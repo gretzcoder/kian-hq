@@ -9,8 +9,7 @@
 	],
 	"vars": {
 		"NEXTJS_ENV": "production",
-		"NEXT_PUBLIC_APP_URL": "https://kian-hq.iqbalalifudin6.workers.dev",
-		"GOOGLE_CLIENT_ID": "PLACEHOLDER_CLIENT_ID"
+		"NEXT_PUBLIC_APP_URL": "https://kian-hq.pegai-runtime.workers.dev"
 	},
 	"assets": {
 		"directory": ".open-next/assets",
