@@ -1,0 +1,50 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": ".open-next/worker.js",
+	"name": "kian-hq",
+	"compatibility_date": "2026-07-23",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"vars": {
+		"NEXTJS_ENV": "development",
+		"NEXT_PUBLIC_APP_URL": "http://localhost:3000",
+		"GOOGLE_CLIENT_ID": "PLACEHOLDER_CLIENT_ID",
+		"GOOGLE_CLIENT_SECRET": "PLACEHOLDER_CLIENT_SECRET"
+	},
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			// Self-reference service binding, the service name must match the worker name
+			// see https://opennext.js.org/cloudflare/caching
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "kian-hq"
+		}
+	],
+	"images": {
+		// Enable image optimization
+		// see https://opennext.js.org/cloudflare/howtos/image
+		"binding": "IMAGES"
+	},
+	"kv_namespaces": [
+		{
+			"binding": "KV",
+			"id": "xxxx_session_kv"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "kian-hq-db",
+			"database_id": "xxxx-d1-id",
+			"migrations_dir": "./migrations"
+		}
+	],
+	"ai": {
+		"binding": "AI"
+	}
+}
