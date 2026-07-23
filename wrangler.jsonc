@@ -8,10 +8,9 @@
 		"global_fetch_strictly_public"
 	],
 	"vars": {
-		"NEXTJS_ENV": "development",
-		"NEXT_PUBLIC_APP_URL": "http://localhost:3000",
-		"GOOGLE_CLIENT_ID": "PLACEHOLDER_CLIENT_ID",
-		"GOOGLE_CLIENT_SECRET": "PLACEHOLDER_CLIENT_SECRET"
+		"NEXTJS_ENV": "production",
+		"NEXT_PUBLIC_APP_URL": "https://kian-hq.iqbalalifudin6.workers.dev",
+		"GOOGLE_CLIENT_ID": "PLACEHOLDER_CLIENT_ID"
 	},
 	"assets": {
 		"directory": ".open-next/assets",
@@ -33,14 +32,14 @@
 	"kv_namespaces": [
 		{
 			"binding": "KV",
-			"id": "xxxx_session_kv"
+			"id": "0cdd78870a494835800d66daa4ab302c"
 		}
 	],
 	"d1_databases": [
 		{
 			"binding": "DB",
 			"database_name": "kian-hq-db",
-			"database_id": "xxxx-d1-id",
+			"database_id": "0b463094-cb92-4ae3-a414-30e3fd138203",
 			"migrations_dir": "./migrations"
 		}
 	],
