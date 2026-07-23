@@ -9,8 +9,6 @@ interface __BaseEnv_CloudflareEnv {
 	ASSETS: Fetcher;
 	NEXTJS_ENV: string;
 	NEXT_PUBLIC_APP_URL: string;
-	GOOGLE_CLIENT_ID: string;
-	GOOGLE_CLIENT_SECRET: string;
 	WORKER_SELF_REFERENCE: Fetcher /* kian-hq */;
 }
 declare namespace Cloudflare {
@@ -21,7 +19,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "NEXTJS_ENV" | "NEXT_PUBLIC_APP_URL" | "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "NEXTJS_ENV" | "NEXT_PUBLIC_APP_URL">> {}
 }
 
 // Begin runtime types

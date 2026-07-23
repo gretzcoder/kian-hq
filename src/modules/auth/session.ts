@@ -6,8 +6,6 @@ export interface SessionUser {
   email: string;
   name: string;
   avatar?: string;
-  googleAccessToken: string;
-  googleRefreshToken?: string;
   expiresAt: number;
 }
 

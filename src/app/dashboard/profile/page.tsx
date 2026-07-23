@@ -179,7 +179,7 @@ export default async function ProfilePage() {
           <div className="flex items-center justify-between py-3 border-b border-zinc-100 dark:border-zinc-900">
             <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Authentication</span>
             <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 px-3 py-1 rounded-full">
-              ✓ Google OAuth 2.0
+              ✓ Email / Password
             </span>
           </div>
           <div className="flex items-center justify-between py-3 border-b border-zinc-100 dark:border-zinc-900">
