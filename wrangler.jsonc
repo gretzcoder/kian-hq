@@ -1,7 +1,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"main": ".open-next/worker.js",
-	"name": "kian-hq",
+	"name": "hq",
 	"compatibility_date": "2026-07-23",
 	"compatibility_flags": [
 		"nodejs_compat",
@@ -9,7 +9,7 @@
 	],
 	"vars": {
 		"NEXTJS_ENV": "production",
-		"NEXT_PUBLIC_APP_URL": "https://kian-hq.pegai-runtime.workers.dev"
+		"NEXT_PUBLIC_APP_URL": "https://hq.kian-eo.workers.dev"
 	},
 	"assets": {
 		"directory": ".open-next/assets",
@@ -20,7 +20,7 @@
 			// Self-reference service binding, the service name must match the worker name
 			// see https://opennext.js.org/cloudflare/caching
 			"binding": "WORKER_SELF_REFERENCE",
-			"service": "kian-hq"
+			"service": "hq"
 		}
 	],
 	"images": {
