@@ -15,8 +15,8 @@ export async function saveContentBrief(projectId: string, formData: FormData) {
     throw new Error('Unauthorized: No active session');
   }
 
-  // 1. Enforce RBAC permission check (requires UPDATE permission to modify briefs)
-  await checkPermission(session.userId, 'UPDATE');
+  // 1. Enforce RBAC permission check (requires UPDATE_BRIEF permission to modify briefs)
+  await checkPermission(session.userId, 'UPDATE_BRIEF');
 
   const audience = formData.get('audience') as string;
   const objectives = formData.get('objectives') as string;

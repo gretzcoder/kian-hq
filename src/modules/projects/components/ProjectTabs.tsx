@@ -40,6 +40,7 @@ export default function ProjectTabs({
   canCreateTask,
   canApproveTask,
   canDeleteTask,
+  canEditBrief,
   currentUserId,
   handleCreateTask,
 }: {
@@ -50,6 +51,7 @@ export default function ProjectTabs({
   canCreateTask: boolean;
   canApproveTask: boolean;
   canDeleteTask: boolean;
+  canEditBrief: boolean;
   currentUserId: string;
   handleCreateTask: (formData: FormData) => Promise<void>;
 }) {
@@ -59,10 +61,10 @@ export default function ProjectTabs({
     TODO: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/80',
     IN_PROGRESS: 'bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-500/10 dark:border-blue-500/20',
     IN_REVIEW: 'bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 border-yellow-500/10 dark:border-yellow-500/20',
+    REVISION: 'bg-red-500/5 text-red-600 dark:text-red-400 border-red-500/10 dark:border-red-500/20',
     APPROVED: 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/10 dark:border-emerald-500/20',
     COMPLETED: 'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/10 dark:border-purple-500/20',
   };
-
   return (
     <div className="space-y-6">
       {/* Tabs Selector Bar */}
@@ -253,7 +255,7 @@ export default function ProjectTabs({
           <BriefForm
             projectId={projectId}
             brief={brief}
-            canEdit={canCreateTask}
+            canEdit={canEditBrief}
           />
         )}
 

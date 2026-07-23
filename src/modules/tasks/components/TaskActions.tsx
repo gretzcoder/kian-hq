@@ -142,18 +142,16 @@ export default function TaskActions({
             )}
           </div>
         )}
-      </div>
-
       {/* 2. Interactive Status Buttons / Actions */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Creator can toggle IN_PROGRESS state */}
-        {isAssignedToMe && task.status === 'TODO' && (
+        {/* Creator can toggle IN_PROGRESS state or restart on REVISION */}
+        {isAssignedToMe && (task.status === 'TODO' || task.status === 'REVISION') && (
           <button
             onClick={() => handleStatusChange('IN_PROGRESS')}
             disabled={loading}
             className="bg-blue-500/5 hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/15 dark:border-blue-500/25 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
           >
-            Start Work
+            {task.status === 'REVISION' ? 'Restart Work (Revision)' : 'Start Work'}
           </button>
         )}
 
@@ -168,11 +166,11 @@ export default function TaskActions({
               ✓ Approve
             </button>
             <button
-              onClick={() => handleStatusChange('IN_PROGRESS')}
+              onClick={() => handleStatusChange('REVISION')}
               disabled={loading}
               className="bg-red-500/5 hover:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
             >
-              ✗ Reject (Re-work)
+              ✗ Request Revision
             </button>
           </>
         )}

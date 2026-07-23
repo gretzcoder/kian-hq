@@ -96,6 +96,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const canApproveTask = await hasPermission(session.userId, 'APPROVE');
   const canDeleteTask = await hasPermission(session.userId, 'DELETE');
   const canDeleteProject = await hasPermission(session.userId, 'DELETE');
+  const canEditBrief = await hasPermission(session.userId, 'UPDATE_BRIEF');
 
   // Bind createTask action with projectId
   const createTaskWithProjectId = createTask.bind(null, projectId);
@@ -179,6 +180,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         canCreateTask={canCreateTask}
         canApproveTask={canApproveTask}
         canDeleteTask={canDeleteTask}
+        canEditBrief={canEditBrief}
         currentUserId={session.userId}
         handleCreateTask={handleCreateTask}
       />
