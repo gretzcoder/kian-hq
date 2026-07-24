@@ -1,10 +1,14 @@
 import { getSession } from '@/modules/auth/session';
 import { redirect } from 'next/navigation';
+import { getSessionContext } from '@/modules/roles/rbac';
 import AIChat from '@/modules/ai-assistant/components/AIChat';
 
 export default async function AIAssistantPage() {
   const session = await getSession();
   if (!session) redirect('/');
+
+  const ctx = await getSessionContext(session.userId);
+  if (!ctx.can('USE_AI')) redirect('/dashboard');
 
   return (
     <div className="space-y-6">

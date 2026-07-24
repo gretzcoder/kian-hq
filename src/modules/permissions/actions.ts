@@ -1,8 +1,8 @@
 'use server';
 
 import { getSession } from '@/modules/auth/session';
-import { checkPermission } from '@/modules/roles/rbac';
-import { getDB, getKV } from '@/db/client';
+import { checkPermission, invalidateCacheForRole } from '@/modules/roles/rbac';
+import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -72,25 +72,4 @@ export async function revokeRolePermission(roleId: string, permissionId: string)
   }
 }
 
-/**
- * Invalidate KV permission cache for all users who have the given role.
- */
-async function invalidateCacheForRole(roleId: string) {
-  try {
-    const db = await getDB();
-    const kv = await getKV();
 
-    const { results } = await db
-      .prepare('SELECT user_id FROM user_roles WHERE role_id = ?')
-      .bind(roleId)
-      .all();
-
-    await Promise.allSettled(
-      results.map((row: any) =>
-        kv.delete(`user:permissions:${row.user_id}`)
-      )
-    );
-  } catch (err) {
-    console.error('Failed to invalidate KV cache for role:', err);
-  }
-}

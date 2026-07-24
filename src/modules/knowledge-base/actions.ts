@@ -15,8 +15,8 @@ export async function createKBArticle(formData: FormData) {
     throw new Error('Unauthorized: No active session');
   }
 
-  // 1. Enforce CREATE permission
-  await checkPermission(session.userId, 'CREATE');
+  // 1. Enforce CREATE_KB permission
+  await checkPermission(session.userId, 'CREATE_KB');
 
   const title = formData.get('title') as string;
   const content = formData.get('content') as string;

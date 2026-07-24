@@ -1,202 +1,221 @@
 'use client';
 
 import { useState } from 'react';
-import { updateTaskStatus, submitTaskAsset, deleteTask } from '../actions';
+import { startWork, submitResult, deleteTask } from '../actions';
 
-interface Task {
-  id: string;
-  project_id: string;
-  title: string;
-  description: string | null;
-  gdrive_asset_url: string | null;
-  status: string;
-  assigned_to: string | null;
-  created_by: string;
-  deadline: number | null;
+/**
+ * TaskActions — Per-assignment action panel.
+ * Uses the new assignment-based workflow (task_assignments) instead of the old
+ * single assigned_to pattern.
+ */
+interface TaskAssignment {
+  id:              string;
+  assignment_role: string;
+  status:          string;
+  result_url:      string | null;
+  revision_note:   string | null;
+  user_id:         string;
+  user_name:       string | null;
 }
 
-export default function TaskActions({
-  task,
-  currentUserId,
-  canApprove,
-  canDelete,
-}: {
-  task: Task;
+interface TaskActionsProps {
+  taskId:      string;
+  assignments: TaskAssignment[];
   currentUserId: string;
-  canApprove: boolean;
-  canDelete: boolean;
+  canDelete:   boolean;
+}
+
+const roleColors: Record<string, string> = {
+  PIC:      'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/15',
+  REVIEWER: 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/15',
+  HELPER:   'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/15',
+  APPROVER: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/15',
+};
+
+const statusColors: Record<string, string> = {
+  ASSIGNED:    'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700',
+  IN_PROGRESS: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15',
+  SUBMITTED:   'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/15',
+  IN_REVIEW:   'text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 border-yellow-500/15',
+  REVISION:    'text-red-600 dark:text-red-400 bg-red-500/5 border-red-500/15',
+  APPROVED:    'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',
+  DONE:        'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15',
+};
+
+function AssignmentCard({
+  assignment,
+  isMe,
+}: {
+  assignment: TaskAssignment;
+  isMe: boolean;
 }) {
   const [loading, setLoading] = useState(false);
-  const [assetUrl, setAssetUrl] = useState(task.gdrive_asset_url || '');
-  const [isEditingUrl, setIsEditingUrl] = useState(!task.gdrive_asset_url);
+  const [url, setUrl] = useState(assignment.result_url ?? '');
+  const [showSubmit, setShowSubmit] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const isAssignedToMe = task.assigned_to === currentUserId;
-
-  const handleStatusChange = async (newStatus: string) => {
+  const handleStart = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await updateTaskStatus(task.id, newStatus);
-      if (!res.success) {
-        alert(res.error || 'Failed to update task status');
-      }
-    } catch (err: any) {
-      alert(err.message || 'An error occurred');
+      const res = await startWork(assignment.id);
+      if (!res.success) setError(res.error ?? 'Failed to start work');
+    } catch (e: any) {
+      setError(e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAssetSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assetUrl) return;
-
+    if (!url.trim()) return;
     setLoading(true);
+    setError(null);
     try {
-      const res = await submitTaskAsset(task.id, assetUrl);
-      if (res.success) {
-        setIsEditingUrl(false);
-      } else {
-        alert(res.error || 'Failed to submit asset URL');
-      }
-    } catch (err: any) {
-      alert(err.message || 'An error occurred');
+      const res = await submitResult(assignment.id, url.trim());
+      if (res.success) setShowSubmit(false);
+      else setError(res.error ?? 'Failed to submit');
+    } catch (e: any) {
+      setError(e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
-
-    setLoading(true);
-    try {
-      const res = await deleteTask(task.id);
-      if (!res.success) {
-        alert(res.error || 'Failed to delete task');
-      }
-    } catch (err: any) {
-      alert(err.message || 'An error occurred');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const role = roleColors[assignment.assignment_role] ?? 'text-zinc-500 bg-zinc-100 border-zinc-200';
+  const status = statusColors[assignment.status] ?? statusColors.ASSIGNED;
 
   return (
-    <div className="space-y-4 pt-4 border-t border-zinc-200 dark:border-zinc-800/60 mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-      {/* 1. Deliverable Submission Form (For assigned creator) */}
-      <div className="flex-1">
-        {isAssignedToMe ? (
-          <div>
-            {isEditingUrl ? (
-              <form onSubmit={handleAssetSubmit} className="flex gap-2 w-full max-w-md">
-                <input
-                  type="url"
-                  value={assetUrl}
-                  onChange={(e) => setAssetUrl(e.target.value)}
-                  placeholder="Paste Google Drive asset link..."
-                  required
-                  disabled={loading}
-                  className="flex-1 bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-2.5 focus:outline-none transition-all duration-200"
-                />
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all active:scale-[0.98] shadow-sm disabled:opacity-50"
-                >
-                  Submit
-                </button>
-              </form>
-            ) : (
-              <div className="flex items-center gap-3 text-xs">
-                <a
-                  href={task.gdrive_asset_url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 font-bold underline truncate max-w-xs block"
-                >
-                  🔗 Submitted Deliverable
-                </a>
-                <button
-                  onClick={() => setIsEditingUrl(true)}
-                  disabled={loading}
-                  className="text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 font-bold px-2.5 py-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-900/60 transition-all active:scale-[0.97]"
-                >
-                  Edit Link
-                </button>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div>
-            {task.gdrive_asset_url ? (
-              <a
-                href={task.gdrive_asset_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-purple-600 dark:text-purple-400 hover:text-purple-500 dark:hover:text-purple-300 font-bold underline text-xs inline-flex items-center gap-1.5"
-              >
-                🔗 View Deliverable
-              </a>
-            ) : (
-              <span className="text-zinc-400 dark:text-zinc-500 text-xs italic font-medium">No submission yet</span>
-            )}
-          </div>
-        )}
-      {/* 2. Interactive Status Buttons / Actions */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Creator can toggle IN_PROGRESS state or restart on REVISION */}
-        {isAssignedToMe && (task.status === 'TODO' || task.status === 'REVISION') && (
-          <button
-            onClick={() => handleStatusChange('IN_PROGRESS')}
-            disabled={loading}
-            className="bg-blue-500/5 hover:bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/15 dark:border-blue-500/25 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
-          >
-            {task.status === 'REVISION' ? 'Restart Work (Revision)' : 'Start Work'}
-          </button>
-        )}
+    <div className={`rounded-xl border p-3 space-y-2 text-xs ${isMe ? 'bg-white dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800' : 'bg-zinc-50/50 dark:bg-zinc-900/20 border-zinc-100 dark:border-zinc-800/50'}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${role}`}>
+            {assignment.assignment_role}
+          </span>
+          <span className="text-zinc-700 dark:text-zinc-300 font-bold">{assignment.user_name ?? 'Unknown'}</span>
+          {isMe && <span className="text-[9px] text-purple-600 dark:text-purple-400 font-black">(you)</span>}
+        </div>
+        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${status}`}>
+          {assignment.status.replace('_', ' ')}
+        </span>
+      </div>
 
-        {/* Executive / Coordinator Approval controls on IN_REVIEW */}
-        {canApprove && task.status === 'IN_REVIEW' && (
-          <>
+      {/* Revision note */}
+      {assignment.revision_note && assignment.status === 'REVISION' && (
+        <div className="bg-red-500/5 border border-red-500/10 rounded-lg p-2 text-[10px] text-red-700 dark:text-red-400">
+          📝 {assignment.revision_note}
+        </div>
+      )}
+
+      {/* Result link */}
+      {assignment.result_url && (
+        <a
+          href={assignment.result_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block text-[10px] text-purple-600 dark:text-purple-400 hover:underline font-bold truncate"
+        >
+          🔗 View result
+        </a>
+      )}
+
+      {/* My actions */}
+      {isMe && (
+        <div className="space-y-2 pt-1">
+          {error && <p className="text-[10px] text-red-600 dark:text-red-400">{error}</p>}
+
+          {(assignment.status === 'ASSIGNED' || assignment.status === 'REVISION') && (
             <button
-              onClick={() => handleStatusChange('APPROVED')}
+              onClick={handleStart}
               disabled={loading}
-              className="bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/15 dark:border-emerald-500/25 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
+              className="w-full bg-blue-500/5 hover:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/15 font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 active:scale-[0.97]"
             >
-              ✓ Approve
+              {loading ? '...' : assignment.status === 'REVISION' ? '↩ Restart Work' : '▶ Start Work'}
             </button>
-            <button
-              onClick={() => handleStatusChange('REVISION')}
-              disabled={loading}
-              className="bg-red-500/5 hover:bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
-            >
-              ✗ Request Revision
-            </button>
-          </>
-        )}
+          )}
 
-        {/* Executive / Coordinator Complete controls on APPROVED */}
-        {canApprove && task.status === 'APPROVED' && (
-          <button
-            onClick={() => handleStatusChange('COMPLETED')}
-            disabled={loading}
-            className="bg-purple-500/5 hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/15 dark:border-purple-500/25 font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
-          >
-            Complete Task
-          </button>
-        )}
+          {assignment.status === 'IN_PROGRESS' && (
+            <>
+              {showSubmit ? (
+                <form onSubmit={handleSubmit} className="flex gap-1.5">
+                  <input
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="Paste Google Drive link..."
+                    required
+                    className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 text-zinc-900 dark:text-zinc-100 text-[11px] rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all"
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                  >
+                    {loading ? '...' : 'Submit'}
+                  </button>
+                </form>
+              ) : (
+                <button
+                  onClick={() => setShowSubmit(true)}
+                  className="w-full bg-purple-500/5 hover:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/15 font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all active:scale-[0.97]"
+                >
+                  📤 Submit Result
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
-        {/* Delete button (If permitted) */}
-        {canDelete && (
+export default function TaskActions({ taskId, assignments, currentUserId, canDelete }: TaskActionsProps) {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!confirm('Delete this task and all its assignments? This cannot be undone.')) return;
+    setDeleting(true);
+    try {
+      await deleteTask(taskId);
+    } catch {
+      alert('Failed to delete task');
+      setDeleting(false);
+    }
+  };
+
+  if (assignments.length === 0 && !canDelete) return null;
+
+  return (
+    <div className="space-y-3 pt-4 border-t border-zinc-200 dark:border-zinc-800/60 mt-4">
+      {/* Assignment list */}
+      {assignments.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Assignments</p>
+          {assignments.map((a) => (
+            <AssignmentCard
+              key={a.id}
+              assignment={a}
+              isMe={a.user_id === currentUserId}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Delete */}
+      {canDelete && (
+        <div className="pt-1">
           <button
             onClick={handleDelete}
-            disabled={loading}
+            disabled={deleting}
             className="text-red-600 dark:text-red-400 hover:bg-red-500/5 font-bold text-xs px-3.5 py-1.5 rounded-xl border border-transparent hover:border-red-500/10 transition-all disabled:opacity-50 active:scale-[0.97]"
           >
-            Delete Task
+            {deleting ? 'Deleting...' : 'Delete Task'}
           </button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

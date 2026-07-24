@@ -37,6 +37,7 @@ export default function ProjectTabs({
   tasks,
   users,
   brief,
+  events,
   canCreateTask,
   canApproveTask,
   canDeleteTask,
@@ -48,6 +49,7 @@ export default function ProjectTabs({
   tasks: Task[];
   users: User[];
   brief: Brief | null;
+  events: any[];
   canCreateTask: boolean;
   canApproveTask: boolean;
   canDeleteTask: boolean;
@@ -106,7 +108,7 @@ export default function ProjectTabs({
         {activeTab === 'tasks' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
             {/* Left Column: Tasks List */}
-            <div className="lg:col-span-2 space-y-4">
+            <div className={canCreateTask ? 'lg:col-span-2 space-y-4' : 'lg:col-span-3 space-y-4'}>
               {tasks.length === 0 ? (
                 <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-3xl p-12 text-center text-zinc-500">
                   No tasks created for this project yet. Define steps on the right panel.
@@ -155,9 +157,9 @@ export default function ProjectTabs({
 
                       {/* Client-side action trigger component */}
                       <TaskActions
-                        task={task}
+                        taskId={task.id}
+                        assignments={[]}
                         currentUserId={currentUserId}
-                        canApprove={canApproveTask}
                         canDelete={canDeleteTask}
                       />
                     </div>
@@ -243,11 +245,7 @@ export default function ProjectTabs({
                   </button>
                 </form>
               </div>
-            ) : (
-              <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 text-center text-zinc-500 text-xs shadow-sm">
-                🔒 You do not have permissions to append tasks.
-              </div>
-            )}
+            ) : null}
           </div>
         )}
 
@@ -260,7 +258,7 @@ export default function ProjectTabs({
         )}
 
         {activeTab === 'timeline' && (
-          <ProjectTimeline tasks={tasks} />
+          <ProjectTimeline events={events} />
         )}
       </div>
     </div>

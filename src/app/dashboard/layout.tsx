@@ -1,7 +1,7 @@
 import { getSession } from '@/modules/auth/session';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { hasPermission } from '@/modules/roles/rbac';
+import { getSessionContext } from '@/modules/roles/rbac';
 import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import { NavLinks, MobileNavLinks } from './components/NavLinks';
 
@@ -15,7 +15,12 @@ export default async function DashboardLayout({
     redirect('/');
   }
 
-  const canManage = await hasPermission(session.userId, 'MANAGE');
+  // Batch-fetch all needed permission flags in one call
+  const ctx = await getSessionContext(session.userId);
+  const canManage      = ctx.can('MANAGE');
+  const canReview      = ctx.can('APPROVE') || ctx.can('REQUEST_REVISION');
+  const canCreateBrief = ctx.can('CREATE_BRIEF') || ctx.can('APPROVE_BRIEF') || ctx.can('SUBMIT_BRIEF') || ctx.can('REQUEST_CHANGES') || ctx.can('UNLOCK_BRIEF');
+  const canUseAI       = ctx.can('USE_AI');
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col transition-colors duration-350">
@@ -27,8 +32,13 @@ export default async function DashboardLayout({
               KIAN HQ
             </Link>
             
-            {/* Dynamic Navigation Links Client Component */}
-            <NavLinks canManage={canManage} />
+            {/* Dynamic Navigation — permission-aware */}
+            <NavLinks
+              canManage={canManage}
+              canReview={canReview}
+              canCreateBrief={canCreateBrief}
+              canUseAI={canUseAI}
+            />
           </div>
 
           <div className="flex items-center gap-4">
@@ -65,7 +75,12 @@ export default async function DashboardLayout({
       </header>
 
       {/* Dynamic Mobile Navigation Bar Client Component */}
-      <MobileNavLinks canManage={canManage} />
+      <MobileNavLinks
+        canManage={canManage}
+        canReview={canReview}
+        canCreateBrief={canCreateBrief}
+        canUseAI={canUseAI}
+      />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">

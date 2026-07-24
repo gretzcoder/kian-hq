@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { saveContentBrief } from '../actions';
+import { updateBrief } from '../actions';
 
 interface Brief {
   audience: string | null;
@@ -34,7 +34,7 @@ export default function BriefForm({
 
     const formData = new FormData(e.currentTarget);
     try {
-      const res = await saveContentBrief(projectId, formData);
+      const res = await updateBrief(projectId, formData);
       if (res.success) {
         setIsEditing(false);
         setStatusMsg({ type: 'success', text: 'Creative brief saved successfully!' });
@@ -182,7 +182,7 @@ export default function BriefForm({
           </div>
         )}
 
-        {canEdit ? (
+        {canEdit && (
           <button
             type="submit"
             disabled={loading}
@@ -190,8 +190,6 @@ export default function BriefForm({
           >
             {loading ? 'Saving...' : 'Save Creative Brief'}
           </button>
-        ) : (
-          <div className="text-xs text-zinc-500">🔒 You do not have permissions to modify briefs.</div>
         )}
       </form>
     </div>

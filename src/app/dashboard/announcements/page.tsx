@@ -1,6 +1,6 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
-import { hasPermission } from '@/modules/roles/rbac';
+import { getSessionContext } from '@/modules/roles/rbac';
 import { createAnnouncement, deleteAnnouncement } from '@/modules/announcements/actions';
 
 interface AnnouncementRow {
@@ -16,17 +16,19 @@ export default async function AnnouncementsPage() {
   if (!session) return null;
 
   const db = await getDB();
+  const [resultsRaw, ctx] = await Promise.all([
+    db.prepare(`
+      SELECT a.id, a.title, a.content, a.created_at, u.name as author_name
+      FROM announcements a
+      LEFT JOIN users u ON a.created_by = u.id
+      ORDER BY a.created_at DESC
+    `).all(),
+    getSessionContext(session.userId),
+  ]);
 
-  const { results: raw } = await db.prepare(`
-    SELECT a.id, a.title, a.content, a.created_at, u.name as author_name
-    FROM announcements a
-    LEFT JOIN users u ON a.created_by = u.id
-    ORDER BY a.created_at DESC
-  `).all();
-  const announcements = raw as unknown as AnnouncementRow[];
-
-  const canCreate = await hasPermission(session.userId, 'CREATE');
-  const canDelete = await hasPermission(session.userId, 'DELETE');
+  const announcements = resultsRaw.results as unknown as AnnouncementRow[];
+  const canCreate = ctx.can('CREATE_ANNOUNCEMENT');
+  const canDelete = ctx.can('DELETE');
 
   async function handleCreate(formData: FormData) {
     'use server';
@@ -58,12 +60,11 @@ export default async function AnnouncementsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* Announcements Feed */}
-        <div className="lg:col-span-2 space-y-5">
+        <div className={canCreate ? 'lg:col-span-2 space-y-5' : 'lg:col-span-3 space-y-5'}>
           {announcements.length === 0 ? (
             <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-3xl p-16 text-center">
               <p className="text-3xl mb-3">📢</p>
               <p className="text-zinc-500 text-sm font-medium">No announcements yet.</p>
-              <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Coordinators and Executives can broadcast updates here.</p>
             </div>
           ) : (
             announcements.map((ann) => (
@@ -106,12 +107,12 @@ export default async function AnnouncementsPage() {
           )}
         </div>
 
-        {/* Right Panel: Create Form or Locked */}
-        <div className="space-y-6">
-          {canCreate ? (
+        {/* Right Panel: Create Form (Only if permitted) */}
+        {canCreate && (
+          <div className="space-y-6">
             <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm">
               <h2 className="text-lg font-bold mb-1 text-zinc-900 dark:text-zinc-100">Broadcast Update</h2>
-              <p className="text-zinc-500 dark:text-zinc-500 text-xs mb-6">
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-6">
                 Post a new team-wide announcement.
               </p>
 
@@ -150,22 +151,16 @@ export default async function AnnouncementsPage() {
                 </button>
               </form>
             </div>
-          ) : (
-            <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 text-center shadow-sm">
-              <p className="text-2xl mb-2">🔒</p>
-              <p className="text-zinc-500 text-sm font-medium">Broadcast Locked</p>
-              <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">You need CREATE permission to post announcements.</p>
-            </div>
-          )}
 
-          {/* Info card */}
-          <div className="border border-purple-500/10 bg-purple-500/5 rounded-3xl p-5">
-            <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-2">Broadcast Protocol</h4>
-            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              Announcements are visible to all team members. Use this channel for critical updates, policy changes, or project milestones only.
-            </p>
+            {/* Info card */}
+            <div className="border border-purple-500/10 bg-purple-500/5 rounded-3xl p-5">
+              <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-2">Broadcast Protocol</h4>
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Announcements are visible to all team members. Use this channel for critical updates, policy changes, or project milestones only.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
-import { hasPermission } from '@/modules/roles/rbac';
+import { getSessionContext } from '@/modules/roles/rbac';
 import { createKBArticle } from '@/modules/knowledge-base/actions';
 
 interface KBArticle {
@@ -17,25 +17,24 @@ export default async function KnowledgeBasePage() {
   if (!session) return null;
 
   const db = await getDB();
+  const [articlesRaw, ctx] = await Promise.all([
+    db.prepare(`
+      SELECT kb.*, u.name as author_name
+      FROM knowledge_base kb
+      LEFT JOIN users u ON kb.created_by = u.id
+      ORDER BY kb.created_at DESC
+    `).all(),
+    getSessionContext(session.userId),
+  ]);
 
-  // 1. Fetch KB Articles in D1 SQL
-  const { results: articlesRaw } = await db.prepare(`
-    SELECT kb.*, u.name as author_name
-    FROM knowledge_base kb
-    LEFT JOIN users u ON kb.created_by = u.id
-    ORDER BY kb.created_at DESC
-  `).all();
-  const articles = articlesRaw as unknown as KBArticle[];
+  const articles = articlesRaw.results as unknown as KBArticle[];
+  const canCreate = ctx.can('CREATE_KB');
 
-  const canCreate = await hasPermission(session.userId, 'CREATE');
-
-  // Server Action wrapper to satisfy Next.js form action void return constraint
   async function handleCreateKBArticle(formData: FormData) {
     'use server';
     await createKBArticle(formData);
   }
 
-  // Category badge classes — support both light + dark mode
   const categoryLabels: Record<string, string> = {
     GENERAL: 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/15',
     GUIDELINE: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/15',
@@ -57,7 +56,7 @@ export default async function KnowledgeBasePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* Articles List Column */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className={canCreate ? 'lg:col-span-2 space-y-6' : 'lg:col-span-3 space-y-6'}>
           {articles.length === 0 ? (
             <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-12 text-center text-zinc-500 text-sm">
               No documentation articles added yet.
@@ -96,7 +95,7 @@ export default async function KnowledgeBasePage() {
         </div>
 
         {/* Creation Form Column (Only if permitted) */}
-        {canCreate ? (
+        {canCreate && (
           <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0e0e10]/60 rounded-3xl p-6 shadow-sm">
             <h2 className="text-lg font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create Document</h2>
             <p className="text-zinc-500 dark:text-zinc-500 text-xs mb-6">Contribute to the team knowledge base guidelines.</p>
@@ -150,10 +149,6 @@ export default async function KnowledgeBasePage() {
                 Publish Document
               </button>
             </form>
-          </div>
-        ) : (
-          <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0e0e10]/20 rounded-3xl p-6 text-center text-zinc-500 text-xs shadow-sm">
-            🔒 Clearance restricted. Document contribution locked.
           </div>
         )}
       </div>

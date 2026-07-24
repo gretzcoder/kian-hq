@@ -1,5 +1,5 @@
 import { getSession } from '@/modules/auth/session';
-import { hasPermission } from '@/modules/roles/rbac';
+import { getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
@@ -15,27 +15,47 @@ interface Project {
   created_at: number;
 }
 
-export default async function ProjectsPage() {
+interface PageProps {
+  searchParams: Promise<{
+    briefId?: string;
+  }>;
+}
+
+const statusColors: Record<string, string> = {
+  PLANNING: 'bg-blue-500/5 text-blue-600 border-blue-500/10 dark:text-blue-400 dark:border-blue-500/15',
+  IN_PROGRESS: 'bg-purple-500/5 text-purple-600 border-purple-500/10 dark:text-purple-400 dark:border-purple-500/15',
+  IN_REVIEW: 'bg-orange-500/5 text-orange-600 border-orange-500/10 dark:text-orange-400 dark:border-orange-500/15',
+  PUBLISHED: 'bg-emerald-500/5 text-emerald-600 border-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/15',
+  ARCHIVED: 'bg-zinc-500/5 text-zinc-500 border-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/15',
+};
+
+export default async function ProjectsPage({ searchParams }: PageProps) {
   const session = await getSession();
   if (!session) redirect('/');
 
   const db = await getDB();
-  const { results: rawProjects } = await db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all();
-  const projects = rawProjects as unknown as Project[];
+  const [projectsRaw, ctx] = await Promise.all([
+    db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all(),
+    getSessionContext(session.userId),
+  ]);
 
-  const canCreate = await hasPermission(session.userId, 'CREATE');
+  const projects = projectsRaw.results as unknown as Project[];
+  const canCreateProject = ctx.can('CREATE_PROJECT');
 
-  const statusColors: Record<string, string> = {
-    PLANNING: 'bg-yellow-500/5 text-yellow-600 border-yellow-500/10 dark:text-yellow-400 dark:border-yellow-500/15',
-    IN_PROGRESS: 'bg-blue-500/5 text-blue-600 border-blue-500/10 dark:text-blue-400 dark:border-blue-500/15',
-    REVIEW: 'bg-purple-500/5 text-purple-600 border-purple-500/10 dark:text-purple-400 dark:border-purple-500/15',
-    PUBLISHED: 'bg-emerald-500/5 text-emerald-600 border-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/15',
-    ARCHIVED: 'bg-zinc-500/5 text-zinc-500 border-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/15',
-  };
+  const { briefId } = await searchParams;
+  let briefTitle: string | null = null;
+  if (briefId) {
+    const brief = await db
+      .prepare('SELECT title FROM content_briefs WHERE id = ?')
+      .bind(briefId)
+      .first() as { title: string | null } | null;
+    briefTitle = brief?.title || 'Untitled Brief';
+  }
 
   async function handleCreateProject(formData: FormData) {
     'use server';
     await createProject(formData);
+    redirect('/dashboard/projects');
   }
 
   return (
@@ -54,7 +74,7 @@ export default async function ProjectsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* Left/Middle Column: Project List */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className={canCreateProject ? 'lg:col-span-2 space-y-4' : 'lg:col-span-3 space-y-4'}>
           {projects.length === 0 ? (
             <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-3xl p-12 text-center text-zinc-500">
               No projects created yet. Start by defining a project on the right panel.
@@ -73,7 +93,7 @@ export default async function ProjectsPage() {
                           statusColors[project.status] || statusColors.PLANNING
                         }`}
                       >
-                        {project.status}
+                        {project.status.replace('_', ' ')}
                       </span>
                       {project.deadline && (
                         <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
@@ -110,7 +130,7 @@ export default async function ProjectsPage() {
                       href={`/dashboard/projects/${project.id}`}
                       className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900/50 transition-all font-bold tracking-wide active:scale-[0.98] shadow-sm"
                     >
-                      Tasks &rarr;
+                      Open &rarr;
                     </Link>
                   </div>
                 </div>
@@ -120,20 +140,34 @@ export default async function ProjectsPage() {
         </div>
 
         {/* Right Column: Creation Panel (If permitted) */}
-        {canCreate ? (
-          <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm">
-            <h2 className="text-lg font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create New Project</h2>
-            <p className="text-zinc-500 dark:text-zinc-500 text-xs mb-6">Initialize a creative campaign and map its storage root.</p>
+        {canCreateProject ? (
+          <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm space-y-4">
+            <div>
+              <h2 className="text-lg font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create New Project</h2>
+              <p className="text-zinc-500 dark:text-zinc-500 text-xs">Initialize a creative campaign and map its storage root.</p>
+            </div>
+
+            {briefTitle && (
+              <div className="bg-purple-500/5 border border-purple-500/10 rounded-2xl p-3.5 space-y-1">
+                <span className="text-[9px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">
+                  Linked Content Brief
+                </span>
+                <p className="text-xs text-zinc-800 dark:text-zinc-200 font-bold">{briefTitle}</p>
+              </div>
+            )}
 
             <form action={handleCreateProject} className="space-y-4">
+              {briefId && <input type="hidden" name="briefId" value={briefId} />}
+
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                  Project Name
+                  Project Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   name="name"
                   required
+                  defaultValue={briefTitle || ''}
                   placeholder="e.g. Q3 Video Campaign"
                   className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all duration-200"
                 />
@@ -182,11 +216,7 @@ export default async function ProjectsPage() {
               </button>
             </form>
           </div>
-        ) : (
-          <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 text-center text-zinc-500 text-xs shadow-sm">
-            🔒 You do not have permissions to initialize projects.
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
