@@ -21,6 +21,7 @@ export default async function DashboardLayout({
   const canReview      = ctx.can('APPROVE') || ctx.can('REQUEST_REVISION');
   const canCreateBrief = ctx.can('CREATE_BRIEF') || ctx.can('APPROVE_BRIEF') || ctx.can('SUBMIT_BRIEF') || ctx.can('REQUEST_CHANGES') || ctx.can('UNLOCK_BRIEF');
   const canUseAI       = ctx.can('USE_AI');
+  const isOJT          = ctx.userType === 'OJT';
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col transition-colors duration-350">
@@ -38,6 +39,7 @@ export default async function DashboardLayout({
               canReview={canReview}
               canCreateBrief={canCreateBrief}
               canUseAI={canUseAI}
+              isOJT={isOJT}
             />
           </div>
 
@@ -80,6 +82,7 @@ export default async function DashboardLayout({
         canReview={canReview}
         canCreateBrief={canCreateBrief}
         canUseAI={canUseAI}
+        isOJT={isOJT}
       />
 
       {/* Main Container */}

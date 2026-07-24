@@ -8,6 +8,7 @@ interface NavLinksProps {
   canReview:      boolean;
   canCreateBrief: boolean;
   canUseAI:       boolean;
+  isOJT?:         boolean;
 }
 
 const activeClass =
@@ -19,7 +20,7 @@ function isActive(pathname: string, href: string, exact = false) {
   return exact ? pathname === href : pathname.startsWith(href);
 }
 
-export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI }: NavLinksProps) {
+export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT = false }: NavLinksProps) {
   const pathname = usePathname();
 
   return (
@@ -27,11 +28,14 @@ export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI }: Nav
       <Link href="/dashboard" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard', true) ? activeClass : inactiveClass}`}>
         Dashboard
       </Link>
-      <Link href="/dashboard/projects" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/projects') ? activeClass : inactiveClass}`}>
-        Projects
-      </Link>
+      
+      {/* Hide Projects link for OJT users */}
+      {!isOJT && (
+        <Link href="/dashboard/projects" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/projects') ? activeClass : inactiveClass}`}>
+          Projects
+        </Link>
+      )}
 
-      {/* Workspace: always show for CREATOR; also for others */}
       <Link href="/dashboard/workspace" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/workspace') ? activeClass : inactiveClass}`}>
         Workspace
       </Link>
@@ -83,12 +87,12 @@ export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI }: Nav
   );
 }
 
-export function MobileNavLinks({ canManage, canReview, canCreateBrief, canUseAI }: NavLinksProps) {
+export function MobileNavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT = false }: NavLinksProps) {
   const pathname = usePathname();
 
   const links = [
     { href: '/dashboard',              label: '🏠',        exact: true  },
-    { href: '/dashboard/projects',     label: 'Projects',  exact: false },
+    ...(!isOJT ? [{ href: '/dashboard/projects',     label: 'Projects',  exact: false }] : []),
     { href: '/dashboard/workspace',    label: 'Workspace', exact: false },
     ...(canReview      ? [{ href: '/dashboard/review',        label: 'Reviews',  exact: false }] : []),
     ...(canCreateBrief ? [{ href: '/dashboard/briefs',        label: 'Briefs',   exact: false }] : []),
