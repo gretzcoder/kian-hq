@@ -43,24 +43,31 @@ const WORKSPACE_TRANSITIONS: Record<string, string[]> = {
   ARCHIVED:  [],
 };
 
+// Unified task and assignment state machine
 const TASK_TRANSITIONS: Record<string, string[]> = {
-  TODO:        ['IN_PROGRESS'],
-  IN_PROGRESS: ['SUBMITTED'],
-  SUBMITTED:   ['IN_REVIEW'],
-  IN_REVIEW:   ['APPROVED', 'REVISION'],
-  REVISION:    ['IN_PROGRESS'],
-  APPROVED:    ['DONE'],
-  DONE:        [],
+  DRAFT:              ['SUBMITTED', 'WAITING_REVIEW'],
+  SUBMITTED:          ['WAITING_REVIEW'],
+  WAITING_REVIEW:     ['APPROVED', 'REVISION_REQUESTED', 'DECLINED'],
+  REVISION_REQUESTED: ['RESUBMITTED', 'WAITING_REVIEW'],
+  RESUBMITTED:        ['WAITING_REVIEW'],
+  APPROVED:           ['LOCKED'],
+  LOCKED:             ['PUBLISHED'],
+  PUBLISHED:          ['ARCHIVED'],
+  DECLINED:           ['DRAFT'], // "Create Again" / reset to Draft
+  ARCHIVED:           [],
 };
 
 const TASK_ASSIGNMENT_TRANSITIONS: Record<string, string[]> = {
-  ASSIGNED:    ['IN_PROGRESS'],
-  IN_PROGRESS: ['SUBMITTED'],
-  SUBMITTED:   ['IN_REVIEW'],
-  IN_REVIEW:   ['APPROVED', 'REVISION'],
-  REVISION:    ['IN_PROGRESS'],
-  APPROVED:    ['DONE'],
-  DONE:        [],
+  DRAFT:              ['SUBMITTED', 'WAITING_REVIEW'],
+  SUBMITTED:          ['WAITING_REVIEW'],
+  WAITING_REVIEW:     ['APPROVED', 'REVISION_REQUESTED', 'DECLINED'],
+  REVISION_REQUESTED: ['RESUBMITTED', 'WAITING_REVIEW'],
+  RESUBMITTED:        ['WAITING_REVIEW'],
+  APPROVED:           ['LOCKED'],
+  LOCKED:             ['PUBLISHED'],
+  PUBLISHED:          ['ARCHIVED'],
+  DECLINED:           ['DRAFT'],
+  ARCHIVED:           [],
 };
 
 const TRANSITION_MAPS: Record<EntityType, Record<string, string[]>> = {

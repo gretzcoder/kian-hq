@@ -81,7 +81,7 @@ export default async function DashboardPage() {
       JOIN tasks t         ON ta.task_id = t.id
       JOIN projects p      ON t.project_id = p.id
       LEFT JOIN users u    ON ta.user_id = u.id
-      WHERE ta.status = 'IN_REVIEW'
+      WHERE ta.status = 'WAITING_REVIEW'
       ORDER BY ta.submitted_at ASC
       LIMIT 10
     `).all();
@@ -101,7 +101,7 @@ export default async function DashboardPage() {
       FROM task_assignments ta
       JOIN tasks t      ON ta.task_id = t.id
       JOIN projects p   ON t.project_id = p.id
-      WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'DONE')
+      WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
       ORDER BY t.deadline ASC
       LIMIT 10
     `).bind(session.userId).all();
@@ -114,13 +114,16 @@ export default async function DashboardPage() {
   }
 
   const statusColors: Record<string, string> = {
-    ASSIGNED:    'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/80',
-    IN_PROGRESS: 'bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-500/10 dark:border-blue-500/20',
-    SUBMITTED:   'bg-orange-500/5 text-orange-600 dark:text-orange-400 border-orange-500/10 dark:border-orange-500/20',
-    IN_REVIEW:   'bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 border-yellow-500/10 dark:border-yellow-500/20',
-    REVISION:    'bg-red-500/5 text-red-600 dark:text-red-400 border-red-500/10 dark:border-red-500/20',
-    APPROVED:    'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/10 dark:border-emerald-500/20',
-    DONE:        'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/10 dark:border-purple-500/20',
+    DRAFT:              'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/80',
+    SUBMITTED:          'bg-orange-500/5 text-orange-600 dark:text-orange-400 border-orange-500/10 dark:border-orange-500/20',
+    WAITING_REVIEW:     'bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 border-yellow-500/10 dark:border-yellow-500/20',
+    REVISION_REQUESTED: 'bg-red-500/5 text-red-600 dark:text-red-400 border-red-500/10 dark:border-red-500/20',
+    RESUBMITTED:        'bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 border-indigo-500/10 dark:border-indigo-500/20',
+    APPROVED:           'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/10 dark:border-emerald-500/20',
+    LOCKED:             'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20',
+    PUBLISHED:          'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/10 dark:border-purple-500/20',
+    ARCHIVED:           'bg-zinc-500/5 text-zinc-400 dark:text-zinc-500 border-zinc-200 dark:border-zinc-800',
+    DECLINED:           'bg-red-800/10 text-red-800 dark:text-red-500 border-red-800/20',
   };
 
   const roleColors: Record<string, string> = {
@@ -139,13 +142,8 @@ export default async function DashboardPage() {
             Creative Console
           </h1>
           <p className="text-zinc-600 dark:text-zinc-400 text-sm mt-1">
-            Welcome back, <span className="text-zinc-900 dark:text-zinc-200 font-bold">{session.name}</span>.
-            {' '}Clearance:{' '}
-            <span className="text-purple-600 dark:text-purple-400 font-extrabold">{displayRole}</span>.
+            Glad to have you here, <span className="text-zinc-900 dark:text-zinc-200 font-bold">{session.name}</span>. Have a wonderful and productive day!
           </p>
-        </div>
-        <div className="text-[10px] text-zinc-500 dark:text-zinc-400 font-black tracking-wider uppercase border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 px-3 py-1.5 rounded-full shadow-sm dark:shadow-none">
-          {displayRole}
         </div>
       </div>
 

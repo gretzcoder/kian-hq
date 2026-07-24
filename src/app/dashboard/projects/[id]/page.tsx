@@ -145,6 +145,12 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     .all();
   const users = usersRaw as unknown as UserRow[];
 
+  // Fetch Staff users for Mentor (OJT Coordinator) selection
+  const { results: staffRaw } = await db
+    .prepare("SELECT id, name FROM users WHERE user_type = 'STAFF' AND status = 'ACTIVE' ORDER BY name ASC")
+    .all();
+  const staffList = staffRaw as unknown as UserRow[];
+
   // Content Brief
   const brief = await db
     .prepare('SELECT id, audience, objectives, key_messages, visual_style, status FROM content_briefs WHERE project_id = ?')
@@ -364,7 +370,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm mt-2">
             <h3 className="text-base font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create Workspace</h3>
             <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-4">Add a campaign unit (e.g. Instagram, Podcast, TikTok)</p>
-            <CreateWorkspaceForm projectId={projectId} />
+            <CreateWorkspaceForm projectId={projectId} staffList={staffList} />
           </div>
         )}
       </div>

@@ -32,6 +32,7 @@ export async function getPageContext(): Promise<PageContext> {
         can: () => false,
         permissions: new Set<string>(),
         roles: [],
+        userType: 'STAFF',
       },
     };
   }

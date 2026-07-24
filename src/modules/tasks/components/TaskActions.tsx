@@ -1,13 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { startWork, submitResult, deleteTask } from '../actions';
+import { submitResult, deleteTask } from '../actions';
 
-/**
- * TaskActions — Per-assignment action panel.
- * Uses the new assignment-based workflow (task_assignments) instead of the old
- * single assigned_to pattern.
- */
 interface TaskAssignment {
   id:              string;
   assignment_role: string;
@@ -33,13 +28,16 @@ const roleColors: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  ASSIGNED:    'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700',
-  IN_PROGRESS: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15',
-  SUBMITTED:   'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/15',
-  IN_REVIEW:   'text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 border-yellow-500/15',
-  REVISION:    'text-red-600 dark:text-red-400 bg-red-500/5 border-red-500/15',
-  APPROVED:    'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',
-  DONE:        'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15',
+  DRAFT:              'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700',
+  SUBMITTED:          'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/15',
+  WAITING_REVIEW:     'text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 border-yellow-500/15',
+  REVISION_REQUESTED: 'text-red-600 dark:text-red-400 bg-red-500/5 border-red-500/15',
+  RESUBMITTED:        'text-indigo-600 dark:text-indigo-400 bg-indigo-500/5 border-indigo-500/15',
+  APPROVED:           'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',
+  LOCKED:             'text-zinc-700 dark:text-zinc-300 bg-zinc-500/10 border-zinc-500/20',
+  PUBLISHED:          'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15',
+  ARCHIVED:           'text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800',
+  DECLINED:           'text-red-800 dark:text-red-500 bg-red-800/10 border-red-800/20',
 };
 
 function AssignmentCard({
@@ -54,19 +52,6 @@ function AssignmentCard({
   const [showSubmit, setShowSubmit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleStart = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await startWork(assignment.id);
-      if (!res.success) setError(res.error ?? 'Failed to start work');
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
@@ -74,8 +59,11 @@ function AssignmentCard({
     setError(null);
     try {
       const res = await submitResult(assignment.id, url.trim());
-      if (res.success) setShowSubmit(false);
-      else setError(res.error ?? 'Failed to submit');
+      if (res.success) {
+        setShowSubmit(false);
+      } else {
+        setError(res.error ?? 'Failed to submit');
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -84,7 +72,7 @@ function AssignmentCard({
   };
 
   const role = roleColors[assignment.assignment_role] ?? 'text-zinc-500 bg-zinc-100 border-zinc-200';
-  const status = statusColors[assignment.status] ?? statusColors.ASSIGNED;
+  const status = statusColors[assignment.status] ?? statusColors.DRAFT;
 
   return (
     <div className={`rounded-xl border p-3 space-y-2 text-xs ${isMe ? 'bg-white dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800' : 'bg-zinc-50/50 dark:bg-zinc-900/20 border-zinc-100 dark:border-zinc-800/50'}`}>
@@ -103,7 +91,7 @@ function AssignmentCard({
       </div>
 
       {/* Revision note */}
-      {assignment.revision_note && assignment.status === 'REVISION' && (
+      {assignment.revision_note && (assignment.status === 'REVISION_REQUESTED' || assignment.status === 'DECLINED') && (
         <div className="bg-red-500/5 border border-red-500/10 rounded-lg p-2 text-[10px] text-red-700 dark:text-red-400">
           📝 {assignment.revision_note}
         </div>
@@ -115,7 +103,7 @@ function AssignmentCard({
           href={assignment.result_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="block text-[10px] text-purple-600 dark:text-purple-400 hover:underline font-bold truncate"
+          className="block text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-500 hover:underline font-bold truncate"
         >
           🔗 View result
         </a>
@@ -126,17 +114,7 @@ function AssignmentCard({
         <div className="space-y-2 pt-1">
           {error && <p className="text-[10px] text-red-600 dark:text-red-400">{error}</p>}
 
-          {(assignment.status === 'ASSIGNED' || assignment.status === 'REVISION') && (
-            <button
-              onClick={handleStart}
-              disabled={loading}
-              className="w-full bg-blue-500/5 hover:bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/15 font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 active:scale-[0.97]"
-            >
-              {loading ? '...' : assignment.status === 'REVISION' ? '↩ Restart Work' : '▶ Start Work'}
-            </button>
-          )}
-
-          {assignment.status === 'IN_PROGRESS' && (
+          {['DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(assignment.status) && (
             <>
               {showSubmit ? (
                 <form onSubmit={handleSubmit} className="flex gap-1.5">
@@ -144,7 +122,7 @@ function AssignmentCard({
                     type="url"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="Paste Google Drive link..."
+                    placeholder="Paste Google Drive / result link..."
                     required
                     className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 text-zinc-900 dark:text-zinc-100 text-[11px] rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 transition-all"
                   />
@@ -161,7 +139,11 @@ function AssignmentCard({
                   onClick={() => setShowSubmit(true)}
                   className="w-full bg-purple-500/5 hover:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/15 font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all active:scale-[0.97]"
                 >
-                  📤 Submit Result
+                  {assignment.status === 'REVISION_REQUESTED'
+                    ? '📤 Resubmit Result'
+                    : assignment.status === 'DECLINED'
+                    ? '🔄 Create Again & Submit'
+                    : '📤 Submit Result'}
                 </button>
               )}
             </>

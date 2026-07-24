@@ -2,11 +2,12 @@ import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getSessionContext } from '@/modules/roles/rbac';
+import { getSessionContext, hasWorkspacePermission } from '@/modules/roles/rbac';
 import TaskActions from '@/modules/tasks/components/TaskActions';
 import WorkspaceStatusForm from './components/WorkspaceStatusForm';
 import TaskAssignmentPanel from './components/TaskAssignmentPanel';
 import CreateTaskForm from './components/CreateTaskForm';
+import TeamMemberPanel from './components/TeamMemberPanel';
 
 interface WorkspaceRow {
   id: string;
@@ -17,6 +18,7 @@ interface WorkspaceRow {
   deadline: number | null;
   created_at: number;
   creator_name: string | null;
+  ojt_coordinator_id: string | null;
 }
 
 interface TaskRow {
@@ -27,6 +29,8 @@ interface TaskRow {
   priority: string;
   deadline: number | null;
   created_at: number;
+  task_type: string;
+  parent_task_id: string | null;
 }
 
 interface AssignmentRow {
@@ -56,13 +60,16 @@ interface PageProps {
 }
 
 const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
-  TODO:        { label: 'Todo',        color: 'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700',        dot: 'bg-zinc-400' },
-  IN_PROGRESS: { label: 'In Progress', color: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15',                      dot: 'bg-blue-500' },
-  SUBMITTED:   { label: 'Submitted',   color: 'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/15',              dot: 'bg-orange-500' },
-  IN_REVIEW:   { label: 'In Review',   color: 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 border-yellow-500/15',              dot: 'bg-yellow-500' },
-  REVISION:    { label: 'Revision',    color: 'text-red-600 dark:text-red-400 bg-red-500/5 border-red-500/15',                          dot: 'bg-red-500' },
-  APPROVED:    { label: 'Approved',    color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',          dot: 'bg-emerald-500' },
-  DONE:        { label: 'Done',        color: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15',              dot: 'bg-purple-500' },
+  DRAFT:              { label: 'Draft',              color: 'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700', dot: 'bg-zinc-400' },
+  SUBMITTED:          { label: 'Submitted',          color: 'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/15',        dot: 'bg-orange-500' },
+  WAITING_REVIEW:     { label: 'Waiting Review',     color: 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 border-yellow-500/15',        dot: 'bg-yellow-500' },
+  REVISION_REQUESTED: { label: 'Revision Requested',  color: 'text-red-600 dark:text-red-400 bg-red-500/5 border-red-500/15',                    dot: 'bg-red-500' },
+  RESUBMITTED:        { label: 'Resubmitted',        color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/5 border-indigo-500/15',        dot: 'bg-indigo-500' },
+  APPROVED:           { label: 'Approved',           color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',    dot: 'bg-emerald-500' },
+  LOCKED:             { label: 'Locked',             color: 'text-zinc-700 dark:text-zinc-300 bg-zinc-500/10 border-zinc-500/20',                dot: 'bg-zinc-500' },
+  PUBLISHED:          { label: 'Published (Done)',   color: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15',        dot: 'bg-purple-500' },
+  ARCHIVED:           { label: 'Archived',           color: 'text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800', dot: 'bg-zinc-400' },
+  DECLINED:           { label: 'Declined',           color: 'text-red-800 dark:text-red-500 bg-red-800/10 border-red-800/20',                   dot: 'bg-red-800' },
 };
 
 const priorityConfig: Record<string, { label: string; color: string }> = {
@@ -107,7 +114,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   // Fetch tasks in this workspace
   const { results: tasksRaw } = await db
     .prepare(`
-      SELECT id, title, description, status, priority, deadline, created_at
+      SELECT id, title, description, status, priority, deadline, created_at, task_type, parent_task_id
       FROM tasks
       WHERE workspace_id = ?
       ORDER BY
@@ -144,20 +151,52 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     assignmentsByTask[a.task_id].push(a);
   }
 
+  // Fetch workspace OJT members
+  const { results: membersRaw } = await db
+    .prepare(`
+      SELECT wm.user_id as userId, u.name as userName, u.email as userEmail, wm.team_role as teamRole
+      FROM workspace_members wm
+      JOIN users u ON wm.user_id = u.id
+      WHERE wm.workspace_id = ?
+      ORDER BY wm.created_at ASC
+    `)
+    .bind(wsId)
+    .all();
+
+  const members = membersRaw as unknown as {
+    userId: string;
+    userName: string | null;
+    userEmail: string;
+    teamRole: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR';
+  }[];
+
   // Fetch all users for assignment dropdown
   const { results: usersRaw } = await db
     .prepare('SELECT id, name FROM users ORDER BY name ASC')
     .all();
   const users = usersRaw as unknown as UserRow[];
 
-  // Permissions
-  const ctx = await getSessionContext(session.userId);
-  const canCreateTask  = ctx.can('CREATE_TASK');
-  const canAssignTask  = ctx.can('ASSIGN_TASK');
-  const canDeleteTask  = ctx.can('DELETE');
-  const canUpdateWs    = ctx.can('UPDATE_WORKSPACE');
+  // Permissions (Centralized Unified Engine)
+  const [canCreateTask, canAssignTask, canDeleteTask, canUpdateWs, canManageMembers] = await Promise.all([
+    hasWorkspacePermission(session.userId, wsId, 'CREATE_TASK'),
+    hasWorkspacePermission(session.userId, wsId, 'ASSIGN_TASK'),
+    hasWorkspacePermission(session.userId, wsId, 'DELETE'),
+    hasWorkspacePermission(session.userId, wsId, 'UPDATE_WORKSPACE'),
+    hasWorkspacePermission(session.userId, wsId, 'UPDATE_WORKSPACE').then(async (coord) => {
+      if (coord) return true;
+      // Also allow team leaders to manage members locally
+      const localRole = members.find((m) => m.userId === session.userId)?.teamRole;
+      if (localRole === 'LEADER') return true;
+      // Or if global manage is allowed
+      const ctx = await getSessionContext(session.userId);
+      return ctx.can('MANAGE');
+    })
+  ]);
 
   const wsCfg = wsStatusConfig[workspace.status] ?? wsStatusConfig.ACTIVE;
+
+  // Compile subset of tasks for prerequisite selection
+  const existingTasks = tasks.map((t) => ({ id: t.id, title: t.title }));
 
   return (
     <div className="space-y-8">
@@ -210,107 +249,122 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Task Flow Guide */}
-      <div className="flex items-center gap-1 overflow-x-auto py-1 flex-wrap gap-y-2">
-        {['TODO', 'IN_PROGRESS', 'SUBMITTED', 'IN_REVIEW', 'APPROVED', 'DONE'].map((s, i, arr) => {
-          const cfg = statusConfig[s];
-          return (
-            <div key={s} className="flex items-center gap-1 shrink-0">
-              <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${cfg.color}`}>
-                {cfg.label}
-              </span>
-              {i < arr.length - 1 && (
-                <span className="text-zinc-300 dark:text-zinc-700 text-xs">→</span>
+      {/* Two Column Dashboard Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Tasks List */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Tasks</h2>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
+              Ordered by Priority
+            </span>
+          </div>
+
+          {tasks.length === 0 ? (
+            <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 text-center bg-white dark:bg-transparent">
+              <p className="text-3xl mb-3">📋</p>
+              <p className="text-zinc-500 font-bold dark:text-zinc-400">No tasks yet in this workspace.</p>
+              {canCreateTask && (
+                <p className="text-zinc-400 dark:text-zinc-500 text-sm mt-1">Use the form to create your first task.</p>
               )}
             </div>
-          );
-        })}
-      </div>
+          ) : (
+            tasks.map((task) => {
+              const taskAssignments = assignmentsByTask[task.id] ?? [];
+              const cfg = statusConfig[task.status] ?? statusConfig.TODO;
+              const pCfg = priorityConfig[task.priority] ?? priorityConfig.NORMAL;
 
-      {/* Task List */}
-      <div className="space-y-5">
-        {tasks.length === 0 ? (
-          <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 text-center">
-            <p className="text-3xl mb-3">📋</p>
-            <p className="text-zinc-500 font-bold dark:text-zinc-400">No tasks yet in this workspace.</p>
-            {canCreateTask && (
-              <p className="text-zinc-400 dark:text-zinc-500 text-sm mt-1">Use the form below to create the first task.</p>
-            )}
-          </div>
-        ) : (
-          tasks.map((task) => {
-            const taskAssignments = assignmentsByTask[task.id] ?? [];
-            const cfg = statusConfig[task.status] ?? statusConfig.TODO;
-            const pCfg = priorityConfig[task.priority] ?? priorityConfig.NORMAL;
-
-            return (
-              <div
-                key={task.id}
-                className={`border bg-white dark:bg-[#09090b]/40 rounded-3xl shadow-sm overflow-hidden transition-all duration-200 ${
-                  task.status === 'REVISION'
-                    ? 'border-red-500/20 dark:border-red-500/20'
-                    : task.status === 'IN_REVIEW'
-                    ? 'border-yellow-500/15 dark:border-yellow-500/15'
-                    : 'border-zinc-200/80 dark:border-zinc-800/80'
-                }`}
-              >
-                {/* Task Header */}
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${cfg.color}`}>
-                          {cfg.label}
-                        </span>
-                        <span className={`text-[9px] font-black uppercase tracking-widest ${pCfg.color}`}>
-                          {pCfg.label}
-                        </span>
+              return (
+                <div
+                  key={task.id}
+                  className={`border bg-white dark:bg-[#09090b]/40 rounded-3xl shadow-sm overflow-hidden transition-all duration-200 ${
+                    ['REVISION_REQUESTED', 'DECLINED'].includes(task.status)
+                      ? 'border-red-500/20 dark:border-red-500/20'
+                      : ['WAITING_REVIEW'].includes(task.status)
+                      ? 'border-yellow-500/15 dark:border-yellow-500/15'
+                      : ['APPROVED', 'LOCKED'].includes(task.status)
+                      ? 'border-emerald-500/15 dark:border-emerald-500/15'
+                      : ['PUBLISHED'].includes(task.status)
+                      ? 'border-purple-500/15 dark:border-purple-500/15'
+                      : 'border-zinc-200/80 dark:border-zinc-800/80'
+                  }`}
+                >
+                  {/* Task Header */}
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${cfg.color}`}>
+                            {cfg.label}
+                          </span>
+                          <span className={`text-[9px] font-black uppercase tracking-widest ${pCfg.color}`}>
+                            {pCfg.label}
+                          </span>
+                          <span className="text-[8px] font-bold text-zinc-400 bg-zinc-100 dark:bg-zinc-800/60 px-2 py-0.5 rounded-md border border-zinc-200/40 dark:border-zinc-700/40">
+                            {task.task_type}
+                          </span>
+                          {task.parent_task_id && (
+                            <span className="text-[8px] font-bold text-amber-600 bg-amber-500/5 px-2 py-0.5 rounded-md border border-amber-500/10">
+                              🔒 Sequential Lock
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{task.title}</h3>
+                        {task.description && (
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">{task.description}</p>
+                        )}
                       </div>
-                      <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{task.title}</h3>
-                      {task.description && (
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">{task.description}</p>
+                      {task.deadline && (
+                        <span className="text-[10px] text-zinc-400 font-mono shrink-0">
+                          📅 {new Date(task.deadline).toLocaleDateString()}
+                        </span>
                       )}
                     </div>
-                    {task.deadline && (
-                      <span className="text-[10px] text-zinc-400 font-mono shrink-0">
-                        📅 {new Date(task.deadline).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
 
-                  {/* Assignments + Actions */}
-                  <TaskActions
-                    taskId={task.id}
-                    assignments={taskAssignments}
-                    currentUserId={session.userId}
-                    canDelete={canDeleteTask}
-                  />
-                </div>
-
-                {/* Assignment Panel — COORDINATOR only */}
-                {canAssignTask && (
-                  <div className="border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/20 px-5 py-4">
-                    <TaskAssignmentPanel
+                    {/* Assignments + Actions */}
+                    <TaskActions
                       taskId={task.id}
-                      existingAssignments={taskAssignments}
-                      users={users}
+                      assignments={taskAssignments}
+                      currentUserId={session.userId}
+                      canDelete={canDeleteTask}
                     />
                   </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
 
-      {/* Create Task Form — COORDINATOR only */}
-      {canCreateTask && (
-        <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm">
-          <h2 className="text-lg font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create Task</h2>
-          <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-5">Add a new task to this workspace.</p>
-          <CreateTaskForm workspaceId={wsId} />
+                  {/* Assignment Panel — Leader/Mentor only */}
+                  {canAssignTask && (
+                    <div className="border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/20 px-5 py-4">
+                      <TaskAssignmentPanel
+                        taskId={task.id}
+                        existingAssignments={taskAssignments}
+                        users={users}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
         </div>
-      )}
+
+        {/* Right Column: Sidebar */}
+        <div className="space-y-6">
+          {/* OJT Team Members panel */}
+          <TeamMemberPanel
+            workspaceId={wsId}
+            members={members}
+            canManageMembers={canManageMembers}
+          />
+
+          {/* Create Task Form */}
+          {canCreateTask && (
+            <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm">
+              <h2 className="text-lg font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create Task</h2>
+              <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-5">Add a new task to this workspace.</p>
+              <CreateTaskForm workspaceId={wsId} existingTasks={existingTasks} />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

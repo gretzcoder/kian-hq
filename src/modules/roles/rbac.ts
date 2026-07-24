@@ -77,6 +77,10 @@ export async function hasPermission(
   userId: string,
   permissionName: string,
 ): Promise<boolean> {
+  const userType = await getUserType(userId);
+  if (userType === 'OJT' && ['MANAGE', 'EXPORT', 'SHARE'].includes(permissionName)) {
+    return false;
+  }
   const permissions = await getUserPermissions(userId);
   return permissions.includes(permissionName);
 }
@@ -98,6 +102,62 @@ export async function checkPermission(
 }
 
 /**
+ * Retrieves the user type (STAFF vs OJT) from D1.
+ */
+export async function getUserType(userId: string): Promise<'STAFF' | 'OJT'> {
+  const db = await getDB();
+  try {
+    const user = await db
+      .prepare('SELECT user_type FROM users WHERE id = ?')
+      .bind(userId)
+      .first() as { user_type: string } | null;
+    return (user?.user_type as 'STAFF' | 'OJT') || 'STAFF';
+  } catch (err) {
+    console.error('getUserType failed:', err);
+    return 'STAFF';
+  }
+}
+
+/**
+ * Checks if a user is the designated OJT Coordinator for a workspace.
+ */
+export async function isWorkspaceCoordinator(
+  workspaceId: string,
+  userId: string,
+): Promise<boolean> {
+  const db = await getDB();
+  try {
+    const workspace = await db
+      .prepare('SELECT ojt_coordinator_id FROM workspaces WHERE id = ?')
+      .bind(workspaceId)
+      .first() as { ojt_coordinator_id: string | null } | null;
+    return workspace?.ojt_coordinator_id === userId;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Retrieves the local OJT role of a user inside a workspace.
+ * Returns null if they are not a member of the workspace.
+ */
+export async function getLocalWorkspaceRole(
+  workspaceId: string,
+  userId: string,
+): Promise<'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | null> {
+  const db = await getDB();
+  try {
+    const member = await db
+      .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
+      .bind(workspaceId, userId)
+      .first() as { team_role: string } | null;
+    return (member?.team_role as any) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Batch-fetch permissions + roles in a single call.
  * Use at page level to avoid multiple round-trips to KV/D1.
  *
@@ -109,18 +169,26 @@ export async function getSessionContext(userId: string): Promise<{
   can: (permission: string) => boolean;
   permissions: Set<string>;
   roles: string[];
+  userType: 'STAFF' | 'OJT';
 }> {
-  const [permissions, roles] = await Promise.all([
+  const [permissions, roles, userType] = await Promise.all([
     getUserPermissions(userId),
     getUserRoles(userId),
+    getUserType(userId),
   ]);
 
   const permSet = new Set(permissions);
 
   return {
-    can: (perm: string) => permSet.has(perm),
+    can: (perm: string) => {
+      if (userType === 'OJT' && ['MANAGE', 'EXPORT', 'SHARE'].includes(perm)) {
+        return false;
+      }
+      return permSet.has(perm);
+    },
     permissions: permSet,
     roles,
+    userType,
   };
 }
 
@@ -130,8 +198,9 @@ export async function getSessionContext(userId: string): Promise<{
  */
 export async function clearPermissionsCache(userId: string): Promise<void> {
   const kv = await getKV();
+  const cacheKey = `user:permissions:${userId}`;
   try {
-    await kv.delete(`user:permissions:${userId}`);
+    await kv.delete(cacheKey);
   } catch (err) {
     console.error('Failed to clear permissions cache:', err);
   }
@@ -156,4 +225,53 @@ export async function invalidateCacheForRole(roleId: string): Promise<void> {
   } catch (err) {
     console.error('invalidateCacheForRole failed:', err);
   }
+}
+
+/**
+ * Centered permission engine checking both Global RBAC permissions
+ * and Local Workspace Roles (OJT Leader, OJT Coordinator).
+ */
+export async function hasWorkspacePermission(
+  userId: string,
+  workspaceId: string,
+  permissionName: string
+): Promise<boolean> {
+  const db = await getDB();
+  const ctx = await getSessionContext(userId);
+
+  // 1. OJT Protection: Interns cannot access administrative features
+  if (ctx.userType === 'OJT' && ['MANAGE', 'EXPORT', 'SHARE'].includes(permissionName)) {
+    return false;
+  }
+
+  // 2. Check Global RBAC first
+  if (ctx.can(permissionName)) {
+    return true;
+  }
+
+  // 3. Check Local OJT Coordinator (Mentor)
+  const ws = await db
+    .prepare('SELECT ojt_coordinator_id FROM workspaces WHERE id = ?')
+    .bind(workspaceId)
+    .first() as { ojt_coordinator_id: string | null } | null;
+
+  if (ws?.ojt_coordinator_id === userId) {
+    if (['CREATE_TASK', 'ASSIGN_TASK', 'DELETE', 'APPROVE', 'REQUEST_REVISION', 'UPDATE_WORKSPACE'].includes(permissionName)) {
+      return true;
+    }
+  }
+
+  // 4. Check Local OJT Team Leader
+  const member = await db
+    .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
+    .bind(workspaceId, userId)
+    .first() as { team_role: string } | null;
+
+  if (member?.team_role === 'LEADER') {
+    if (['CREATE_TASK', 'ASSIGN_TASK', 'DELETE'].includes(permissionName)) {
+      return true;
+    }
+  }
+
+  return false;
 }

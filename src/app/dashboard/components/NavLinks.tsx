@@ -54,7 +54,7 @@ export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI }: Nav
         Updates
       </Link>
       <Link href="/dashboard/kb" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/kb') ? activeClass : inactiveClass}`}>
-        KB
+        Knowledge
       </Link>
 
       {/* AI: gated by USE_AI permission */}
@@ -93,7 +93,7 @@ export function MobileNavLinks({ canManage, canReview, canCreateBrief, canUseAI 
     ...(canReview      ? [{ href: '/dashboard/review',        label: 'Reviews',  exact: false }] : []),
     ...(canCreateBrief ? [{ href: '/dashboard/briefs',        label: 'Briefs',   exact: false }] : []),
     { href: '/dashboard/announcements',label: 'Updates',   exact: false },
-    { href: '/dashboard/kb',           label: 'KB',        exact: false },
+    { href: '/dashboard/kb',           label: 'Knowledge', exact: false },
     ...(canUseAI  ? [{ href: '/dashboard/ai',          label: 'AI',       exact: false }] : []),
     { href: '/dashboard/analytics',    label: 'Analytics', exact: false },
     ...(canManage ? [

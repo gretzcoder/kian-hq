@@ -3,6 +3,7 @@ import { hasPermission } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import PermissionMatrix from '@/modules/permissions/components/PermissionMatrix';
+import RoleSettingsPanel from '@/modules/permissions/components/RoleSettingsPanel';
 
 interface Role {
   id: string;
@@ -162,6 +163,9 @@ export default async function PermissionsPage() {
           grantedMap={grantedMap}
         />
       </div>
+
+      {/* Roles settings panel (CRUD) */}
+      <RoleSettingsPanel roles={roles} />
     </div>
   );
 }

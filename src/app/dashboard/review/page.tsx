@@ -52,7 +52,7 @@ export default async function ReviewPage() {
     JOIN projects p    ON t.project_id = p.id
     LEFT JOIN workspaces ws ON t.workspace_id = ws.id
     LEFT JOIN users u  ON ta.user_id = u.id
-    WHERE ta.status = 'IN_REVIEW'
+    WHERE ta.status = 'WAITING_REVIEW'
     ORDER BY ta.submitted_at ASC
   `).all();
 

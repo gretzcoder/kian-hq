@@ -3,7 +3,18 @@
 import { useState } from 'react';
 import { createWorkspace } from '@/modules/workspaces/actions';
 
-export default function CreateWorkspaceForm({ projectId }: { projectId: string }) {
+interface StaffUser {
+  id: string;
+  name: string;
+}
+
+export default function CreateWorkspaceForm({
+  projectId,
+  staffList,
+}: {
+  projectId: string;
+  staffList: StaffUser[];
+}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -60,15 +71,35 @@ export default function CreateWorkspaceForm({ projectId }: { projectId: string }
           />
         </div>
       </div>
-      <div>
-        <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">Description</label>
-        <input
-          type="text"
-          name="description"
-          placeholder="Optional context for this workspace..."
-          className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all"
-        />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">Description</label>
+          <input
+            type="text"
+            name="description"
+            placeholder="Optional context for this workspace..."
+            className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+            Mentor (OJT Coordinator)
+          </label>
+          <select
+            name="ojt_coordinator_id"
+            className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-700 dark:text-zinc-300 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all cursor-pointer font-medium"
+          >
+            <option value="">Select Mentor...</option>
+            {staffList.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
+
       <button
         type="submit"
         disabled={loading}

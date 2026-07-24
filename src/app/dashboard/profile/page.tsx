@@ -86,7 +86,7 @@ export default async function ProfilePage() {
           My Profile
         </h1>
         <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
-          Your account identity, clearance level, and performance overview.
+          Your account details and performance overview.
         </p>
       </div>
 
@@ -189,9 +189,9 @@ export default async function ProfilePage() {
             </span>
           </div>
           <div className="flex items-center justify-between py-3">
-            <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Access Control</span>
+            <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">Role</span>
             <span className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-500/5 border border-purple-500/10 px-3 py-1 rounded-full">
-              RBAC — {profile?.role_name || 'CREATOR'}
+              {profile?.role_name || 'CREATOR'}
             </span>
           </div>
         </div>

@@ -52,48 +52,56 @@ export async function signupAction(formData: FormData) {
     // Check if this is the first user
     const countResult = await db.prepare('SELECT COUNT(*) as count FROM users').first() as { count: number };
     const isFirstUser = countResult.count === 0;
-    const initialRoleId = isFirstUser ? 'role_executive' : 'role_creator';
 
-    // Insert user row
-    await db
-      .prepare('INSERT INTO users (id, email, name, status, password_hash) VALUES (?, ?, ?, ?, ?)')
-      .bind(userId, email.toLowerCase(), name, 'ACTIVE', dbPasswordHash)
-      .run();
+    if (isFirstUser) {
+      // First user is automatically active and gets EXECUTIVE role
+      await db
+        .prepare('INSERT INTO users (id, email, name, status, password_hash) VALUES (?, ?, ?, ?, ?)')
+        .bind(userId, email.toLowerCase(), name, 'ACTIVE', dbPasswordHash)
+        .run();
 
-    // Assign role
-    await db
-      .prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)')
-      .bind(userId, initialRoleId)
-      .run();
+      await db
+        .prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)')
+        .bind(userId, 'role_executive')
+        .run();
 
-    // 4. Create session & cookie
-    const sessionId = `session_${crypto.randomUUID().replace(/-/g, '')}`;
-    const sessionData = {
-      userId,
-      email: email.toLowerCase(),
-      name,
-      avatar: undefined,
-      expiresAt: Date.now() + SESSION_TTL,
-    };
+      // Create session & cookie
+      const sessionId = `session_${crypto.randomUUID().replace(/-/g, '')}`;
+      const sessionData = {
+        userId,
+        email: email.toLowerCase(),
+        name,
+        avatar: undefined,
+        expiresAt: Date.now() + SESSION_TTL,
+      };
 
-    await kv.put(`session:${sessionId}`, JSON.stringify(sessionData), {
-      expirationTtl: SESSION_TTL_SECONDS,
-    });
+      await kv.put(`session:${sessionId}`, JSON.stringify(sessionData), {
+        expirationTtl: SESSION_TTL_SECONDS,
+      });
 
-    const headersStore = await headers();
-    const referer = headersStore.get('referer') || '';
-    const secure = referer.startsWith('https://');
+      const headersStore = await headers();
+      const referer = headersStore.get('referer') || '';
+      const secure = referer.startsWith('https://');
 
-    const cookieStore = await cookies();
-    cookieStore.set('session_id', sessionId, {
-      httpOnly: true,
-      secure,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: SESSION_TTL_SECONDS,
-    });
+      const cookieStore = await cookies();
+      cookieStore.set('session_id', sessionId, {
+        httpOnly: true,
+        secure,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: SESSION_TTL_SECONDS,
+      });
 
-    return { success: true };
+      return { success: true, pendingApproval: false };
+    } else {
+      // Subsequent users register as PENDING and require manual approval & role assignment
+      await db
+        .prepare('INSERT INTO users (id, email, name, status, password_hash) VALUES (?, ?, ?, ?, ?)')
+        .bind(userId, email.toLowerCase(), name, 'PENDING', dbPasswordHash)
+        .run();
+
+      return { success: true, pendingApproval: true };
+    }
   } catch (err: any) {
     console.error('Signup error:', err);
     return { success: false, error: err.message || 'Signup failed' };
@@ -123,6 +131,10 @@ export async function loginAction(formData: FormData) {
 
     if (!user || !user.password_hash) {
       return { success: false, error: 'Invalid email or password.' };
+    }
+
+    if (user.status === 'PENDING') {
+      return { success: false, error: 'Your account is pending admin approval.' };
     }
 
     if (user.status !== 'ACTIVE') {
