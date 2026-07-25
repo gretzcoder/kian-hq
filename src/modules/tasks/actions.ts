@@ -1,7 +1,7 @@
 'use server';
 
 import { getSession } from '@/modules/auth/session';
-import { checkPermission, hasPermission, hasWorkspacePermission } from '@/modules/roles/rbac';
+import { checkPermission, hasPermission, hasWorkspacePermission, getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
 import { validateTransition } from '@/modules/workflow/engine';
@@ -24,6 +24,32 @@ interface AssignmentRow {
   user_id: string;
   assignment_role: string;
   status: string;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: Check OJT sequential rundown prerequisites
+// ---------------------------------------------------------------------------
+async function checkOJTPrerequisites(db: any, taskId: string, role: string): Promise<{ allowed: boolean; error?: string }> {
+  if (role === 'PLANNER') {
+    // Check if RESEARCHER step is approved
+    const res = await db
+      .prepare("SELECT status FROM task_assignments WHERE task_id = ? AND assignment_role = 'RESEARCHER'")
+      .bind(taskId)
+      .first() as { status: string } | null;
+    if (!res || !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(res.status)) {
+      return { allowed: false, error: 'Cannot progress planning step until research step is Approved.' };
+    }
+  } else if (role === 'CREATOR') {
+    // Check if PLANNER step is approved
+    const res = await db
+      .prepare("SELECT status FROM task_assignments WHERE task_id = ? AND assignment_role = 'PLANNER'")
+      .bind(taskId)
+      .first() as { status: string } | null;
+    if (!res || !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(res.status)) {
+      return { allowed: false, error: 'Cannot progress creation step until planning step is Approved.' };
+    }
+  }
+  return { allowed: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +151,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
 export async function assignCreatorToTask(
   taskId: string,
   userId: string,
-  role: 'PIC' | 'REVIEWER' | 'HELPER' | 'APPROVER',
+  role: 'PIC' | 'REVIEWER' | 'HELPER' | 'APPROVER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR',
 ) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
@@ -266,6 +292,12 @@ export async function startWork(assignmentId: string) {
       }
     }
 
+    // Check OJT step prerequisites
+    const ojtCheck = await checkOJTPrerequisites(db, assignment.task_id, assignment.assignment_role);
+    if (!ojtCheck.allowed) {
+      return { success: false, error: ojtCheck.error };
+    }
+
     if (task?.workspace_id) {
       revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
     }
@@ -325,6 +357,12 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
       if (parent && !['APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(parent.status)) {
         return { success: false, error: 'Cannot submit this task until the prerequisite task is Approved.' };
       }
+    }
+
+    // Check OJT step prerequisites
+    const ojtCheck = await checkOJTPrerequisites(db, assignment.task_id, assignment.assignment_role);
+    if (!ojtCheck.allowed) {
+      return { success: false, error: ojtCheck.error };
     }
 
     const auditStatus = assignment.status === 'REVISION_REQUESTED' ? 'RESUBMITTED' : 'SUBMITTED';
@@ -411,9 +449,17 @@ export async function approveAssignment(assignmentId: string) {
   const db = await getDB();
 
   const assignment = await db
-    .prepare('SELECT id, task_id, status FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, status, assignment_role, lead_approved, mentor_approved, coordinator_approved FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as AssignmentRow | null;
+    .first() as {
+      id: string;
+      task_id: string;
+      status: string;
+      assignment_role: string;
+      lead_approved: number;
+      mentor_approved: number;
+      coordinator_approved: number;
+    } | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
@@ -422,32 +468,71 @@ export async function approveAssignment(assignmentId: string) {
     .bind(assignment.task_id)
     .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string } | null;
 
-  // Local Coordinator check OR global APPROVE permission (Unified Permission Engine)
-  const workspaceId = task?.workspace_id || '';
-  const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'APPROVE');
-  if (!authorized) {
-    throw new Error('Forbidden: You do not have permission to approve assignments in this workspace.');
-  }
+  if (!task) return { success: false, error: 'Task not found.' };
 
-  let nextStatus = 'APPROVED';
-  if (assignment.status === 'WAITING_REVIEW') {
-    nextStatus = 'APPROVED';
-  } else if (assignment.status === 'APPROVED') {
-    nextStatus = 'LOCKED';
-  } else if (assignment.status === 'LOCKED') {
-    nextStatus = 'PUBLISHED';
-  } else if (assignment.status === 'PUBLISHED') {
-    nextStatus = 'ARCHIVED';
+  const workspaceId = task.workspace_id || '';
+
+  const ctx = await getSessionContext(session.userId);
+  const isLeader = (await db
+    .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+    .bind(workspaceId, session.userId)
+    .first()) !== null;
+
+  const isMentor = (await db
+    .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
+    .bind(workspaceId, session.userId)
+    .first()) !== null;
+
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+
+  const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR'].includes(assignment.assignment_role);
+
+  if (isOjtRole) {
+    if (!isLeader && !isMentor && !isCoordinator) {
+      throw new Error('Forbidden: You do not have permission to approve this step.');
+    }
   } else {
-    validateTransition('task_assignment', assignment.status, 'APPROVED');
+    const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'APPROVE');
+    if (!authorized) {
+      throw new Error('Forbidden: You do not have permission to approve assignments in this workspace.');
+    }
   }
 
   try {
+    let nextStatus = assignment.status;
+    let newLeadApproved = assignment.lead_approved;
+    let newMentorApproved = assignment.mentor_approved;
+    let newCoordinatorApproved = assignment.coordinator_approved;
+
+    if (isOjtRole) {
+      if (isLeader) newLeadApproved = 1;
+      if (isMentor) newMentorApproved = 1;
+      if (isCoordinator) newCoordinatorApproved = 1;
+
+      if (newLeadApproved === 1 && newMentorApproved === 1 && newCoordinatorApproved === 1) {
+        nextStatus = 'APPROVED';
+      } else {
+        nextStatus = 'WAITING_REVIEW';
+      }
+    } else {
+      if (assignment.status === 'WAITING_REVIEW') {
+        nextStatus = 'APPROVED';
+      } else if (assignment.status === 'APPROVED') {
+        nextStatus = 'LOCKED';
+      } else if (assignment.status === 'LOCKED') {
+        nextStatus = 'PUBLISHED';
+      } else if (assignment.status === 'PUBLISHED') {
+        nextStatus = 'ARCHIVED';
+      } else {
+        validateTransition('task_assignment', assignment.status, 'APPROVED');
+      }
+    }
+
     const now = Math.floor(Date.now() / 1000);
 
     await db
-      .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ? WHERE id = ?')
-      .bind(nextStatus, now, assignmentId)
+      .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ? WHERE id = ?')
+      .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, assignmentId)
       .run();
 
     await logWorkflowEvent({
@@ -456,37 +541,42 @@ export async function approveAssignment(assignmentId: string) {
       fromStatus: assignment.status,
       toStatus: nextStatus,
       triggeredBy: session.userId,
-      note: `Approved stage transition to ${nextStatus}`,
+      note: `Approved by: ${isLeader ? 'Leader ' : ''}${isMentor ? 'Mentor ' : ''}${isCoordinator ? 'Coordinator ' : ''}(Status: ${nextStatus})`,
     });
 
-    if (task) {
-      // Check if all assignments are ready for the new status
+    if (nextStatus === 'APPROVED') {
       const { results: pending } = await db
         .prepare("SELECT id FROM task_assignments WHERE task_id = ? AND status NOT IN ('APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD')")
         .bind(task.id)
         .all();
 
-      if (pending.length === 0 && task.status !== nextStatus) {
+      if (pending.length === 0 && task.status !== 'APPROVED') {
         await db
           .prepare('UPDATE tasks SET status = ? WHERE id = ?')
-          .bind(nextStatus, task.id)
+          .bind('APPROVED', task.id)
           .run();
 
         await logWorkflowEvent({
           entityType: 'task',
           entityId: task.id,
           fromStatus: task.status,
-          toStatus: nextStatus,
+          toStatus: 'APPROVED',
           triggeredBy: session.userId,
-          note: `Task stage auto-progressed to ${nextStatus}`,
+          note: `Task stage auto-progressed to APPROVED`,
         });
       }
-
-      if (task.workspace_id) {
-        revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+    } else if (isOjtRole) {
+      if (task.status !== 'WAITING_REVIEW') {
+        await db
+          .prepare('UPDATE tasks SET status = ? WHERE id = ?')
+          .bind('WAITING_REVIEW', task.id)
+          .run();
       }
     }
 
+    if (task.workspace_id) {
+      revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+    }
     revalidatePath('/dashboard/review');
     revalidatePath('/dashboard/workspace');
     return { success: true };
@@ -507,9 +597,9 @@ export async function requestRevision(assignmentId: string, note: string) {
   const db = await getDB();
 
   const assignment = await db
-    .prepare('SELECT id, task_id, status FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, status, assignment_role FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as AssignmentRow | null;
+    .first() as { id: string; task_id: string; status: string; assignment_role: string } | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
@@ -518,11 +608,34 @@ export async function requestRevision(assignmentId: string, note: string) {
     .bind(assignment.task_id)
     .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string } | null;
 
-  // Local Coordinator check OR global REQUEST_REVISION permission (Unified Permission Engine)
-  const workspaceId = task?.workspace_id || '';
-  const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'REQUEST_REVISION');
-  if (!authorized) {
-    throw new Error('Forbidden: You do not have permission to request revisions in this workspace.');
+  if (!task) return { success: false, error: 'Task not found.' };
+
+  const workspaceId = task.workspace_id || '';
+  const ctx = await getSessionContext(session.userId);
+
+  const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR'].includes(assignment.assignment_role);
+
+  if (isOjtRole) {
+    const isLeader = (await db
+      .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+      .bind(workspaceId, session.userId)
+      .first()) !== null;
+
+    const isMentor = (await db
+      .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
+      .bind(workspaceId, session.userId)
+      .first()) !== null;
+
+    const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+
+    if (!isLeader && !isMentor && !isCoordinator) {
+      throw new Error('Forbidden: You do not have permission to request revision for this step.');
+    }
+  } else {
+    const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'REQUEST_REVISION');
+    if (!authorized) {
+      throw new Error('Forbidden: You do not have permission to request revisions in this workspace.');
+    }
   }
 
   const nextStatus = 'REVISION_REQUESTED';
@@ -530,7 +643,7 @@ export async function requestRevision(assignmentId: string, note: string) {
 
   try {
     await db
-      .prepare('UPDATE task_assignments SET status = ?, revision_note = ?, reviewed_at = ? WHERE id = ?')
+      .prepare('UPDATE task_assignments SET status = ?, revision_note = ?, reviewed_at = ?, lead_approved = 0, mentor_approved = 0, coordinator_approved = 0 WHERE id = ?')
       .bind(nextStatus, note.trim(), Math.floor(Date.now() / 1000), assignmentId)
       .run();
 
@@ -627,9 +740,9 @@ export async function declineAssignment(assignmentId: string, note: string) {
   const db = await getDB();
 
   const assignment = await db
-    .prepare('SELECT id, task_id, status FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, status, assignment_role FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as AssignmentRow | null;
+    .first() as { id: string; task_id: string; status: string; assignment_role: string } | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
@@ -638,10 +751,34 @@ export async function declineAssignment(assignmentId: string, note: string) {
     .bind(assignment.task_id)
     .first() as { id: string; project_id: string; workspace_id: string | null; status: string } | null;
 
-  const workspaceId = task?.workspace_id || '';
-  const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'REQUEST_REVISION');
-  if (!authorized) {
-    throw new Error('Forbidden: You do not have permission to decline assignments in this workspace.');
+  if (!task) return { success: false, error: 'Task not found.' };
+
+  const workspaceId = task.workspace_id || '';
+  const ctx = await getSessionContext(session.userId);
+
+  const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR'].includes(assignment.assignment_role);
+
+  if (isOjtRole) {
+    const isLeader = (await db
+      .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+      .bind(workspaceId, session.userId)
+      .first()) !== null;
+
+    const isMentor = (await db
+      .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
+      .bind(workspaceId, session.userId)
+      .first()) !== null;
+
+    const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+
+    if (!isLeader && !isMentor && !isCoordinator) {
+      throw new Error('Forbidden: You do not have permission to decline this step.');
+    }
+  } else {
+    const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'REQUEST_REVISION');
+    if (!authorized) {
+      throw new Error('Forbidden: You do not have permission to decline assignments in this workspace.');
+    }
   }
 
   const nextStatus = 'DECLINED';
@@ -649,7 +786,7 @@ export async function declineAssignment(assignmentId: string, note: string) {
 
   try {
     await db
-      .prepare('UPDATE task_assignments SET status = ?, revision_note = ?, reviewed_at = ? WHERE id = ?')
+      .prepare('UPDATE task_assignments SET status = ?, revision_note = ?, reviewed_at = ?, lead_approved = 0, mentor_approved = 0, coordinator_approved = 0 WHERE id = ?')
       .bind(nextStatus, note.trim(), Math.floor(Date.now() / 1000), assignmentId)
       .run();
 

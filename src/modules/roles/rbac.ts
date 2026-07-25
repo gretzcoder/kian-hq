@@ -140,6 +140,7 @@ export async function isWorkspaceCoordinator(
 /**
  * Retrieves the local OJT role of a user inside a workspace.
  * Returns null if they are not a member of the workspace.
+ * Returns 'LEADER' if they have it, otherwise returns their first role.
  */
 export async function getLocalWorkspaceRole(
   workspaceId: string,
@@ -147,13 +148,35 @@ export async function getLocalWorkspaceRole(
 ): Promise<'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | null> {
   const db = await getDB();
   try {
-    const member = await db
+    const { results } = await db
       .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
       .bind(workspaceId, userId)
-      .first() as { team_role: string } | null;
-    return (member?.team_role as any) || null;
+      .all();
+    if (!results || results.length === 0) return null;
+    const roles = results.map((r: any) => r.team_role);
+    if (roles.includes('LEADER')) return 'LEADER';
+    return (roles[0] as any) || null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Retrieves all local OJT roles of a user inside a workspace.
+ */
+export async function getLocalWorkspaceRoles(
+  workspaceId: string,
+  userId: string,
+): Promise<('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[]> {
+  const db = await getDB();
+  try {
+    const { results } = await db
+      .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
+      .bind(workspaceId, userId)
+      .all();
+    return results.map((r: any) => r.team_role) as any[];
+  } catch {
+    return [];
   }
 }
 
@@ -262,12 +285,13 @@ export async function hasWorkspacePermission(
   }
 
   // 4. Check Local OJT Team Leader
-  const member = await db
+  const { results: localRoles } = await db
     .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
     .bind(workspaceId, userId)
-    .first() as { team_role: string } | null;
+    .all();
 
-  if (member?.team_role === 'LEADER') {
+  const isLeader = localRoles?.some((r: any) => r.team_role === 'LEADER');
+  if (isLeader) {
     if (['CREATE_TASK', 'ASSIGN_TASK', 'DELETE'].includes(permissionName)) {
       return true;
     }

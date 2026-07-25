@@ -132,6 +132,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         .prepare(`
           SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
                  ta.status, ta.result_url, ta.revision_note, ta.submitted_at,
+                 ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
                  u.name as user_name
           FROM task_assignments ta
           LEFT JOIN users u ON ta.user_id = u.id
@@ -163,12 +164,26 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     .bind(wsId)
     .all();
 
-  const members = membersRaw as unknown as {
-    userId: string;
-    userName: string | null;
-    userEmail: string;
-    teamRole: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR';
-  }[];
+  // Group roles by user to support multiple roles
+  const membersMap: Record<string, { userId: string; userName: string | null; userEmail: string; teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[] }> = {};
+  for (const m of (membersRaw as any[])) {
+    if (!membersMap[m.userId]) {
+      membersMap[m.userId] = {
+        userId: m.userId,
+        userName: m.userName,
+        userEmail: m.userEmail,
+        teamRoles: [],
+      };
+    }
+    membersMap[m.userId].teamRoles.push(m.teamRole);
+  }
+  const members = Object.values(membersMap) as any[];
+
+  // Compute QC roles for the current user
+  const isLeader = members.find((m) => m.userId === session.userId)?.teamRoles?.includes('LEADER') ?? false;
+  const isMentor = workspace.ojt_coordinator_id === session.userId;
+  const ctx = await getSessionContext(session.userId);
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
   // Fetch all users for assignment dropdown
   const { results: usersRaw } = await db
@@ -185,10 +200,8 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     hasWorkspacePermission(session.userId, wsId, 'UPDATE_WORKSPACE').then(async (coord) => {
       if (coord) return true;
       // Also allow team leaders to manage members locally
-      const localRole = members.find((m) => m.userId === session.userId)?.teamRole;
-      if (localRole === 'LEADER') return true;
+      if (isLeader) return true;
       // Or if global manage is allowed
-      const ctx = await getSessionContext(session.userId);
       return ctx.can('MANAGE');
     })
   ]);
@@ -327,6 +340,9 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
                       assignments={taskAssignments}
                       currentUserId={session.userId}
                       canDelete={canDeleteTask}
+                      isLeader={isLeader}
+                      isMentor={isMentor}
+                      isCoordinator={isCoordinator}
                     />
                   </div>
 
@@ -337,6 +353,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
                         taskId={task.id}
                         existingAssignments={taskAssignments}
                         users={users}
+                        members={members}
                       />
                     </div>
                   )}

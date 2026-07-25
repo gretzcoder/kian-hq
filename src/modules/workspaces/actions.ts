@@ -235,12 +235,13 @@ export async function addWorkspaceMember(
 }
 
 /**
- * Updates an OJT member's team role inside a workspace.
+ * Updates an OJT member's team roles inside a workspace.
+ * Deletes existing roles for this member in this workspace and inserts the new ones.
  */
-export async function updateWorkspaceMemberRole(
+export async function updateWorkspaceMemberRoles(
   workspaceId: string,
   userId: string,
-  teamRole: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR',
+  teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[],
 ) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
@@ -250,10 +251,19 @@ export async function updateWorkspaceMemberRole(
   if (!hasAuthority) throw new Error('Forbidden: You are not authorized to manage team members.');
 
   try {
+    // Delete all current roles for this user in this workspace
     await db
-      .prepare('UPDATE workspace_members SET team_role = ? WHERE workspace_id = ? AND user_id = ?')
-      .bind(teamRole, workspaceId, userId)
+      .prepare('DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
+      .bind(workspaceId, userId)
       .run();
+
+    // Insert new roles
+    for (const role of teamRoles) {
+      await db
+        .prepare('INSERT INTO workspace_members (workspace_id, user_id, team_role) VALUES (?, ?, ?)')
+        .bind(workspaceId, userId, role)
+        .run();
+    }
 
     const ws = await db.prepare('SELECT project_id FROM workspaces WHERE id = ?').bind(workspaceId).first() as { project_id: string } | null;
     if (ws) {
@@ -261,8 +271,19 @@ export async function updateWorkspaceMemberRole(
     }
     return { success: true };
   } catch (err: any) {
-    return { success: false, error: err.message };
+    return { success: false, error: err.message || 'Failed to update roles.' };
   }
+}
+
+/**
+ * Updates an OJT member's team role inside a workspace (Backward compatible).
+ */
+export async function updateWorkspaceMemberRole(
+  workspaceId: string,
+  userId: string,
+  teamRole: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR',
+) {
+  return updateWorkspaceMemberRoles(workspaceId, userId, [teamRole]);
 }
 
 /**

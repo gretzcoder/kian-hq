@@ -16,37 +16,51 @@ interface User {
   name: string;
 }
 
-const ASSIGNMENT_ROLES = ['PIC', 'REVIEWER', 'HELPER', 'APPROVER'] as const;
+interface Member {
+  userId: string;
+  userName: string | null;
+  userEmail: string;
+  teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[];
+}
+
+const ASSIGNMENT_ROLES = ['RESEARCHER', 'PLANNER', 'CREATOR', 'PIC', 'REVIEWER', 'HELPER', 'APPROVER'] as const;
 type AssignmentRole = typeof ASSIGNMENT_ROLES[number];
 
 const roleConfig: Record<string, { color: string; label: string; desc: string }> = {
-  PIC:      { color: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border-purple-500/15', label: 'PIC',      desc: 'Person in Charge — lead creator' },
-  REVIEWER: { color: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/15',         label: 'Reviewer', desc: 'Reviews and gives feedback' },
-  HELPER:   { color: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/15', label: 'Helper', desc: 'Supports the PIC' },
-  APPROVER: { color: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/15',     label: 'Approver', desc: 'Has final approval rights' },
+  RESEARCHER: { color: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/15', label: 'Researcher', desc: 'Step 1: Mencari ide konten' },
+  PLANNER:    { color: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/15', label: 'Planner', desc: 'Step 2: Membuat brief konten' },
+  CREATOR:    { color: 'text-pink-700 dark:text-pink-400 bg-pink-500/10 border-pink-500/15', label: 'Creator', desc: 'Step 3: Create konten (produksi)' },
+  PIC:        { color: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border-purple-500/15', label: 'PIC',      desc: 'Penanggung jawab tugas reguler' },
+  REVIEWER:   { color: 'text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/15', label: 'Reviewer', desc: 'Peninjau hasil kerja' },
+  HELPER:     { color: 'text-teal-700 dark:text-teal-400 bg-teal-500/10 border-teal-500/15', label: 'Helper', desc: 'Pemberi bantuan teknis' },
+  APPROVER:   { color: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/15', label: 'Approver', desc: 'Pemberi persetujuan akhir' },
 };
 
 export default function TaskAssignmentPanel({
   taskId,
   existingAssignments,
   users,
+  members,
 }: {
   taskId: string;
   existingAssignments: ExistingAssignment[];
   users: User[];
+  members: Member[];
 }) {
   const [selectedUser, setSelectedUser] = useState('');
-  const [selectedRole, setSelectedRole] = useState<AssignmentRole>('PIC');
+  const [selectedRole, setSelectedRole] = useState<AssignmentRole>('RESEARCHER');
   const [loading, setLoading] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  // Users already assigned to this task
-  const assignedUserIds = new Set(existingAssignments.map((a) => a.user_id));
+  // Check if role is already assigned
+  const isRoleAssigned = existingAssignments.some((a) => a.assignment_role === selectedRole);
 
   const handleAssign = async () => {
     if (!selectedUser) return setError('Please select a user.');
+    if (isRoleAssigned) return setError(`Role ${selectedRole} is already assigned. Remove the current assignment first.`);
+
     setLoading(true);
     setError(null);
     try {
@@ -76,6 +90,17 @@ export default function TaskAssignmentPanel({
     }
   };
 
+  // Filter users based on OJT role constraints
+  const eligibleUsers = users.filter((u) => {
+    // If selecting OJT role, check if user is a member with that role in this workspace
+    if (['RESEARCHER', 'PLANNER', 'CREATOR'].includes(selectedRole)) {
+      const member = members.find((m) => m.userId === u.id);
+      return member && member.teamRoles.includes(selectedRole as any);
+    }
+    // For other roles, any workspace member is eligible
+    return members.some((m) => m.userId === u.id);
+  });
+
   return (
     <div className="space-y-3">
       {/* Header */}
@@ -101,50 +126,75 @@ export default function TaskAssignmentPanel({
           )}
 
           {/* Role Selector */}
-          <div className="grid grid-cols-4 gap-1.5">
-            {ASSIGNMENT_ROLES.map((role) => {
-              const cfg = roleConfig[role];
-              return (
-                <button
-                  key={role}
-                  onClick={() => setSelectedRole(role)}
-                  title={cfg.desc}
-                  className={`text-[10px] font-black uppercase tracking-wide px-2 py-2 rounded-xl border transition-all ${
-                    selectedRole === role
-                      ? cfg.color
-                      : 'text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
-                  }`}
-                >
-                  {cfg.label}
-                </button>
-              );
-            })}
+          <div>
+            <label className="block text-[8px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
+              Select Step / Role to Assign
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {ASSIGNMENT_ROLES.map((role) => {
+                const cfg = roleConfig[role];
+                return (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => {
+                      setSelectedRole(role);
+                      setSelectedUser('');
+                      setError(null);
+                    }}
+                    title={cfg.desc}
+                    className={`text-[9px] font-black uppercase tracking-wide px-2.5 py-1.5 rounded-lg border transition-all ${
+                      selectedRole === role
+                        ? cfg.color
+                        : 'text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                    }`}
+                  >
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Role description */}
           <p className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">{roleConfig[selectedRole].desc}</p>
 
-          {/* User Selector */}
-          <select
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
-            className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-2.5 focus:outline-none transition-all"
-          >
-            <option value="">Select team member...</option>
-            {users
-              .filter((u) => !assignedUserIds.has(u.id))
-              .map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-          </select>
+          {isRoleAssigned ? (
+            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/5 border border-amber-500/10 rounded-xl px-3 py-2">
+              ⚠️ This role is already assigned. You must remove the current assignment in order to re-assign.
+            </p>
+          ) : (
+            <>
+              {/* User Selector */}
+              <select
+                value={selectedUser}
+                onChange={(e) => setSelectedUser(e.target.value)}
+                className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-2.5 focus:outline-none transition-all cursor-pointer"
+              >
+                <option value="">Select eligible team member...</option>
+                {eligibleUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
 
-          <button
-            onClick={handleAssign}
-            disabled={loading || !selectedUser}
-            className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white disabled:text-zinc-400 dark:disabled:text-zinc-500 font-bold text-xs py-2.5 rounded-xl transition-all disabled:opacity-60 active:scale-[0.98]"
-          >
-            {loading ? 'Assigning...' : `Assign as ${selectedRole}`}
-          </button>
+              {eligibleUsers.length === 0 && (
+                <p className="text-[10px] text-red-500 dark:text-red-400 italic">
+                  No members in the workspace have the OJT "{selectedRole}" role. Please assign this role to a team member first.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={handleAssign}
+                disabled={loading || !selectedUser}
+                className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white disabled:text-zinc-400 dark:disabled:text-zinc-500 font-bold text-xs py-2.5 rounded-xl transition-all disabled:opacity-60 active:scale-[0.98]"
+              >
+                {loading ? 'Assigning...' : `Assign as ${selectedRole}`}
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -152,13 +202,13 @@ export default function TaskAssignmentPanel({
       {existingAssignments.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {existingAssignments.map((a) => {
-            const cfg = roleConfig[a.assignment_role] ?? roleConfig.PIC;
+            const cfg = roleConfig[a.assignment_role] ?? { color: 'text-zinc-500 bg-zinc-100', label: a.assignment_role };
             return (
               <div
                 key={a.id}
                 className={`flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1.5 rounded-xl border ${cfg.color}`}
               >
-                <span className="font-black uppercase">{a.assignment_role}</span>
+                <span className="font-black uppercase">{cfg.label}</span>
                 <span className="text-zinc-600 dark:text-zinc-300 font-medium">{a.user_name ?? 'Unknown'}</span>
                 <button
                   onClick={() => handleRemove(a.id)}

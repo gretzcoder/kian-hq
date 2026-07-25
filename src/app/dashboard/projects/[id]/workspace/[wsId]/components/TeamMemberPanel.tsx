@@ -1,20 +1,36 @@
 'use client';
 
 import { useState } from 'react';
-import { addWorkspaceMember, updateWorkspaceMemberRole, removeWorkspaceMember } from '@/modules/workspaces/actions';
+import { addWorkspaceMember, updateWorkspaceMemberRoles, removeWorkspaceMember } from '@/modules/workspaces/actions';
 
 interface Member {
   userId: string;
   userName: string | null;
   userEmail: string;
-  teamRole: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR';
+  teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[];
 }
 
-const roleLabels: Record<string, { label: string; color: string }> = {
-  LEADER:     { label: 'Ketua Tim', color: 'text-purple-700 bg-purple-500/10 border-purple-500/20' },
-  RESEARCHER: { label: 'Researcher', color: 'text-blue-700 bg-blue-500/10 border-blue-500/20' },
-  PLANNER:    { label: 'Planner', color: 'text-emerald-700 bg-emerald-500/10 border-emerald-500/20' },
-  CREATOR:    { label: 'Creator', color: 'text-pink-700 bg-pink-500/10 border-pink-500/20' },
+const roleConfig: Record<'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR', { label: string; activeColor: string; inactiveColor: string }> = {
+  LEADER: {
+    label: 'Ketua Tim',
+    activeColor: 'text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/40 border-purple-200 dark:border-purple-800/60',
+    inactiveColor: 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40 hover:border-purple-300 dark:hover:border-purple-800/40'
+  },
+  RESEARCHER: {
+    label: 'Researcher',
+    activeColor: 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800/60',
+    inactiveColor: 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40 hover:border-blue-300 dark:hover:border-blue-800/40'
+  },
+  PLANNER: {
+    label: 'Planner',
+    activeColor: 'text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800/60',
+    inactiveColor: 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40 hover:border-emerald-300 dark:hover:border-emerald-800/40'
+  },
+  CREATOR: {
+    label: 'Creator',
+    activeColor: 'text-pink-700 bg-pink-100 dark:text-pink-300 dark:bg-pink-900/40 border-pink-200 dark:border-pink-800/60',
+    inactiveColor: 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40 hover:border-pink-300 dark:hover:border-pink-800/40'
+  },
 };
 
 export default function TeamMemberPanel({
@@ -57,13 +73,24 @@ export default function TeamMemberPanel({
     }
   };
 
-  const handleRoleChange = async (userId: string, newRole: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR') => {
+  const handleToggleRole = async (
+    userId: string,
+    currentRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[],
+    roleToToggle: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR'
+  ) => {
     setUpdating(userId);
+    let newRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[];
+    if (currentRoles.includes(roleToToggle)) {
+      newRoles = currentRoles.filter((r) => r !== roleToToggle);
+    } else {
+      newRoles = [...currentRoles, roleToToggle];
+    }
+
     try {
-      const res = await updateWorkspaceMemberRole(workspaceId, userId, newRole);
-      if (!res.success) alert(res.error ?? 'Failed to update role.');
+      const res = await updateWorkspaceMemberRoles(workspaceId, userId, newRoles);
+      if (!res.success) alert(res.error ?? 'Failed to update roles.');
     } catch (err: any) {
-      alert(err.message || 'Failed to update role.');
+      alert(err.message || 'Failed to update roles.');
     } finally {
       setUpdating(null);
     }
@@ -88,7 +115,7 @@ export default function TeamMemberPanel({
       <div>
         <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">OJT Team Members</h2>
         <p className="text-zinc-500 dark:text-zinc-500 text-xs mt-0.5">
-          Manage internship assignments, roles, and collaboration for this team.
+          Manage internship assignments, roles, and collaboration for this team. A member can hold multiple roles.
         </p>
       </div>
 
@@ -120,15 +147,15 @@ export default function TeamMemberPanel({
           </div>
 
           <div>
-            <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Team Role</label>
+            <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Initial Role</label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as any)}
               className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-700 dark:text-zinc-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none transition-all cursor-pointer"
             >
-              <option value="RESEARCHER">Content Researcher</option>
-              <option value="PLANNER">Content Planner</option>
-              <option value="CREATOR">Content Creator</option>
+              <option value="RESEARCHER">Researcher (Ide)</option>
+              <option value="PLANNER">Planner (Brief)</option>
+              <option value="CREATOR">Creator (Konten)</option>
               <option value="LEADER">Ketua Tim (Leader)</option>
             </select>
           </div>
@@ -138,7 +165,7 @@ export default function TeamMemberPanel({
             disabled={loading}
             className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-2.5 rounded-xl transition-all disabled:opacity-60 active:scale-[0.98] h-[38px] md:w-full"
           >
-            {loading ? 'Adding...' : '+ Add to Team'}
+            {loading ? 'Adding...' : '+ Invite Member'}
           </button>
         </form>
       )}
@@ -149,34 +176,15 @@ export default function TeamMemberPanel({
           <p className="text-xs text-zinc-400 dark:text-zinc-500 italic text-center py-4">No team members assigned yet.</p>
         ) : (
           members.map((m) => {
-            const roleCfg = roleLabels[m.teamRole] || { label: m.teamRole, color: 'text-zinc-500 bg-zinc-100' };
             const isSelfUpdating = updating === m.userId;
 
             return (
-              <div key={m.userId} className="flex items-center justify-between gap-4 py-3.5 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-zinc-800 dark:text-zinc-200 truncate">{m.userName || 'Unknown User'}</p>
-                  <p className="text-[10px] text-zinc-400 font-mono truncate">{m.userEmail}</p>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0">
-                  {canManageMembers ? (
-                    <select
-                      value={m.teamRole}
-                      disabled={isSelfUpdating}
-                      onChange={(e) => handleRoleChange(m.userId, e.target.value as any)}
-                      className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] font-bold rounded-lg px-2 py-1 text-zinc-700 dark:text-zinc-300 focus:outline-none cursor-pointer"
-                    >
-                      <option value="LEADER">Ketua Tim</option>
-                      <option value="RESEARCHER">Researcher</option>
-                      <option value="PLANNER">Planner</option>
-                      <option value="CREATOR">Creator</option>
-                    </select>
-                  ) : (
-                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${roleCfg.color}`}>
-                      {roleCfg.label}
-                    </span>
-                  )}
+              <div key={m.userId} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-zinc-800 dark:text-zinc-200 truncate">{m.userName || 'Unknown User'}</p>
+                    <p className="text-[10px] text-zinc-400 font-mono truncate">{m.userEmail}</p>
+                  </div>
 
                   {canManageMembers && (
                     <button
@@ -185,8 +193,35 @@ export default function TeamMemberPanel({
                       className="text-xs text-red-500 hover:text-red-600 font-black p-1.5 rounded-lg hover:bg-red-500/5 transition-all"
                       title="Remove member"
                     >
-                      ✕
+                      ✕ Remove
                     </button>
+                  )}
+                </div>
+
+                {/* Roles Selector / Display */}
+                <div className="flex flex-wrap gap-2">
+                  {(['LEADER', 'RESEARCHER', 'PLANNER', 'CREATOR'] as const).map((r) => {
+                    const hasRole = m.teamRoles.includes(r);
+                    const cfg = roleConfig[r];
+                    const classes = `text-[9px] font-black uppercase px-2.5 py-1 rounded-full border transition-all ${
+                      hasRole ? cfg.activeColor : cfg.inactiveColor
+                    } ${canManageMembers && !isSelfUpdating ? 'cursor-pointer active:scale-95' : 'pointer-events-none'}`;
+
+                    return (
+                      <button
+                        key={r}
+                        type="button"
+                        disabled={isSelfUpdating || !canManageMembers}
+                        onClick={() => handleToggleRole(m.userId, m.teamRoles, r)}
+                        className={classes}
+                      >
+                        {hasRole ? '✓ ' : ''}
+                        {cfg.label}
+                      </button>
+                    );
+                  })}
+                  {isSelfUpdating && (
+                    <span className="text-[10px] text-zinc-400 animate-pulse font-bold self-center">Updating...</span>
                   )}
                 </div>
               </div>
