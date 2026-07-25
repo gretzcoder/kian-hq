@@ -3,17 +3,17 @@
 import { useState } from 'react';
 import { createWorkspace } from '@/modules/workspaces/actions';
 
-interface StaffUser {
+interface OjtUser {
   id: string;
   name: string;
 }
 
 export default function CreateWorkspaceForm({
   projectId,
-  staffList,
+  ojtList,
 }: {
   projectId: string;
-  staffList: StaffUser[];
+  ojtList: OjtUser[];
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,9 +91,9 @@ export default function CreateWorkspaceForm({
             className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-700 dark:text-zinc-300 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all cursor-pointer font-medium"
           >
             <option value="">Select Mentor...</option>
-            {staffList.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
+            {ojtList.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
               </option>
             ))}
           </select>

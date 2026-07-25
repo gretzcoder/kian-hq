@@ -39,6 +39,10 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
     getSessionContext(session.userId),
   ]);
 
+  if (ctx.userType === 'OJT') {
+    redirect('/dashboard/workspace');
+  }
+
   const projects = projectsRaw.results as unknown as Project[];
   const canCreateProject = ctx.can('CREATE_PROJECT');
 

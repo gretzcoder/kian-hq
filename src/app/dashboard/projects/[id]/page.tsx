@@ -101,6 +101,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
 
   // Batch permissions
   const ctx = await getSessionContext(session.userId);
+
+  if (ctx.userType === 'OJT') {
+    redirect('/dashboard/workspace');
+  }
+
   const canCreateTask    = ctx.can('CREATE_TASK');
   const canApproveTask   = ctx.can('APPROVE');
   const canDeleteTask    = ctx.can('DELETE');
@@ -145,11 +150,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     .all();
   const users = usersRaw as unknown as UserRow[];
 
-  // Fetch Staff users for Mentor (OJT Coordinator) selection
-  const { results: staffRaw } = await db
-    .prepare("SELECT id, name FROM users WHERE user_type = 'STAFF' AND status = 'ACTIVE' ORDER BY name ASC")
+  // Fetch OJT users for Mentor (OJT Coordinator) selection
+  const { results: ojtRaw } = await db
+    .prepare("SELECT id, name FROM users WHERE user_type = 'OJT' AND status = 'ACTIVE' ORDER BY name ASC")
     .all();
-  const staffList = staffRaw as unknown as UserRow[];
+  const ojtList = ojtRaw as unknown as UserRow[];
 
   // Content Brief
   const brief = await db
@@ -370,7 +375,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm mt-2">
             <h3 className="text-base font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create Workspace</h3>
             <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-4">Add a campaign unit (e.g. Instagram, Podcast, TikTok)</p>
-            <CreateWorkspaceForm projectId={projectId} staffList={staffList} />
+            <CreateWorkspaceForm projectId={projectId} ojtList={ojtList} />
           </div>
         )}
       </div>

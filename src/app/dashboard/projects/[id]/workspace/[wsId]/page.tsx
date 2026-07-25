@@ -206,6 +206,8 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     })
   ]);
 
+  const isOJT = ctx.userType === 'OJT';
+
   const wsCfg = wsStatusConfig[workspace.status] ?? wsStatusConfig.ACTIVE;
 
   // Compile subset of tasks for prerequisite selection
@@ -215,13 +217,23 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     <div className="space-y-8">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs font-bold text-zinc-500 dark:text-zinc-400">
-        <Link href="/dashboard/projects" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
-          Projects
-        </Link>
-        <span className="text-zinc-300 dark:text-zinc-700">›</span>
-        <Link href={`/dashboard/projects/${projectId}`} className="hover:text-zinc-900 dark:hover:text-white transition-colors">
-          {project?.name ?? projectId}
-        </Link>
+        {isOJT ? (
+          <>
+            <span>Projects</span>
+            <span className="text-zinc-300 dark:text-zinc-700">›</span>
+            <span>{project?.name ?? projectId}</span>
+          </>
+        ) : (
+          <>
+            <Link href="/dashboard/projects" className="hover:text-zinc-900 dark:hover:text-white transition-colors">
+              Projects
+            </Link>
+            <span className="text-zinc-300 dark:text-zinc-700">›</span>
+            <Link href={`/dashboard/projects/${projectId}`} className="hover:text-zinc-900 dark:hover:text-white transition-colors">
+              {project?.name ?? projectId}
+            </Link>
+          </>
+        )}
         <span className="text-zinc-300 dark:text-zinc-700">›</span>
         <span className="text-zinc-900 dark:text-white">{workspace.name}</span>
       </div>
