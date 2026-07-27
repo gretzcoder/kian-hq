@@ -90,14 +90,8 @@ export default function TaskAssignmentPanel({
     }
   };
 
-  // Filter users based on OJT role constraints
+  // Any workspace member is eligible for any role inside a task
   const eligibleUsers = users.filter((u) => {
-    // If selecting OJT role, check if user is a member with that role in this workspace
-    if (['RESEARCHER', 'PLANNER', 'CREATOR'].includes(selectedRole)) {
-      const member = members.find((m) => m.userId === u.id);
-      return member && member.teamRoles.includes(selectedRole as any);
-    }
-    // For other roles, any workspace member is eligible
     return members.some((m) => m.userId === u.id);
   });
 
@@ -181,7 +175,7 @@ export default function TaskAssignmentPanel({
 
               {eligibleUsers.length === 0 && (
                 <p className="text-[10px] text-red-500 dark:text-red-400 italic">
-                  No members in the workspace have the OJT "{selectedRole}" role. Please assign this role to a team member first.
+                  No members are currently in this workspace. Please invite members first.
                 </p>
               )}
 
