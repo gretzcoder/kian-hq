@@ -3,7 +3,7 @@ import { getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { createProject } from '@/modules/projects/actions';
+import CreateProjectForm from './components/CreateProjectForm';
 
 interface Project {
   id: string;
@@ -37,7 +37,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
   const [projectsRaw, ctx, ojtRaw] = await Promise.all([
     db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all(),
     getSessionContext(session.userId),
-    db.prepare("SELECT id, name FROM users WHERE user_type = 'OJT' AND status = 'ACTIVE' ORDER BY name ASC").all(),
+    db.prepare("SELECT id, name, email FROM users WHERE user_type = 'OJT' AND status = 'ACTIVE' ORDER BY email ASC").all(),
   ]);
 
   if (ctx.userType === 'OJT') {
@@ -45,7 +45,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
   }
 
   const projects = projectsRaw.results as unknown as Project[];
-  const ojtList = ojtRaw.results as unknown as { id: string; name: string }[];
+  const ojtList = ojtRaw.results as unknown as { id: string; name: string; email: string }[];
   const canCreateProject = ctx.can('CREATE_PROJECT');
 
   const { briefId } = await searchParams;
@@ -58,11 +58,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
     briefTitle = brief?.title || 'Untitled Brief';
   }
 
-  async function handleCreateProject(formData: FormData) {
-    'use server';
-    await createProject(formData);
-    redirect('/dashboard/projects');
-  }
+  // createProject action is imported and called inside CreateProjectForm client component
 
   return (
     <div className="space-y-8">
@@ -147,89 +143,11 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
 
         {/* Right Column: Creation Panel (If permitted) */}
         {canCreateProject ? (
-          <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm space-y-4">
-            <div>
-              <h2 className="text-lg font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create New Project</h2>
-              <p className="text-zinc-500 dark:text-zinc-500 text-xs">Initialize a creative campaign and map its storage root.</p>
-            </div>
-
-            {briefTitle && (
-              <div className="bg-purple-500/5 border border-purple-500/10 rounded-2xl p-3.5 space-y-1">
-                <span className="text-[9px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">
-                  Linked Content Brief
-                </span>
-                <p className="text-xs text-zinc-800 dark:text-zinc-200 font-bold">{briefTitle}</p>
-              </div>
-            )}
-
-            <form action={handleCreateProject} className="space-y-4">
-              {briefId && <input type="hidden" name="briefId" value={briefId} />}
-
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                  Project Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  name="name"
-                  required
-                  defaultValue={briefTitle || ''}
-                  placeholder="e.g. Q3 Video Campaign"
-                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all duration-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                  Description
-                </label>
-                <textarea
-                  name="description"
-                  rows={3}
-                  placeholder="Briefly describe the campaign goals..."
-                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all resize-none duration-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                  Storage URL (Google Drive folder)
-                </label>
-                <input
-                  type="url"
-                  name="gdriveFolderUrl"
-                  placeholder="e.g. https://drive.google.com/..."
-                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all duration-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                  Coordinators <span className="text-red-500">*</span>
-                </label>
-                <div className="max-h-36 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 bg-zinc-100/50 dark:bg-zinc-900/50 space-y-2">
-                  {ojtList.map((o) => (
-                    <label key={o.id} className="flex items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        name="ojtCoordinatorIds"
-                        value={o.id}
-                        className="rounded text-purple-600 focus:ring-purple-500 border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:ring-2"
-                      />
-                      {o.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all duration-300 shadow-[0_4px_16px_rgba(147,51,234,0.15)] hover:shadow-[0_4px_20px_rgba(147,51,234,0.25)] active:scale-[0.98] mt-4"
-              >
-                Create Project
-              </button>
-            </form>
-          </div>
+          <CreateProjectForm
+            briefId={briefId || null}
+            briefTitle={briefTitle}
+            ojtList={ojtList}
+          />
         ) : null}
       </div>
     </div>
