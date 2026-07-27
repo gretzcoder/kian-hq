@@ -7,7 +7,7 @@ interface Member {
   userId: string;
   userName: string | null;
   userEmail: string;
-  teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[];
+  teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[];
 }
 
 const roleConfig: Record<'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR', { label: string; activeColor: string; inactiveColor: string }> = {
@@ -37,13 +37,14 @@ export default function TeamMemberPanel({
   workspaceId,
   members,
   canManageMembers,
+  isMentor,
 }: {
   workspaceId: string;
   members: Member[];
   canManageMembers: boolean;
+  isMentor: boolean;
 }) {
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR'>('RESEARCHER');
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export default function TeamMemberPanel({
     setSuccess(false);
 
     try {
-      const res = await addWorkspaceMember(workspaceId, email, role);
+      const res = await addWorkspaceMember(workspaceId, email); // Defaults to MEMBER
       if (res.success) {
         setEmail('');
         setSuccess(true);
@@ -75,11 +76,13 @@ export default function TeamMemberPanel({
 
   const handleToggleRole = async (
     userId: string,
-    currentRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[],
+    currentRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[],
     roleToToggle: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR'
   ) => {
     setUpdating(userId);
-    let newRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[];
+    let newRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[];
+    
+    // Toggle the role in the array
     if (currentRoles.includes(roleToToggle)) {
       newRoles = currentRoles.filter((r) => r !== roleToToggle);
     } else {
@@ -110,6 +113,15 @@ export default function TeamMemberPanel({
     }
   };
 
+  const canToggleRole = (roleToToggle: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR') => {
+    if (!canManageMembers) return false;
+    if (roleToToggle === 'LEADER') {
+      return isMentor; // Only mentor can assign/remove team leader
+    }
+    // OJT roles can be toggled by either Mentor or Team Leader (via canManageMembers)
+    return true;
+  };
+
   return (
     <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm space-y-6">
       <div>
@@ -131,10 +143,10 @@ export default function TeamMemberPanel({
         </p>
       )}
 
-      {/* Add Member Form (LEADER/Mentor only) */}
-      {canManageMembers && (
-        <form onSubmit={handleAdd} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-4">
-          <div className="md:col-span-1.5">
+      {/* Add Member Form (Mentor only) */}
+      {isMentor && (
+        <form onSubmit={handleAdd} className="flex gap-3 items-end bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-4">
+          <div className="flex-1">
             <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Member Email</label>
             <input
               type="email"
@@ -146,24 +158,10 @@ export default function TeamMemberPanel({
             />
           </div>
 
-          <div>
-            <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Initial Role</label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as any)}
-              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-700 dark:text-zinc-300 text-xs rounded-xl px-3 py-2.5 focus:outline-none transition-all cursor-pointer"
-            >
-              <option value="RESEARCHER">Researcher (Ide)</option>
-              <option value="PLANNER">Planner (Brief)</option>
-              <option value="CREATOR">Creator (Konten)</option>
-              <option value="LEADER">Ketua Tim (Leader)</option>
-            </select>
-          </div>
-
           <button
             type="submit"
             disabled={loading}
-            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-2.5 rounded-xl transition-all disabled:opacity-60 active:scale-[0.98] h-[38px] md:w-full"
+            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-2.5 px-6 rounded-xl transition-all disabled:opacity-60 active:scale-[0.98] h-[38px] shrink-0"
           >
             {loading ? 'Adding...' : '+ Invite Member'}
           </button>
@@ -186,7 +184,7 @@ export default function TeamMemberPanel({
                     <p className="text-[10px] text-zinc-400 font-mono truncate">{m.userEmail}</p>
                   </div>
 
-                  {canManageMembers && (
+                  {isMentor && (
                     <button
                       onClick={() => handleRemove(m.userId, m.userName)}
                       disabled={isSelfUpdating}
@@ -203,15 +201,16 @@ export default function TeamMemberPanel({
                   {(['LEADER', 'RESEARCHER', 'PLANNER', 'CREATOR'] as const).map((r) => {
                     const hasRole = m.teamRoles.includes(r);
                     const cfg = roleConfig[r];
+                    const clickable = canToggleRole(r);
                     const classes = `text-[9px] font-black uppercase px-2.5 py-1 rounded-full border transition-all ${
                       hasRole ? cfg.activeColor : cfg.inactiveColor
-                    } ${canManageMembers && !isSelfUpdating ? 'cursor-pointer active:scale-95' : 'pointer-events-none'}`;
+                    } ${clickable && !isSelfUpdating ? 'cursor-pointer active:scale-95' : 'pointer-events-none opacity-50'}`;
 
                     return (
                       <button
                         key={r}
                         type="button"
-                        disabled={isSelfUpdating || !canManageMembers}
+                        disabled={isSelfUpdating || !clickable}
                         onClick={() => handleToggleRole(m.userId, m.teamRoles, r)}
                         className={classes}
                       >

@@ -34,9 +34,10 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
   if (!session) redirect('/');
 
   const db = await getDB();
-  const [projectsRaw, ctx] = await Promise.all([
+  const [projectsRaw, ctx, ojtRaw] = await Promise.all([
     db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all(),
     getSessionContext(session.userId),
+    db.prepare("SELECT id, name FROM users WHERE user_type = 'OJT' AND status = 'ACTIVE' ORDER BY name ASC").all(),
   ]);
 
   if (ctx.userType === 'OJT') {
@@ -44,6 +45,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
   }
 
   const projects = projectsRaw.results as unknown as Project[];
+  const ojtList = ojtRaw.results as unknown as { id: string; name: string }[];
   const canCreateProject = ctx.can('CREATE_PROJECT');
 
   const { briefId } = await searchParams;
@@ -210,6 +212,24 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
                   name="deadline"
                   className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-500 dark:text-zinc-400 duration-200 cursor-pointer"
                 />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                  Mentor (OJT Coordinator) <span className="text-red-500">*</span>
+                </label>
+                <select
+                  name="ojtCoordinatorId"
+                  required
+                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-700 dark:text-zinc-300 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all duration-200 cursor-pointer font-medium"
+                >
+                  <option value="">Select Mentor...</option>
+                  {ojtList.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <button

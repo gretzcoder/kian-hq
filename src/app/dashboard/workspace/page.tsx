@@ -110,6 +110,22 @@ export default async function WorkspacePage() {
 
   const assignments = rawAssignments as unknown as AssignmentRow[];
 
+  // Fetch projects where user is the mentor (ojt_coordinator_id)
+  const { results: rawMentoredProjects } = await db.prepare(`
+    SELECT id, name, description, status, deadline
+    FROM projects
+    WHERE ojt_coordinator_id = ?
+    ORDER BY created_at DESC
+  `).bind(session.userId).all();
+
+  const mentoredProjects = rawMentoredProjects as unknown as {
+    id: string;
+    name: string;
+    description: string | null;
+    status: string;
+    deadline: number | null;
+  }[];
+
   // Group assignments by workspace
   const grouped: Record<string, { workspaceName: string; projectName: string; projectId: string; workspaceId: string | null; items: AssignmentRow[] }> = {};
   for (const a of assignments) {
@@ -139,6 +155,51 @@ export default async function WorkspacePage() {
           </p>
         </div>
       </div>
+
+      {/* Mentored Projects Section (for OJT mentors) */}
+      {mentoredProjects.length > 0 && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Campaigns & Projects I Mentor</h2>
+            <span className="text-xs text-zinc-400 font-mono font-bold">
+              {mentoredProjects.length} project{mentoredProjects.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {mentoredProjects.map((p) => (
+              <div
+                key={p.id}
+                className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between hover:shadow-md shadow-sm hover:-translate-y-0.5 group"
+              >
+                <div>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 block mb-1">
+                    Mentor Role
+                  </span>
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                    {p.name}
+                  </h3>
+                  {p.description && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
+                      {p.description}
+                    </p>
+                  )}
+                </div>
+                <div className="mt-8 pt-3 border-t border-zinc-100 dark:border-zinc-900/60 flex items-center justify-between gap-2">
+                  <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-500/5 px-2.5 py-1 rounded-full border border-blue-500/10">
+                    {p.status}
+                  </span>
+                  <Link
+                    href={`/dashboard/projects/${p.id}`}
+                    className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900/50 transition-all font-bold active:scale-[0.98] shadow-sm"
+                  >
+                    Manage Project &rarr;
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Workspaces List Section */}
       <div className="space-y-4">

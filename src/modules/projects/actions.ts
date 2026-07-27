@@ -26,6 +26,7 @@ export async function createProject(formData: FormData) {
   const description = formData.get('description') as string;
   const gdriveFolderUrl = formData.get('gdriveFolderUrl') as string;
   const deadlineStr = formData.get('deadline') as string;
+  const ojtCoordinatorId = formData.get('ojtCoordinatorId') as string | null;
   const briefId = formData.get('briefId') as string | null; // optional: link from brief
 
   if (!name?.trim()) {
@@ -39,10 +40,10 @@ export async function createProject(formData: FormData) {
   try {
     await db
       .prepare(`
-        INSERT INTO projects (id, name, description, gdrive_folder_id, status, deadline)
-        VALUES (?, ?, ?, ?, 'PLANNING', ?)
+        INSERT INTO projects (id, name, description, gdrive_folder_id, status, deadline, ojt_coordinator_id)
+        VALUES (?, ?, ?, ?, 'PLANNING', ?, ?)
       `)
-      .bind(projectId, name.trim(), description || null, gdriveFolderUrl || null, deadline)
+      .bind(projectId, name.trim(), description || null, gdriveFolderUrl || null, deadline, ojtCoordinatorId || null)
       .run();
 
     await logWorkflowEvent({
@@ -107,6 +108,7 @@ export async function updateProject(projectId: string, formData: FormData) {
   const gdriveFolderUrl = formData.get('gdriveFolderUrl') as string;
   const status = formData.get('status') as string;
   const deadlineStr = formData.get('deadline') as string;
+  const ojtCoordinatorId = formData.get('ojtCoordinatorId') as string | null;
 
   if (!name?.trim()) {
     return { success: false, error: 'Project name is required.' };
@@ -119,10 +121,10 @@ export async function updateProject(projectId: string, formData: FormData) {
     await db
       .prepare(`
         UPDATE projects
-        SET name = ?, description = ?, gdrive_folder_id = ?, status = ?, deadline = ?
+        SET name = ?, description = ?, gdrive_folder_id = ?, status = ?, deadline = ?, ojt_coordinator_id = ?
         WHERE id = ?
       `)
-      .bind(name.trim(), description || null, gdriveFolderUrl || null, status || 'PLANNING', deadline, projectId)
+      .bind(name.trim(), description || null, gdriveFolderUrl || null, status || 'PLANNING', deadline, ojtCoordinatorId || null, projectId)
       .run();
 
     revalidatePath('/dashboard');

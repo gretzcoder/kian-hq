@@ -1,7 +1,7 @@
 'use server';
 
 import { getSession } from '@/modules/auth/session';
-import { checkPermission, getSessionContext } from '@/modules/roles/rbac';
+import { checkPermission, getSessionContext, getLocalWorkspaceRoles } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
 import { validateTransition } from '@/modules/workflow/engine';
@@ -20,7 +20,19 @@ export async function createWorkspace(projectId: string, formData: FormData) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'CREATE_WORKSPACE');
+  const db = await getDB();
+  const project = await db
+    .prepare('SELECT ojt_coordinator_id FROM projects WHERE id = ?')
+    .bind(projectId)
+    .first() as { ojt_coordinator_id: string | null } | null;
+
+  const ctx = await getSessionContext(session.userId);
+  const isMentor = project?.ojt_coordinator_id === session.userId;
+  const hasGlobalPerm = ctx.can('CREATE_WORKSPACE');
+
+  if (!isMentor && !hasGlobalPerm) {
+    return { success: false, error: 'Forbidden: You do not have permission to create a workspace for this project.' };
+  }
 
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
@@ -30,19 +42,18 @@ export async function createWorkspace(projectId: string, formData: FormData) {
     return { success: false, error: 'Workspace name is required.' };
   }
 
-  const db = await getDB();
   const workspaceId = `ws_${crypto.randomUUID().replace(/-/g, '')}`;
   const deadline = deadlineStr ? new Date(deadlineStr).getTime() : null;
 
   try {
-    const ojtCoordinatorId = formData.get('ojt_coordinator_id') as string;
+    const ojtCoordinatorId = project?.ojt_coordinator_id || null;
 
     await db
       .prepare(`
         INSERT INTO workspaces (id, project_id, name, description, status, deadline, created_by, ojt_coordinator_id)
         VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?)
       `)
-      .bind(workspaceId, projectId, name.trim(), description || null, deadline, session.userId, ojtCoordinatorId || null)
+      .bind(workspaceId, projectId, name.trim(), description || null, deadline, session.userId, ojtCoordinatorId)
       .run();
 
     await logWorkflowEvent({
@@ -200,7 +211,7 @@ async function checkOJTManagementAuthority(db: any, workspaceId: string, userId:
 export async function addWorkspaceMember(
   workspaceId: string,
   email: string,
-  teamRole: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR',
+  teamRole: 'MEMBER' | 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' = 'MEMBER',
 ) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
@@ -241,14 +252,58 @@ export async function addWorkspaceMember(
 export async function updateWorkspaceMemberRoles(
   workspaceId: string,
   userId: string,
-  teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[],
+  teamRoles: ('MEMBER' | 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[],
 ) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
   const db = await getDB();
-  const hasAuthority = await checkOJTManagementAuthority(db, workspaceId, session.userId);
-  if (!hasAuthority) throw new Error('Forbidden: You are not authorized to manage team members.');
+  
+  const ws = await db
+    .prepare('SELECT ojt_coordinator_id FROM workspaces WHERE id = ?')
+    .bind(workspaceId)
+    .first() as { ojt_coordinator_id: string | null } | null;
+
+  const isMentor = ws?.ojt_coordinator_id === session.userId;
+
+  // Check if logged-in user is LEADER
+  const loggedInUserRoles = await getLocalWorkspaceRoles(workspaceId, session.userId);
+  const isLeader = loggedInUserRoles.includes('LEADER');
+
+  const ctx = await getSessionContext(session.userId);
+  const isGlobalAdmin = ctx.can('MANAGE');
+
+  if (!isMentor && !isLeader && !isGlobalAdmin) {
+    throw new Error('Forbidden: You do not have permission to manage workspace roles.');
+  }
+
+  // Get target user's current roles
+  const currentRoles = await getLocalWorkspaceRoles(workspaceId, userId);
+
+  // Determine what roles are being added or removed
+  const rolesToAdd = teamRoles.filter(r => !currentRoles.includes(r));
+  const rolesToRemove = currentRoles.filter(r => !teamRoles.includes(r));
+
+  // Enforce OJT Split-Role Constraints:
+  // 1. LEADER role can ONLY be changed by the Mentor or Global Admin
+  if (rolesToAdd.includes('LEADER') || rolesToRemove.includes('LEADER')) {
+    if (!isMentor && !isGlobalAdmin) {
+      return { success: false, error: 'Only the Mentor can delegate or remove the Team Lead.' };
+    }
+  }
+
+  // 2. OJT roles (RESEARCHER, PLANNER, CREATOR) can ONLY be changed by the Team Lead, Mentor, or Global Admin
+  const isChangingOjtRoles = (['RESEARCHER', 'PLANNER', 'CREATOR'] as const).some(
+    (r: string) => rolesToAdd.includes(r as any) || rolesToRemove.includes(r as any)
+  );
+  if (isChangingOjtRoles) {
+    if (!isLeader && !isMentor && !isGlobalAdmin) {
+      return { success: false, error: 'Only the Team Lead can assign or change team roles.' };
+    }
+  }
+
+  // Ensure 'MEMBER' role is always kept
+  const finalRoles = Array.from(new Set([...teamRoles, 'MEMBER']));
 
   try {
     // Delete all current roles for this user in this workspace
@@ -258,7 +313,7 @@ export async function updateWorkspaceMemberRoles(
       .run();
 
     // Insert new roles
-    for (const role of teamRoles) {
+    for (const role of finalRoles) {
       await db
         .prepare('INSERT INTO workspace_members (workspace_id, user_id, team_role) VALUES (?, ?, ?)')
         .bind(workspaceId, userId, role)

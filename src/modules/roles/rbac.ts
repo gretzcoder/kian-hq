@@ -145,7 +145,7 @@ export async function isWorkspaceCoordinator(
 export async function getLocalWorkspaceRole(
   workspaceId: string,
   userId: string,
-): Promise<'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | null> {
+): Promise<'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER' | null> {
   const db = await getDB();
   try {
     const { results } = await db
@@ -167,7 +167,7 @@ export async function getLocalWorkspaceRole(
 export async function getLocalWorkspaceRoles(
   workspaceId: string,
   userId: string,
-): Promise<('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[]> {
+): Promise<('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[]> {
   const db = await getDB();
   try {
     const { results } = await db

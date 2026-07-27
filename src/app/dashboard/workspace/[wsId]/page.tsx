@@ -167,7 +167,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     .all();
 
   // Group roles by user to support multiple roles
-  const membersMap: Record<string, { userId: string; userName: string | null; userEmail: string; teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[] }> = {};
+  const membersMap: Record<string, { userId: string; userName: string | null; userEmail: string; teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[] }> = {};
   for (const m of (membersRaw as any[])) {
     if (!membersMap[m.userId]) {
       membersMap[m.userId] = {
@@ -384,6 +384,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             workspaceId={wsId}
             members={members}
             canManageMembers={canManageMembers}
+            isMentor={isMentor || isCoordinator}
           />
 
           {/* Create Task Form */}
