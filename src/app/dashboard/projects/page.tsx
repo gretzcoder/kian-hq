@@ -205,31 +205,21 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
 
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                  Deadline
+                  Coordinators <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="date"
-                  name="deadline"
-                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-500 dark:text-zinc-400 duration-200 cursor-pointer"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                  Mentor (OJT Coordinator) <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="ojtCoordinatorId"
-                  required
-                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-700 dark:text-zinc-300 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all duration-200 cursor-pointer font-medium"
-                >
-                  <option value="">Select Mentor...</option>
+                <div className="max-h-36 overflow-y-auto border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 bg-zinc-100/50 dark:bg-zinc-900/50 space-y-2">
                   {ojtList.map((o) => (
-                    <option key={o.id} value={o.id}>
+                    <label key={o.id} className="flex items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="ojtCoordinatorIds"
+                        value={o.id}
+                        className="rounded text-purple-600 focus:ring-purple-500 border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 focus:ring-2"
+                      />
                       {o.name}
-                    </option>
+                    </label>
                   ))}
-                </select>
+                </div>
               </div>
 
               <button

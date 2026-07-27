@@ -21,13 +21,13 @@ export async function createWorkspace(projectId: string, formData: FormData) {
   if (!session) throw new Error('Unauthorized');
 
   const db = await getDB();
-  const project = await db
-    .prepare('SELECT ojt_coordinator_id FROM projects WHERE id = ?')
-    .bind(projectId)
-    .first() as { ojt_coordinator_id: string | null } | null;
+  const isMentorQuery = await db
+    .prepare('SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?')
+    .bind(projectId, session.userId)
+    .first();
 
   const ctx = await getSessionContext(session.userId);
-  const isMentor = project?.ojt_coordinator_id === session.userId;
+  const isMentor = !!isMentorQuery;
   const hasGlobalPerm = ctx.can('CREATE_WORKSPACE');
 
   if (!isMentor && !hasGlobalPerm) {
@@ -46,7 +46,7 @@ export async function createWorkspace(projectId: string, formData: FormData) {
   const deadline = deadlineStr ? new Date(deadlineStr).getTime() : null;
 
   try {
-    const ojtCoordinatorId = project?.ojt_coordinator_id || null;
+    const ojtCoordinatorId = session.userId;
 
     await db
       .prepare(`

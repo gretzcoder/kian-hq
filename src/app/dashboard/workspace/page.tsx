@@ -112,10 +112,11 @@ export default async function WorkspacePage() {
 
   // Fetch projects where user is the mentor (ojt_coordinator_id)
   const { results: rawMentoredProjects } = await db.prepare(`
-    SELECT id, name, description, status, deadline
-    FROM projects
-    WHERE ojt_coordinator_id = ?
-    ORDER BY created_at DESC
+    SELECT DISTINCT p.id, p.name, p.description, p.status, p.deadline
+    FROM projects p
+    JOIN project_coordinators pc ON p.id = pc.project_id
+    WHERE pc.user_id = ?
+    ORDER BY p.created_at DESC
   `).bind(session.userId).all();
 
   const mentoredProjects = rawMentoredProjects as unknown as {

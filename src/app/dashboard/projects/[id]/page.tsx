@@ -104,7 +104,12 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const ctx = await getSessionContext(session.userId);
   const isOJT = ctx.userType === 'OJT';
 
-  const isProjectMentor = project.ojt_coordinator_id === session.userId;
+  const projectMentor = await db
+    .prepare('SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?')
+    .bind(projectId, session.userId)
+    .first();
+  const isProjectMentor = !!projectMentor;
+
   if (isOJT && !isProjectMentor) {
     redirect('/dashboard/workspace');
   }

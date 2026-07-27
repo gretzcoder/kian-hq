@@ -25,26 +25,37 @@ export async function createProject(formData: FormData) {
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
   const gdriveFolderUrl = formData.get('gdriveFolderUrl') as string;
-  const deadlineStr = formData.get('deadline') as string;
-  const ojtCoordinatorId = formData.get('ojtCoordinatorId') as string | null;
+  const ojtCoordinatorIds = formData.getAll('ojtCoordinatorIds') as string[];
   const briefId = formData.get('briefId') as string | null; // optional: link from brief
 
   if (!name?.trim()) {
     return { success: false, error: 'Project name is required.' };
   }
 
+  if (ojtCoordinatorIds.length === 0) {
+    return { success: false, error: 'At least one Coordinator is required.' };
+  }
+
   const db = await getDB();
   const projectId = `proj_${crypto.randomUUID().replace(/-/g, '')}`;
-  const deadline = deadlineStr ? new Date(deadlineStr).getTime() : null;
 
   try {
+    const firstMentorId = ojtCoordinatorIds[0] || null;
+
     await db
       .prepare(`
         INSERT INTO projects (id, name, description, gdrive_folder_id, status, deadline, ojt_coordinator_id)
-        VALUES (?, ?, ?, ?, 'PLANNING', ?, ?)
+        VALUES (?, ?, ?, ?, 'PLANNING', NULL, ?)
       `)
-      .bind(projectId, name.trim(), description || null, gdriveFolderUrl || null, deadline, ojtCoordinatorId || null)
+      .bind(projectId, name.trim(), description || null, gdriveFolderUrl || null, firstMentorId)
       .run();
+
+    for (const mentorId of ojtCoordinatorIds) {
+      await db
+        .prepare('INSERT OR IGNORE INTO project_coordinators (project_id, user_id) VALUES (?, ?)')
+        .bind(projectId, mentorId)
+        .run();
+    }
 
     await logWorkflowEvent({
       entityType: 'project',
@@ -107,25 +118,37 @@ export async function updateProject(projectId: string, formData: FormData) {
   const description = formData.get('description') as string;
   const gdriveFolderUrl = formData.get('gdriveFolderUrl') as string;
   const status = formData.get('status') as string;
-  const deadlineStr = formData.get('deadline') as string;
-  const ojtCoordinatorId = formData.get('ojtCoordinatorId') as string | null;
+  const ojtCoordinatorIds = formData.getAll('ojtCoordinatorIds') as string[];
 
   if (!name?.trim()) {
     return { success: false, error: 'Project name is required.' };
   }
 
   const db = await getDB();
-  const deadline = deadlineStr ? new Date(deadlineStr).getTime() : null;
 
   try {
+    const firstMentorId = ojtCoordinatorIds[0] || null;
+
     await db
       .prepare(`
         UPDATE projects
-        SET name = ?, description = ?, gdrive_folder_id = ?, status = ?, deadline = ?, ojt_coordinator_id = ?
+        SET name = ?, description = ?, gdrive_folder_id = ?, status = ?, ojt_coordinator_id = ?
         WHERE id = ?
       `)
-      .bind(name.trim(), description || null, gdriveFolderUrl || null, status || 'PLANNING', deadline, ojtCoordinatorId || null, projectId)
+      .bind(name.trim(), description || null, gdriveFolderUrl || null, status || 'PLANNING', firstMentorId, projectId)
       .run();
+
+    await db
+      .prepare('DELETE FROM project_coordinators WHERE project_id = ?')
+      .bind(projectId)
+      .run();
+
+    for (const mentorId of ojtCoordinatorIds) {
+      await db
+        .prepare('INSERT OR IGNORE INTO project_coordinators (project_id, user_id) VALUES (?, ?)')
+        .bind(projectId, mentorId)
+        .run();
+    }
 
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/projects');
