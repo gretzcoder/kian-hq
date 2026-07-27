@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createProject } from '@/modules/projects/actions';
 
 interface OjtUser {
@@ -30,6 +30,7 @@ function SearchableSelect({
 }) {
   const [search, setSearch] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedUser = ojtList.find((u) => u.id === selectedId);
 
@@ -41,6 +42,18 @@ function SearchableSelect({
     }
   }, [selectedId, selectedUser]);
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const filtered = ojtList.filter(
     (u) =>
       u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -48,7 +61,7 @@ function SearchableSelect({
   );
 
   return (
-    <div className="relative space-y-1">
+    <div className="relative space-y-1" ref={containerRef}>
       <div className="flex gap-2 items-center">
         <div className="relative flex-1">
           <input
@@ -63,30 +76,27 @@ function SearchableSelect({
             className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all duration-200"
           />
           {isOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} />
-              <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg z-20 divide-y divide-zinc-100 dark:divide-zinc-800/60">
-                {filtered.length === 0 ? (
-                  <p className="p-3 text-xs text-zinc-400 dark:text-zinc-500 italic">No emails match search</p>
-                ) : (
-                  filtered.map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => {
-                        onChange(u.id);
-                        setSearch(u.email);
-                        setIsOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium flex flex-col"
-                    >
-                      <span className="font-bold">{u.email}</span>
-                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500">{u.name}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            </>
+            <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg z-20 divide-y divide-zinc-100 dark:divide-zinc-800/60">
+              {filtered.length === 0 ? (
+                <p className="p-3 text-xs text-zinc-400 dark:text-zinc-500 italic">No emails match search</p>
+              ) : (
+                filtered.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => {
+                      onChange(u.id);
+                      setSearch(u.email);
+                      setIsOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium flex flex-col"
+                  >
+                    <span className="font-bold">{u.email}</span>
+                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500">{u.name}</span>
+                  </button>
+                ))
+              )}
+            </div>
           )}
         </div>
 
