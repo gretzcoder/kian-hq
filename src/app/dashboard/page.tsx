@@ -269,7 +269,7 @@ export default async function DashboardPage() {
                       )}
                       <Link
                         href={task.workspace_id
-                          ? `/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`
+                          ? `/dashboard/workspace/${task.workspace_id}`
                           : `/dashboard/projects/${task.project_id}`}
                         className="text-[11px] border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 bg-white dark:bg-zinc-900/60 px-3.5 py-2 rounded-xl transition-all font-bold tracking-wide active:scale-[0.98] shadow-sm"
                       >

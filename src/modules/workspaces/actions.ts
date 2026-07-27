@@ -105,7 +105,7 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
       .run();
 
     revalidatePath(`/dashboard/projects/${ws.project_id}`);
-    revalidatePath(`/dashboard/projects/${ws.project_id}/workspace/${workspaceId}`);
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
     return { success: true };
   } catch (err: any) {
     console.error('updateWorkspace failed:', err);
@@ -156,7 +156,7 @@ export async function updateWorkspaceStatus(
     });
 
     revalidatePath(`/dashboard/projects/${ws.project_id}`);
-    revalidatePath(`/dashboard/projects/${ws.project_id}/workspace/${workspaceId}`);
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
     return { success: true };
   } catch (err: any) {
     console.error('updateWorkspaceStatus failed:', err);
@@ -226,7 +226,7 @@ export async function addWorkspaceMember(
 
     const ws = await db.prepare('SELECT project_id FROM workspaces WHERE id = ?').bind(workspaceId).first() as { project_id: string } | null;
     if (ws) {
-      revalidatePath(`/dashboard/projects/${ws.project_id}/workspace/${workspaceId}`);
+      revalidatePath(`/dashboard/workspace/${workspaceId}`);
     }
     return { success: true };
   } catch (err: any) {
@@ -267,7 +267,7 @@ export async function updateWorkspaceMemberRoles(
 
     const ws = await db.prepare('SELECT project_id FROM workspaces WHERE id = ?').bind(workspaceId).first() as { project_id: string } | null;
     if (ws) {
-      revalidatePath(`/dashboard/projects/${ws.project_id}/workspace/${workspaceId}`);
+      revalidatePath(`/dashboard/workspace/${workspaceId}`);
     }
     return { success: true };
   } catch (err: any) {
@@ -305,7 +305,7 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
 
     const ws = await db.prepare('SELECT project_id FROM workspaces WHERE id = ?').bind(workspaceId).first() as { project_id: string } | null;
     if (ws) {
-      revalidatePath(`/dashboard/projects/${ws.project_id}/workspace/${workspaceId}`);
+      revalidatePath(`/dashboard/workspace/${workspaceId}`);
     }
     return { success: true };
   } catch (err: any) {

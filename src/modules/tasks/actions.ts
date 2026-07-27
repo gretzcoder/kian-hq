@@ -130,7 +130,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
       note: `Task "${title}" created (${taskType})`,
     });
 
-    revalidatePath(`/dashboard/projects/${ws.project_id}/workspace/${workspaceId}`);
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
     revalidatePath('/dashboard/workspace');
     return { success: true, taskId };
   } catch (err: any) {
@@ -193,7 +193,7 @@ export async function assignCreatorToTask(
     });
 
     if (task.workspace_id) {
-      revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
     return { success: true, assignmentId };
@@ -241,7 +241,7 @@ export async function removeTaskAssignment(assignmentId: string) {
       .run();
 
     if (assignment.workspace_id) {
-      revalidatePath(`/dashboard/projects/${assignment.project_id}/workspace/${assignment.workspace_id}`);
+      revalidatePath(`/dashboard/workspace/${assignment.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
     return { success: true };
@@ -299,7 +299,7 @@ export async function startWork(assignmentId: string) {
     }
 
     if (task?.workspace_id) {
-      revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
     return { success: true };
@@ -423,7 +423,7 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
     });
 
     if (task?.workspace_id) {
-      revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
     revalidatePath('/dashboard/review');
@@ -575,7 +575,7 @@ export async function approveAssignment(assignmentId: string) {
     }
 
     if (task.workspace_id) {
-      revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/review');
     revalidatePath('/dashboard/workspace');
@@ -672,7 +672,7 @@ export async function requestRevision(assignmentId: string, note: string) {
     });
 
     if (task?.workspace_id) {
-      revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/review');
     revalidatePath('/dashboard/workspace');
@@ -715,7 +715,7 @@ export async function deleteTask(taskId: string) {
     await db.prepare('DELETE FROM tasks WHERE id = ?').bind(taskId).run();
 
     if (task.workspace_id) {
-      revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
     return { success: true };
@@ -815,7 +815,7 @@ export async function declineAssignment(assignmentId: string, note: string) {
     });
 
     if (task?.workspace_id) {
-      revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
     revalidatePath('/dashboard/review');
@@ -884,7 +884,7 @@ export async function resetDeclinedAssignment(assignmentId: string) {
     });
 
     if (task?.workspace_id) {
-      revalidatePath(`/dashboard/projects/${task.project_id}/workspace/${task.workspace_id}`);
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
     return { success: true };

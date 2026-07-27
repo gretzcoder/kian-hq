@@ -344,7 +344,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               return (
                 <Link
                   key={ws.id}
-                  href={`/dashboard/projects/${projectId}/workspace/${ws.id}`}
+                  href={`/dashboard/workspace/${ws.id}`}
                   className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 rounded-2xl p-5 hover:border-purple-500/30 dark:hover:border-purple-500/30 hover:shadow-md transition-all duration-300 group block"
                 >
                   <div className="flex items-start justify-between gap-2 mb-3">

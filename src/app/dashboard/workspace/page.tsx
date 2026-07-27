@@ -178,7 +178,7 @@ export default async function WorkspacePage() {
                     {ws.status}
                   </span>
                   <Link
-                    href={`/dashboard/projects/${ws.project_id}/workspace/${ws.id}`}
+                    href={`/dashboard/workspace/${ws.id}`}
                     className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900/50 transition-all font-bold active:scale-[0.98] shadow-sm"
                   >
                     Open Console &rarr;
@@ -219,7 +219,7 @@ export default async function WorkspacePage() {
                   </div>
                   <Link
                     href={group.workspaceId
-                      ? `/dashboard/projects/${group.projectId}/workspace/${group.workspaceId}`
+                      ? `/dashboard/workspace/${group.workspaceId}`
                       : `/dashboard/projects/${group.projectId}`}
                     className="text-[10px] font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
                   >
@@ -284,7 +284,7 @@ export default async function WorkspacePage() {
                           </span>
                           <Link
                             href={group.workspaceId
-                              ? `/dashboard/projects/${group.projectId}/workspace/${group.workspaceId}`
+                              ? `/dashboard/workspace/${group.workspaceId}`
                               : `/dashboard/projects/${group.projectId}`}
                             className="text-[11px] border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 bg-white dark:bg-zinc-900/50 px-3.5 py-1.5 rounded-lg transition-all font-bold"
                           >

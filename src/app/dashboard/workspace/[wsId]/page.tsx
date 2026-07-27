@@ -56,7 +56,7 @@ interface ProjectRow {
 }
 
 interface PageProps {
-  params: Promise<{ id: string; wsId: string }>;
+  params: Promise<{ wsId: string }>;
 }
 
 const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
@@ -89,7 +89,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const session = await getSession();
   if (!session) redirect('/');
 
-  const { id: projectId, wsId } = await params;
+  const { wsId } = await params;
   const db = await getDB();
 
   // Fetch workspace
@@ -98,12 +98,14 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       SELECT ws.*, u.name as creator_name
       FROM workspaces ws
       LEFT JOIN users u ON ws.created_by = u.id
-      WHERE ws.id = ? AND ws.project_id = ?
+      WHERE ws.id = ?
     `)
-    .bind(wsId, projectId)
+    .bind(wsId)
     .first() as WorkspaceRow | null;
 
   if (!workspace) notFound();
+
+  const projectId = workspace.project_id;
 
   // Fetch project for breadcrumb
   const project = await db
