@@ -2,6 +2,111 @@
 
 import { useState } from 'react';
 import { submitResult, deleteTask, approveAssignment, requestRevision, startWork } from '../actions';
+import RichTextEditor from '@/components/RichTextEditor';
+
+// ─── CreatorDrivePreview ────────────────────────────────────────────────────
+// Aspect-ratio aware, user-friendly Google Drive preview widget for Creator step
+function CreatorDrivePreview({ url }: { url: string }) {
+  const [showPreview, setShowPreview] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  const getPreviewSrc = (rawUrl: string): string | null => {
+    const fileMatch = rawUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || rawUrl.match(/id=([a-zA-Z0-9_-]+)/);
+    if (fileMatch?.[1]) return `https://drive.google.com/file/d/${fileMatch[1]}/preview`;
+    const folderMatch = rawUrl.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (folderMatch?.[1]) return `https://drive.google.com/embeddedfolderview?id=${folderMatch[1]}#grid`;
+    return null;
+  };
+
+  const previewSrc = getPreviewSrc(url);
+
+  return (
+    <div className="space-y-2 mt-1">
+      {/* Action row */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl
+                     bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-sm shadow-purple-500/20
+                     active:scale-[0.97]"
+        >
+          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M6.194 20.942 2.4 14.4l5.742-9.942h7.716L9.116 14.4H14.4L8.658 24H2.4zm12.512-1.8-2.97-5.142H14.4L20.142 4.46 23.1 9.6l-2.514 4.342L23.1 18H15.6l-1.2 2.07H10.8L14.4 24h7.2l-2.894-4.858Z"/>
+          </svg>
+          Buka Google Drive
+        </a>
+
+        {previewSrc && (
+          <button
+            type="button"
+            onClick={() => { setShowPreview((p) => !p); if (!showPreview) setLoaded(false); }}
+            className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all border
+              ${showPreview
+                ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border-zinc-300 dark:border-zinc-600'
+                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+              }`}
+          >
+            {showPreview ? (
+              <><span>▲</span> Tutup Preview</>
+            ) : (
+              <><span>▼</span> Lihat Preview</>
+            )}
+          </button>
+        )}
+      </div>
+
+      {/* Collapsible preview panel */}
+      {showPreview && previewSrc && (
+        <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700 bg-zinc-100 dark:bg-zinc-800 shadow-sm">
+          {/* Loading skeleton */}
+          {!loaded && (
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-zinc-400 dark:text-zinc-500">
+              <svg className="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" strokeLinecap="round"/>
+              </svg>
+              <span className="text-xs font-medium">Memuat preview…</span>
+            </div>
+          )}
+          {/* Aspect ratio wrapper: 16:9 */}
+          <div
+            style={{ display: loaded ? 'block' : 'none' }}
+            className="relative w-full"
+          >
+            {/* Padding-top trick for 16:9 aspect ratio */}
+            <div className="relative" style={{ paddingTop: '56.25%' }}>
+              <iframe
+                src={previewSrc}
+                onLoad={() => setLoaded(true)}
+                allow="autoplay"
+                title="Google Drive Preview"
+                className="absolute inset-0 w-full h-full border-0"
+                style={{ background: 'transparent' }}
+              />
+            </div>
+          </div>
+
+          {/* Footer hint */}
+          {loaded && (
+            <div className="px-3 py-1.5 bg-zinc-50 dark:bg-zinc-900/60 border-t border-zinc-200 dark:border-zinc-700 flex items-center justify-between gap-2">
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">Preview Google Drive</span>
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline"
+              >
+                Buka di tab baru ↗
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 interface TaskAssignment {
   id:              string;
@@ -14,7 +119,9 @@ interface TaskAssignment {
   lead_approved?:   number;
   mentor_approved?: number;
   coordinator_approved?: number;
+  deadline?:        number | null;
 }
+
 
 interface TaskActionsProps {
   taskId:          string;
@@ -24,6 +131,7 @@ interface TaskActionsProps {
   isLeader?:       boolean;
   isMentor?:       boolean;
   isCoordinator?:  boolean;
+  isOjt?:          boolean;
 }
 
 const statusColors: Record<string, string> = {
@@ -48,14 +156,34 @@ export default function TaskActions({
   isLeader = false,
   isMentor = false,
   isCoordinator = false,
+  isOjt = false,
 }: TaskActionsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [urlInputs, setUrlInputs] = useState<Record<string, string>>({});
   const [showSubmitMap, setShowSubmitMap] = useState<Record<string, boolean>>({});
+  const [expandedTextMap, setExpandedTextMap] = useState<Record<string, boolean>>({});
   const [revisionInputs, setRevisionInputs] = useState<Record<string, string>>({});
   const [showRevisionMap, setShowRevisionMap] = useState<Record<string, boolean>>({});
   const [errorMap, setErrorMap] = useState<Record<string, string>>({});
+
+
+  const getDrivePreviewUrl = (url: string) => {
+    // Convert view/sharing link to embed preview link if possible
+    // e.g. https://drive.google.com/file/d/FILE_ID/view?usp=sharing -> https://drive.google.com/file/d/FILE_ID/preview
+    // e.g. https://drive.google.com/open?id=FILE_ID -> https://drive.google.com/file/d/FILE_ID/preview
+    const fileIdMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+    if (fileIdMatch && fileIdMatch[1]) {
+      return `https://drive.google.com/file/d/${fileIdMatch[1]}/preview`;
+    }
+    // Folder preview fallback
+    const folderMatch = url.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    if (folderMatch && folderMatch[1]) {
+      return `https://drive.google.com/embeddedfolderview?id=${folderMatch[1]}#grid`;
+    }
+    return null;
+  };
+
 
   const handleDelete = async () => {
     if (!confirm('Delete this task and all its assignments? This cannot be undone.')) return;
@@ -140,9 +268,51 @@ export default function TaskActions({
     }
   };
 
+  const getDeadlineBadge = (deadline: number | null | undefined, isFinished: boolean) => {
+    if (!deadline) return null;
+    const now = Date.now();
+    const diffDays = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+    const dateStr = new Date(deadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+
+    if (isFinished) {
+      return (
+        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+          ✓ Target: {dateStr}
+        </span>
+      );
+    }
+
+    if (diffDays < 0) {
+      const lateDays = Math.abs(diffDays);
+      return (
+        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 animate-pulse" title={`Target: ${dateStr}`}>
+          ⚠️ Terlambat {lateDays} hr ({dateStr})
+        </span>
+      );
+    } else if (diffDays === 0) {
+      return (
+        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" title={`Target: ${dateStr}`}>
+          ⏳ Hari Ini ({dateStr})
+        </span>
+      );
+    } else if (diffDays <= 3) {
+      return (
+        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20" title={`Target: ${dateStr}`}>
+          ⏱️ H-{diffDays} ({dateStr})
+        </span>
+      );
+    } else {
+      return (
+        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">
+          🟢 On Track ({dateStr})
+        </span>
+      );
+    }
+  };
+
   // Identify OJT assignments
   const ojtAssignments = assignments.filter((a) => ['RESEARCHER', 'PLANNER', 'CREATOR'].includes(a.assignment_role));
-  const isOjtTask = ojtAssignments.length > 0;
+  const isOjtTask = isOjt || ojtAssignments.length > 0;
 
   // Render OJT rundown flow
   const renderOJTRundown = () => {
@@ -160,11 +330,11 @@ export default function TaskActions({
           const assign = assignments.find((a) => a.assignment_role === step.role);
           const isActive = previousStepApproved;
           
-          // Check if this step is approved
+          // Check if this step is approved or unassigned
           const isApproved = assign && ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(assign.status);
           
-          // Update sequential gate
-          previousStepApproved = isApproved ?? false;
+          // Update sequential gate: unassigned steps or approved steps do not block the next step
+          previousStepApproved = !assign || (isApproved ?? false);
 
           const isMe = assign?.user_id === currentUserId;
           const statusBadge = assign ? statusColors[assign.status] ?? 'bg-zinc-100 text-zinc-500' : '';
@@ -199,16 +369,20 @@ export default function TaskActions({
                     <h4 className="text-xs font-black text-zinc-800 dark:text-zinc-200">{step.label}</h4>
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-500 leading-normal">{step.desc}</p>
                   </div>
-                  {assign ? (
-                    <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border shrink-0 ${statusBadge}`}>
-                      {assign.status.replace('_', ' ')}
-                    </span>
-                  ) : (
-                    <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400 shrink-0">
-                      Unassigned
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                    {assign && getDeadlineBadge(assign.deadline, isApproved ?? false)}
+                    {assign ? (
+                      <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${statusBadge}`}>
+                        {assign.status.replace('_', ' ')}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400">
+                        Unassigned
+                      </span>
+                    )}
+                  </div>
                 </div>
+
 
                 {assign && (
                   <div className="text-[11px] space-y-2 pt-1">
@@ -219,18 +393,39 @@ export default function TaskActions({
                       {isMe && <span className="text-[9px] text-purple-600 dark:text-purple-400 font-black">(you)</span>}
                     </div>
 
-                    {/* Result Link */}
+                    {/* Result Content / Link */}
                     {assign.result_url && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-zinc-500 dark:text-zinc-400 font-bold">Aset / Ide Link:</span>
-                        <a
-                          href={assign.result_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-purple-600 dark:text-purple-400 hover:text-purple-500 hover:underline font-bold truncate max-w-xs flex items-center gap-1"
-                        >
-                          <span>🔗 Buka Link Google Drive</span>
-                        </a>
+                      <div className="space-y-2">
+                        <span className="text-zinc-500 dark:text-zinc-400 font-bold block">
+                          {assign.assignment_role === 'CREATOR' ? 'Aset Konten (Google Drive):' : 'Laporan Hasil Pengerjaan:'}
+                        </span>
+
+                        {assign.assignment_role === 'CREATOR' ? (
+                          <CreatorDrivePreview url={assign.result_url} />
+                        ) : (
+                          /* Text report with Expand / Collapse and HTML rendering */
+                          <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-3 text-xs text-zinc-800 dark:text-zinc-200">
+                            <div
+                              dangerouslySetInnerHTML={{ __html: assign.result_url }}
+                              className={`prose dark:prose-invert max-w-none text-xs leading-relaxed ${
+                                !expandedTextMap[assign.id] && assign.result_url.length > 200 ? 'line-clamp-3 overflow-hidden' : ''
+                              }`}
+                            />
+
+
+                            {assign.result_url.length > 200 && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setExpandedTextMap((prev) => ({ ...prev, [assign.id]: !prev[assign.id] }))
+                                }
+                                className="mt-2 text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline focus:outline-none"
+                              >
+                                {expandedTextMap[assign.id] ? '↑ Ciutkan Teks' : '↓ Baca Selengkapnya'}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -293,50 +488,91 @@ export default function TaskActions({
                       {/* Intern Assignee Actions */}
                       {isMe && (
                         <>
-                          {assign.status === 'ASSIGNED' && (
-                            <button
-                              type="button"
-                              onClick={() => handleStartWork(assign.id)}
-                              disabled={loading === assign.id}
-                              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all active:scale-[0.98]"
-                            >
-                              {loading === assign.id ? 'Starting...' : '🚀 Mulai Pengerjaan'}
-                            </button>
-                          )}
-
-                          {['DRAFT', 'REVISION_REQUESTED', 'DECLINED', 'IN_PROGRESS'].includes(assign.status) && (
-                            <div className="space-y-2">
-                              {showSubmitMap[assign.id] ? (
-                                <form onSubmit={(e) => handleSubmitResult(e, assign.id)} className="flex gap-2">
-                                  <input
-                                    type="url"
-                                    value={urlInputs[assign.id] ?? ''}
-                                    onChange={(e) => setUrlInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
-                                    placeholder="Paste Link Google Drive hasil kerja..."
-                                    required
-                                    className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-500 transition-all text-zinc-900 dark:text-zinc-100"
-                                  />
-                                  <button
-                                    type="submit"
-                                    disabled={loading === assign.id}
-                                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50"
-                                  >
-                                    {loading === assign.id ? '...' : 'Submit'}
-                                  </button>
-                                </form>
-                              ) : (
+                          {!isActive && !isApproved ? (
+                            <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-3 text-[10px] text-amber-700 dark:text-amber-400 font-bold flex items-center gap-2">
+                              <span>🔒</span>
+                              <span>Step ini masih terkunci. Menunggu Step sebelumnya disetujui QC.</span>
+                            </div>
+                          ) : (
+                            <>
+                              {assign.status === 'ASSIGNED' && (
                                 <button
                                   type="button"
-                                  onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: true }))}
-                                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all active:scale-[0.98]"
+                                  onClick={() => handleStartWork(assign.id)}
+                                  disabled={loading === assign.id}
+                                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all active:scale-[0.98]"
                                 >
-                                  📤 Kirim Hasil Kerja (Google Drive URL)
+                                  {loading === assign.id ? 'Starting...' : '🚀 Mulai Pengerjaan'}
                                 </button>
                               )}
-                            </div>
+
+                              {['DRAFT', 'REVISION_REQUESTED', 'DECLINED', 'IN_PROGRESS'].includes(assign.status) && (
+                                <div className="space-y-2">
+                                  {showSubmitMap[assign.id] ? (
+                                    <form onSubmit={(e) => handleSubmitResult(e, assign.id)} className="space-y-2">
+                                      {assign.assignment_role === 'CREATOR' ? (
+                                        <div className="flex gap-2">
+                                          <input
+                                            type="url"
+                                            value={urlInputs[assign.id] ?? ''}
+                                            onChange={(e) => setUrlInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
+                                            placeholder="Paste Link Google Drive hasil konten..."
+                                            required
+                                            className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-500 transition-all text-zinc-900 dark:text-zinc-100"
+                                          />
+                                          <button
+                                            type="submit"
+                                            disabled={loading === assign.id}
+                                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                                          >
+                                            {loading === assign.id ? '...' : 'Submit'}
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          <RichTextEditor
+                                            value={urlInputs[assign.id] ?? ''}
+                                            onChange={(html) => setUrlInputs((prev) => ({ ...prev, [assign.id]: html }))}
+                                            placeholder={`Tulis laporan hasil pengerjaan ${step.label} dengan format WYSIWYG...`}
+                                          />
+                                          <div className="flex justify-end gap-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: false }))}
+                                              className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 font-bold text-[10px] px-3 py-1.5 rounded-lg"
+                                            >
+                                              Batal
+                                            </button>
+                                            <button
+                                              type="submit"
+                                              disabled={loading === assign.id || !urlInputs[assign.id]?.trim()}
+                                              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                                            >
+                                              {loading === assign.id ? 'Submitting...' : 'Kirim Laporan Teks'}
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                      )}
+                                    </form>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: true }))}
+                                      className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all active:scale-[0.98]"
+                                    >
+                                      {assign.assignment_role === 'CREATOR'
+                                        ? '📤 Kirim Hasil Konten (Google Drive URL)'
+                                        : '📝 Kirim Laporan Teks Hasil Pengerjaan'}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </>
                           )}
                         </>
                       )}
+
 
                       {/* QC Approver Actions */}
                       {assign.status === 'WAITING_REVIEW' && (
@@ -443,10 +679,14 @@ export default function TaskActions({
                   <span className="text-zinc-700 dark:text-zinc-300 font-bold">{a.user_name ?? 'Unknown'}</span>
                   {isMe && <span className="text-[9px] text-purple-600 dark:text-purple-400 font-black">(you)</span>}
                 </div>
-                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${status}`}>
-                  {a.status.replace('_', ' ')}
-                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {getDeadlineBadge(a.deadline, ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status))}
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${status}`}>
+                    {a.status.replace('_', ' ')}
+                  </span>
+                </div>
               </div>
+
 
               {a.revision_note && ['REVISION_REQUESTED', 'DECLINED'].includes(a.status) && (
                 <div className="bg-red-500/5 border border-red-500/10 rounded-lg p-2 text-[10px] text-red-700 dark:text-red-400">

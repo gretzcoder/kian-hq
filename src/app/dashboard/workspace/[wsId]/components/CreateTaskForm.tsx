@@ -4,12 +4,6 @@ import { useState } from 'react';
 import { createTask } from '@/modules/tasks/actions';
 
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
-const TASK_TYPES = [
-  { id: 'REGULAR',          label: 'Reguler (Weekly)', color: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/10' },
-  { id: 'MONTHLY_REPORT',   label: 'Monthly Report',   color: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/10' },
-  { id: 'EVENT',            label: 'Event Troopers',   color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/10' },
-  { id: 'FINAL_SUBMISSION', label: 'Tugas Akhir',      color: 'text-pink-600 dark:text-pink-400 bg-pink-500/5 border-pink-500/10' },
-] as const;
 
 export default function CreateTaskForm({
   workspaceId,
@@ -20,7 +14,6 @@ export default function CreateTaskForm({
 }) {
   const [loading, setLoading] = useState(false);
   const [priority, setPriority] = useState<'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
-  const [taskType, setTaskType] = useState<'REGULAR' | 'MONTHLY_REPORT' | 'EVENT' | 'FINAL_SUBMISSION'>('REGULAR');
   const [parentTaskId, setParentTaskId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -41,7 +34,6 @@ export default function CreateTaskForm({
     const form = e.currentTarget;
     const formData = new FormData(form);
     formData.set('priority', priority);
-    formData.set('taskType', taskType);
     formData.set('parentTaskId', parentTaskId);
 
     try {
@@ -49,7 +41,6 @@ export default function CreateTaskForm({
       if (res.success) {
         form.reset();
         setPriority('NORMAL');
-        setTaskType('REGULAR');
         setParentTaskId('');
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
@@ -75,29 +66,6 @@ export default function CreateTaskForm({
           ✓ Task created successfully!
         </p>
       )}
-
-      {/* Task Type Selector */}
-      <div>
-        <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-          Workflow/Task Type
-        </label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          {TASK_TYPES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTaskType(t.id)}
-              className={`text-[10px] font-bold py-2.5 rounded-xl border text-center transition-all ${
-                taskType === t.id
-                  ? t.color
-                  : 'text-zinc-400 bg-transparent border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>

@@ -299,3 +299,56 @@ export async function hasWorkspacePermission(
 
   return false;
 }
+
+/**
+ * Batch-resolves all workspace permission flags in a single pass.
+ * Call this instead of multiple hasWorkspacePermission() calls to avoid
+ * redundant KV reads and DB queries per request.
+ *
+ * Requires the caller to have already fetched:
+ *  - ctx: from getSessionContext(userId)
+ *  - ojtCoordinatorId: from the workspace row
+ *  - memberRoles: team_role[] for the current user from workspace_members
+ *
+ * @example
+ * const ctx = await getSessionContext(session.userId);
+ * const perms = resolveWorkspacePermissions(ctx, ws.ojt_coordinator_id, userRoles, userId);
+ * const canCreate = perms.canCreateTask;
+ */
+export function resolveWorkspacePermissions(
+  ctx: Awaited<ReturnType<typeof getSessionContext>>,
+  ojtCoordinatorId: string | null,
+  memberRoles: string[],
+  userId: string,
+): {
+  canCreateTask: boolean;
+  canAssignTask: boolean;
+  canDeleteTask: boolean;
+  canUpdateWs: boolean;
+  canManageMembers: boolean;
+} {
+  const isMentor = ojtCoordinatorId === userId;
+  const isLeader = memberRoles.includes('LEADER');
+
+  // OJT Protection
+  const globalCheck = (perm: string) => {
+    if (ctx.userType === 'OJT' && ['MANAGE', 'EXPORT', 'SHARE'].includes(perm)) return false;
+    return ctx.permissions.has(perm);
+  };
+
+  const mentorPerms = ['CREATE_TASK', 'ASSIGN_TASK', 'DELETE', 'APPROVE', 'REQUEST_REVISION', 'UPDATE_WORKSPACE'];
+  const leaderPerms = ['CREATE_TASK', 'ASSIGN_TASK', 'DELETE'];
+
+  const canDo = (perm: string) =>
+    globalCheck(perm) ||
+    (isMentor && mentorPerms.includes(perm)) ||
+    (isLeader && leaderPerms.includes(perm));
+
+  return {
+    canCreateTask:    canDo('CREATE_TASK'),
+    canAssignTask:    canDo('ASSIGN_TASK'),
+    canDeleteTask:    canDo('DELETE'),
+    canUpdateWs:      canDo('UPDATE_WORKSPACE'),
+    canManageMembers: canDo('UPDATE_WORKSPACE') || isLeader || globalCheck('MANAGE'),
+  };
+}

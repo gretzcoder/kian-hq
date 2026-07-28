@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { addWorkspaceMember, updateWorkspaceMemberRoles, removeWorkspaceMember } from '@/modules/workspaces/actions';
 
 interface Member {
@@ -38,30 +38,47 @@ export default function TeamMemberPanel({
   members,
   canManageMembers,
   isMentor,
+  ojtUsers = [],
 }: {
   workspaceId: string;
   members: Member[];
   canManageMembers: boolean;
   isMentor: boolean;
+  ojtUsers?: { id: string; name: string; email: string }[];
 }) {
-  const [email, setEmail] = useState('');
+  const [search, setSearch] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!search.trim()) return;
 
     setLoading(true);
     setError(null);
     setSuccess(false);
 
     try {
-      const res = await addWorkspaceMember(workspaceId, email); // Defaults to MEMBER
+      const res = await addWorkspaceMember(workspaceId, search.trim()); // Defaults to MEMBER
       if (res.success) {
-        setEmail('');
+        setSearch('');
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       } else {
@@ -73,6 +90,12 @@ export default function TeamMemberPanel({
       setLoading(false);
     }
   };
+
+  const filteredOjt = ojtUsers.filter(
+    (u) =>
+      u.email.toLowerCase().includes(search.toLowerCase()) ||
+      u.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   const handleToggleRole = async (
     userId: string,
@@ -143,19 +166,46 @@ export default function TeamMemberPanel({
         </p>
       )}
 
-      {/* Add Member Form (Mentor only) */}
-      {isMentor && (
+      {/* Add Member Form (Mentor or Team Leader) */}
+      {canManageMembers && (
         <form onSubmit={handleAdd} className="flex gap-3 items-end bg-zinc-50/50 dark:bg-zinc-900/30 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-4">
-          <div className="flex-1">
+          <div className="flex-1 relative" ref={containerRef}>
             <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Member Email</label>
             <input
-              type="email"
+              type="text"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="intern@kian-eo.com"
+              autoComplete="off"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setIsOpen(true);
+              }}
+              onFocus={() => setIsOpen(true)}
+              placeholder="Search OJT email (e.g. intern@kian.co)"
               className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-2.5 focus:outline-none transition-all"
             />
+            {isOpen && (
+              <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-lg z-20 divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                {filteredOjt.length === 0 ? (
+                  <p className="p-3 text-xs text-zinc-400 dark:text-zinc-500 italic">No OJT emails match search</p>
+                ) : (
+                  filteredOjt.map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => {
+                        setSearch(u.email);
+                        setIsOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs text-zinc-700 dark:text-zinc-300 hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium flex flex-col"
+                    >
+                      <span className="font-bold">{u.email}</span>
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500">{u.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           <button
@@ -184,7 +234,7 @@ export default function TeamMemberPanel({
                     <p className="text-[10px] text-zinc-400 font-mono truncate">{m.userEmail}</p>
                   </div>
 
-                  {isMentor && (
+                  {canManageMembers && (
                     <button
                       onClick={() => handleRemove(m.userId, m.userName)}
                       disabled={isSelfUpdating}

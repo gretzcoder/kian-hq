@@ -1,0 +1,28 @@
+-- OJT Test Scenario Seeding
+DELETE FROM workspace_members WHERE workspace_id = 'ws_ojt_team_a';
+DELETE FROM task_assignments WHERE task_id IN (SELECT id FROM tasks WHERE workspace_id = 'ws_ojt_team_a');
+DELETE FROM tasks WHERE workspace_id = 'ws_ojt_team_a';
+DELETE FROM workspaces WHERE id = 'ws_ojt_team_a';
+DELETE FROM projects WHERE id = 'proj_ojt_test';
+DELETE FROM user_roles WHERE user_id = 'usr_ojt_coord';
+DELETE FROM users WHERE id = 'usr_ojt_coord';
+DELETE FROM user_roles WHERE user_id = 'usr_ojt_leader';
+DELETE FROM users WHERE id = 'usr_ojt_leader';
+DELETE FROM user_roles WHERE user_id = 'usr_ojt_researc';
+DELETE FROM users WHERE id = 'usr_ojt_researc';
+DELETE FROM user_roles WHERE user_id = 'usr_ojt_planner';
+DELETE FROM users WHERE id = 'usr_ojt_planner';
+DELETE FROM user_roles WHERE user_id = 'usr_ojt_creator';
+DELETE FROM users WHERE id = 'usr_ojt_creator';
+INSERT INTO users (id, email, name, status, password_hash, user_type) VALUES ('usr_ojt_coord', 'mentor@kian.com', 'Mentor OJT (Staff)', 'ACTIVE', '6c51869c4620eaa979c1bedc6adc6097:9fa0ffde6ac0ef0bfd90d52d7ea21d5d279863db65d2929413a832c3b7131a56', 'STAFF');
+INSERT INTO user_roles (user_id, role_id) VALUES ('usr_ojt_coord', 'role_creator');
+INSERT INTO users (id, email, name, status, password_hash, user_type) VALUES ('usr_ojt_leader', 'leader@ojt.com', 'Budi (Ketua Tim)', 'ACTIVE', '6c51869c4620eaa979c1bedc6adc6097:9fa0ffde6ac0ef0bfd90d52d7ea21d5d279863db65d2929413a832c3b7131a56', 'OJT');
+INSERT INTO users (id, email, name, status, password_hash, user_type) VALUES ('usr_ojt_researc', 'researcher@ojt.com', 'Ani (Researcher)', 'ACTIVE', '6c51869c4620eaa979c1bedc6adc6097:9fa0ffde6ac0ef0bfd90d52d7ea21d5d279863db65d2929413a832c3b7131a56', 'OJT');
+INSERT INTO users (id, email, name, status, password_hash, user_type) VALUES ('usr_ojt_planner', 'planner@ojt.com', 'Candra (Planner)', 'ACTIVE', '6c51869c4620eaa979c1bedc6adc6097:9fa0ffde6ac0ef0bfd90d52d7ea21d5d279863db65d2929413a832c3b7131a56', 'OJT');
+INSERT INTO users (id, email, name, status, password_hash, user_type) VALUES ('usr_ojt_creator', 'creator@ojt.com', 'Dodi (Creator)', 'ACTIVE', '6c51869c4620eaa979c1bedc6adc6097:9fa0ffde6ac0ef0bfd90d52d7ea21d5d279863db65d2929413a832c3b7131a56', 'OJT');
+INSERT INTO projects (id, name, description, status) VALUES ('proj_ojt_test', 'OJT Internship Project', 'Workspace testing target for OJT Interns and Mentors', 'PLANNING');
+INSERT INTO workspaces (id, project_id, name, description, status, ojt_coordinator_id, created_by) VALUES ('ws_ojt_team_a', 'proj_ojt_test', 'Tim OJT A - Kampanye Instagram', 'Workspace kolaborasi Tim OJT A di bawah asuhan Mentor.', 'ACTIVE', 'usr_ojt_coord', 'usr_ojt_coord');
+INSERT INTO workspace_members (workspace_id, user_id, team_role) VALUES ('ws_ojt_team_a', 'usr_ojt_leader', 'LEADER');
+INSERT INTO workspace_members (workspace_id, user_id, team_role) VALUES ('ws_ojt_team_a', 'usr_ojt_researc', 'RESEARCHER');
+INSERT INTO workspace_members (workspace_id, user_id, team_role) VALUES ('ws_ojt_team_a', 'usr_ojt_planner', 'PLANNER');
+INSERT INTO workspace_members (workspace_id, user_id, team_role) VALUES ('ws_ojt_team_a', 'usr_ojt_creator', 'CREATOR');

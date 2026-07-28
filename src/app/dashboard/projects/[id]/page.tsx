@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { deleteProject, publishProject, archiveProject } from '@/modules/projects/actions';
 import ProjectTabs from '@/modules/projects/components/ProjectTabs';
 import CreateWorkspaceForm from './components/CreateWorkspaceForm';
+import DeleteWorkspaceButton from './components/DeleteWorkspaceButton';
 
 interface ProjectRow {
   id: string;
@@ -119,7 +120,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const canDeleteTask    = ctx.can('DELETE');
   const canDeleteProject = ctx.can('DELETE');
   const canEditBrief     = ctx.can('UPDATE_BRIEF');
-  const canCreateWs      = ctx.can('CREATE_WORKSPACE');
+  const canCreateWs      = ctx.can('CREATE_WORKSPACE') || isProjectMentor;
+  const canDeleteWs      = ctx.can('DELETE') || isProjectMentor;
   const canPublish       = ctx.can('PUBLISH_PROJECT');
   const canArchive       = ctx.can('ARCHIVE_PROJECT');
 
@@ -130,7 +132,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
              COUNT(t.id) as task_count
       FROM workspaces ws
       LEFT JOIN tasks t ON t.workspace_id = ws.id
-      WHERE ws.project_id = ?
+      WHERE ws.project_id = ? AND ws.deleted_at IS NULL
       GROUP BY ws.id
       ORDER BY ws.created_at ASC
     `)
@@ -263,11 +265,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${statusColor}`}>
               {project.status.replace('_', ' ')}
             </span>
-            {project.deadline && (
-              <span className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
-                Due: {new Date(project.deadline).toLocaleDateString()}
-              </span>
-            )}
           </div>
         </div>
 
@@ -288,39 +285,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           </div>
         )}
 
-        {/* Workflow Step Bar */}
-        <div className="mt-6 pt-6 border-t border-zinc-100 dark:border-zinc-900/60">
-          <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-3">Workflow Progress</p>
-          <div className="flex items-center gap-0">
-            {PROJECT_FLOW.map((step, i) => {
-              const isPast    = i < currentIdx;
-              const isCurrent = i === currentIdx;
-              const isFuture  = i > currentIdx;
-              return (
-                <div key={step.status} className="flex items-center flex-1 min-w-0">
-                  <div className={`flex-1 relative ${i > 0 ? 'before:absolute before:right-full before:top-1/2 before:-translate-y-1/2 before:w-full before:h-0.5 before:content-[""]' : ''} ${
-                    isPast ? 'before:bg-purple-500' : 'before:bg-zinc-200 dark:before:bg-zinc-800'
-                  }`}>
-                    <div className={`relative flex flex-col items-center gap-1.5 px-1`}>
-                      <div className={`w-2.5 h-2.5 rounded-full border-2 transition-all ${
-                        isCurrent ? 'bg-purple-500 border-purple-500 ring-4 ring-purple-500/20' :
-                        isPast    ? 'bg-purple-500 border-purple-500' :
-                                    'bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700'
-                      }`} />
-                      <span className={`text-[9px] font-black uppercase tracking-wide text-center leading-tight ${
-                        isCurrent ? 'text-purple-600 dark:text-purple-400' :
-                        isPast    ? 'text-zinc-500 dark:text-zinc-400' :
-                                    'text-zinc-300 dark:text-zinc-600'
-                      }`}>
-                        {step.label}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+
       </div>
 
       {/* Workspaces Section */}
@@ -346,29 +311,32 @@ export default async function ProjectDetailPage({ params }: PageProps) {
             {workspaces.map((ws) => {
               const wsCfg = wsStatusColors[ws.status] ?? wsStatusColors.ACTIVE;
               return (
-                <Link
-                  key={ws.id}
-                  href={`/dashboard/workspace/${ws.id}`}
-                  className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 rounded-2xl p-5 hover:border-purple-500/30 dark:hover:border-purple-500/30 hover:shadow-md transition-all duration-300 group block"
-                >
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <h3 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                      {ws.name}
-                    </h3>
-                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border shrink-0 ${wsCfg}`}>
-                      {ws.status}
-                    </span>
-                  </div>
-                  {ws.description && (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 mb-3">{ws.description}</p>
-                  )}
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-500 font-bold">
-                    <span>{ws.task_count} task{Number(ws.task_count) !== 1 ? 's' : ''}</span>
-                    {ws.deadline && (
-                      <span className="font-mono">📅 {new Date(ws.deadline).toLocaleDateString()}</span>
+                <div key={ws.id} className="relative group/wscard">
+                  <Link
+                    href={`/dashboard/workspace/${ws.id}`}
+                    className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 rounded-2xl p-5 hover:border-purple-500/30 dark:hover:border-purple-500/30 hover:shadow-md transition-all duration-300 group block"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-3">
+                      <h3 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                        {ws.name}
+                      </h3>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${wsCfg}`}>
+                          {ws.status}
+                        </span>
+                        {canDeleteWs && (
+                          <DeleteWorkspaceButton workspaceId={ws.id} workspaceName={ws.name} />
+                        )}
+                      </div>
+                    </div>
+                    {ws.description && (
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 mb-3">{ws.description}</p>
                     )}
-                  </div>
-                </Link>
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-500 font-bold">
+                      <span>{ws.task_count} task{Number(ws.task_count) !== 1 ? 's' : ''}</span>
+                    </div>
+                  </Link>
+                </div>
               );
             })}
           </div>
@@ -393,7 +361,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           users={users}
           brief={brief}
           events={events}
-          canCreateTask={canCreateTask}
+          canCreateTask={false}
           canApproveTask={canApproveTask}
           canDeleteTask={canDeleteTask}
           canEditBrief={canEditBrief}

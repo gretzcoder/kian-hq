@@ -9,6 +9,7 @@ interface NavLinksProps {
   canCreateBrief: boolean;
   canUseAI:       boolean;
   isOJT?:         boolean;
+  isMentor?:      boolean;
 }
 
 const activeClass =
@@ -20,7 +21,7 @@ function isActive(pathname: string, href: string, exact = false) {
   return exact ? pathname === href : pathname.startsWith(href);
 }
 
-export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT = false }: NavLinksProps) {
+export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT = false, isMentor = false }: NavLinksProps) {
   const pathname = usePathname();
 
   return (
@@ -68,9 +69,12 @@ export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT
         </Link>
       )}
 
-      <Link href="/dashboard/analytics" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/analytics') ? activeClass : inactiveClass}`}>
-        Analytics
-      </Link>
+      {/* Analytics: hidden for OJT users (not relevant to their workflow) */}
+      {!isOJT && (
+        <Link href="/dashboard/analytics" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/analytics') ? activeClass : inactiveClass}`}>
+          Analytics
+        </Link>
+      )}
 
       {/* Admin: MANAGE only */}
       {canManage && (
@@ -87,7 +91,7 @@ export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT
   );
 }
 
-export function MobileNavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT = false }: NavLinksProps) {
+export function MobileNavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT = false, isMentor = false }: NavLinksProps) {
   const pathname = usePathname();
 
   const links = [
@@ -99,7 +103,8 @@ export function MobileNavLinks({ canManage, canReview, canCreateBrief, canUseAI,
     { href: '/dashboard/announcements',label: 'Updates',   exact: false },
     { href: '/dashboard/kb',           label: 'Knowledge', exact: false },
     ...(canUseAI  ? [{ href: '/dashboard/ai',          label: 'AI',       exact: false }] : []),
-    { href: '/dashboard/analytics',    label: 'Analytics', exact: false },
+    // Analytics only for non-OJT users
+    ...(!isOJT ? [{ href: '/dashboard/analytics',    label: 'Analytics', exact: false }] : []),
     ...(canManage ? [
       { href: '/dashboard/users',       label: 'Users', exact: false },
       { href: '/dashboard/permissions', label: 'Perms', exact: false },

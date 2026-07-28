@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { assignCreatorToTask, removeTaskAssignment } from '@/modules/tasks/actions';
+import { assignMultipleCreatorsToTask, removeTaskAssignment } from '@/modules/tasks/actions';
 
 interface ExistingAssignment {
   id: string;
@@ -38,35 +38,71 @@ const roleConfig: Record<string, { color: string; label: string; desc: string }>
 
 export default function TaskAssignmentPanel({
   taskId,
+  taskDeadline,
   existingAssignments,
   users,
   members,
+  isOjt = false,
 }: {
   taskId: string;
+  taskDeadline?: number | null;
   existingAssignments: ExistingAssignment[];
   users: User[];
   members: Member[];
+  isOjt?: boolean;
 }) {
-  const [selectedUser, setSelectedUser] = useState('');
-  const [selectedRole, setSelectedRole] = useState<AssignmentRole>('RESEARCHER');
+  // Batch form state: mapping role -> userId and role -> deadline (date string YYYY-MM-DD)
+  const [roleUserMap, setRoleUserMap] = useState<Record<string, string>>({});
+  const [roleDeadlineMap, setRoleDeadlineMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  // Check if role is already assigned
-  const isRoleAssigned = existingAssignments.some((a) => a.assignment_role === selectedRole);
+  const activeRoles = isOjt
+    ? (['RESEARCHER', 'PLANNER', 'CREATOR'] as const)
+    : ASSIGNMENT_ROLES;
 
-  const handleAssign = async () => {
-    if (!selectedUser) return setError('Please select a user.');
-    if (isRoleAssigned) return setError(`Role ${selectedRole} is already assigned. Remove the current assignment first.`);
+  const eligibleUsers = users.filter((u) => {
+    return members.some((m) => m.userId === u.id);
+  });
+
+  // Calculate maxDate string for date input HTML attribute (YYYY-MM-DD)
+  const maxDateStr = taskDeadline
+    ? new Date(taskDeadline).toISOString().split('T')[0]
+    : undefined;
+
+  const handleBatchAssign = async () => {
+    setError(null);
+    const toAssign: Array<{ userId: string; role: AssignmentRole; deadline?: number | null }> = [];
+
+    for (const role of activeRoles) {
+      const isAssigned = existingAssignments.some((a) => a.assignment_role === role);
+      const selectedUserId = roleUserMap[role];
+      const deadlineStr = roleDeadlineMap[role];
+      const deadline = deadlineStr ? new Date(deadlineStr).getTime() : null;
+
+      // Validation: step deadline cannot be later than task overall deadline
+      if (deadline && taskDeadline && deadline > taskDeadline) {
+        const taskDeadlineFormatted = new Date(taskDeadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+        return setError(`Deadline untuk step ${role} tidak boleh melebihi batas akhir task (${taskDeadlineFormatted}).`);
+      }
+
+      if (!isAssigned && selectedUserId) {
+        toAssign.push({ userId: selectedUserId, role, deadline });
+      }
+    }
+
+    if (toAssign.length === 0) {
+      return setError('Pilih minimal satu user pada role yang belum ter-assign.');
+    }
 
     setLoading(true);
-    setError(null);
     try {
-      const res = await assignCreatorToTask(taskId, selectedUser, selectedRole);
+      const res = await assignMultipleCreatorsToTask(taskId, toAssign);
       if (res.success) {
-        setSelectedUser('');
+        setRoleUserMap({});
+        setRoleDeadlineMap({});
         setOpen(false);
       } else {
         setError(res.error ?? 'Assignment failed');
@@ -77,6 +113,7 @@ export default function TaskAssignmentPanel({
       setLoading(false);
     }
   };
+
 
   const handleRemove = async (assignmentId: string) => {
     if (!confirm('Remove this assignment?')) return;
@@ -90,10 +127,9 @@ export default function TaskAssignmentPanel({
     }
   };
 
-  // Any workspace member is eligible for any role inside a task
-  const eligibleUsers = users.filter((u) => {
-    return members.some((m) => m.userId === u.id);
-  });
+  const hasUnassignedRoles = activeRoles.some(
+    (role) => !existingAssignments.some((a) => a.assignment_role === role)
+  );
 
   return (
     <div className="space-y-3">
@@ -102,95 +138,99 @@ export default function TaskAssignmentPanel({
         <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
           Assign Team Members
         </p>
-        <button
-          onClick={() => { setOpen((o) => !o); setError(null); }}
-          className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 transition-colors"
-        >
-          {open ? '↑ Close' : '+ Add Assignment'}
-        </button>
+        {hasUnassignedRoles && (
+          <button
+            onClick={() => { setOpen((o) => !o); setError(null); }}
+            className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 transition-colors"
+          >
+            {open ? '↑ Close' : '+ Assign Members'}
+          </button>
+        )}
       </div>
 
-      {/* Assignment Form */}
+      {/* Batch Assignment Form */}
       {open && (
-        <div className="bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 space-y-3">
+        <div className="bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 space-y-4">
           {error && (
             <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/5 border border-red-500/10 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
-          {/* Role Selector */}
-          <div>
-            <label className="block text-[8px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-1.5">
-              Select Step / Role to Assign
-            </label>
-            <div className="flex flex-wrap gap-1.5">
-              {ASSIGNMENT_ROLES.map((role) => {
-                const cfg = roleConfig[role];
-                return (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => {
-                      setSelectedRole(role);
-                      setSelectedUser('');
-                      setError(null);
-                    }}
-                    title={cfg.desc}
-                    className={`text-[9px] font-black uppercase tracking-wide px-2.5 py-1.5 rounded-lg border transition-all ${
-                      selectedRole === role
-                        ? cfg.color
-                        : 'text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
-                    }`}
-                  >
-                    {cfg.label}
-                  </button>
-                );
-              })}
-            </div>
+          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed font-medium">
+            Pilih anggota tim dan target deadline pengumpulan untuk masing-masing step di bawah, lalu klik <span className="font-bold text-purple-600 dark:text-purple-400">Simpan Semua Penugasan</span>.
+          </p>
+
+          <div className="space-y-3">
+            {activeRoles.map((role) => {
+              const cfg = roleConfig[role];
+              const existing = existingAssignments.find((a) => a.assignment_role === role);
+
+              return (
+                <div
+                  key={role}
+                  className="p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-950/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-lg border ${cfg.color}`}>
+                        {cfg.label}
+                      </span>
+                      {existing && (
+                        <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                          ✓ Sudah ditugaskan: {existing.user_name}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">{cfg.desc}</p>
+                  </div>
+
+                  {!existing && (
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                      <select
+                        value={roleUserMap[role] || ''}
+                        onChange={(e) =>
+                          setRoleUserMap((prev) => ({ ...prev, [role]: e.target.value }))
+                        }
+                        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-purple-500 transition-all cursor-pointer sm:w-48"
+                      >
+                        <option value="">-- Pilih Anggota --</option>
+                        {eligibleUsers.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <input
+                        type="date"
+                        max={maxDateStr}
+                        value={roleDeadlineMap[role] || ''}
+                        onChange={(e) =>
+                          setRoleDeadlineMap((prev) => ({ ...prev, [role]: e.target.value }))
+                        }
+                        title={maxDateStr ? `Batas maksimum deadline step: ${maxDateStr}` : 'Target Deadline Pengumpulan Step'}
+                        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-purple-500 transition-all cursor-pointer"
+                      />
+
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
-          {/* Role description */}
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">{roleConfig[selectedRole].desc}</p>
-
-          {isRoleAssigned ? (
-            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/5 border border-amber-500/10 rounded-xl px-3 py-2">
-              ⚠️ This role is already assigned. You must remove the current assignment in order to re-assign.
-            </p>
-          ) : (
-            <>
-              {/* User Selector */}
-              <select
-                value={selectedUser}
-                onChange={(e) => setSelectedUser(e.target.value)}
-                className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-2.5 focus:outline-none transition-all cursor-pointer"
-              >
-                <option value="">Select eligible team member...</option>
-                {eligibleUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-
-              {eligibleUsers.length === 0 && (
-                <p className="text-[10px] text-red-500 dark:text-red-400 italic">
-                  No members are currently in this workspace. Please invite members first.
-                </p>
-              )}
-
-              <button
-                type="button"
-                onClick={handleAssign}
-                disabled={loading || !selectedUser}
-                className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white disabled:text-zinc-400 dark:disabled:text-zinc-500 font-bold text-xs py-2.5 rounded-xl transition-all disabled:opacity-60 active:scale-[0.98]"
-              >
-                {loading ? 'Assigning...' : `Assign as ${selectedRole}`}
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            onClick={handleBatchAssign}
+            disabled={loading}
+            className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white disabled:text-zinc-400 dark:disabled:text-zinc-500 font-bold text-xs py-2.5 rounded-xl transition-all disabled:opacity-60 active:scale-[0.98] shadow-sm"
+          >
+            {loading ? 'Menyimpan...' : '💾 Simpan Semua Penugasan'}
+          </button>
         </div>
       )}
+
 
       {/* Current Assignments */}
       {existingAssignments.length > 0 && (

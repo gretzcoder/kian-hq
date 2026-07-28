@@ -2,12 +2,12 @@ import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { getSessionContext, hasWorkspacePermission } from '@/modules/roles/rbac';
-import TaskActions from '@/modules/tasks/components/TaskActions';
+import { getSessionContext, resolveWorkspacePermissions } from '@/modules/roles/rbac';
 import WorkspaceStatusForm from './components/WorkspaceStatusForm';
-import TaskAssignmentPanel from './components/TaskAssignmentPanel';
-import CreateTaskForm from './components/CreateTaskForm';
 import TeamMemberPanel from './components/TeamMemberPanel';
+import CreateTaskForm from './components/CreateTaskForm';
+import TaskAccordion from './components/TaskAccordion';
+
 
 interface WorkspaceRow {
   id: string;
@@ -59,25 +59,6 @@ interface PageProps {
   params: Promise<{ wsId: string }>;
 }
 
-const statusConfig: Record<string, { label: string; color: string; dot: string }> = {
-  DRAFT:              { label: 'Draft',              color: 'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700', dot: 'bg-zinc-400' },
-  SUBMITTED:          { label: 'Submitted',          color: 'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/15',        dot: 'bg-orange-500' },
-  WAITING_REVIEW:     { label: 'Waiting Review',     color: 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 border-yellow-500/15',        dot: 'bg-yellow-500' },
-  REVISION_REQUESTED: { label: 'Revision Requested',  color: 'text-red-600 dark:text-red-400 bg-red-500/5 border-red-500/15',                    dot: 'bg-red-500' },
-  RESUBMITTED:        { label: 'Resubmitted',        color: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/5 border-indigo-500/15',        dot: 'bg-indigo-500' },
-  APPROVED:           { label: 'Approved',           color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',    dot: 'bg-emerald-500' },
-  LOCKED:             { label: 'Locked',             color: 'text-zinc-700 dark:text-zinc-300 bg-zinc-500/10 border-zinc-500/20',                dot: 'bg-zinc-500' },
-  PUBLISHED:          { label: 'Published (Done)',   color: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15',        dot: 'bg-purple-500' },
-  ARCHIVED:           { label: 'Archived',           color: 'text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800', dot: 'bg-zinc-400' },
-  DECLINED:           { label: 'Declined',           color: 'text-red-800 dark:text-red-500 bg-red-800/10 border-red-800/20',                   dot: 'bg-red-800' },
-};
-
-const priorityConfig: Record<string, { label: string; color: string }> = {
-  LOW:    { label: 'Low',    color: 'text-zinc-400' },
-  NORMAL: { label: 'Normal', color: 'text-zinc-500' },
-  HIGH:   { label: 'High',   color: 'text-orange-500' },
-  URGENT: { label: 'Urgent', color: 'text-red-500 font-black' },
-};
 
 const wsStatusConfig: Record<string, { label: string; color: string }> = {
   ACTIVE:    { label: 'Active',     color: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15' },
@@ -92,7 +73,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const { wsId } = await params;
   const db = await getDB();
 
-  // Fetch workspace
+  // Fetch workspace first (needed for notFound() guard and to extract projectId)
   const workspace = await db
     .prepare(`
       SELECT ws.*, u.name as creator_name
@@ -107,35 +88,51 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   const projectId = workspace.project_id;
 
-  // Fetch project for breadcrumb
-  const project = await db
-    .prepare('SELECT id, name FROM projects WHERE id = ?')
-    .bind(projectId)
-    .first() as ProjectRow | null;
-
-  // Fetch tasks in this workspace
-  const { results: tasksRaw } = await db
-    .prepare(`
+  // Fetch everything else IN PARALLEL — no sequential waterfall
+  const [
+    project,
+    ojtCheck,
+    { results: tasksRaw },
+    { results: membersRaw },
+    { results: usersRaw },
+    { results: ojtUsersRaw },
+    ctx,
+  ] = await Promise.all([
+    db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
+    db.prepare("SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1").bind(projectId).first(),
+    db.prepare(`
       SELECT id, title, description, status, priority, deadline, created_at, task_type, parent_task_id
       FROM tasks
       WHERE workspace_id = ?
       ORDER BY
         CASE priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
         created_at ASC
-    `)
-    .bind(wsId)
-    .all();
+    `).bind(wsId).all(),
+    db.prepare(`
+      SELECT wm.user_id as userId, u.name as userName, u.email as userEmail, wm.team_role as teamRole
+      FROM workspace_members wm
+      JOIN users u ON wm.user_id = u.id
+      WHERE wm.workspace_id = ?
+      ORDER BY wm.created_at ASC
+    `).bind(wsId).all(),
+    db.prepare('SELECT id, name FROM users ORDER BY name ASC').all(),
+    db.prepare("SELECT id, name, email FROM users WHERE user_type = 'OJT' AND status = 'ACTIVE' ORDER BY email ASC").all(),
+    getSessionContext(session.userId),
+  ]);
 
+  const isOjtWorkspace = ojtCheck !== null || workspace.ojt_coordinator_id !== null;
   const tasks = tasksRaw as unknown as TaskRow[];
+  const users = usersRaw as unknown as UserRow[];
+  const ojtUsers = ojtUsersRaw as unknown as { id: string; name: string; email: string }[];
 
-  // Fetch all assignments for all tasks in this workspace
+  // Fetch assignments only when there are tasks (depends on tasks result above)
   const { results: assignmentsRaw } = tasks.length > 0
     ? await db
         .prepare(`
           SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
                  ta.status, ta.result_url, ta.revision_note, ta.submitted_at,
                  ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
-                 u.name as user_name
+                 ta.deadline, u.name as user_name
           FROM task_assignments ta
           LEFT JOIN users u ON ta.user_id = u.id
           WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
@@ -145,6 +142,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         .all()
     : { results: [] };
 
+
   const assignments = assignmentsRaw as unknown as AssignmentRow[];
 
   // Group assignments by task_id
@@ -153,18 +151,6 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     if (!assignmentsByTask[a.task_id]) assignmentsByTask[a.task_id] = [];
     assignmentsByTask[a.task_id].push(a);
   }
-
-  // Fetch workspace OJT members
-  const { results: membersRaw } = await db
-    .prepare(`
-      SELECT wm.user_id as userId, u.name as userName, u.email as userEmail, wm.team_role as teamRole
-      FROM workspace_members wm
-      JOIN users u ON wm.user_id = u.id
-      WHERE wm.workspace_id = ?
-      ORDER BY wm.created_at ASC
-    `)
-    .bind(wsId)
-    .all();
 
   // Group roles by user to support multiple roles
   const membersMap: Record<string, { userId: string; userName: string | null; userEmail: string; teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[] }> = {};
@@ -181,32 +167,15 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   }
   const members = Object.values(membersMap) as any[];
 
-  // Compute QC roles for the current user
-  const isLeader = members.find((m) => m.userId === session.userId)?.teamRoles?.includes('LEADER') ?? false;
+  // Compute roles for the current user (from already-fetched member data — no extra DB call)
+  const currentUserRoles: string[] = members.find((m) => m.userId === session.userId)?.teamRoles ?? [];
+  const isLeader = currentUserRoles.includes('LEADER');
   const isMentor = workspace.ojt_coordinator_id === session.userId;
-  const ctx = await getSessionContext(session.userId);
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
-  // Fetch all users for assignment dropdown
-  const { results: usersRaw } = await db
-    .prepare('SELECT id, name FROM users ORDER BY name ASC')
-    .all();
-  const users = usersRaw as unknown as UserRow[];
-
-  // Permissions (Centralized Unified Engine)
-  const [canCreateTask, canAssignTask, canDeleteTask, canUpdateWs, canManageMembers] = await Promise.all([
-    hasWorkspacePermission(session.userId, wsId, 'CREATE_TASK'),
-    hasWorkspacePermission(session.userId, wsId, 'ASSIGN_TASK'),
-    hasWorkspacePermission(session.userId, wsId, 'DELETE'),
-    hasWorkspacePermission(session.userId, wsId, 'UPDATE_WORKSPACE'),
-    hasWorkspacePermission(session.userId, wsId, 'UPDATE_WORKSPACE').then(async (coord) => {
-      if (coord) return true;
-      // Also allow team leaders to manage members locally
-      if (isLeader) return true;
-      // Or if global manage is allowed
-      return ctx.can('MANAGE');
-    })
-  ]);
+  // Batch-resolve all permissions in ONE synchronous call (no extra DB/KV round-trips)
+  const { canCreateTask, canAssignTask, canDeleteTask, canUpdateWs, canManageMembers } =
+    resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId);
 
   const isOJT = ctx.userType === 'OJT';
 
@@ -258,9 +227,6 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
               </p>
             )}
             <div className="flex items-center gap-4 mt-3 text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
-              {workspace.deadline && (
-                <span>📅 Due: {new Date(workspace.deadline).toLocaleDateString()}</span>
-              )}
               {workspace.creator_name && (
                 <span>👤 Created by: {workspace.creator_name}</span>
               )}
@@ -296,84 +262,19 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
               )}
             </div>
           ) : (
-            tasks.map((task) => {
-              const taskAssignments = assignmentsByTask[task.id] ?? [];
-              const cfg = statusConfig[task.status] ?? statusConfig.TODO;
-              const pCfg = priorityConfig[task.priority] ?? priorityConfig.NORMAL;
-
-              return (
-                <div
-                  key={task.id}
-                  className={`border bg-white dark:bg-[#09090b]/40 rounded-3xl shadow-sm overflow-hidden transition-all duration-200 ${
-                    ['REVISION_REQUESTED', 'DECLINED'].includes(task.status)
-                      ? 'border-red-500/20 dark:border-red-500/20'
-                      : ['WAITING_REVIEW'].includes(task.status)
-                      ? 'border-yellow-500/15 dark:border-yellow-500/15'
-                      : ['APPROVED', 'LOCKED'].includes(task.status)
-                      ? 'border-emerald-500/15 dark:border-emerald-500/15'
-                      : ['PUBLISHED'].includes(task.status)
-                      ? 'border-purple-500/15 dark:border-purple-500/15'
-                      : 'border-zinc-200/80 dark:border-zinc-800/80'
-                  }`}
-                >
-                  {/* Task Header */}
-                  <div className="p-5">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                          <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${cfg.color}`}>
-                            {cfg.label}
-                          </span>
-                          <span className={`text-[9px] font-black uppercase tracking-widest ${pCfg.color}`}>
-                            {pCfg.label}
-                          </span>
-                          <span className="text-[8px] font-bold text-zinc-400 bg-zinc-100 dark:bg-zinc-800/60 px-2 py-0.5 rounded-md border border-zinc-200/40 dark:border-zinc-700/40">
-                            {task.task_type}
-                          </span>
-                          {task.parent_task_id && (
-                            <span className="text-[8px] font-bold text-amber-600 bg-amber-500/5 px-2 py-0.5 rounded-md border border-amber-500/10">
-                              🔒 Sequential Lock
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">{task.title}</h3>
-                        {task.description && (
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 leading-relaxed">{task.description}</p>
-                        )}
-                      </div>
-                      {task.deadline && (
-                        <span className="text-[10px] text-zinc-400 font-mono shrink-0">
-                          📅 {new Date(task.deadline).toLocaleDateString()}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Assignments + Actions */}
-                    <TaskActions
-                      taskId={task.id}
-                      assignments={taskAssignments}
-                      currentUserId={session.userId}
-                      canDelete={canDeleteTask}
-                      isLeader={isLeader}
-                      isMentor={isMentor}
-                      isCoordinator={isCoordinator}
-                    />
-                  </div>
-
-                  {/* Assignment Panel — Leader/Mentor only */}
-                  {canAssignTask && (
-                    <div className="border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/20 px-5 py-4">
-                      <TaskAssignmentPanel
-                        taskId={task.id}
-                        existingAssignments={taskAssignments}
-                        users={users}
-                        members={members}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })
+            <TaskAccordion
+              tasks={tasks}
+              assignmentsByTask={assignmentsByTask}
+              currentUserId={session.userId}
+              canDeleteTask={canDeleteTask}
+              canAssignTask={canAssignTask}
+              isLeader={isLeader}
+              isMentor={isMentor}
+              isCoordinator={isCoordinator}
+              isOjtWorkspace={isOjtWorkspace}
+              users={users}
+              members={members}
+            />
           )}
         </div>
 
@@ -385,6 +286,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             members={members}
             canManageMembers={canManageMembers}
             isMentor={isMentor || isCoordinator}
+            ojtUsers={ojtUsers}
           />
 
           {/* Create Task Form */}

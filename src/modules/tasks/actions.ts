@@ -31,22 +31,31 @@ interface AssignmentRow {
 // ---------------------------------------------------------------------------
 async function checkOJTPrerequisites(db: any, taskId: string, role: string): Promise<{ allowed: boolean; error?: string }> {
   if (role === 'PLANNER') {
-    // Check if RESEARCHER step is approved
+    // Check if RESEARCHER step exists and is approved
     const res = await db
       .prepare("SELECT status FROM task_assignments WHERE task_id = ? AND assignment_role = 'RESEARCHER'")
       .bind(taskId)
       .first() as { status: string } | null;
-    if (!res || !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(res.status)) {
-      return { allowed: false, error: 'Cannot progress planning step until research step is Approved.' };
+    if (res && !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(res.status)) {
+      return { allowed: false, error: 'Tidak dapat melanjutkan step Planning sebelum step Research disetujui QC.' };
     }
   } else if (role === 'CREATOR') {
-    // Check if PLANNER step is approved
-    const res = await db
+    // Check if PLANNER step exists and is approved
+    const planner = await db
       .prepare("SELECT status FROM task_assignments WHERE task_id = ? AND assignment_role = 'PLANNER'")
       .bind(taskId)
       .first() as { status: string } | null;
-    if (!res || !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(res.status)) {
-      return { allowed: false, error: 'Cannot progress creation step until planning step is Approved.' };
+    if (planner && !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(planner.status)) {
+      return { allowed: false, error: 'Tidak dapat melanjutkan step Creation sebelum step Planning disetujui QC.' };
+    }
+
+    // Check if RESEARCHER step exists and is approved (if planner wasn't assigned)
+    const researcher = await db
+      .prepare("SELECT status FROM task_assignments WHERE task_id = ? AND assignment_role = 'RESEARCHER'")
+      .bind(taskId)
+      .first() as { status: string } | null;
+    if (researcher && !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(researcher.status)) {
+      return { allowed: false, error: 'Tidak dapat melanjutkan step Creation sebelum step Research disetujui QC.' };
     }
   }
   return { allowed: true };
@@ -152,6 +161,7 @@ export async function assignCreatorToTask(
   taskId: string,
   userId: string,
   role: 'PIC' | 'REVIEWER' | 'HELPER' | 'APPROVER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR',
+  deadline?: number | null,
 ) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
@@ -177,10 +187,10 @@ export async function assignCreatorToTask(
   try {
     await db
       .prepare(`
-        INSERT INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status)
-        VALUES (?, ?, ?, ?, ?, 'DRAFT')
+        INSERT INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, deadline)
+        VALUES (?, ?, ?, ?, ?, 'DRAFT', ?)
       `)
-      .bind(assignmentId, taskId, userId, role, session.userId)
+      .bind(assignmentId, taskId, userId, role, session.userId, deadline ?? null)
       .run();
 
     await logWorkflowEvent({
@@ -205,6 +215,76 @@ export async function assignCreatorToTask(
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Assigns multiple users to a task with their respective roles and deadlines in a single batch call.
+ * Requires: ASSIGN_TASK permission.
+ */
+export async function assignMultipleCreatorsToTask(
+  taskId: string,
+  assignments: Array<{
+    userId: string;
+    role: 'PIC' | 'REVIEWER' | 'HELPER' | 'APPROVER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR';
+    deadline?: number | null;
+  }>,
+) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  if (!assignments || assignments.length === 0) {
+    return { success: false, error: 'No assignments provided.' };
+  }
+
+  const db = await getDB();
+
+  const task = await db
+    .prepare('SELECT id, project_id, workspace_id FROM tasks WHERE id = ?')
+    .bind(taskId)
+    .first() as TaskRow | null;
+
+  if (!task) return { success: false, error: 'Task not found.' };
+
+  const workspaceId = task.workspace_id || '';
+  const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'ASSIGN_TASK');
+  if (!authorized) {
+    throw new Error('Forbidden: You do not have permission to assign tasks in this workspace.');
+  }
+
+  try {
+    for (const item of assignments) {
+      if (!item.userId || !item.role) continue;
+      const assignmentId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+
+      await db
+        .prepare(`
+          INSERT INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, deadline)
+          VALUES (?, ?, ?, ?, ?, 'DRAFT', ?)
+        `)
+        .bind(assignmentId, taskId, item.userId, item.role, session.userId, item.deadline ?? null)
+        .run();
+
+      await logWorkflowEvent({
+        entityType: 'task_assignment',
+        entityId: assignmentId,
+        fromStatus: null,
+        toStatus: 'DRAFT',
+        triggeredBy: session.userId,
+        note: `Batch assigned as ${item.role}`,
+      });
+    }
+
+    if (task.workspace_id) {
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
+    }
+    revalidatePath('/dashboard/workspace');
+    return { success: true };
+  } catch (err: any) {
+    console.error('assignMultipleCreatorsToTask failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+
 
 // ---------------------------------------------------------------------------
 // REMOVE ASSIGNMENT

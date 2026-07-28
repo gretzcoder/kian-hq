@@ -34,10 +34,10 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
   if (!session) redirect('/');
 
   const db = await getDB();
-  const [projectsRaw, ctx, ojtRaw] = await Promise.all([
+  const [projectsRaw, ctx, usersRaw] = await Promise.all([
     db.prepare('SELECT * FROM projects ORDER BY created_at DESC').all(),
     getSessionContext(session.userId),
-    db.prepare("SELECT id, name, email FROM users WHERE user_type = 'OJT' AND status = 'ACTIVE' ORDER BY email ASC").all(),
+    db.prepare("SELECT id, name, email FROM users WHERE status = 'ACTIVE' ORDER BY email ASC").all(),
   ]);
 
   if (ctx.userType === 'OJT') {
@@ -45,7 +45,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
   }
 
   const projects = projectsRaw.results as unknown as Project[];
-  const ojtList = ojtRaw.results as unknown as { id: string; name: string; email: string }[];
+  const usersList = usersRaw.results as unknown as { id: string; name: string; email: string }[];
   const canCreateProject = ctx.can('CREATE_PROJECT');
 
   const { briefId } = await searchParams;
@@ -97,11 +97,6 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
                       >
                         {project.status.replace('_', ' ')}
                       </span>
-                      {project.deadline && (
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
-                          Due: {new Date(project.deadline).toLocaleDateString()}
-                        </span>
-                      )}
                     </div>
                     <Link
                       href={`/dashboard/projects/${project.id}`}
@@ -146,7 +141,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
           <CreateProjectForm
             briefId={briefId || null}
             briefTitle={briefTitle}
-            ojtList={ojtList}
+            ojtList={usersList}
           />
         ) : null}
       </div>

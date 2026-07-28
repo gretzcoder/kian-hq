@@ -66,7 +66,9 @@ function SearchableSelect({
         <div className="relative flex-1">
           <input
             type="text"
-            placeholder="Search email (e.g. intern@kian.co)"
+            name="ojt_coordinator_search_prevent_autofill"
+            autoComplete="new-password"
+            placeholder="Search email (e.g. staff@kian.co or intern@kian.co)"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -236,7 +238,7 @@ export default function CreateProjectForm({
             </button>
           </div>
 
-          <div className="space-y-2 max-h-56 overflow-y-auto border border-zinc-100 dark:border-zinc-900 bg-zinc-50/30 dark:bg-zinc-950/20 rounded-2xl p-3">
+          <div className="space-y-2.5 border border-zinc-200/60 dark:border-zinc-800/60 bg-zinc-50/20 dark:bg-zinc-950/10 rounded-2xl p-3">
             {coordinators.map((selectedId, index) => (
               <SearchableSelect
                 key={index}

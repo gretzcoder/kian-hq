@@ -367,3 +367,72 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
     return { success: false, error: err.message };
   }
 }
+
+// ---------------------------------------------------------------------------
+// DELETE WORKSPACE (soft delete)
+// ---------------------------------------------------------------------------
+
+/**
+ * Soft-deletes a workspace by setting deleted_at timestamp.
+ * Accessible by:
+ *  - The workspace's OJT coordinator (creator/mentor)
+ *  - The project's mentor (project_coordinators)
+ *  - Any user with global DELETE permission (STAFF admin)
+ */
+export async function deleteWorkspace(workspaceId: string) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+
+  // Fetch workspace to determine authorization
+  const ws = await db
+    .prepare('SELECT id, project_id, ojt_coordinator_id, deleted_at FROM workspaces WHERE id = ?')
+    .bind(workspaceId)
+    .first() as { id: string; project_id: string; ojt_coordinator_id: string | null; deleted_at: number | null } | null;
+
+  if (!ws) return { success: false, error: 'Workspace not found.' };
+  if (ws.deleted_at) return { success: false, error: 'Workspace is already deleted.' };
+
+  const ctx = await getSessionContext(session.userId);
+  const hasGlobalDelete = ctx.can('DELETE');
+
+  // Check if user is the workspace creator/coordinator
+  const isWsCreator = ws.ojt_coordinator_id === session.userId;
+
+  // Check if user is the project mentor
+  const projectMentor = await db
+    .prepare('SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?')
+    .bind(ws.project_id, session.userId)
+    .first();
+  const isProjectMentor = !!projectMentor;
+
+  if (!isWsCreator && !isProjectMentor && !hasGlobalDelete) {
+    return { success: false, error: 'Forbidden: You do not have permission to delete this workspace.' };
+  }
+
+  try {
+    const deletedAt = Date.now();
+    await db
+      .prepare('UPDATE workspaces SET deleted_at = ? WHERE id = ?')
+      .bind(deletedAt, workspaceId)
+      .run();
+
+    await logWorkflowEvent({
+      entityType: 'workspace',
+      entityId: workspaceId,
+      fromStatus: 'ACTIVE',
+      toStatus: 'DELETED',
+      triggeredBy: session.userId,
+      note: 'Workspace soft-deleted',
+    });
+
+    revalidatePath(`/dashboard/projects/${ws.project_id}`);
+    revalidatePath('/dashboard/workspace');
+    return { success: true, projectId: ws.project_id };
+  } catch (err: any) {
+    console.error('deleteWorkspace failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+

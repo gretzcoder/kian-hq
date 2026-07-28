@@ -3,6 +3,7 @@ import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/modules/roles/rbac';
 import Link from 'next/link';
+import DeleteWorkspaceButton from '../projects/[id]/components/DeleteWorkspaceButton';
 
 interface AssignmentRow {
   assignment_id:   string;
@@ -52,18 +53,66 @@ export default async function WorkspacePage() {
   const session = await getSession();
   if (!session) redirect('/');
 
-  const ctx = await getSessionContext(session.userId);
-  const db  = await getDB();
-
-  // 1. Fetch workspaces where user is a member or coordinator
-  const { results: rawWorkspaces } = await db.prepare(`
-    SELECT DISTINCT ws.id, ws.name, ws.description, ws.status, ws.deadline, ws.project_id, p.name AS project_name
-    FROM workspaces ws
-    JOIN projects p ON ws.project_id = p.id
-    LEFT JOIN workspace_members wm ON ws.id = wm.workspace_id
-    WHERE wm.user_id = ? OR ws.ojt_coordinator_id = ?
-    ORDER BY ws.created_at DESC
-  `).bind(session.userId, session.userId).all();
+  // Fetch permissions + all data IN PARALLEL
+  const [
+    ctx,
+    { results: rawWorkspaces },
+    { results: rawAssignments },
+    { results: rawMentoredProjects },
+  ] = await Promise.all([
+    getSessionContext(session.userId),
+    // 1. Fetch workspaces where user is a member or coordinator
+    getDB().then((db) => db.prepare(`
+      SELECT ws.id, ws.name, ws.description, ws.status, ws.deadline, ws.project_id, ws.ojt_coordinator_id, p.name AS project_name,
+             (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role
+      FROM workspaces ws
+      JOIN projects p ON ws.project_id = p.id
+      WHERE (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
+         OR ws.ojt_coordinator_id = ?)
+        AND ws.deleted_at IS NULL
+      ORDER BY ws.created_at DESC
+    `).bind(session.userId, session.userId, session.userId).all()),
+    // 2. All active assignments for the current user
+    getDB().then((db) => db.prepare(`
+      SELECT
+        ta.id            AS assignment_id,
+        ta.assignment_role,
+        ta.status        AS assignment_status,
+        ta.result_url,
+        ta.revision_note,
+        t.id             AS task_id,
+        t.title          AS task_title,
+        t.deadline       AS task_deadline,
+        t.priority       AS task_priority,
+        t.workspace_id,
+        ws.name          AS workspace_name,
+        t.project_id,
+        p.name           AS project_name
+      FROM task_assignments ta
+      JOIN tasks t      ON ta.task_id = t.id
+      JOIN projects p   ON t.project_id = p.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
+      ORDER BY
+        CASE ta.status
+          WHEN 'REVISION_REQUESTED' THEN 1
+          WHEN 'DECLINED'           THEN 2
+          WHEN 'WAITING_REVIEW'     THEN 3
+          WHEN 'IN_PROGRESS'        THEN 4
+          WHEN 'ASSIGNED'           THEN 5
+          ELSE 6
+        END,
+        t.deadline ASC NULLS LAST
+    `).bind(session.userId).all()),
+    // 3. Projects where user is the mentor
+    getDB().then((db) => db.prepare(`
+      SELECT DISTINCT p.id, p.name, p.description, p.status, p.deadline
+      FROM projects p
+      JOIN project_coordinators pc ON p.id = pc.project_id
+      WHERE pc.user_id = ?
+      ORDER BY p.created_at DESC
+    `).bind(session.userId).all()),
+  ]);
 
   const userWorkspaces = rawWorkspaces as unknown as {
     id: string;
@@ -72,52 +121,12 @@ export default async function WorkspacePage() {
     status: string;
     deadline: number | null;
     project_id: string;
+    ojt_coordinator_id: string | null;
     project_name: string;
+    my_team_role: string | null;
   }[];
 
-  // 2. All active assignments for the current user
-  const { results: rawAssignments } = await db.prepare(`
-    SELECT
-      ta.id            AS assignment_id,
-      ta.assignment_role,
-      ta.status        AS assignment_status,
-      ta.result_url,
-      ta.revision_note,
-      t.id             AS task_id,
-      t.title          AS task_title,
-      t.deadline       AS task_deadline,
-      t.priority       AS task_priority,
-      t.workspace_id,
-      ws.name          AS workspace_name,
-      t.project_id,
-      p.name           AS project_name
-    FROM task_assignments ta
-    JOIN tasks t      ON ta.task_id = t.id
-    JOIN projects p   ON t.project_id = p.id
-    LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-    WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
-    ORDER BY
-      CASE ta.status
-        WHEN 'REVISION_REQUESTED' THEN 1
-        WHEN 'DECLINED'           THEN 2
-        WHEN 'WAITING_REVIEW'     THEN 3
-        WHEN 'IN_PROGRESS'        THEN 4
-        WHEN 'ASSIGNED'           THEN 5
-        ELSE 6
-      END,
-      t.deadline ASC NULLS LAST
-  `).bind(session.userId).all();
-
   const assignments = rawAssignments as unknown as AssignmentRow[];
-
-  // Fetch projects where user is the mentor (ojt_coordinator_id)
-  const { results: rawMentoredProjects } = await db.prepare(`
-    SELECT DISTINCT p.id, p.name, p.description, p.status, p.deadline
-    FROM projects p
-    JOIN project_coordinators pc ON p.id = pc.project_id
-    WHERE pc.user_id = ?
-    ORDER BY p.created_at DESC
-  `).bind(session.userId).all();
 
   const mentoredProjects = rawMentoredProjects as unknown as {
     id: string;
@@ -126,6 +135,20 @@ export default async function WorkspacePage() {
     status: string;
     deadline: number | null;
   }[];
+
+  const mentoredProjectIds = new Set(mentoredProjects.map((p) => p.id));
+  const canGlobalDelete = ctx.can('DELETE');
+
+  // Auto-redirect: Mentor with exactly 1 project and no workspace membership → go to project
+  if (mentoredProjects.length === 1 && userWorkspaces.length === 0) {
+    redirect(`/dashboard/projects/${mentoredProjects[0].id}`);
+  }
+
+  // Auto-redirect: Team Leader with exactly 1 workspace and no mentor role → go to workspace
+  const leaderWorkspaces = userWorkspaces.filter((ws) => ws.my_team_role === 'LEADER');
+  if (leaderWorkspaces.length === 1 && mentoredProjects.length === 0) {
+    redirect(`/dashboard/workspace/${leaderWorkspaces[0].id}`);
+  }
 
   // Group assignments by workspace
   const grouped: Record<string, { workspaceName: string; projectName: string; projectId: string; workspaceId: string | null; items: AssignmentRow[] }> = {};
@@ -157,24 +180,25 @@ export default async function WorkspacePage() {
         </div>
       </div>
 
-      {/* Mentored Projects Section (for OJT mentors) */}
-      {mentoredProjects.length > 0 && (
+      {/* Mentored Projects (only visible for multi-project mentors who also have workspace memberships) */}
+      {mentoredProjects.length > 1 && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Campaigns & Projects I Mentor</h2>
+            <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Projects I Mentor</h2>
             <span className="text-xs text-zinc-400 font-mono font-bold">
-              {mentoredProjects.length} project{mentoredProjects.length !== 1 ? 's' : ''}
+              {mentoredProjects.length} projects
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {mentoredProjects.map((p) => (
-              <div
+              <Link
                 key={p.id}
-                className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between hover:shadow-md shadow-sm hover:-translate-y-0.5 group"
+                href={`/dashboard/projects/${p.id}`}
+                className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-purple-500/30 dark:hover:border-purple-500/30 rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between hover:shadow-md shadow-sm hover:-translate-y-0.5 group block"
               >
                 <div>
                   <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 block mb-1">
-                    Mentor Role
+                    Mentor
                   </span>
                   <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                     {p.name}
@@ -185,18 +209,12 @@ export default async function WorkspacePage() {
                     </p>
                   )}
                 </div>
-                <div className="mt-8 pt-3 border-t border-zinc-100 dark:border-zinc-900/60 flex items-center justify-between gap-2">
+                <div className="mt-6 pt-3 border-t border-zinc-100 dark:border-zinc-900/60">
                   <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-500/5 px-2.5 py-1 rounded-full border border-blue-500/10">
                     {p.status}
                   </span>
-                  <Link
-                    href={`/dashboard/projects/${p.id}`}
-                    className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900/50 transition-all font-bold active:scale-[0.98] shadow-sm"
-                  >
-                    Manage Project &rarr;
-                  </Link>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
@@ -212,42 +230,50 @@ export default async function WorkspacePage() {
         </div>
         {userWorkspaces.length === 0 ? (
           <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-3xl p-12 text-center text-zinc-400 text-xs font-bold leading-normal">
-            📋 You are not assigned to any OJT workspaces yet.<br />
-            Ask your Mentor to invite you.
+            📋 You are not assigned to any workspaces yet.<br />
+            Ask your team leader or coordinator to invite you.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {userWorkspaces.map((ws) => (
-              <div
-                key={ws.id}
-                className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between hover:shadow-md shadow-sm hover:-translate-y-0.5 group"
-              >
-                <div>
-                  <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 block mb-1">
-                    {ws.project_name}
-                  </span>
-                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                    {ws.name}
-                  </h3>
-                  {ws.description && (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
-                      {ws.description}
-                    </p>
-                  )}
+            {userWorkspaces.map((ws) => {
+              const canDeleteWs = canGlobalDelete || ws.ojt_coordinator_id === session.userId || mentoredProjectIds.has(ws.project_id);
+              return (
+                <div
+                  key={ws.id}
+                  className="relative border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between hover:shadow-md shadow-sm hover:-translate-y-0.5 group"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 block">
+                        {ws.project_name}
+                      </span>
+                      {canDeleteWs && (
+                        <DeleteWorkspaceButton workspaceId={ws.id} workspaceName={ws.name} />
+                      )}
+                    </div>
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                      {ws.name}
+                    </h3>
+                    {ws.description && (
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
+                        {ws.description}
+                      </p>
+                    )}
+                  </div>
+                  <div className="mt-8 pt-3 border-t border-zinc-100 dark:border-zinc-900/60 flex items-center justify-between gap-2">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-500/5 px-2.5 py-1 rounded-full border border-blue-500/10">
+                      {ws.status}
+                    </span>
+                    <Link
+                      href={`/dashboard/workspace/${ws.id}`}
+                      className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900/50 transition-all font-bold active:scale-[0.98] shadow-sm"
+                    >
+                      Open Console &rarr;
+                    </Link>
+                  </div>
                 </div>
-                <div className="mt-8 pt-3 border-t border-zinc-100 dark:border-zinc-900/60 flex items-center justify-between gap-2">
-                  <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-500/5 px-2.5 py-1 rounded-full border border-blue-500/10">
-                    {ws.status}
-                  </span>
-                  <Link
-                    href={`/dashboard/workspace/${ws.id}`}
-                    className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900/50 transition-all font-bold active:scale-[0.98] shadow-sm"
-                  >
-                    Open Console &rarr;
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import { getSession } from '@/modules/auth/session';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getSessionContext } from '@/modules/roles/rbac';
+import { getDB } from '@/db/client';
 import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import { NavLinks, MobileNavLinks } from './components/NavLinks';
 
@@ -23,6 +24,17 @@ export default async function DashboardLayout({
   const canUseAI       = ctx.can('USE_AI');
   const isOJT          = ctx.userType === 'OJT';
 
+  // Detect if OJT user is a project mentor (for simplified nav)
+  let isMentor = false;
+  if (isOJT) {
+    const db = await getDB();
+    const mentorRow = await db
+      .prepare('SELECT 1 FROM project_coordinators WHERE user_id = ? LIMIT 1')
+      .bind(session.userId)
+      .first();
+    isMentor = !!mentorRow;
+  }
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col transition-colors duration-350">
       {/* Top Header */}
@@ -40,6 +52,7 @@ export default async function DashboardLayout({
               canCreateBrief={canCreateBrief}
               canUseAI={canUseAI}
               isOJT={isOJT}
+              isMentor={isMentor}
             />
           </div>
 
@@ -83,6 +96,7 @@ export default async function DashboardLayout({
         canCreateBrief={canCreateBrief}
         canUseAI={canUseAI}
         isOJT={isOJT}
+        isMentor={isMentor}
       />
 
       {/* Main Container */}
