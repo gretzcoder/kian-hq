@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { submitResult, deleteTask, approveAssignment, requestRevision, startWork } from '../actions';
 import RichTextEditor from '@/components/RichTextEditor';
+import { useUI } from '@/components/ui/UIProvider';
 
 // ─── CreatorDrivePreview ────────────────────────────────────────────────────
 // Aspect-ratio aware, user-friendly Google Drive preview widget for Creator step
@@ -185,13 +186,23 @@ export default function TaskActions({
   };
 
 
+  const { toast, confirm: confirmModal } = useUI();
+
   const handleDelete = async () => {
-    if (!confirm('Delete this task and all its assignments? This cannot be undone.')) return;
+    const isConfirmed = await confirmModal({
+      title: 'Hapus Tugas',
+      message: 'Apakah Anda yakin ingin menghapus tugas ini beserta seluruh penugasannya? Tindakan ini tidak dapat dibatalkan.',
+      confirmText: 'Ya, Hapus',
+      variant: 'danger',
+    });
+    if (!isConfirmed) return;
+
     setDeleting(true);
     try {
       await deleteTask(taskId);
+      toast('Tugas berhasil dihapus.', 'success');
     } catch {
-      alert('Failed to delete task');
+      toast('Gagal menghapus tugas. Silakan coba lagi.', 'error');
       setDeleting(false);
     }
   };
@@ -202,10 +213,15 @@ export default function TaskActions({
     try {
       const res = await startWork(assignmentId);
       if (!res.success) {
-        setErrorMap((prev) => ({ ...prev, [assignmentId]: res.error ?? 'Failed to start work' }));
+        const msg = res.error ?? 'Failed to start work';
+        setErrorMap((prev) => ({ ...prev, [assignmentId]: msg }));
+        toast(msg, 'error');
+      } else {
+        toast('Pengerjaan tugas dimulai!', 'success');
       }
     } catch (e: any) {
       setErrorMap((prev) => ({ ...prev, [assignmentId]: e.message }));
+      toast(e.message, 'error');
     } finally {
       setLoading(null);
     }
@@ -222,11 +238,15 @@ export default function TaskActions({
       const res = await submitResult(assignmentId, url.trim());
       if (res.success) {
         setShowSubmitMap((prev) => ({ ...prev, [assignmentId]: false }));
+        toast('Hasil pengerjaan berhasil dikirim untuk di-review!', 'success');
       } else {
-        setErrorMap((prev) => ({ ...prev, [assignmentId]: res.error ?? 'Failed to submit' }));
+        const msg = res.error ?? 'Failed to submit';
+        setErrorMap((prev) => ({ ...prev, [assignmentId]: msg }));
+        toast(msg, 'error');
       }
     } catch (e: any) {
       setErrorMap((prev) => ({ ...prev, [assignmentId]: e.message }));
+      toast(e.message, 'error');
     } finally {
       setLoading(null);
     }
@@ -238,10 +258,15 @@ export default function TaskActions({
     try {
       const res = await approveAssignment(assignmentId);
       if (!res.success) {
-        setErrorMap((prev) => ({ ...prev, [assignmentId]: res.error ?? 'Approval failed' }));
+        const msg = res.error ?? 'Approval failed';
+        setErrorMap((prev) => ({ ...prev, [assignmentId]: msg }));
+        toast(msg, 'error');
+      } else {
+        toast('Persetujuan QC berhasil disimpan!', 'success');
       }
     } catch (e: any) {
       setErrorMap((prev) => ({ ...prev, [assignmentId]: e.message }));
+      toast(e.message, 'error');
     } finally {
       setLoading(null);
     }
@@ -249,7 +274,7 @@ export default function TaskActions({
 
   const handleRequestRevision = async (assignmentId: string) => {
     const note = revisionInputs[assignmentId];
-    if (!note?.trim()) return alert('Revision note is required.');
+    if (!note?.trim()) return toast('Catatan revisi wajib diisi.', 'warning');
 
     setLoading(assignmentId);
     setErrorMap((prev) => ({ ...prev, [assignmentId]: '' }));
@@ -258,11 +283,15 @@ export default function TaskActions({
       if (res.success) {
         setShowRevisionMap((prev) => ({ ...prev, [assignmentId]: false }));
         setRevisionInputs((prev) => ({ ...prev, [assignmentId]: '' }));
+        toast('Permintaan revisi berhasil dikirim ke intern.', 'info');
       } else {
-        setErrorMap((prev) => ({ ...prev, [assignmentId]: res.error ?? 'Failed to request revision' }));
+        const msg = res.error ?? 'Failed to request revision';
+        setErrorMap((prev) => ({ ...prev, [assignmentId]: msg }));
+        toast(msg, 'error');
       }
     } catch (e: any) {
       setErrorMap((prev) => ({ ...prev, [assignmentId]: e.message }));
+      toast(e.message, 'error');
     } finally {
       setLoading(null);
     }
