@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { deleteProject, publishProject, archiveProject } from '@/modules/projects/actions';
 import ProjectTabs from '@/modules/projects/components/ProjectTabs';
+import ProjectDetailTabs from '@/modules/projects/components/ProjectDetailTabs';
 import CreateWorkspaceForm from './components/CreateWorkspaceForm';
 import DeleteWorkspaceButton from './components/DeleteWorkspaceButton';
 
@@ -288,87 +289,108 @@ export default async function ProjectDetailPage({ params }: PageProps) {
 
       </div>
 
-      {/* Workspaces Section */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">Workspaces</h2>
-            <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-0.5">Campaign units inside this project.</p>
-          </div>
-          {canCreateWs && <span className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">+ scroll down to create</span>}
-        </div>
-
-        {workspaces.length === 0 ? (
-          <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-10 text-center">
-            <p className="text-2xl mb-2">🏠</p>
-            <p className="text-zinc-500 dark:text-zinc-400 font-bold text-sm">No workspaces yet.</p>
-            {canCreateWs && (
-              <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Create one below to start organizing tasks.</p>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {workspaces.map((ws) => {
-              const wsCfg = wsStatusColors[ws.status] ?? wsStatusColors.ACTIVE;
-              return (
-                <div key={ws.id} className="relative group/wscard">
-                  <Link
-                    href={`/dashboard/workspace/${ws.id}`}
-                    className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 rounded-2xl p-5 hover:border-purple-500/30 dark:hover:border-purple-500/30 hover:shadow-md transition-all duration-300 group block"
-                  >
-                    <div className="flex items-start justify-between gap-2 mb-3">
-                      <h3 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                        {ws.name}
-                      </h3>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${wsCfg}`}>
-                          {ws.status}
-                        </span>
-                        {canDeleteWs && (
-                          <DeleteWorkspaceButton workspaceId={ws.id} workspaceName={ws.name} />
-                        )}
+      {/* Project Detail Clean Tabbed Container */}
+      <ProjectDetailTabs
+        workspacesCount={workspaces.length}
+        hasBrief={!!brief}
+        eventsCount={events.length}
+        workspacesTab={
+          workspaces.length === 0 ? (
+            <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-10 text-center">
+              <p className="text-2xl mb-2">🏠</p>
+              <p className="text-zinc-500 dark:text-zinc-400 font-bold text-sm">
+                Belum ada workspace di proyek ini.
+              </p>
+              {canCreateWs && (
+                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">
+                  Klik tombol "+ Buat Workspace" untuk memulai penugasan kampanye.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {workspaces.map((ws) => {
+                const wsCfg = wsStatusColors[ws.status] ?? wsStatusColors.ACTIVE;
+                return (
+                  <div key={ws.id} className="relative group/wscard">
+                    <Link
+                      href={`/dashboard/workspace/${ws.id}`}
+                      className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 rounded-2xl p-5 hover:border-purple-500/30 dark:hover:border-purple-500/30 hover:shadow-md transition-all duration-300 group block"
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <h3 className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                          {ws.name}
+                        </h3>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${wsCfg}`}
+                          >
+                            {ws.status}
+                          </span>
+                          {canDeleteWs && (
+                            <DeleteWorkspaceButton workspaceId={ws.id} workspaceName={ws.name} />
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    {ws.description && (
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 mb-3">{ws.description}</p>
-                    )}
-                    <div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-500 font-bold">
-                      <span>{ws.task_count} task{Number(ws.task_count) !== 1 ? 's' : ''}</span>
-                    </div>
-                  </Link>
-                </div>
-              );
-            })}
+                      {ws.description && (
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2 mb-3">
+                          {ws.description}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between text-[10px] text-zinc-400 dark:text-zinc-500 font-bold">
+                        <span>
+                          {ws.task_count} task{Number(ws.task_count) !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        }
+        briefTab={
+          <div className="max-w-3xl">
+            <ProjectTabs
+              projectId={projectId}
+              tasks={[]}
+              users={users}
+              brief={brief}
+              events={[]}
+              canCreateTask={false}
+              canApproveTask={canApproveTask}
+              canDeleteTask={canDeleteTask}
+              canEditBrief={canEditBrief}
+              currentUserId={session.userId}
+              handleCreateTask={async () => {
+                'use server';
+              }}
+            />
           </div>
-        )}
-
-        {/* Create Workspace Form */}
-        {canCreateWs && (
-          <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm mt-2">
-            <h3 className="text-base font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create Workspace</h3>
-            <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-4">Add a campaign unit (e.g. Instagram, Podcast, TikTok)</p>
-            <CreateWorkspaceForm projectId={projectId} />
+        }
+        timelineTab={
+          <div className="max-w-3xl">
+            <ProjectTabs
+              projectId={projectId}
+              tasks={[]}
+              users={users}
+              brief={null}
+              events={events}
+              canCreateTask={false}
+              canApproveTask={canApproveTask}
+              canDeleteTask={canDeleteTask}
+              canEditBrief={false}
+              currentUserId={session.userId}
+              handleCreateTask={async () => {
+                'use server';
+              }}
+            />
           </div>
-        )}
-      </div>
-
-      {/* Legacy Tasks + Brief (ProjectTabs) */}
-      <div>
-        <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 mb-4">Other</h2>
-        <ProjectTabs
-          projectId={projectId}
-          tasks={tasks}
-          users={users}
-          brief={brief}
-          events={events}
-          canCreateTask={false}
-          canApproveTask={canApproveTask}
-          canDeleteTask={canDeleteTask}
-          canEditBrief={canEditBrief}
-          currentUserId={session.userId}
-          handleCreateTask={async () => { 'use server'; }}
-        />
-      </div>
+        }
+        createWorkspaceForm={
+          canCreateWs ? <CreateWorkspaceForm projectId={projectId} /> : undefined
+        }
+      />
     </div>
   );
 }

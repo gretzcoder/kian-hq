@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { approveAssignment, requestRevision, declineAssignment } from '@/modules/tasks/actions';
+import { useUI } from '@/components/ui/UIProvider';
 
 export default function ReviewActions({
   assignmentId,
@@ -16,6 +17,8 @@ export default function ReviewActions({
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const { toast } = useUI();
+
   const handleApprove = async () => {
     setLoading(true);
     setError(null);
@@ -23,11 +26,16 @@ export default function ReviewActions({
       const res = await approveAssignment(assignmentId);
       if (res.success) {
         setDone(true);
+        toast('Persetujuan berhasil disimpan!', 'success');
       } else {
-        setError(res.error ?? 'Failed to approve');
+        const msg = res.error ?? 'Failed to approve';
+        setError(msg);
+        toast(msg, 'error');
       }
     } catch (e: any) {
-      setError(e.message ?? 'An error occurred');
+      const msg = e.message ?? 'An error occurred';
+      setError(msg);
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
@@ -35,7 +43,9 @@ export default function ReviewActions({
 
   const handleActionWithNote = async () => {
     if (!noteText.trim()) {
-      setError('Please write a note explaining the decision.');
+      const msg = 'Harap isi catatan penjelasan keputusan terlebih dahulu.';
+      setError(msg);
+      toast(msg, 'warning');
       return;
     }
     setLoading(true);
@@ -48,11 +58,21 @@ export default function ReviewActions({
 
       if (res.success) {
         setDone(true);
+        toast(
+          mode === 'REVISION'
+            ? 'Permintaan revisi berhasil dikirim!'
+            : 'Penugasan telah ditolak.',
+          mode === 'REVISION' ? 'info' : 'warning'
+        );
       } else {
-        setError(res.error ?? `Failed to perform ${mode.toLowerCase()} action.`);
+        const msg = res.error ?? `Failed to perform ${mode.toLowerCase()} action.`;
+        setError(msg);
+        toast(msg, 'error');
       }
     } catch (e: any) {
-      setError(e.message ?? 'An error occurred');
+      const msg = e.message ?? 'An error occurred';
+      setError(msg);
+      toast(msg, 'error');
     } finally {
       setLoading(false);
     }
