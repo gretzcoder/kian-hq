@@ -466,45 +466,31 @@ export default function TaskActions({
                       </div>
                     )}
 
-                    {/* QC Approval Badges */}
-                    {['WAITING_REVIEW', 'APPROVED'].includes(assign.status) && (
-                      <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-2.5 mt-2.5">
-                        <p className="text-[8px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-2">
-                          Status QC (Wajib Lolos dari 3 Pihak)
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {/* Ketua Tim QC */}
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border flex items-center gap-1 ${
-                            assign.lead_approved === 1
-                              ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30'
-                              : 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40'
-                          }`}>
-                            <span>{assign.lead_approved === 1 ? '✓' : '⏳'}</span>
-                            <span>Ketua Tim</span>
-                          </span>
+                    {/* Clean Consolidated QC Approval Indicator */}
+                    {['WAITING_REVIEW', 'APPROVED'].includes(assign.status) && (() => {
+                      const approvedCount = (assign.lead_approved || 0) + (assign.mentor_approved || 0) + (assign.coordinator_approved || 0);
+                      const isFullyApproved = approvedCount === 3;
 
-                          {/* Mentor QC */}
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border flex items-center gap-1 ${
-                            assign.mentor_approved === 1
-                              ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30'
-                              : 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40'
-                          }`}>
-                            <span>{assign.mentor_approved === 1 ? '✓' : '⏳'}</span>
-                            <span>Mentor</span>
-                          </span>
-
-                          {/* Koordinator QC */}
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md border flex items-center gap-1 ${
-                            assign.coordinator_approved === 1
-                              ? 'text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/30'
-                              : 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40'
-                          }`}>
-                            <span>{assign.coordinator_approved === 1 ? '✓' : '⏳'}</span>
-                            <span>Koordinator OJT</span>
-                          </span>
+                      return (
+                        <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-2 mt-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400">
+                              Status QC:
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                                isFullyApproved
+                                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                  : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                              }`}
+                              title={`Detail: Ketua Tim (${assign.lead_approved ? '✓' : '⏳'}), Mentor (${assign.mentor_approved ? '✓' : '⏳'}), Koordinator (${assign.coordinator_approved ? '✓' : '⏳'})`}
+                            >
+                              <span>{isFullyApproved ? '✓ Selesai (3/3)' : `⏳ Persetujuan (${approvedCount}/3)`}</span>
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Action buttons */}
                     <div className="pt-2">

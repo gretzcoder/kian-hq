@@ -7,6 +7,7 @@ import WorkspaceStatusForm from './components/WorkspaceStatusForm';
 import TeamMemberPanel from './components/TeamMemberPanel';
 import CreateTaskForm from './components/CreateTaskForm';
 import TaskAccordion from './components/TaskAccordion';
+import WorkspaceTabs from './components/WorkspaceTabs';
 
 
 interface WorkspaceRow {
@@ -242,23 +243,21 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Two Column Dashboard Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Tasks List */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-black text-zinc-900 dark:text-zinc-100">Tasks</h2>
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 font-mono">
-              Ordered by Priority
-            </span>
-          </div>
-
-          {tasks.length === 0 ? (
+      {/* Workspace Tabs Container */}
+      <WorkspaceTabs
+        tasksCount={tasks.length}
+        membersCount={members.length}
+        tasksTab={
+          tasks.length === 0 ? (
             <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 text-center bg-white dark:bg-transparent">
               <p className="text-3xl mb-3">📋</p>
-              <p className="text-zinc-500 font-bold dark:text-zinc-400">No tasks yet in this workspace.</p>
+              <p className="text-zinc-500 font-bold dark:text-zinc-400">
+                Belum ada tugas di workspace ini.
+              </p>
               {canCreateTask && (
-                <p className="text-zinc-400 dark:text-zinc-500 text-sm mt-1">Use the form to create your first task.</p>
+                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">
+                  Klik tombol "+ Buat Tugas" di atas untuk memulai penugasan.
+                </p>
               )}
             </div>
           ) : (
@@ -275,12 +274,9 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
               users={users}
               members={members}
             />
-          )}
-        </div>
-
-        {/* Right Column: Sidebar */}
-        <div className="space-y-6">
-          {/* OJT Team Members panel */}
+          )
+        }
+        membersTab={
           <TeamMemberPanel
             workspaceId={wsId}
             members={members}
@@ -288,17 +284,13 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             isMentor={isMentor || isCoordinator}
             ojtUsers={ojtUsers}
           />
-
-          {/* Create Task Form */}
-          {canCreateTask && (
-            <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm">
-              <h2 className="text-lg font-bold mb-1 text-zinc-900 dark:text-zinc-100">Create Task</h2>
-              <p className="text-zinc-500 dark:text-zinc-400 text-xs mb-5">Add a new task to this workspace.</p>
-              <CreateTaskForm workspaceId={wsId} existingTasks={existingTasks} />
-            </div>
-          )}
-        </div>
-      </div>
+        }
+        createTaskForm={
+          canCreateTask ? (
+            <CreateTaskForm workspaceId={wsId} existingTasks={existingTasks} />
+          ) : undefined
+        }
+      />
     </div>
   );
 }
