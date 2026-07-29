@@ -125,6 +125,16 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const tasks = tasksRaw as unknown as TaskRow[];
   const users = usersRaw as unknown as UserRow[];
   const ojtUsers = ojtUsersRaw as unknown as { id: string; name: string; email: string }[];
+  const members = (membersRaw as any[]);
+
+  // SECURITY GATE: OJT interns must be a member or mentor of the workspace/project to view it
+  if (ctx.userType === 'OJT') {
+    const isMember = members.some((m) => m.userId === session.userId);
+    const isMentor = workspace.ojt_coordinator_id === session.userId || ojtCheck !== null;
+    if (!isMember && !isMentor) {
+      redirect('/dashboard');
+    }
+  }
 
   // Fetch assignments only when there are tasks (depends on tasks result above)
   const { results: assignmentsRaw } = tasks.length > 0
@@ -166,10 +176,10 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     }
     membersMap[m.userId].teamRoles.push(m.teamRole);
   }
-  const members = Object.values(membersMap) as any[];
+  const membersList = Object.values(membersMap) as any[];
 
   // Compute roles for the current user (from already-fetched member data — no extra DB call)
-  const currentUserRoles: string[] = members.find((m) => m.userId === session.userId)?.teamRoles ?? [];
+  const currentUserRoles: string[] = membersList.find((m) => m.userId === session.userId)?.teamRoles ?? [];
   const isLeader = currentUserRoles.includes('LEADER');
   const isMentor = workspace.ojt_coordinator_id === session.userId;
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
@@ -246,7 +256,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       {/* Workspace Tabs Container */}
       <WorkspaceTabs
         tasksCount={tasks.length}
-        membersCount={members.length}
+        membersCount={membersList.length}
         tasksTab={
           tasks.length === 0 ? (
             <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 text-center bg-white dark:bg-transparent">
@@ -279,9 +289,9 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         membersTab={
           <TeamMemberPanel
             workspaceId={wsId}
-            members={members}
+            members={membersList}
             canManageMembers={canManageMembers}
-            isMentor={isMentor || isCoordinator}
+            isMentor={isMentor}
             ojtUsers={ojtUsers}
           />
         }

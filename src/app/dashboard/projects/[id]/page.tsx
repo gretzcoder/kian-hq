@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { deleteProject, publishProject, archiveProject } from '@/modules/projects/actions';
 import ProjectTabs from '@/modules/projects/components/ProjectTabs';
 import ProjectDetailTabs from '@/modules/projects/components/ProjectDetailTabs';
+import ProjectCoordinatorsManager from '@/modules/projects/components/ProjectCoordinatorsManager';
 import CreateWorkspaceForm from './components/CreateWorkspaceForm';
 import DeleteWorkspaceButton from './components/DeleteWorkspaceButton';
 
@@ -209,6 +210,21 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const flowStatuses = PROJECT_FLOW.map((step) => step.status);
   const currentIdx = flowStatuses.indexOf(project.status);
 
+  // Fetch current project coordinators & all users for manager dropdown
+  const [{ results: currentCoordinatorsRaw }, { results: allUsersRaw }] = await Promise.all([
+    db.prepare(`
+      SELECT u.id, u.name, u.email
+      FROM project_coordinators pc
+      JOIN users u ON pc.user_id = u.id
+      WHERE pc.project_id = ?
+      ORDER BY u.name ASC
+    `).bind(projectId).all(),
+    db.prepare('SELECT id, name, email FROM users WHERE status = "ACTIVE" ORDER BY name ASC').all(),
+  ]);
+  const currentCoordinators = currentCoordinatorsRaw as unknown as Array<{ id: string; name: string; email: string }>;
+  const availableUsers = allUsersRaw as unknown as Array<{ id: string; name: string; email: string }>;
+  const canUpdateProject = ctx.can('UPDATE');
+
   return (
     <div className="space-y-8">
       {/* Back + Controls */}
@@ -253,41 +269,40 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* Project Banner */}
+      {/* Project Banner (Title & Description) */}
       <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 md:p-8 shadow-sm">
-        <div className="flex flex-wrap justify-between items-start gap-4 mb-4">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-zinc-950 via-zinc-800 to-zinc-600 dark:from-white dark:via-zinc-200 dark:to-zinc-400 bg-clip-text text-transparent">
-              {project.name}
-            </h1>
-            <p className="text-[10px] text-zinc-500 font-bold tracking-wider mt-1.5 uppercase">ID: {project.id}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${statusColor}`}>
-              {project.status.replace('_', ' ')}
-            </span>
-          </div>
+        <div className="mb-3">
+          <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-zinc-950 via-zinc-800 to-zinc-600 dark:from-white dark:via-zinc-200 dark:to-zinc-400 bg-clip-text text-transparent">
+            {project.name}
+          </h1>
         </div>
 
         <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed max-w-3xl font-medium">
-          {project.description || 'No description provided.'}
+          {project.description || 'Tidak ada deskripsi proyek.'}
         </p>
 
         {project.gdrive_folder_id && (
-          <div className="mt-6 pt-6 border-t border-zinc-100 dark:border-zinc-900/60">
+          <div className="mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-900/60">
             <a
               href={project.gdrive_folder_id}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-xs font-bold bg-purple-500/5 hover:bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/10 dark:border-purple-500/20 px-4 py-2 rounded-xl transition-all active:scale-[0.97]"
             >
-              📁 Open Storage Folder
+              📂 Buka Google Drive Folder
             </a>
           </div>
         )}
-
-
       </div>
+
+      {/* Project Coordinators Manager */}
+      {canUpdateProject && (
+        <ProjectCoordinatorsManager
+          projectId={projectId}
+          currentCoordinators={currentCoordinators}
+          availableUsers={availableUsers}
+        />
+      )}
 
       {/* Project Detail Clean Tabbed Container */}
       <ProjectDetailTabs

@@ -228,11 +228,13 @@ export default function ProjectTabs({
 
                   <div>
                     <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                      Deadline
+                      Deadline <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="date"
                       name="deadline"
+                      required
+                      min={new Date().toISOString().split('T')[0]}
                       className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-500 dark:text-zinc-400 duration-200 cursor-pointer"
                     />
                   </div>

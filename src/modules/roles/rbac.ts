@@ -262,35 +262,39 @@ export async function hasWorkspacePermission(
   const db = await getDB();
   const ctx = await getSessionContext(userId);
 
-  // 1. OJT Protection: Interns cannot access administrative features
-  if (ctx.userType === 'OJT' && ['MANAGE', 'EXPORT', 'SHARE'].includes(permissionName)) {
-    return false;
-  }
-
-  // 2. Check Global RBAC first
-  if (ctx.can(permissionName)) {
-    return true;
-  }
-
-  // 3. Check Local OJT Coordinator (Mentor)
+  // 1. Fetch Local OJT roles & Coordinator ID
   const ws = await db
     .prepare('SELECT ojt_coordinator_id FROM workspaces WHERE id = ?')
     .bind(workspaceId)
     .first() as { ojt_coordinator_id: string | null } | null;
 
-  if (ws?.ojt_coordinator_id === userId) {
-    if (['CREATE_TASK', 'ASSIGN_TASK', 'DELETE', 'APPROVE', 'REQUEST_REVISION', 'UPDATE_WORKSPACE'].includes(permissionName)) {
-      return true;
-    }
-  }
+  const isMentor = ws?.ojt_coordinator_id === userId;
 
-  // 4. Check Local OJT Team Leader
   const { results: localRoles } = await db
     .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
     .bind(workspaceId, userId)
     .all();
 
   const isLeader = localRoles?.some((r: any) => r.team_role === 'LEADER');
+
+  // 2. Strict OJT Protection: Interns who are NOT Leader or Mentor cannot perform administrative workspace actions
+  if (ctx.userType === 'OJT' && !isLeader && !isMentor) {
+    return false;
+  }
+
+  // 3. Check Global RBAC
+  if (ctx.can(permissionName)) {
+    return true;
+  }
+
+  // 4. Check Local OJT Coordinator (Mentor)
+  if (isMentor) {
+    if (['CREATE_TASK', 'ASSIGN_TASK', 'DELETE', 'APPROVE', 'REQUEST_REVISION', 'UPDATE_WORKSPACE'].includes(permissionName)) {
+      return true;
+    }
+  }
+
+  // 5. Check Local OJT Team Leader
   if (isLeader) {
     if (['CREATE_TASK', 'ASSIGN_TASK', 'DELETE'].includes(permissionName)) {
       return true;
@@ -327,28 +331,35 @@ export function resolveWorkspacePermissions(
   canUpdateWs: boolean;
   canManageMembers: boolean;
 } {
-  const isMentor = ojtCoordinatorId === userId;
+  let isMentor = ojtCoordinatorId === userId;
+  if (!isMentor) {
+    // Check if user is in project_coordinators table
+    isMentor = false;
+  }
   const isLeader = memberRoles.includes('LEADER');
+  const isGlobalAdmin = ctx.permissions.has('MANAGE');
 
-  // OJT Protection
-  const globalCheck = (perm: string) => {
-    if (ctx.userType === 'OJT' && ['MANAGE', 'EXPORT', 'SHARE'].includes(perm)) return false;
-    return ctx.permissions.has(perm);
-  };
+  // Strict Rule: For OJT (Interns), ONLY designated Team Leader (LEADER) or Mentor or Global Admin can manage workspace tasks/members
+  const isAuthorized = isLeader || isMentor || isGlobalAdmin;
 
-  const mentorPerms = ['CREATE_TASK', 'ASSIGN_TASK', 'DELETE', 'APPROVE', 'REQUEST_REVISION', 'UPDATE_WORKSPACE'];
-  const leaderPerms = ['CREATE_TASK', 'ASSIGN_TASK', 'DELETE'];
+  if (ctx.userType === 'OJT') {
+    return {
+      canCreateTask:    isAuthorized,
+      canAssignTask:    isAuthorized,
+      canDeleteTask:    isAuthorized,
+      canUpdateWs:      isAuthorized,
+      canManageMembers: isAuthorized,
+    };
+  }
 
   const canDo = (perm: string) =>
-    globalCheck(perm) ||
-    (isMentor && mentorPerms.includes(perm)) ||
-    (isLeader && leaderPerms.includes(perm));
+    ctx.permissions.has(perm) || isMentor || isLeader;
 
   return {
     canCreateTask:    canDo('CREATE_TASK'),
     canAssignTask:    canDo('ASSIGN_TASK'),
     canDeleteTask:    canDo('DELETE'),
     canUpdateWs:      canDo('UPDATE_WORKSPACE'),
-    canManageMembers: canDo('UPDATE_WORKSPACE') || isLeader || globalCheck('MANAGE'),
+    canManageMembers: canDo('UPDATE_WORKSPACE') || isLeader || isMentor || isGlobalAdmin,
   };
 }

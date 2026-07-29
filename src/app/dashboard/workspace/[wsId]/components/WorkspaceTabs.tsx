@@ -84,11 +84,11 @@ export default function WorkspaceTabs({
         {activeTab === 'tasks' && <div className="animate-in fade-in duration-200">{tasksTab}</div>}
 
         {activeTab === 'members' && (
-          <div className="max-w-2xl animate-in fade-in duration-200">{membersTab}</div>
+          <div className="animate-in fade-in duration-200">{membersTab}</div>
         )}
 
         {activeTab === 'create' && createTaskForm && (
-          <div className="max-w-xl animate-in fade-in duration-200 border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm">
+          <div className="animate-in fade-in duration-200 border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm">
             <h3 className="text-base font-bold mb-1 text-zinc-900 dark:text-zinc-100">
               Buat Tugas Baru
             </h3>

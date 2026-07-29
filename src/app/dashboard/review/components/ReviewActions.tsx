@@ -4,29 +4,62 @@ import { useState } from 'react';
 import { approveAssignment, requestRevision, declineAssignment } from '@/modules/tasks/actions';
 import { useUI } from '@/components/ui/UIProvider';
 
+export function getSparkMeta(spark: number): { label: string; emoji: string; color: string } {
+  if (spark >= 9) return { label: 'LEGENDARY SPARK', emoji: '👑', color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' };
+  if (spark >= 7) return { label: 'GREAT SPARK', emoji: '💎', color: 'text-purple-500 bg-purple-500/10 border-purple-500/30' };
+  if (spark >= 5) return { label: 'SOLID SPARK', emoji: '⚡', color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30' };
+  if (spark >= 3) return { label: 'FAIR SPARK', emoji: '👍', color: 'text-sky-500 bg-sky-500/10 border-sky-500/30' };
+  return { label: 'MINIMUM SPARK', emoji: '🩹', color: 'text-zinc-500 bg-zinc-500/10 border-zinc-500/30' };
+}
+
 export default function ReviewActions({
   assignmentId,
   canRequestRevision,
+  canAwardBadge = true,
 }: {
   assignmentId: string;
   canRequestRevision: boolean;
+  canAwardBadge?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'NONE' | 'REVISION' | 'DECLINE'>('NONE');
+  const [mode, setMode] = useState<'NONE' | 'SPARK_MODAL' | 'REVISION' | 'DECLINE'>('NONE');
+  const [sparks, setSparks] = useState<number>(8);
   const [noteText, setNoteText] = useState('');
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { toast } = useUI();
 
-  const handleApprove = async () => {
+  const handleQuickApprove = async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await approveAssignment(assignmentId);
       if (res.success) {
         setDone(true);
-        toast('Persetujuan berhasil disimpan!', 'success');
+        toast('Persetujuan QC berhasil disimpan!', 'success');
+      } else {
+        const msg = res.error ?? 'Failed to approve';
+        setError(msg);
+        toast(msg, 'error');
+      }
+    } catch (e: any) {
+      const msg = e.message ?? 'An error occurred';
+      setError(msg);
+      toast(msg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveWithSparks = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await approveAssignment(assignmentId, sparks, noteText.trim());
+      if (res.success) {
+        setDone(true);
+        toast(`Persetujuan disimpan dengan ${sparks} ✨ Creative Sparks!`, 'success');
       } else {
         const msg = res.error ?? 'Failed to approve';
         setError(msg);
@@ -86,6 +119,8 @@ export default function ReviewActions({
     );
   }
 
+  const currentSparkMeta = getSparkMeta(sparks);
+
   return (
     <div className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-900">
       {error && (
@@ -97,30 +132,95 @@ export default function ReviewActions({
       {mode === 'NONE' ? (
         <div className="flex gap-2 flex-wrap">
           <button
-            onClick={handleApprove}
+            onClick={() => {
+              if (canAwardBadge) {
+                setMode('SPARK_MODAL');
+              } else {
+                handleQuickApprove();
+              }
+            }}
             disabled={loading}
-            className="flex-1 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/15 dark:border-emerald-500/25 font-bold text-xs px-4 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
+            className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5"
           >
-            {loading ? '...' : '✓ Approve'}
+            <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ Approve QC'}</span>
           </button>
           {canRequestRevision && (
             <>
               <button
                 onClick={() => setMode('REVISION')}
                 disabled={loading}
-                className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-4 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
+                className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
               >
-                ✗ Request Revision
+                Request Revision
               </button>
               <button
                 onClick={() => setMode('DECLINE')}
                 disabled={loading}
-                className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-4 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
+                className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
               >
-                🛑 Decline
+                Decline
               </button>
             </>
           )}
+        </div>
+      ) : mode === 'SPARK_MODAL' ? (
+        <div className="space-y-3.5 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center justify-between">
+            <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+              ✨ Berikan Creative Sparks (1 - 10)
+            </label>
+            <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${currentSparkMeta.color}`}>
+              {currentSparkMeta.emoji} {currentSparkMeta.label} ({sparks}/10)
+            </span>
+          </div>
+
+          {/* 1 to 10 Sparks Selector Buttons */}
+          <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+              const isSelected = sparks === num;
+              return (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setSparks(num)}
+                  className={`py-2 rounded-xl text-xs font-black transition-all ${
+                    isSelected
+                      ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/20 scale-105 ring-2 ring-purple-500/30'
+                      : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
+                  }`}
+                >
+                  {num}
+                </button>
+              );
+            })}
+          </div>
+
+          <div>
+            <input
+              type="text"
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              placeholder="Catatan apresiasi pengerjaan (opsional)..."
+              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3.5 py-2 focus:outline-none focus:border-purple-500 transition-all"
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end pt-0.5">
+            <button
+              onClick={() => { setMode('NONE'); setNoteText(''); setError(null); }}
+              disabled={loading}
+              className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleApproveWithSparks}
+              disabled={loading}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-1.5 rounded-xl transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
+            >
+              {loading ? 'Menyimpan...' : `Kirim ${sparks} ✨ & Setujui`}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-2">

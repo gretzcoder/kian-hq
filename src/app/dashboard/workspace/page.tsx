@@ -61,17 +61,18 @@ export default async function WorkspacePage() {
     { results: rawMentoredProjects },
   ] = await Promise.all([
     getSessionContext(session.userId),
-    // 1. Fetch workspaces where user is a member or coordinator
+    // 1. Fetch workspaces where user is a member, workspace coordinator, or project mentor
     getDB().then((db) => db.prepare(`
       SELECT ws.id, ws.name, ws.description, ws.status, ws.deadline, ws.project_id, ws.ojt_coordinator_id, p.name AS project_name,
              (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role
       FROM workspaces ws
       JOIN projects p ON ws.project_id = p.id
       WHERE (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
-         OR ws.ojt_coordinator_id = ?)
+         OR ws.ojt_coordinator_id = ?
+         OR EXISTS (SELECT 1 FROM project_coordinators WHERE project_id = ws.project_id AND user_id = ?))
         AND ws.deleted_at IS NULL
       ORDER BY ws.created_at DESC
-    `).bind(session.userId, session.userId, session.userId).all()),
+    `).bind(session.userId, session.userId, session.userId, session.userId).all()),
     // 2. All active assignments for the current user
     getDB().then((db) => db.prepare(`
       SELECT

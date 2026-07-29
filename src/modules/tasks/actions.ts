@@ -39,14 +39,14 @@ async function checkOJTPrerequisites(db: any, taskId: string, role: string): Pro
     if (res && !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(res.status)) {
       return { allowed: false, error: 'Tidak dapat melanjutkan step Planning sebelum step Research disetujui QC.' };
     }
-  } else if (role === 'CREATOR') {
+  } else if (['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(role)) {
     // Check if PLANNER step exists and is approved
     const planner = await db
       .prepare("SELECT status FROM task_assignments WHERE task_id = ? AND assignment_role = 'PLANNER'")
       .bind(taskId)
       .first() as { status: string } | null;
     if (planner && !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(planner.status)) {
-      return { allowed: false, error: 'Tidak dapat melanjutkan step Creation sebelum step Planning disetujui QC.' };
+      return { allowed: false, error: 'Tidak dapat melanjutkan step ini sebelum step Planning disetujui QC.' };
     }
 
     // Check if RESEARCHER step exists and is approved (if planner wasn't assigned)
@@ -55,7 +55,7 @@ async function checkOJTPrerequisites(db: any, taskId: string, role: string): Pro
       .bind(taskId)
       .first() as { status: string } | null;
     if (researcher && !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(researcher.status)) {
-      return { allowed: false, error: 'Tidak dapat melanjutkan step Creation sebelum step Research disetujui QC.' };
+      return { allowed: false, error: 'Tidak dapat melanjutkan step ini sebelum step Research disetujui QC.' };
     }
   }
   return { allowed: true };
@@ -93,17 +93,25 @@ export async function createTask(workspaceId: string, formData: FormData) {
   const description = formData.get('description') as string;
   const priority = (formData.get('priority') as string) || 'NORMAL';
   const deadlineStr = formData.get('deadline') as string;
+  const outputType = (formData.get('outputType') as string) || 'DESIGN';
   
   // OJT fields
-  const taskType = (formData.get('taskType') as string) || 'REGULAR';
   const parentTaskId = formData.get('parentTaskId') as string || null;
 
   if (!title?.trim()) {
-    return { success: false, error: 'Task title is required.' };
+    return { success: false, error: 'Judul tugas wajib diisi.' };
+  }
+
+  if (!deadlineStr?.trim()) {
+    return { success: false, error: 'Tenggat waktu (Deadline) wajib diisi.' };
+  }
+
+  if (!['DESIGN', 'VIDEO'].includes(outputType)) {
+    return { success: false, error: 'Jenis output karya wajib dipilih (Design atau Video).' };
   }
 
   const taskId = `task_${crypto.randomUUID().replace(/-/g, '')}`;
-  const deadline = deadlineStr ? new Date(deadlineStr).getTime() : null;
+  const deadline = new Date(deadlineStr).getTime();
 
   // Determine initial status based on task type
   const initialStatus = 'DRAFT';
@@ -125,7 +133,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
         priority, 
         session.userId, 
         deadline,
-        taskType,
+        outputType,
         parentTaskId
       )
       .run();
@@ -136,7 +144,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
       fromStatus: null,
       toStatus: initialStatus,
       triggeredBy: session.userId,
-      note: `Task "${title}" created (${taskType})`,
+      note: `Task "${title}" created (Output: ${outputType})`,
     });
 
     revalidatePath(`/dashboard/workspace/${workspaceId}`);
@@ -160,7 +168,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
 export async function assignCreatorToTask(
   taskId: string,
   userId: string,
-  role: 'PIC' | 'REVIEWER' | 'HELPER' | 'APPROVER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR',
+  role: 'PIC' | 'REVIEWER' | 'HELPER' | 'APPROVER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'DESIGNER' | 'VIDEO_EDITOR',
   deadline?: number | null,
 ) {
   const session = await getSession();
@@ -224,7 +232,7 @@ export async function assignMultipleCreatorsToTask(
   taskId: string,
   assignments: Array<{
     userId: string;
-    role: 'PIC' | 'REVIEWER' | 'HELPER' | 'APPROVER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR';
+    role: 'PIC' | 'REVIEWER' | 'HELPER' | 'APPROVER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'DESIGNER' | 'VIDEO_EDITOR';
     deadline?: number | null;
   }>,
 ) {
@@ -522,7 +530,7 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
  * Approves a submitted assignment.
  * Requires: APPROVE permission.
  */
-export async function approveAssignment(assignmentId: string) {
+export async function approveAssignment(assignmentId: string, appreciationBadge?: string | number, appreciationNote?: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
@@ -565,7 +573,7 @@ export async function approveAssignment(assignmentId: string) {
 
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
-  const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR'].includes(assignment.assignment_role);
+  const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assignment.assignment_role);
 
   if (isOjtRole) {
     if (!isLeader && !isMentor && !isCoordinator) {
@@ -621,7 +629,7 @@ export async function approveAssignment(assignmentId: string) {
       fromStatus: assignment.status,
       toStatus: nextStatus,
       triggeredBy: session.userId,
-      note: `Approved by: ${isLeader ? 'Leader ' : ''}${isMentor ? 'Mentor ' : ''}${isCoordinator ? 'Coordinator ' : ''}(Status: ${nextStatus})`,
+      note: `Approved by: ${isLeader ? 'Leader ' : ''}${isMentor ? 'Mentor ' : ''}${isCoordinator ? 'Coordinator ' : ''}(Status: ${nextStatus})${appreciationBadge ? ` [Sparks: ${appreciationBadge}]` : ''}${appreciationNote ? ` Note: ${appreciationNote}` : ''}`,
     });
 
     if (nextStatus === 'APPROVED') {
@@ -682,6 +690,10 @@ export async function requestRevision(assignmentId: string, note: string) {
     .first() as { id: string; task_id: string; status: string; assignment_role: string } | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
+
+  if (['APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(assignment.status)) {
+    return { success: false, error: 'Penugasan yang sudah disetujui (Approved) tidak dapat diminta revisi kembali.' };
+  }
 
   const task = await db
     .prepare('SELECT id, project_id, workspace_id, status, task_type FROM tasks WHERE id = ?')

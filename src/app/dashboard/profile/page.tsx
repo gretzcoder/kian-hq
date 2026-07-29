@@ -39,6 +39,7 @@ export default async function ProfilePage() {
     recentActivityRaw,
     workspaceCountRaw,
     projectCountRaw,
+    earnedBadgesRaw,
   ] = await Promise.all([
     db.prepare(`
       SELECT u.id, u.email, u.name, u.status, u.user_type, u.created_at, r.name as role_name
@@ -95,6 +96,13 @@ export default async function ProfilePage() {
       JOIN tasks t ON ta.task_id = t.id
       WHERE ta.user_id = ?
     `).bind(session.userId).first(),
+
+    db.prepare(`
+      SELECT we.note, ta.assignment_role
+      FROM workflow_events we
+      JOIN task_assignments ta ON we.entity_id = ta.id
+      WHERE ta.user_id = ? AND (we.note LIKE '%[Sparks:%' OR we.note LIKE '%[Badge:%')
+    `).bind(session.userId).all(),
   ]);
 
   const profile          = profileRaw as unknown as UserProfile | null;
@@ -103,6 +111,45 @@ export default async function ProfilePage() {
   const recentActivity   = recentActivityRaw.results as unknown as RecentActivity[];
   const workspaceCount   = (workspaceCountRaw as unknown as { count: number } | null)?.count ?? 0;
   const projectCount     = (projectCountRaw  as unknown as { count: number } | null)?.count ?? 0;
+
+  // Calculate Creative Sparks & Role Breakdown
+  let totalSparks = 0;
+  const roleSparksMap: Record<string, number> = {
+    PLANNER: 0,
+    DESIGNER: 0,
+    VIDEO_EDITOR: 0,
+    CREATOR: 0,
+    RESEARCHER: 0,
+  };
+
+  (earnedBadgesRaw.results as any[]).forEach((row) => {
+    // Check [Sparks: X]
+    const sparkMatch = row.note?.match(/\[Sparks:\s*(\d+)\]/);
+    if (sparkMatch && sparkMatch[1]) {
+      const val = parseInt(sparkMatch[1], 10);
+      totalSparks += val;
+      const r = row.assignment_role || 'CREATOR';
+      roleSparksMap[r] = (roleSparksMap[r] || 0) + val;
+    }
+  });
+
+  // Determine Dynamic Title Badges
+  const titleBadges: { title: string; emoji: string; desc: string; color: string }[] = [];
+  if (roleSparksMap.PLANNER >= 15) {
+    titleBadges.push({ title: 'TOP PLANNER', emoji: '🧠', desc: `${roleSparksMap.PLANNER} Sparks`, color: 'from-amber-500/15 to-orange-500/15 border-amber-500/30 text-amber-700 dark:text-amber-300' });
+  }
+  if (roleSparksMap.DESIGNER >= 15) {
+    titleBadges.push({ title: 'TOP DESIGNER', emoji: '🎨', desc: `${roleSparksMap.DESIGNER} Sparks`, color: 'from-purple-500/15 to-pink-500/15 border-purple-500/30 text-purple-700 dark:text-purple-300' });
+  }
+  if (roleSparksMap.VIDEO_EDITOR >= 15) {
+    titleBadges.push({ title: 'TOP VIDEO EDITOR', emoji: '🎬', desc: `${roleSparksMap.VIDEO_EDITOR} Sparks`, color: 'from-pink-500/15 to-rose-500/15 border-pink-500/30 text-pink-700 dark:text-pink-300' });
+  }
+  if (roleSparksMap.CREATOR >= 15) {
+    titleBadges.push({ title: 'MASTER CREATOR', emoji: '✨', desc: `${roleSparksMap.CREATOR} Sparks`, color: 'from-indigo-500/15 to-purple-500/15 border-indigo-500/30 text-indigo-700 dark:text-indigo-300' });
+  }
+  if (roleSparksMap.RESEARCHER >= 15) {
+    titleBadges.push({ title: 'ELITE RESEARCHER', emoji: '🔍', desc: `${roleSparksMap.RESEARCHER} Sparks`, color: 'from-blue-500/15 to-cyan-500/15 border-blue-500/30 text-blue-700 dark:text-blue-300' });
+  }
 
   const getCount = (statuses: string[]) =>
     assignmentStats.filter((s) => statuses.includes(s.status)).reduce((a, s) => a + Number(s.count), 0);
@@ -242,6 +289,68 @@ export default async function ProfilePage() {
         </div>
       </div>
 
+      {/* ── CREATIVE SPARKS & TITLE BADGES ── */}
+      <div className={`${card} p-6 border-purple-500/20 bg-gradient-to-br from-purple-500/[0.03] to-indigo-500/[0.03]`}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+          <div>
+            <h3 className="text-xs font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
+              <span>✨ Creative Sparks & Title Badges</span>
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Akumulasi poin apresiasi kualitas karya dari mentor & koordinator.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-4 py-2 rounded-2xl shrink-0">
+            <span className="text-xl">✨</span>
+            <div>
+              <p className="text-lg font-black text-purple-700 dark:text-purple-300 leading-none">{totalSparks} Sparks</p>
+              <p className="text-[9px] text-purple-600/80 dark:text-purple-400/80 font-bold uppercase tracking-wider">Total Terkumpul</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic Titles Row */}
+        {titleBadges.length > 0 && (
+          <div className="pt-4">
+            <p className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5">
+              Gelar Keahlian Utama:
+            </p>
+            <div className="flex gap-3 flex-wrap">
+              {titleBadges.map((tb) => (
+                <div
+                  key={tb.title}
+                  className={`px-4 py-2 rounded-2xl border bg-gradient-to-r ${tb.color} flex items-center gap-2.5 shadow-sm`}
+                >
+                  <span className="text-xl">{tb.emoji}</span>
+                  <div>
+                    <p className="text-xs font-black tracking-wider leading-none">{tb.title}</p>
+                    <p className="text-[9px] opacity-80 font-bold mt-0.5">{tb.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Role Sparks Breakdown */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+          {[
+            { role: 'PLANNER', label: 'Planner Sparks', emoji: '🧠', val: roleSparksMap.PLANNER, color: 'text-amber-600 dark:text-amber-400 bg-amber-500/5 border-amber-500/15' },
+            { role: 'DESIGNER', label: 'Designer Sparks', emoji: '🎨', val: roleSparksMap.DESIGNER, color: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15' },
+            { role: 'VIDEO_EDITOR', label: 'Video Editor Sparks', emoji: '🎬', val: roleSparksMap.VIDEO_EDITOR, color: 'text-pink-600 dark:text-pink-400 bg-pink-500/5 border-pink-500/15' },
+            { role: 'RESEARCHER', label: 'Researcher Sparks', emoji: '🔍', val: roleSparksMap.RESEARCHER, color: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15' },
+          ].map((item) => (
+            <div key={item.role} className={`p-3.5 rounded-2xl border ${item.color} flex items-center justify-between`}>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">{item.emoji}</span>
+                <span className="text-xs font-bold">{item.label}</span>
+              </div>
+              <span className="text-sm font-black font-mono">{item.val} ✨</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* ── METRICS ROW ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
@@ -259,63 +368,63 @@ export default async function ProfilePage() {
       </div>
 
       {/* ── BREAKDOWN GRID ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        {/* Role Breakdown */}
-        {roleStats.length > 0 && (
-          <div className={`${card} p-5`}>
-            <h3 className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-4">
-              Role yang Pernah Dikerjakan
-            </h3>
-            <div className="space-y-3">
-              {roleStats.map((r) => {
-                const pct = totalAssignments > 0 ? Math.round((Number(r.count) / totalAssignments) * 100) : 0;
-                const colorCls = roleColors[r.assignment_role] ?? 'text-zinc-600 bg-zinc-100 border-zinc-200';
-                return (
-                  <div key={r.assignment_role} className="flex items-center gap-3">
-                    <span className={`text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-lg border shrink-0 ${colorCls}`}>
-                      {r.assignment_role}
-                    </span>
-                    <div className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
-                      <div className="h-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-400 transition-all duration-700" style={{ width: `${pct}%` }} />
+      {(roleStats.length > 0 || totalAssignments > 0) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          {/* Role Breakdown */}
+          {roleStats.length > 0 && (
+            <div className={`${card} p-5`}>
+              <h3 className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-4">
+                Role yang Pernah Dikerjakan
+              </h3>
+              <div className="space-y-3">
+                {roleStats.map((r) => {
+                  const pct = totalAssignments > 0 ? Math.round((Number(r.count) / totalAssignments) * 100) : 0;
+                  const colorCls = roleColors[r.assignment_role] ?? 'text-zinc-600 bg-zinc-100 border-zinc-200';
+                  return (
+                    <div key={r.assignment_role} className="flex items-center gap-3">
+                      <span className={`text-[9px] font-black uppercase tracking-wide px-2 py-0.5 rounded-lg border shrink-0 ${colorCls}`}>
+                        {r.assignment_role}
+                      </span>
+                      <div className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
+                        <div className="h-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-400 transition-all duration-700" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs font-black text-zinc-500 w-5 text-right shrink-0">{r.count}</span>
                     </div>
-                    <span className="text-xs font-black text-zinc-500 w-5 text-right shrink-0">{r.count}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Status Breakdown */}
-        <div className={`${card} p-5`}>
-          <h3 className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-4">
-            Status Assignment
-          </h3>
-          {totalAssignments === 0 ? (
-            <p className="text-xs text-zinc-400 italic">Belum ada assignment.</p>
-          ) : (
-            <div className="space-y-3">
-              {BREAKDOWN_STATUSES.map((status) => {
-                const count = getCount([status]);
-                if (count === 0) return null;
-                const pct  = Math.round((count / totalAssignments) * 100);
-                const meta = statusMeta[status];
-                return (
-                  <div key={status} className="flex items-center gap-3">
-                    <span className={`text-[9px] font-bold w-[128px] shrink-0 truncate ${meta?.color ?? 'text-zinc-500'}`}>
-                      {meta?.label ?? status}
-                    </span>
-                    <div className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
-                      <div className={`h-2 rounded-full transition-all duration-700 ${meta?.bar ?? 'bg-zinc-400'}`} style={{ width: `${pct}%` }} />
+          {/* Status Breakdown */}
+          {totalAssignments > 0 && (
+            <div className={`${card} p-5`}>
+              <h3 className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-4">
+                Status Assignment
+              </h3>
+              <div className="space-y-3">
+                {BREAKDOWN_STATUSES.map((status) => {
+                  const count = getCount([status]);
+                  if (count === 0) return null;
+                  const pct  = Math.round((count / totalAssignments) * 100);
+                  const meta = statusMeta[status];
+                  return (
+                    <div key={status} className="flex items-center gap-3">
+                      <span className={`text-[9px] font-bold w-[128px] shrink-0 truncate ${meta?.color ?? 'text-zinc-500'}`}>
+                        {meta?.label ?? status}
+                      </span>
+                      <div className="flex-1 bg-zinc-100 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
+                        <div className={`h-2 rounded-full transition-all duration-700 ${meta?.bar ?? 'bg-zinc-400'}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="text-xs font-black text-zinc-500 w-5 text-right shrink-0">{count}</span>
                     </div>
-                    <span className="text-xs font-black text-zinc-500 w-5 text-right shrink-0">{count}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
-      </div>
+      )}
 
       {/* ── RECENT ACTIVITY ── */}
       {recentActivity.length > 0 && (
@@ -357,33 +466,6 @@ export default async function ProfilePage() {
           </div>
         </div>
       )}
-
-      {/* ── ACCOUNT INFO ── */}
-      <div className={`${card} p-5`}>
-        <h3 className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-4">
-          Informasi Akun
-        </h3>
-        <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
-          {[
-            { label: 'Autentikasi',  value: 'Email / Password',       badge: 'emerald' },
-            { label: 'Session Store', value: 'Cloudflare KV',          badge: 'blue' },
-            { label: 'Role Sistem',  value: profile?.role_name ?? '—', badge: 'purple' },
-            { label: 'Tipe User',    value: profile?.user_type ?? 'STAFF', badge: 'amber' },
-          ].map(({ label, value, badge }) => (
-            <div key={label} className="flex items-center justify-between py-3">
-              <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{label}</span>
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full border
-                ${badge === 'emerald' ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/10' : ''}
-                ${badge === 'blue'    ? 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/10' : ''}
-                ${badge === 'purple'  ? 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/10' : ''}
-                ${badge === 'amber'   ? 'text-amber-600 dark:text-amber-400 bg-amber-500/5 border-amber-500/10' : ''}
-              `}>
-                {value}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

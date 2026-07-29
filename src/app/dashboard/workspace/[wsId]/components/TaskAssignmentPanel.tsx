@@ -23,17 +23,19 @@ interface Member {
   teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[];
 }
 
-const ASSIGNMENT_ROLES = ['RESEARCHER', 'PLANNER', 'CREATOR', 'PIC', 'REVIEWER', 'HELPER', 'APPROVER'] as const;
+const ASSIGNMENT_ROLES = ['RESEARCHER', 'PLANNER', 'DESIGNER', 'VIDEO_EDITOR', 'CREATOR', 'PIC', 'REVIEWER', 'HELPER', 'APPROVER'] as const;
 type AssignmentRole = typeof ASSIGNMENT_ROLES[number];
 
 const roleConfig: Record<string, { color: string; label: string; desc: string }> = {
-  RESEARCHER: { color: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/15', label: 'Researcher', desc: 'Step 1: Mencari ide konten' },
-  PLANNER:    { color: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/15', label: 'Planner', desc: 'Step 2: Membuat brief konten' },
-  CREATOR:    { color: 'text-pink-700 dark:text-pink-400 bg-pink-500/10 border-pink-500/15', label: 'Creator', desc: 'Step 3: Create konten (produksi)' },
-  PIC:        { color: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border-purple-500/15', label: 'PIC',      desc: 'Penanggung jawab tugas reguler' },
-  REVIEWER:   { color: 'text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/15', label: 'Reviewer', desc: 'Peninjau hasil kerja' },
-  HELPER:     { color: 'text-teal-700 dark:text-teal-400 bg-teal-500/10 border-teal-500/15', label: 'Helper', desc: 'Pemberi bantuan teknis' },
-  APPROVER:   { color: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/15', label: 'Approver', desc: 'Pemberi persetujuan akhir' },
+  RESEARCHER:   { color: 'text-blue-700 dark:text-blue-400 bg-blue-500/10 border-blue-500/15', label: 'Researcher', desc: 'Step 1: Mencari ide & moodboard referensi' },
+  PLANNER:      { color: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/15', label: 'Planner', desc: 'Step 2: Membuat script & brief konsep' },
+  DESIGNER:     { color: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border-purple-500/15', label: 'Designer', desc: 'Step 3: Produksi desain grafis / visual asset' },
+  VIDEO_EDITOR: { color: 'text-pink-700 dark:text-pink-400 bg-pink-500/10 border-pink-500/15', label: 'Video Editor', desc: 'Step 3: Editing video & sound effect' },
+  CREATOR:      { color: 'text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/15', label: 'Creator (General)', desc: 'Step 3: Produksi konten umum' },
+  PIC:          { color: 'text-purple-700 dark:text-purple-400 bg-purple-500/10 border-purple-500/15', label: 'PIC',      desc: 'Penanggung jawab tugas reguler' },
+  REVIEWER:     { color: 'text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/15', label: 'Reviewer', desc: 'Peninjau hasil kerja' },
+  HELPER:       { color: 'text-teal-700 dark:text-teal-400 bg-teal-500/10 border-teal-500/15', label: 'Helper', desc: 'Pemberi bantuan teknis' },
+  APPROVER:     { color: 'text-amber-700 dark:text-amber-400 bg-amber-500/10 border-amber-500/15', label: 'Approver', desc: 'Pemberi persetujuan akhir' },
 };
 
 export default function TaskAssignmentPanel({
@@ -60,7 +62,7 @@ export default function TaskAssignmentPanel({
   const [open, setOpen] = useState(false);
 
   const activeRoles = isOjt
-    ? (['RESEARCHER', 'PLANNER', 'CREATOR'] as const)
+    ? (['RESEARCHER', 'PLANNER', 'DESIGNER', 'VIDEO_EDITOR', 'CREATOR'] as const)
     : ASSIGNMENT_ROLES;
 
   const eligibleUsers = users.filter((u) => {
@@ -204,13 +206,17 @@ export default function TaskAssignmentPanel({
 
                       <input
                         type="date"
+                        min={new Date().toISOString().split('T')[0]}
                         max={maxDateStr}
                         value={roleDeadlineMap[role] || ''}
                         onChange={(e) =>
                           setRoleDeadlineMap((prev) => ({ ...prev, [role]: e.target.value }))
                         }
+                        onClick={(e) => {
+                          try { e.currentTarget.showPicker?.(); } catch {}
+                        }}
                         title={maxDateStr ? `Batas maksimum deadline step: ${maxDateStr}` : 'Target Deadline Pengumpulan Step'}
-                        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-purple-500 transition-all cursor-pointer"
+                        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-2.5 py-2 focus:outline-none focus:border-purple-500 transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
                       />
 
                     </div>

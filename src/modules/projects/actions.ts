@@ -160,6 +160,60 @@ export async function updateProject(projectId: string, formData: FormData) {
   }
 }
 
+/**
+ * Updates project coordinators (mentors).
+ * Requires: UPDATE permission.
+ */
+export async function updateProjectCoordinators(projectId: string, userIds: string[]) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  await checkPermission(session.userId, 'UPDATE');
+
+  if (!userIds || userIds.length === 0) {
+    return { success: false, error: 'Proyek harus memiliki minimal 1 Koordinator.' };
+  }
+
+  const db = await getDB();
+
+  try {
+    const firstMentorId = userIds[0];
+
+    // 1. Update first mentor on projects table and ALL associated workspaces under this project
+    await db
+      .prepare('UPDATE projects SET ojt_coordinator_id = ? WHERE id = ?')
+      .bind(firstMentorId, projectId)
+      .run();
+
+    await db
+      .prepare('UPDATE workspaces SET ojt_coordinator_id = ? WHERE project_id = ?')
+      .bind(firstMentorId, projectId)
+      .run();
+
+    // 2. Clear existing coordinators and insert new set
+    await db
+      .prepare('DELETE FROM project_coordinators WHERE project_id = ?')
+      .bind(projectId)
+      .run();
+
+    for (const uId of userIds) {
+      await db
+        .prepare('INSERT OR IGNORE INTO project_coordinators (project_id, user_id) VALUES (?, ?)')
+        .bind(projectId, uId)
+        .run();
+    }
+
+    revalidatePath('/dashboard');
+    revalidatePath('/dashboard/projects');
+    revalidatePath('/dashboard/workspace');
+    revalidatePath(`/dashboard/projects/${projectId}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error('updateProjectCoordinators failed:', err);
+    return { success: false, error: err.message || 'Failed to update project coordinators.' };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // PUBLISH PROJECT
 // ---------------------------------------------------------------------------

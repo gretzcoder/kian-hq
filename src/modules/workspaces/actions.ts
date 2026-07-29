@@ -183,10 +183,8 @@ export async function updateWorkspaceStatus(
  * Local helper to verify if the user has authority to manage OJT team members in this workspace.
  */
 async function checkOJTManagementAuthority(db: any, workspaceId: string, userId: string): Promise<boolean> {
-  try {
-    const ctx = await getSessionContext(userId);
-    if (ctx.can('MANAGE')) return true;
-  } catch {}
+  const ctx = await getSessionContext(userId);
+  if (ctx.can('MANAGE')) return true;
 
   const ws = await db
     .prepare('SELECT ojt_coordinator_id FROM workspaces WHERE id = ?')
@@ -196,11 +194,11 @@ async function checkOJTManagementAuthority(db: any, workspaceId: string, userId:
   if (ws?.ojt_coordinator_id === userId) return true;
 
   const member = await db
-    .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
+    .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
     .bind(workspaceId, userId)
-    .first() as { team_role: string } | null;
+    .first();
 
-  if (member?.team_role === 'LEADER') return true;
+  if (member) return true;
 
   return false;
 }
@@ -353,15 +351,28 @@ export async function removeWorkspaceMember(workspaceId: string, userId: string)
   if (!hasAuthority) throw new Error('Forbidden: You are not authorized to manage team members.');
 
   try {
+    // 1. Delete all workspace_members records for this user in this workspace
     await db
       .prepare('DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
       .bind(workspaceId, userId)
       .run();
 
+    // 2. Delete all task_assignments for this user under tasks in this workspace
+    await db
+      .prepare(`
+        DELETE FROM task_assignments
+        WHERE user_id = ?
+          AND task_id IN (SELECT id FROM tasks WHERE workspace_id = ?)
+      `)
+      .bind(userId, workspaceId)
+      .run();
+
     const ws = await db.prepare('SELECT project_id FROM workspaces WHERE id = ?').bind(workspaceId).first() as { project_id: string } | null;
     if (ws) {
       revalidatePath(`/dashboard/workspace/${workspaceId}`);
+      revalidatePath(`/dashboard/projects/${ws.project_id}`);
     }
+    revalidatePath('/dashboard/workspace');
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };

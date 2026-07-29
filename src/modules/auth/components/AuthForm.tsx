@@ -1,13 +1,16 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { loginAction, signupAction } from '../actions';
 
 export default function AuthForm() {
+  const router = useRouter();
   const [isSignUp, setIsSignUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -28,7 +31,9 @@ export default function AuthForm() {
             formElement.reset();
             setIsSignUp(false); // Switch to sign-in tab so they can login after approval
           } else {
-            window.location.href = '/dashboard';
+            setIsLoggingIn(true);
+            router.push('/dashboard');
+            router.refresh();
           }
         } else {
           setError(res.error || 'Authentication failed');
@@ -36,20 +41,36 @@ export default function AuthForm() {
       } else {
         const res = await loginAction(formData);
         if (res.success) {
-          window.location.href = '/dashboard';
+          setIsLoggingIn(true);
+          router.push('/dashboard');
+          router.refresh();
         } else {
           setError(res.error || 'Authentication failed');
+          setLoading(false);
         }
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
-    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="w-full max-w-md glass-panel premium-shadow rounded-3xl p-5 sm:p-8 transition-all duration-300 border border-zinc-200/80 dark:border-zinc-800/80">
+    <>
+      {/* Full-Screen Loading Overlay when Logging In */}
+      {isLoggingIn && (
+        <div className="fixed inset-0 z-50 bg-zinc-50 dark:bg-[#030303] flex flex-col items-center justify-center space-y-4 animate-in fade-in duration-300">
+          <div className="relative w-12 h-12 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full border-2 border-zinc-200/30 dark:border-zinc-800/30 border-t-purple-600 dark:border-t-purple-400 animate-spin" />
+            <div className="absolute inset-2 rounded-full border-2 border-zinc-200/20 dark:border-zinc-800/20 border-b-pink-500 dark:border-b-pink-400 animate-[spin_1.5s_linear_infinite_reverse]" />
+          </div>
+          <p className="text-[10px] font-black tracking-[0.35em] text-zinc-400 dark:text-zinc-500 uppercase text-center pl-[0.35em] select-none">
+            JUST MOMENT
+          </p>
+        </div>
+      )}
+
+      <div className="w-full max-w-md glass-panel premium-shadow rounded-3xl p-5 sm:p-8 transition-all duration-300 border border-zinc-200/80 dark:border-zinc-800/80">
       {/* Tab Selectors */}
       <div className="flex border-b border-zinc-200 dark:border-zinc-800 mb-4 sm:mb-6">
         <button
@@ -139,11 +160,21 @@ export default function AuthForm() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2.5 sm:py-3.5 rounded-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_20px_rgba(147,51,234,0.15)] hover:shadow-[0_4px_24px_rgba(147,51,234,0.25)] active:scale-[0.98] mt-1 sm:mt-2 text-xs sm:text-sm"
+          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-2.5 sm:py-3.5 rounded-xl transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed shadow-[0_4px_20px_rgba(147,51,234,0.15)] hover:shadow-[0_4px_24px_rgba(147,51,234,0.25)] active:scale-[0.98] mt-1 sm:mt-2 text-xs sm:text-sm flex items-center justify-center gap-2"
         >
-          {loading ? 'Processing...' : isSignUp ? 'Create Account' : 'Sign In'}
+          {loading ? (
+            <>
+              <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+              <span>Authenticating...</span>
+            </>
+          ) : isSignUp ? (
+            'Create Account'
+          ) : (
+            'Sign In'
+          )}
         </button>
       </form>
     </div>
-  );
+  </>
+);
 }

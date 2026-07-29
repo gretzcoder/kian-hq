@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { submitResult, deleteTask, approveAssignment, requestRevision, startWork } from '../actions';
 import RichTextEditor from '@/components/RichTextEditor';
 import { useUI } from '@/components/ui/UIProvider';
+import ReviewActions from '@/app/dashboard/review/components/ReviewActions';
 
 // ─── CreatorDrivePreview ────────────────────────────────────────────────────
 // Aspect-ratio aware, user-friendly Google Drive preview widget for Creator step
@@ -340,7 +341,7 @@ export default function TaskActions({
   };
 
   // Identify OJT assignments
-  const ojtAssignments = assignments.filter((a) => ['RESEARCHER', 'PLANNER', 'CREATOR'].includes(a.assignment_role));
+  const ojtAssignments = assignments.filter((a) => ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(a.assignment_role));
   const isOjtTask = isOjt || ojtAssignments.length > 0;
 
   // Render OJT rundown flow
@@ -348,8 +349,10 @@ export default function TaskActions({
     const steps = [
       { role: 'RESEARCHER', label: 'Step 1: Researcher (Mencari Ide)', desc: 'Mencari referensi & ide konten.' },
       { role: 'PLANNER', label: 'Step 2: Planner (Membuat Brief)', desc: 'Menyusun brief konten detail.' },
-      { role: 'CREATOR', label: 'Step 3: Creator (Membuat Konten)', desc: 'Membuat aset media / konten visual.' },
-    ];
+      { role: 'DESIGNER', label: 'Step 3: Designer (Desain Visual)', desc: 'Membuat aset desain visual, feed, & thumbnail.' },
+      { role: 'VIDEO_EDITOR', label: 'Step 3: Video Editor (Editing Video)', desc: 'Editing video Reels/TikTok/YouTube.' },
+      { role: 'CREATOR', label: 'Step 3: Creator (Produksi Konten)', desc: 'Membuat aset media / konten visual.' },
+    ].filter(step => assignments.some(a => a.assignment_role === step.role) || ['RESEARCHER', 'PLANNER'].includes(step.role));
 
     let previousStepApproved = true;
 
@@ -426,10 +429,10 @@ export default function TaskActions({
                     {assign.result_url && (
                       <div className="space-y-2">
                         <span className="text-zinc-500 dark:text-zinc-400 font-bold block">
-                          {assign.assignment_role === 'CREATOR' ? 'Aset Konten (Google Drive):' : 'Laporan Hasil Pengerjaan:'}
+                          {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role) ? 'Aset Hasil Karya (Google Drive):' : 'Laporan Hasil Pengerjaan:'}
                         </span>
 
-                        {assign.assignment_role === 'CREATOR' ? (
+                        {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role) ? (
                           <CreatorDrivePreview url={assign.result_url} />
                         ) : (
                           /* Text report with Expand / Collapse and HTML rendering */
@@ -525,13 +528,13 @@ export default function TaskActions({
                                 <div className="space-y-2">
                                   {showSubmitMap[assign.id] ? (
                                     <form onSubmit={(e) => handleSubmitResult(e, assign.id)} className="space-y-2">
-                                      {assign.assignment_role === 'CREATOR' ? (
+                                      {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role) ? (
                                         <div className="flex gap-2">
                                           <input
                                             type="url"
                                             value={urlInputs[assign.id] ?? ''}
                                             onChange={(e) => setUrlInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
-                                            placeholder="Paste Link Google Drive hasil konten..."
+                                            placeholder="Paste Link Google Drive hasil karya..."
                                             required
                                             className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-500 transition-all text-zinc-900 dark:text-zinc-100"
                                           />
@@ -576,8 +579,8 @@ export default function TaskActions({
                                       onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: true }))}
                                       className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all active:scale-[0.98]"
                                     >
-                                      {assign.assignment_role === 'CREATOR'
-                                        ? '📤 Kirim Hasil Konten (Google Drive URL)'
+                                      {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role)
+                                        ? '📤 Kirim Hasil Karya (Google Drive URL)'
                                         : '📝 Kirim Laporan Teks Hasil Pengerjaan'}
                                     </button>
                                   )}
@@ -589,8 +592,8 @@ export default function TaskActions({
                       )}
 
 
-                      {/* QC Approver Actions */}
-                      {assign.status === 'WAITING_REVIEW' && (
+                      {/* QC Approver Actions — Unified ReviewActions with Badge Modal */}
+                      {['WAITING_REVIEW', 'APPROVED'].includes(assign.status) && (
                         <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
                           <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400">
                             Persetujuan QC (Anda sebagai:{' '}
@@ -604,56 +607,11 @@ export default function TaskActions({
                             )
                           </p>
 
-                          <div className="flex gap-2">
-                            {/* Determine if current user can approve this step.
-                                Leader can approve if they haven't already.
-                                Mentor can approve if they haven't already.
-                                Coordinator can approve if they haven't already.
-                            */}
-                            {((isLeader && assign.lead_approved === 0) ||
-                              (isMentor && assign.mentor_approved === 0) ||
-                              (isCoordinator && assign.coordinator_approved === 0)) && (
-                              <button
-                                type="button"
-                                onClick={() => handleApproveQC(assign.id)}
-                                disabled={loading === assign.id}
-                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all active:scale-[0.98] flex items-center gap-1"
-                              >
-                                <span>✓ Approve QC</span>
-                              </button>
-                            )}
-
-                            {/* Revision Toggle */}
-                            {(isLeader || isMentor || isCoordinator) && (
-                              <button
-                                type="button"
-                                onClick={() => setShowRevisionMap((prev) => ({ ...prev, [assign.id]: !prev[assign.id] }))}
-                                className="bg-red-500/10 hover:bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/10 font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all"
-                              >
-                                ✕ Minta Revisi
-                              </button>
-                            )}
-                          </div>
-
-                          {showRevisionMap[assign.id] && (
-                            <div className="space-y-2 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50">
-                              <textarea
-                                value={revisionInputs[assign.id] ?? ''}
-                                onChange={(e) => setRevisionInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
-                                placeholder="Tulis catatan revisi untuk anak OJT..."
-                                rows={2}
-                                className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] rounded-lg p-2 focus:outline-none focus:border-red-500 text-zinc-900 dark:text-zinc-100"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleRequestRevision(assign.id)}
-                                disabled={loading === assign.id || !revisionInputs[assign.id]?.trim()}
-                                className="bg-red-600 hover:bg-red-500 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
-                              >
-                                {loading === assign.id ? 'Sending...' : 'Kirim Permintaan Revisi'}
-                              </button>
-                            </div>
-                          )}
+                          <ReviewActions
+                            assignmentId={assign.id}
+                            canRequestRevision={assign.status !== 'APPROVED' && (isLeader || isMentor || isCoordinator)}
+                            canAwardBadge={isMentor || isCoordinator}
+                          />
                         </div>
                       )}
                     </div>
