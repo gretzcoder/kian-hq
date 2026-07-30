@@ -618,7 +618,7 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
 
     const now = Math.floor(Date.now() / 1000);
 
-    const sparksValue = (isCoordinator && typeof appreciationBadge === 'number') ? appreciationBadge : null;
+    const sparksValue = typeof appreciationBadge === 'number' ? appreciationBadge : null;
 
     if (sparksValue !== null) {
       await db
@@ -679,6 +679,66 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     return { success: true };
   } catch (err: any) {
     console.error('approveAssignment failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Directly updates Sparks points for an assignment.
+ * Allowed for Leader, Mentor, and Coordinator.
+ */
+export async function updateSparks(assignmentId: string, sparks: number) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+
+  const assignment = await db
+    .prepare('SELECT id, task_id, assignment_role FROM task_assignments WHERE id = ?')
+    .bind(assignmentId)
+    .first() as { id: string; task_id: string; assignment_role: string } | null;
+
+  if (!assignment) return { success: false, error: 'Assignment not found.' };
+
+  const task = await db
+    .prepare('SELECT workspace_id FROM tasks WHERE id = ?')
+    .bind(assignment.task_id)
+    .first() as { workspace_id: string | null } | null;
+
+  const workspaceId = task?.workspace_id || '';
+
+  const ctx = await getSessionContext(session.userId);
+  const isLeader = (await db
+    .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+    .bind(workspaceId, session.userId)
+    .first()) !== null;
+
+  const isMentor = (await db
+    .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
+    .bind(workspaceId, session.userId)
+    .first()) !== null;
+
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+
+  if (!isLeader && !isMentor && !isCoordinator) {
+    return { success: false, error: 'Only Leader, Mentor, or Coordinator can update Sparks.' };
+  }
+
+  try {
+    await db
+      .prepare('UPDATE task_assignments SET sparks = ? WHERE id = ?')
+      .bind(sparks, assignmentId)
+      .run();
+
+    if (workspaceId) {
+      revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    }
+    revalidatePath('/dashboard/review');
+    revalidatePath('/dashboard/workspace');
+    revalidatePath('/dashboard/leaderboard');
+    return { success: true };
+  } catch (err: any) {
+    console.error('updateSparks failed:', err);
     return { success: false, error: err.message };
   }
 }

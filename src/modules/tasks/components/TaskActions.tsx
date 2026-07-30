@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { submitResult, deleteTask, approveAssignment, requestRevision, startWork } from '../actions';
+import { submitResult, deleteTask, approveAssignment, requestRevision, startWork, updateSparks } from '../actions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { useUI } from '@/components/ui/UIProvider';
 import ReviewActions from '@/app/dashboard/review/components/ReviewActions';
@@ -118,6 +118,7 @@ interface TaskAssignment {
   revision_note:   string | null;
   user_id:         string;
   user_name:       string | null;
+  sparks?:         number;
   lead_approved?:   number;
   mentor_approved?: number;
   coordinator_approved?: number;
@@ -150,6 +151,8 @@ const statusColors: Record<string, string> = {
   DECLINED:           'text-red-800 dark:text-red-500 bg-red-800/10 border-red-800/20',
 };
 
+import EditSparksModal from './EditSparksModal';
+
 export default function TaskActions({
   taskId,
   assignments,
@@ -162,6 +165,7 @@ export default function TaskActions({
 }: TaskActionsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editingSparksAssignId, setEditingSparksAssignId] = useState<string | null>(null);
   const [urlInputs, setUrlInputs] = useState<Record<string, string>>({});
   const [showSubmitMap, setShowSubmitMap] = useState<Record<string, boolean>>({});
   const [expandedTextMap, setExpandedTextMap] = useState<Record<string, boolean>>({});
@@ -344,6 +348,13 @@ export default function TaskActions({
   const ojtAssignments = assignments.filter((a) => ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(a.assignment_role));
   const isOjtTask = isOjt || ojtAssignments.length > 0;
 
+  // Collapsible step state: track user explicit toggles (role -> boolean)
+  const [collapsedStepsMap, setCollapsedStepsMap] = useState<Record<string, boolean>>({});
+
+  const toggleStepCollapse = (stepRole: string) => {
+    setCollapsedStepsMap((prev) => ({ ...prev, [stepRole]: !prev[stepRole] }));
+  };
+
   // Render OJT rundown flow
   const renderOJTRundown = () => {
     const steps = [
@@ -354,10 +365,19 @@ export default function TaskActions({
       { role: 'CREATOR', label: 'Step 3: Creator (Produksi Konten)', desc: 'Membuat aset media / konten visual.' },
     ].filter(step => assignments.some(a => a.assignment_role === step.role) || ['RESEARCHER', 'PLANNER'].includes(step.role));
 
+    // Find the currently active step index (first step that is NOT approved)
+    const activeStepIndex = steps.findIndex((step) => {
+      const assign = assignments.find((a) => a.assignment_role === step.role);
+      return !assign || !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(assign.status);
+    });
+
+    // Default target active step (if all approved, expand the last step)
+    const activeRole = activeStepIndex !== -1 ? steps[activeStepIndex].role : steps[steps.length - 1]?.role;
+
     let previousStepApproved = true;
 
     return (
-      <div className="space-y-6 relative pl-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-zinc-200 dark:before:bg-zinc-800">
+      <div className="space-y-4 relative pl-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-zinc-200 dark:before:bg-zinc-800">
         {steps.map((step) => {
           const assign = assignments.find((a) => a.assignment_role === step.role);
           const isActive = previousStepApproved;
@@ -370,11 +390,17 @@ export default function TaskActions({
 
           const isMe = assign?.user_id === currentUserId;
           const statusBadge = assign ? statusColors[assign.status] ?? 'bg-zinc-100 text-zinc-500' : '';
+          
+          // Auto-expand step if it's the active/in-progress step, unless explicitly collapsed by user
+          const defaultOpen = step.role === activeRole;
+          const isCollapsed = collapsedStepsMap[step.role] !== undefined
+            ? collapsedStepsMap[step.role]
+            : !defaultOpen;
 
           return (
             <div key={step.role} className="relative group">
               {/* Step indicator node */}
-              <div className={`absolute -left-[23px] top-1.5 w-3.5 h-3.5 rounded-full border-2 transition-colors ${
+              <div className={`absolute -left-[23px] top-3.5 w-3.5 h-3.5 rounded-full border-2 transition-colors z-10 ${
                 isApproved 
                   ? 'bg-emerald-500 border-emerald-500 dark:bg-emerald-400 dark:border-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
                   : assign?.status === 'WAITING_REVIEW'
@@ -386,34 +412,60 @@ export default function TaskActions({
                   : 'bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700'
               }`} />
 
-              <div className={`space-y-2 p-4 rounded-2xl border transition-all ${
+              <div className={`rounded-2xl border transition-all overflow-hidden ${
                 isApproved
                   ? 'bg-emerald-500/5 border-emerald-500/10 dark:border-emerald-500/5'
                   : assign?.status === 'WAITING_REVIEW'
                   ? 'bg-yellow-500/5 border-yellow-500/10 dark:border-yellow-500/5'
                   : isActive
                   ? 'bg-white dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-800/80 shadow-sm'
-                  : 'bg-zinc-50/50 dark:bg-zinc-950/20 border-zinc-100 dark:border-zinc-900/40 opacity-60'
+                  : 'bg-zinc-50/50 dark:bg-zinc-950/20 border-zinc-100 dark:border-zinc-900/40 opacity-70'
               }`}>
-                {/* Header */}
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <h4 className="text-xs font-black text-zinc-800 dark:text-zinc-200">{step.label}</h4>
-                    <p className="text-[10px] text-zinc-500 dark:text-zinc-500 leading-normal">{step.desc}</p>
+                {/* Clickable Step Header */}
+                <button
+                  type="button"
+                  onClick={() => toggleStepCollapse(step.role)}
+                  className="w-full text-left p-3.5 flex flex-wrap items-center justify-between gap-2 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors focus:outline-none"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`text-zinc-400 dark:text-zinc-500 text-xs font-bold transition-transform duration-200 shrink-0 ${
+                      isCollapsed ? '' : 'rotate-180'
+                    }`}>
+                      ▾
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-black text-zinc-800 dark:text-zinc-200 truncate">{step.label}</h4>
+                      {isCollapsed && assign?.user_name && (
+                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
+                          Assignee: <span className="font-semibold">{assign.user_name}</span>
+                        </p>
+                      )}
+                    </div>
                   </div>
+
                   <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+                    {assign?.sparks !== undefined && assign.sparks > 0 && (
+                      <span className="text-[10px] font-black bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <span>✨</span> {assign.sparks} Sparks
+                      </span>
+                    )}
                     {assign && getDeadlineBadge(assign.deadline, isApproved ?? false)}
                     {assign ? (
-                      <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${statusBadge}`}>
+                      <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border ${statusBadge}`}>
                         {assign.status.replace('_', ' ')}
                       </span>
                     ) : (
-                      <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400">
+                      <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border border-dashed border-zinc-200 dark:border-zinc-800 text-zinc-400">
                         Unassigned
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
+
+                {/* Collapsible Step Content */}
+                {!isCollapsed && (
+                  <div className="px-4 pb-4 pt-1 border-t border-zinc-100 dark:border-zinc-800/40 space-y-2">
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{step.desc}</p>
 
 
                 {assign && (
@@ -595,29 +647,74 @@ export default function TaskActions({
                       )}
 
 
-                      {/* QC Approver Actions — Unified ReviewActions with Badge Modal */}
-                      {['WAITING_REVIEW', 'APPROVED'].includes(assign.status) && (
-                        <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
-                          <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400">
-                            Persetujuan QC (Anda sebagai:{' '}
-                            {[
-                              isLeader ? 'Ketua Tim' : '',
-                              isMentor ? 'Mentor' : '',
-                              isCoordinator ? 'Koordinator' : '',
-                            ]
-                              .filter(Boolean)
-                              .join(', ') || 'Reviewer'}
-                            )
-                          </p>
+                      {/* QC Approver Actions — Only show if status is WAITING_REVIEW and user hasn't approved yet */}
+                      {assign.status === 'WAITING_REVIEW' && (() => {
+                        const alreadyApproved =
+                          (isLeader && assign.lead_approved === 1) ||
+                          (isMentor && assign.mentor_approved === 1) ||
+                          (isCoordinator && assign.coordinator_approved === 1);
 
-                          <ReviewActions
-                            assignmentId={assign.id}
-                            canRequestRevision={assign.status !== 'APPROVED' && (isLeader || isMentor || isCoordinator)}
-                            canAwardBadge={isMentor || isCoordinator}
-                          />
+                        if (alreadyApproved) {
+                          return (
+                            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-2">
+                              <span>✓ Anda telah memberikan persetujuan (QC). Menunggu reviewer lain.</span>
+                            </div>
+                          );
+                        }
+
+                        if (!isLeader && !isMentor && !isCoordinator) return null;
+
+                        return (
+                          <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
+                            <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400">
+                              Persetujuan QC (Anda sebagai:{' '}
+                              {[
+                                isLeader ? 'Ketua Tim' : '',
+                                isMentor ? 'Mentor' : '',
+                                isCoordinator ? 'Koordinator' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(', ')}
+                              )
+                            </p>
+
+                            <ReviewActions
+                              assignmentId={assign.id}
+                              canRequestRevision={isLeader || isMentor || isCoordinator}
+                              canAwardBadge={isMentor || isCoordinator}
+                            />
+                          </div>
+                        );
+                      })()}
+
+                      {/* Edit Sparks Control (for Leader, Mentor, Coordinator) */}
+                      {(isLeader || isMentor || isCoordinator) && ['WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED'].includes(assign.status) && (
+                        <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                            ✨ Sparks: <strong>{assign.sparks || 0} Poin</strong>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingSparksAssignId(assign.id)}
+                            className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 active:scale-95 transition-all shadow-sm flex items-center gap-1"
+                          >
+                            <span>✏️</span> Ubah Sparks
+                          </button>
+
+                          {editingSparksAssignId === assign.id && (
+                            <EditSparksModal
+                              assignmentId={assign.id}
+                              assigneeName={assign.user_name ?? 'Assignee'}
+                              currentSparks={assign.sparks || 8}
+                              isOpen={true}
+                              onClose={() => setEditingSparksAssignId(null)}
+                            />
+                          )}
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
                   </div>
                 )}
               </div>

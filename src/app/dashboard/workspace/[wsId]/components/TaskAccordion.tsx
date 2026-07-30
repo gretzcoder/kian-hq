@@ -162,33 +162,39 @@ export default function TaskAccordion({
         const cfg = statusConfig[task.status] ?? statusConfig.DRAFT;
         const pCfg = priorityConfig[task.priority] ?? priorityConfig.NORMAL;
         const borderColor = getBorderColor(task.status);
+        const totalTaskSparks = taskAssignments.reduce((acc, a) => acc + ((a as any).sparks || 0), 0);
 
         return (
           <div
             key={task.id}
             className={`border bg-white dark:bg-[#09090b]/40 rounded-3xl shadow-sm overflow-hidden transition-all duration-300 ${borderColor}`}
           >
-            {/* Accordion Header — always visible, click to toggle */}
-            <button
-              type="button"
-              onClick={() => toggle(task.id)}
-              className="w-full text-left p-5 flex items-start justify-between gap-3 group hover:bg-zinc-50/60 dark:hover:bg-white/[0.02] transition-colors"
-            >
-              <div className="min-w-0 flex-1">
-                {/* Badges row */}
-                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${cfg.color}`}>
-                    {cfg.label}
-                  </span>
-                  <span className={`text-[9px] font-black uppercase tracking-widest ${pCfg.color}`}>
-                    {pCfg.label}
-                  </span>
-                  {task.parent_task_id && (
-                    <span className="text-[8px] font-bold text-amber-600 bg-amber-500/5 px-2 py-0.5 rounded-md border border-amber-500/10">
-                      🔒 Sequential Lock
+              {/* Accordion Header — always visible, click to toggle */}
+              <button
+                type="button"
+                onClick={() => toggle(task.id)}
+                className="w-full text-left p-5 flex items-start justify-between gap-3 group hover:bg-zinc-50/60 dark:hover:bg-white/[0.02] transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  {/* Badges row */}
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${cfg.color}`}>
+                      {cfg.label}
                     </span>
-                  )}
-                </div>
+                    <span className={`text-[9px] font-black uppercase tracking-widest ${pCfg.color}`}>
+                      {pCfg.label}
+                    </span>
+                    {totalTaskSparks > 0 && (
+                      <span className="text-[10px] font-black bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <span>✨</span> {totalTaskSparks} Total Sparks
+                      </span>
+                    )}
+                    {task.parent_task_id && (
+                      <span className="text-[8px] font-bold text-amber-600 bg-amber-500/5 px-2 py-0.5 rounded-md border border-amber-500/10">
+                        🔒 Sequential Lock
+                      </span>
+                    )}
+                  </div>
 
                 {/* Title */}
                 <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors">
