@@ -8,6 +8,8 @@ import TeamMemberPanel from './components/TeamMemberPanel';
 import CreateTaskForm from './components/CreateTaskForm';
 import TaskAccordion from './components/TaskAccordion';
 import WorkspaceTabs from './components/WorkspaceTabs';
+import { WorkspaceChatRoom } from './components/WorkspaceChatRoom';
+import { WorkspaceChatMessage } from '@/modules/workspaces/chatActions';
 
 
 interface WorkspaceRow {
@@ -97,6 +99,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     { results: membersRaw },
     { results: usersRaw },
     { results: ojtUsersRaw },
+    { results: chatMessagesRaw },
     ctx,
   ] = await Promise.all([
     db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
@@ -118,6 +121,13 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     `).bind(wsId).all(),
     db.prepare('SELECT id, name FROM users ORDER BY name ASC').all(),
     db.prepare("SELECT id, name, email FROM users WHERE user_type = 'OJT' AND status = 'ACTIVE' ORDER BY email ASC").all(),
+    db.prepare(`
+      SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.created_at, u.name as user_name
+      FROM workspace_chats wc
+      LEFT JOIN users u ON wc.user_id = u.id
+      WHERE wc.workspace_id = ?
+      ORDER BY wc.created_at ASC
+    `).bind(wsId).all(),
     getSessionContext(session.userId),
   ]);
 
@@ -195,6 +205,8 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   // Compile subset of tasks for prerequisite selection
   const existingTasks = tasks.map((t) => ({ id: t.id, title: t.title }));
 
+  const chatMessages = chatMessagesRaw as unknown as WorkspaceChatMessage[];
+
   return (
     <div className="space-y-8">
       {/* Breadcrumb */}
@@ -257,6 +269,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       <WorkspaceTabs
         tasksCount={tasks.length}
         membersCount={membersList.length}
+        chatMessagesCount={chatMessages.length}
         tasksTab={
           tasks.length === 0 ? (
             <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 text-center bg-white dark:bg-transparent">
@@ -285,6 +298,14 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
               members={members}
             />
           )
+        }
+        chatTab={
+          <WorkspaceChatRoom
+            workspaceId={wsId}
+            currentUserId={session.userId}
+            initialMessages={chatMessages}
+            canDeleteAny={ctx.can('DELETE')}
+          />
         }
         membersTab={
           <TeamMemberPanel

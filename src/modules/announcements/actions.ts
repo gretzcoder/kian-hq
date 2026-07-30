@@ -67,3 +67,100 @@ export async function deleteAnnouncement(id: string) {
     return { success: false, error: err.message || 'Failed to delete announcement.' };
   }
 }
+
+/**
+ * Server Action to add a comment on an announcement.
+ */
+export async function addAnnouncementComment(announcementId: string, content: string) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const trimmed = content?.trim();
+  if (!trimmed) return { success: false, error: 'Comment content cannot be empty.' };
+
+  const db = await getDB();
+  const commentId = `ac_${crypto.randomUUID().replace(/-/g, '')}`;
+
+  try {
+    await db
+      .prepare('INSERT INTO announcement_comments (id, announcement_id, user_id, content) VALUES (?, ?, ?, ?)')
+      .bind(commentId, announcementId, session.userId, trimmed)
+      .run();
+
+    revalidatePath('/dashboard/announcements');
+    return { success: true };
+  } catch (err: any) {
+    console.error('addAnnouncementComment failed:', err);
+    return { success: false, error: err.message || 'Failed to add comment.' };
+  }
+}
+
+/**
+ * Server Action to delete a comment from an announcement.
+ */
+export async function deleteAnnouncementComment(commentId: string) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+
+  try {
+    // Only allow owner or admin/delete permission
+    const existing = await db
+      .prepare('SELECT user_id FROM announcement_comments WHERE id = ?')
+      .bind(commentId)
+      .first<{ user_id: string }>();
+
+    if (!existing) return { success: false, error: 'Comment not found.' };
+
+    if (existing.user_id !== session.userId) {
+      await checkPermission(session.userId, 'DELETE');
+    }
+
+    await db.prepare('DELETE FROM announcement_comments WHERE id = ?').bind(commentId).run();
+
+    revalidatePath('/dashboard/announcements');
+    return { success: true };
+  } catch (err: any) {
+    console.error('deleteAnnouncementComment failed:', err);
+    return { success: false, error: err.message || 'Failed to delete comment.' };
+  }
+}
+
+/**
+ * Server Action to toggle an emoji reaction on an announcement.
+ */
+export async function toggleAnnouncementReaction(announcementId: string, emoji: string) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  if (!emoji) return { success: false, error: 'Emoji is required.' };
+
+  const db = await getDB();
+
+  try {
+    const existing = await db
+      .prepare('SELECT 1 FROM announcement_reactions WHERE announcement_id = ? AND user_id = ? AND emoji = ?')
+      .bind(announcementId, session.userId, emoji)
+      .first();
+
+    if (existing) {
+      await db
+        .prepare('DELETE FROM announcement_reactions WHERE announcement_id = ? AND user_id = ? AND emoji = ?')
+        .bind(announcementId, session.userId, emoji)
+        .run();
+    } else {
+      await db
+        .prepare('INSERT INTO announcement_reactions (announcement_id, user_id, emoji) VALUES (?, ?, ?)')
+        .bind(announcementId, session.userId, emoji)
+        .run();
+    }
+
+    revalidatePath('/dashboard/announcements');
+    return { success: true };
+  } catch (err: any) {
+    console.error('toggleAnnouncementReaction failed:', err);
+    return { success: false, error: err.message || 'Failed to update reaction.' };
+  }
+}
+

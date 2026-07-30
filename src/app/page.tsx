@@ -83,13 +83,15 @@ export default async function Home() {
   const [firstLine, secondLine] = HEADLINES[randomIndex];
 
   return (
-    <div className="h-screen h-[100dvh] overflow-hidden bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-white font-sans flex flex-col justify-between selection:bg-purple-500 selection:text-white relative transition-colors duration-300">
-      {/* Dynamic Glowing Blur Backgrounds */}
-      <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-purple-900/5 dark:bg-purple-900/10 blur-[130px] pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-900/5 dark:bg-indigo-900/10 blur-[130px] pointer-events-none" />
+    <div className="min-h-screen min-h-[100dvh] overflow-x-hidden overflow-y-auto bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-white font-sans flex flex-col justify-between selection:bg-purple-500 selection:text-white relative transition-colors duration-300">
+      {/* Dynamic Glowing Blur Backgrounds - strictly contained */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] rounded-full bg-purple-900/5 dark:bg-purple-900/10 blur-[130px]" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-900/5 dark:bg-indigo-900/10 blur-[130px]" />
+      </div>
 
       {/* Header */}
-      <header className="max-w-7xl mx-auto w-full px-6 sm:px-8 py-3.5 sm:py-6 flex justify-between items-center z-10">
+      <header className="max-w-7xl mx-auto w-full px-6 sm:px-8 py-3.5 sm:py-6 flex justify-between items-center z-10 shrink-0">
         <div className="flex items-center gap-2.5">
           <span className="text-xl font-black tracking-widest bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 bg-clip-text text-transparent">
             KIAN HQ
@@ -107,7 +109,7 @@ export default async function Home() {
       </header>
 
       {/* Main Container */}
-      <main className="max-w-7xl mx-auto w-full px-6 sm:px-8 py-4 sm:py-6 lg:py-12 flex flex-col lg:flex-row items-center justify-center gap-6 sm:gap-12 lg:gap-24 flex-1 z-10 overflow-hidden">
+      <main className="max-w-7xl mx-auto w-full px-6 sm:px-8 py-4 sm:py-6 lg:py-12 flex flex-col lg:flex-row items-center justify-center gap-6 sm:gap-12 lg:gap-24 flex-1 z-10">
         {/* Left Hero Description */}
         <div className="flex flex-col items-center lg:items-start text-center lg:text-left max-w-xl">
           <div className="hidden lg:inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-purple-500/10 dark:border-purple-500/20 bg-purple-500/5 text-purple-600 dark:text-purple-400 text-xs font-bold mb-6">
@@ -115,7 +117,7 @@ export default async function Home() {
             Kreasi Inovasi Anak Nusantara
           </div>
 
-          <h1 className="text-3xl sm:text-6xl font-black tracking-tight leading-[1.08] mb-3 sm:mb-6 bg-gradient-to-b from-zinc-950 to-zinc-600 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.08] mb-3 sm:mb-6 bg-gradient-to-b from-zinc-950 to-zinc-600 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent">
             {firstLine}<br />{secondLine}
           </h1>
 
@@ -134,7 +136,7 @@ export default async function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="max-w-7xl mx-auto w-full px-6 sm:px-8 py-3.5 sm:py-6 border-t border-zinc-200 dark:border-zinc-900/60 flex flex-col sm:flex-row justify-between items-center text-xs text-zinc-500 dark:text-zinc-400 gap-3 sm:gap-4 z-10">
+      <footer className="max-w-7xl mx-auto w-full px-6 sm:px-8 py-3.5 sm:py-6 border-t border-zinc-200 dark:border-zinc-900/60 flex flex-col sm:flex-row justify-between items-center text-xs text-zinc-500 dark:text-zinc-400 gap-3 sm:gap-4 z-10 shrink-0">
         <div>
           &copy; {new Date().getFullYear()} Kian HQ. Fueling creative minds.
         </div>

@@ -2,6 +2,8 @@ import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { createAnnouncement, deleteAnnouncement } from '@/modules/announcements/actions';
+import { AnnouncementInteractive, CommentItem, ReactionItem } from './AnnouncementInteractive';
+import { MarkdownViewer } from '@/components/MarkdownViewer';
 
 interface AnnouncementRow {
   id: string;
@@ -11,22 +13,56 @@ interface AnnouncementRow {
   created_at: number;
 }
 
+interface DBCommentRow {
+  id: string;
+  announcement_id: string;
+  user_id: string;
+  content: string;
+  created_at: number;
+  user_name: string | null;
+}
+
+interface DBReactionRow {
+  announcement_id: string;
+  emoji: string;
+  count: number;
+  user_reacted: number;
+}
+
 export default async function AnnouncementsPage() {
   const session = await getSession();
   if (!session) return null;
 
   const db = await getDB();
-  const [resultsRaw, ctx] = await Promise.all([
+  const [resultsRaw, commentsRaw, reactionsRaw, ctx] = await Promise.all([
     db.prepare(`
       SELECT a.id, a.title, a.content, a.created_at, u.name as author_name
       FROM announcements a
       LEFT JOIN users u ON a.created_by = u.id
       ORDER BY a.created_at DESC
     `).all(),
+    db.prepare(`
+      SELECT c.id, c.announcement_id, c.user_id, c.content, c.created_at, u.name as user_name
+      FROM announcement_comments c
+      LEFT JOIN users u ON c.user_id = u.id
+      ORDER BY c.created_at ASC
+    `).all(),
+    db.prepare(`
+      SELECT 
+        announcement_id, 
+        emoji, 
+        COUNT(*) as count,
+        MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as user_reacted
+      FROM announcement_reactions
+      GROUP BY announcement_id, emoji
+    `).bind(session.userId).all(),
     getSessionContext(session.userId),
   ]);
 
   const announcements = resultsRaw.results as unknown as AnnouncementRow[];
+  const allComments = commentsRaw.results as unknown as DBCommentRow[];
+  const allReactions = reactionsRaw.results as unknown as DBReactionRow[];
+
   const canCreate = ctx.can('CREATE_ANNOUNCEMENT');
   const canDelete = ctx.can('DELETE');
 
@@ -67,43 +103,72 @@ export default async function AnnouncementsPage() {
               <p className="text-zinc-500 text-sm font-medium">No announcements yet.</p>
             </div>
           ) : (
-            announcements.map((ann) => (
-              <div
-                key={ann.id}
-                className="border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm border-l-4 border-l-purple-500 hover:shadow-md transition-all duration-300"
-              >
-                <div className="flex flex-wrap justify-between items-start gap-4 mb-3">
-                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex-1">{ann.title}</h3>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
-                      {new Date(ann.created_at * 1000).toLocaleDateString('id-ID', {
-                        day: 'numeric', month: 'long', year: 'numeric',
-                      })}
-                    </span>
-                    {canDelete && (
-                      <form action={handleDelete}>
-                        <input type="hidden" name="id" value={ann.id} />
-                        <button
-                          type="submit"
-                          className="text-[10px] text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-bold border border-red-500/10 hover:border-red-500/20 hover:bg-red-500/5 px-2.5 py-1 rounded-lg transition-all active:scale-[0.97]"
-                        >
-                          Delete
-                        </button>
-                      </form>
-                    )}
+            announcements.map((ann) => {
+              const comments: CommentItem[] = allComments
+                .filter((c) => c.announcement_id === ann.id)
+                .map((c) => ({
+                  id: c.id,
+                  user_id: c.user_id,
+                  user_name: c.user_name,
+                  content: c.content,
+                  created_at: c.created_at,
+                }));
+
+              const reactions: ReactionItem[] = allReactions
+                .filter((r) => r.announcement_id === ann.id)
+                .map((r) => ({
+                  emoji: r.emoji,
+                  count: Number(r.count),
+                  user_reacted: Boolean(r.user_reacted),
+                }));
+
+              return (
+                <div
+                  key={ann.id}
+                  className="border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm border-l-4 border-l-purple-500 hover:shadow-md transition-all duration-300"
+                >
+                  <div className="flex flex-wrap justify-between items-start gap-4 mb-3">
+                    <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex-1">{ann.title}</h3>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
+                        {new Date(ann.created_at * 1000).toLocaleDateString('id-ID', {
+                          day: 'numeric', month: 'long', year: 'numeric',
+                        })}
+                      </span>
+                      {canDelete && (
+                        <form action={handleDelete}>
+                          <input type="hidden" name="id" value={ann.id} />
+                          <button
+                            type="submit"
+                            className="text-[10px] text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-bold border border-red-500/10 hover:border-red-500/20 hover:bg-red-500/5 px-2.5 py-1 rounded-lg transition-all active:scale-[0.97]"
+                          >
+                            Delete
+                          </button>
+                        </form>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <p className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                  {ann.content}
-                </p>
+                  <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed my-2">
+                    <MarkdownViewer content={ann.content} />
+                  </div>
 
-                <div className="mt-5 pt-3 border-t border-zinc-100 dark:border-zinc-900 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                  Broadcasted by:{' '}
-                  <span className="text-zinc-700 dark:text-zinc-400 normal-case">{ann.author_name || 'System Operator'}</span>
+                  <div className="mt-4 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
+                    Broadcasted by:{' '}
+                    <span className="text-zinc-700 dark:text-zinc-400 normal-case">{ann.author_name || 'System Operator'}</span>
+                  </div>
+
+                  {/* Comments and Emoji Reactions */}
+                  <AnnouncementInteractive
+                    announcementId={ann.id}
+                    currentUserId={session.userId}
+                    comments={comments}
+                    reactions={reactions}
+                    canDelete={canDelete}
+                  />
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

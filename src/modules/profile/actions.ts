@@ -40,6 +40,144 @@ export async function updateProfileName(name: string) {
 }
 
 /**
+ * Normalizes user avatar URL (e.g. converting Google Drive view links to direct image links)
+ */
+export async function normalizeAvatarUrl(url: string | null | undefined): Promise<string | undefined> {
+  if (!url || !url.trim()) return undefined;
+  let clean = url.trim();
+
+  // Convert Google Drive view URL to direct image link
+  // e.g., https://drive.google.com/file/d/1A2B3C4D5E/view?usp=sharing
+  const gdriveMatch = clean.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (gdriveMatch && gdriveMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${gdriveMatch[1]}`;
+  }
+
+  // Convert Dropbox share link to direct download link
+  if (clean.includes('dropbox.com')) {
+    clean = clean.replace('?dl=0', '?dl=1').replace('dl=0', 'dl=1');
+  }
+
+  return clean;
+}
+
+/**
+ * Update complete OJT user profile data.
+ * Updates D1 database and KV session.
+ */
+export async function updateOjtProfile(payload: {
+  name: string;
+  university?: string;
+  study_program?: string;
+  semester?: string;
+  whatsapp_number?: string;
+  avatar_url?: string;
+  main_roles?: string[]; // Multiple roles e.g. ['RESEARCHER', 'PLANNER']
+  custom_role?: string;
+  tools?: string;
+  portfolio_url?: string;
+  completeOnboarding?: boolean;
+}) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Tidak terautentikasi.' };
+
+  const name = payload.name.trim();
+  if (!name || name.length < 2) return { success: false, error: 'Nama minimal 2 karakter.' };
+  if (name.length > 80) return { success: false, error: 'Nama maksimal 80 karakter.' };
+
+  const normalizedAvatar = await normalizeAvatarUrl(payload.avatar_url);
+  const mainRolesJson = JSON.stringify(payload.main_roles || []);
+  const setOnboarding = payload.completeOnboarding ? 1 : 0;
+
+  const db = await getDB();
+
+  if (payload.completeOnboarding) {
+    await db
+      .prepare(`
+        UPDATE users SET
+          name = ?,
+          university = ?,
+          study_program = ?,
+          semester = ?,
+          whatsapp_number = ?,
+          avatar_url = ?,
+          main_roles = ?,
+          custom_role = ?,
+          tools = ?,
+          portfolio_url = ?,
+          onboarding_completed = 1
+        WHERE id = ?
+      `)
+      .bind(
+        name,
+        payload.university?.trim() || null,
+        payload.study_program?.trim() || null,
+        payload.semester?.trim() || null,
+        payload.whatsapp_number?.trim() || null,
+        normalizedAvatar || null,
+        mainRolesJson,
+        payload.custom_role?.trim() || null,
+        payload.tools?.trim() || null,
+        payload.portfolio_url?.trim() || null,
+        session.userId
+      )
+      .run();
+  } else {
+    await db
+      .prepare(`
+        UPDATE users SET
+          name = ?,
+          university = ?,
+          study_program = ?,
+          semester = ?,
+          whatsapp_number = ?,
+          avatar_url = ?,
+          main_roles = ?,
+          custom_role = ?,
+          tools = ?,
+          portfolio_url = ?
+        WHERE id = ?
+      `)
+      .bind(
+        name,
+        payload.university?.trim() || null,
+        payload.study_program?.trim() || null,
+        payload.semester?.trim() || null,
+        payload.whatsapp_number?.trim() || null,
+        normalizedAvatar || null,
+        mainRolesJson,
+        payload.custom_role?.trim() || null,
+        payload.tools?.trim() || null,
+        payload.portfolio_url?.trim() || null,
+        session.userId
+      )
+      .run();
+  }
+
+  // Refresh KV session so avatar and name update instantly
+  try {
+    const kv = await getKV();
+    const cookieStore = await cookies();
+    const sessionId = cookieStore.get('session_id')?.value;
+    if (sessionId) {
+      const updated = {
+        ...session,
+        name,
+        avatar: normalizedAvatar || session.avatar,
+      };
+      const ttlSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
+      await kv.put(`session:${sessionId}`, JSON.stringify(updated), { expirationTtl: ttlSeconds || 3600 });
+    }
+  } catch {
+    // non-fatal
+  }
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/profile');
+  return { success: true };
+}
+
+/**
  * Change the current user's password.
  * Requires the current password for verification.
  */

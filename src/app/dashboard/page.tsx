@@ -39,10 +39,10 @@ export default async function DashboardPage() {
   // Batch-fetch permissions + roles in ONE call
   const ctx = await getSessionContext(session.userId);
 
-  const [totalUsers, totalProjects, totalTasks, announcementsRaw] = await Promise.all([
-    db.prepare('SELECT COUNT(*) as count FROM users').first() as Promise<{ count: number }>,
-    db.prepare('SELECT COUNT(*) as count FROM projects').first() as Promise<{ count: number }>,
-    db.prepare('SELECT COUNT(*) as count FROM tasks').first() as Promise<{ count: number }>,
+  const [pendingQCCount, inProgressTasksCount, totalOjtCount, announcementsRaw] = await Promise.all([
+    db.prepare("SELECT COUNT(*) as count FROM task_assignments WHERE status = 'WAITING_REVIEW'").first() as Promise<{ count: number }>,
+    db.prepare("SELECT COUNT(*) as count FROM tasks WHERE status IN ('TODO', 'IN_PROGRESS', 'REVISION')").first() as Promise<{ count: number }>,
+    db.prepare("SELECT COUNT(*) as count FROM users WHERE user_type = 'OJT'").first() as Promise<{ count: number }>,
     db.prepare(`
       SELECT a.*, u.name as author_name
       FROM announcements a
@@ -188,10 +188,9 @@ export default async function DashboardPage() {
 
       {/* Metrics Grid Component */}
       <DashboardStats
-        totalUsers={totalUsers.count}
-        totalProjects={totalProjects.count}
-        totalTasks={totalTasks.count}
-        canManage={canManage}
+        pendingQCCount={pendingQCCount.count}
+        inProgressTasksCount={inProgressTasksCount.count}
+        totalOjtCount={totalOjtCount.count}
         isOJT={isOJT}
       />
 

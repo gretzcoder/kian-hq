@@ -227,14 +227,14 @@ export async function deleteUser(targetUserId: string) {
     await db.prepare('DELETE FROM user_roles WHERE user_id = ?').bind(targetUserId).run();
     await db.prepare('DELETE FROM workspace_members WHERE user_id = ?').bind(targetUserId).run();
     await db.prepare('DELETE FROM task_assignments WHERE user_id = ?').bind(targetUserId).run();
+    await db.prepare('DELETE FROM project_coordinators WHERE user_id = ?').bind(targetUserId).run();
 
     // 2. Set null on creator/approver fields to prevent FK errors
     await db.prepare('UPDATE content_briefs SET approved_by = NULL WHERE approved_by = ?').bind(targetUserId).run();
     await db.prepare('UPDATE content_briefs SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
-    await db.prepare('UPDATE projects SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
     await db.prepare('UPDATE tasks SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
     await db.prepare('UPDATE workspaces SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
-    await db.prepare('UPDATE announcements SET author_id = NULL WHERE author_id = ?').bind(targetUserId).run();
+    await db.prepare('UPDATE announcements SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
     await db.prepare('UPDATE workflow_events SET triggered_by = NULL WHERE triggered_by = ?').bind(targetUserId).run();
 
     // 3. Delete user record

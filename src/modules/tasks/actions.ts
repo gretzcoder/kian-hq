@@ -618,10 +618,19 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
 
     const now = Math.floor(Date.now() / 1000);
 
-    await db
-      .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ? WHERE id = ?')
-      .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, assignmentId)
-      .run();
+    const sparksValue = (isCoordinator && typeof appreciationBadge === 'number') ? appreciationBadge : null;
+
+    if (sparksValue !== null) {
+      await db
+        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, sparks = ? WHERE id = ?')
+        .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, sparksValue, assignmentId)
+        .run();
+    } else {
+      await db
+        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ? WHERE id = ?')
+        .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, assignmentId)
+        .run();
+    }
 
     await logWorkflowEvent({
       entityType: 'task_assignment',

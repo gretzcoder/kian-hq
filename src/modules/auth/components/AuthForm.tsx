@@ -30,6 +30,7 @@ export default function AuthForm() {
             );
             formElement.reset();
             setIsSignUp(false); // Switch to sign-in tab so they can login after approval
+            setLoading(false);
           } else {
             setIsLoggingIn(true);
             router.push('/dashboard');
@@ -37,6 +38,7 @@ export default function AuthForm() {
           }
         } else {
           setError(res.error || 'Authentication failed');
+          setLoading(false);
         }
       } else {
         const res = await loginAction(formData);
@@ -105,32 +107,62 @@ export default function AuthForm() {
 
       <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
         {isSignUp && (
+          <>
+            <div>
+              <label className="block text-[9px] sm:text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1 sm:mb-2">
+                Full Name
+              </label>
+              <input
+                type="text"
+                name="name"
+                required
+                placeholder="e.g. John Doe"
+                className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm rounded-xl px-4 py-2.5 sm:py-3 focus:outline-none transition-all duration-200"
+              />
+            </div>
+            <div>
+              <label className="block text-[9px] sm:text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1 sm:mb-2">
+                Username
+              </label>
+              <input
+                type="text"
+                name="username"
+                required
+                placeholder="e.g. johndoe"
+                pattern="[a-zA-Z0-9_-]{3,20}"
+                title="Username must be 3-20 characters long (letters, numbers, _, -)"
+                className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm rounded-xl px-4 py-2.5 sm:py-3 focus:outline-none transition-all duration-200"
+              />
+            </div>
+            <div>
+              <label className="block text-[9px] sm:text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1 sm:mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                name="email"
+                required
+                placeholder="e.g. john@kian.hq"
+                className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm rounded-xl px-4 py-2.5 sm:py-3 focus:outline-none transition-all duration-200"
+              />
+            </div>
+          </>
+        )}
+
+        {!isSignUp && (
           <div>
             <label className="block text-[9px] sm:text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1 sm:mb-2">
-              Full Name
+              Username or Email
             </label>
             <input
               type="text"
-              name="name"
+              name="identifier"
               required
-              placeholder="e.g. John Doe"
+              placeholder="Username or email address"
               className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm rounded-xl px-4 py-2.5 sm:py-3 focus:outline-none transition-all duration-200"
             />
           </div>
         )}
-
-        <div>
-          <label className="block text-[9px] sm:text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1 sm:mb-2">
-            Email Address
-          </label>
-          <input
-            type="email"
-            name="email"
-            required
-            placeholder="e.g. john@kian.hq"
-            className="w-full bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800/80 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs sm:text-sm rounded-xl px-4 py-2.5 sm:py-3 focus:outline-none transition-all duration-200"
-          />
-        </div>
 
         <div>
           <label className="block text-[9px] sm:text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-1 sm:mb-2">

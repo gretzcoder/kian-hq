@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { submitResult, deleteTask, approveAssignment, requestRevision, startWork } from '../actions';
-import RichTextEditor from '@/components/RichTextEditor';
+import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { useUI } from '@/components/ui/UIProvider';
 import ReviewActions from '@/app/dashboard/review/components/ReviewActions';
 
@@ -435,14 +435,15 @@ export default function TaskActions({
                         {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role) ? (
                           <CreatorDrivePreview url={assign.result_url} />
                         ) : (
-                          /* Text report with Expand / Collapse and HTML rendering */
+                          /* Text report rendered via MarkdownViewer */
                           <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-3 text-xs text-zinc-800 dark:text-zinc-200">
                             <div
-                              dangerouslySetInnerHTML={{ __html: assign.result_url }}
-                              className={`prose dark:prose-invert max-w-none text-xs leading-relaxed ${
+                              className={`leading-relaxed ${
                                 !expandedTextMap[assign.id] && assign.result_url.length > 200 ? 'line-clamp-3 overflow-hidden' : ''
                               }`}
-                            />
+                            >
+                              <MarkdownViewer content={assign.result_url} />
+                            </div>
 
 
                             {assign.result_url.length > 200 && (
@@ -548,10 +549,12 @@ export default function TaskActions({
                                         </div>
                                       ) : (
                                         <div className="space-y-2">
-                                          <RichTextEditor
+                                          <textarea
+                                            rows={4}
                                             value={urlInputs[assign.id] ?? ''}
-                                            onChange={(html) => setUrlInputs((prev) => ({ ...prev, [assign.id]: html }))}
-                                            placeholder={`Tulis laporan hasil pengerjaan ${step.label} dengan format WYSIWYG...`}
+                                            onChange={(e) => setUrlInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
+                                            placeholder={`Tulis laporan hasil pengerjaan ${step.label} (mendukung Markdown: **bold**, *italic*, - list, etc)...`}
+                                            className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl p-3 focus:outline-none transition-all duration-200 resize-none font-mono"
                                           />
                                           <div className="flex justify-end gap-2">
                                             <button

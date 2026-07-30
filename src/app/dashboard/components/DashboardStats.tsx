@@ -1,117 +1,94 @@
 import Link from 'next/link';
 
 interface DashboardStatsProps {
-  totalUsers: number;
-  totalProjects: number;
-  totalTasks: number;
-  canManage: boolean;
+  pendingQCCount: number;
+  inProgressTasksCount: number;
+  totalOjtCount: number;
   isOJT: boolean;
 }
 
 export default function DashboardStats({
-  totalUsers,
-  totalProjects,
-  totalTasks,
-  canManage,
+  pendingQCCount,
+  inProgressTasksCount,
+  totalOjtCount,
   isOJT,
 }: DashboardStatsProps) {
   if (isOJT) return null;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-      {/* Members card — clickable only with MANAGE */}
-      {canManage ? (
-        <Link
-          href="/dashboard/users"
-          className="block border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-350 group"
-        >
-          <div className="flex justify-between items-start gap-4">
-            <div>
-              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-widest group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                Active Members
-              </p>
-              <p className="text-4xl font-black mt-2 text-zinc-900 dark:text-zinc-100">
-                {totalUsers}
-              </p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-purple-500/5 text-purple-600 dark:text-purple-400">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            </div>
-          </div>
-          <div className="text-[10px] text-zinc-500 dark:text-zinc-500 mt-4 font-bold tracking-wide">
-            Manage team clearance mapping &rarr;
-          </div>
-        </Link>
-      ) : (
-        <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm">
-          <div className="flex justify-between items-start gap-4">
-            <div>
-              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-widest">
-                Active Members
-              </p>
-              <p className="text-4xl font-black mt-2 text-zinc-900 dark:text-zinc-100">
-                {totalUsers}
-              </p>
-            </div>
-            <div className="p-2.5 rounded-xl bg-zinc-500/5 text-zinc-400">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            </div>
-          </div>
-          <div className="text-[10px] text-zinc-500 dark:text-zinc-500 mt-4 font-bold tracking-wide">
-            Synced D1 Relational Engine
-          </div>
-        </div>
-      )}
-
+      {/* 1. Pending QC Reviews */}
       <Link
-        href="/dashboard/projects"
-        className="block border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-350 group"
+        href="/dashboard/review"
+        className="block border border-amber-500/20 dark:border-amber-500/20 bg-amber-500/5 dark:bg-amber-500/5 rounded-3xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-350 group"
       >
         <div className="flex justify-between items-start gap-4">
           <div>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-widest group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-              Active Projects
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase tracking-widest group-hover:underline">
+              Pending QC Reviews
             </p>
             <p className="text-4xl font-black mt-2 text-zinc-900 dark:text-zinc-100">
-              {totalProjects}
+              {pendingQCCount}
             </p>
           </div>
-          <div className="p-2.5 rounded-xl bg-blue-500/5 text-blue-600 dark:text-blue-400">
+          <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
         </div>
-        <div className="text-[10px] text-zinc-500 dark:text-zinc-500 mt-4 font-bold tracking-wide">
-          Browse creative registry &rarr;
+        <div className="text-[10px] text-amber-600/80 dark:text-amber-400/80 mt-4 font-bold tracking-wide">
+          Awaiting approval &rarr;
         </div>
       </Link>
 
+      {/* 2. Tasks In-Progress */}
       <Link
-        href="/dashboard/analytics"
-        className="block border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-350 group"
+        href="/dashboard/workspace"
+        className="block border border-purple-500/20 dark:border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/5 rounded-3xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-350 group"
       >
         <div className="flex justify-between items-start gap-4">
           <div>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-widest group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-              Total Tasks
+            <p className="text-[10px] text-purple-600 dark:text-purple-400 font-bold uppercase tracking-widest group-hover:underline">
+              Tasks In-Progress
             </p>
             <p className="text-4xl font-black mt-2 text-zinc-900 dark:text-zinc-100">
-              {totalTasks}
+              {inProgressTasksCount}
             </p>
           </div>
-          <div className="p-2.5 rounded-xl bg-pink-500/5 text-pink-600 dark:text-pink-400">
+          <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
         </div>
-        <div className="text-[10px] text-zinc-500 dark:text-zinc-500 mt-4 font-bold tracking-wide">
-          View analytics dashboard &rarr;
+        <div className="text-[10px] text-purple-600/80 dark:text-purple-400/80 mt-4 font-bold tracking-wide">
+          Active operational tasks &rarr;
+        </div>
+      </Link>
+
+      {/* 3. Total OJT Interns */}
+      <Link
+        href="/dashboard/users"
+        className="block border border-blue-500/20 dark:border-blue-500/20 bg-blue-500/5 dark:bg-blue-500/5 rounded-3xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-350 group"
+      >
+        <div className="flex justify-between items-start gap-4">
+          <div>
+            <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-widest group-hover:underline">
+              Total OJT Interns
+            </p>
+            <p className="text-4xl font-black mt-2 text-zinc-900 dark:text-zinc-100">
+              {totalOjtCount}
+            </p>
+          </div>
+          <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+          </div>
+        </div>
+        <div className="text-[10px] text-blue-600/80 dark:text-blue-400/80 mt-4 font-bold tracking-wide">
+          Manage OJT team &rarr;
         </div>
       </Link>
     </div>

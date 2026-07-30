@@ -6,6 +6,8 @@ import { getDB } from '@/db/client';
 import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import DashboardSidebar from './components/DashboardSidebar';
 
+import OnboardingModal from '@/modules/profile/components/OnboardingModal';
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -15,6 +17,16 @@ export default async function DashboardLayout({
   if (!session) {
     redirect('/');
   }
+
+  const db = await getDB();
+
+  // Check if onboarding is completed
+  const userRow = await db
+    .prepare('SELECT onboarding_completed FROM users WHERE id = ?')
+    .bind(session.userId)
+    .first() as { onboarding_completed: number } | null;
+
+  const showOnboarding = userRow ? userRow.onboarding_completed === 0 : false;
 
   // Batch-fetch all needed permission flags in one call
   const ctx = await getSessionContext(session.userId);
@@ -27,7 +39,6 @@ export default async function DashboardLayout({
   // Detect if OJT user is a project mentor (for simplified nav)
   let isMentor = false;
   if (isOJT) {
-    const db = await getDB();
     const mentorRow = await db
       .prepare('SELECT 1 FROM project_coordinators WHERE user_id = ? LIMIT 1')
       .bind(session.userId)
@@ -37,6 +48,9 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col lg:flex-row transition-colors duration-350">
+      {/* Onboarding Modal Overlay */}
+      {showOnboarding && <OnboardingModal initialName={session.name} />}
+
       {/* Left Sidebar Navigation */}
       <DashboardSidebar
         canManage={canManage}
@@ -45,6 +59,7 @@ export default async function DashboardLayout({
         canUseAI={canUseAI}
         isOJT={isOJT}
         isMentor={isMentor}
+        isLocked={showOnboarding}
         session={{
           name: session.name,
           email: session.email,

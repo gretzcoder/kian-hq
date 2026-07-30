@@ -41,6 +41,10 @@ export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT
         Workspace
       </Link>
 
+      <Link href="/dashboard/leaderboard" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/leaderboard') ? activeClass : inactiveClass}`}>
+        Leaderboard
+      </Link>
+
       {/* Review Queue: only for COORDINATOR/EXECUTIVE */}
       {canReview && (
         <Link href="/dashboard/review" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/review') ? activeClass : inactiveClass}`}>

@@ -12,6 +12,7 @@ interface SidebarProps {
   canUseAI: boolean;
   isOJT?: boolean;
   isMentor?: boolean;
+  isLocked?: boolean;
   session: {
     name: string;
     email: string;
@@ -29,6 +30,7 @@ export default function DashboardSidebar({
   canCreateBrief,
   canUseAI,
   isOJT = false,
+  isLocked = false,
   session,
 }: SidebarProps) {
   const pathname = usePathname();
@@ -42,6 +44,7 @@ export default function DashboardSidebar({
         { href: '/dashboard', label: 'Dashboard', icon: '🏠', exact: true },
         ...(!isOJT ? [{ href: '/dashboard/projects', label: 'Projects', icon: '📁', exact: false }] : []),
         { href: '/dashboard/workspace', label: 'My Workspace', icon: '⚡', exact: false },
+        { href: '/dashboard/leaderboard', label: 'Leaderboard', icon: '🏆', exact: false },
       ],
     },
     {
@@ -103,7 +106,9 @@ export default function DashboardSidebar({
       <aside
         className={`fixed lg:sticky top-0 z-50 h-screen bg-white dark:bg-[#09090b] border-r border-zinc-200/80 dark:border-zinc-800/80 flex flex-col justify-between transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] ${
           collapsed ? 'w-20' : 'w-64'
-        } ${mobileOpen ? 'left-0' : '-left-64 lg:left-0'}`}
+        } ${mobileOpen ? 'left-0' : '-left-64 lg:left-0'} ${
+          isLocked ? 'pointer-events-none select-none opacity-40 blur-[1px]' : ''
+        }`}
       >
         {/* Top Logo & Toggle */}
         <div>
