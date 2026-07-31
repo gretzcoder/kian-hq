@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useRef } from 'react';
 import Link from 'next/link';
 import {
   addAnnouncementComment,
@@ -46,6 +46,16 @@ export function AnnouncementInteractive({
   const [commentInput, setCommentInput] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ id: string; userName: string } | null>(null);
   const [showComments, setShowComments] = useState(comments.length > 0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function handleReply(commentId: string, userName: string) {
+    setShowComments(true);
+    setReplyingTo({ id: commentId, userName });
+    setCommentInput(`@${userName} `);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+  }
 
   function handleReaction(emoji: string) {
     startTransition(async () => {
@@ -166,10 +176,7 @@ export function AnnouncementInteractive({
                             </span>
                             <button
                               type="button"
-                              onClick={() => {
-                                setReplyingTo({ id: c.id, userName: c.user_name || 'User' });
-                                setCommentInput(`@${c.user_name || 'User'} `);
-                              }}
+                              onClick={() => handleReply(c.id, c.user_name || 'User')}
                               className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline ml-auto sm:ml-0"
                             >
                               Balas
@@ -238,10 +245,7 @@ export function AnnouncementInteractive({
                                   </span>
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setReplyingTo({ id: c.id, userName: reply.user_name || 'User' });
-                                      setCommentInput(`@${reply.user_name || 'User'} `);
-                                    }}
+                                    onClick={() => handleReply(c.id, reply.user_name || 'User')}
                                     className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline ml-auto sm:ml-0"
                                   >
                                     Balas
@@ -296,6 +300,7 @@ export function AnnouncementInteractive({
 
             <div className="flex gap-2">
               <input
+                ref={inputRef}
                 type="text"
                 value={commentInput}
                 onChange={(e) => setCommentInput(e.target.value)}
