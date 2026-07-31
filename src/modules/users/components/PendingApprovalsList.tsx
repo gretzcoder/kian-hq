@@ -64,13 +64,19 @@ export default function PendingApprovalsList({
   if (pendingUsers.length === 0) return null;
 
   return (
-    <div className="border border-amber-500/20 dark:border-amber-500/10 bg-amber-500/5 rounded-3xl p-6 space-y-4 shadow-[0_4px_20px_rgba(245,158,11,0.02)]">
-      <div>
-        <h2 className="text-lg font-black text-amber-800 dark:text-amber-400 flex items-center gap-2">
-          <span>⚠️</span> Pending Account Approvals ({pendingUsers.length})
-        </h2>
-        <p className="text-xs text-amber-700/80 dark:text-amber-500/80 mt-1">
-          Review newly registered users, assign their classification, select security roles, and grant access to KIAN HQ.
+    <div className="border border-amber-500/20 dark:border-amber-500/10 bg-amber-500/5 dark:bg-amber-500/[0.02] rounded-3xl p-4 sm:p-6 space-y-4 shadow-[0_4px_20px_rgba(245,158,11,0.02)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-amber-500/10">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+          <h2 className="text-sm sm:text-base font-black text-amber-900 dark:text-amber-300 tracking-tight">
+            Persetujuan Akun Baru
+          </h2>
+          <span className="text-[10px] font-black bg-amber-500/15 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20">
+            {pendingUsers.length} Menunggu
+          </span>
+        </div>
+        <p className="text-[11px] text-amber-700/80 dark:text-amber-500/80 leading-relaxed">
+          Tentukan klasifikasi & peran keamanan untuk memberikan akses ke KIAN HQ.
         </p>
       </div>
 
