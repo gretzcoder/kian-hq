@@ -81,55 +81,64 @@ export default function PendingApprovalsList({
           const isProcessing = loading === user.id;
 
           return (
-            <div key={user.id} className="flex flex-wrap items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
+            <div
+              key={user.id}
+              className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+            >
+              {/* User info */}
               <div className="min-w-0">
-                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{user.name}</p>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">{user.email}</p>
+                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{user.name}</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-0.5 truncate">{user.email}</p>
               </div>
 
-              <div className="flex items-center gap-3 flex-wrap">
-                {/* Type Selection */}
-                <select
-                  value={selectedType}
-                  disabled={isProcessing}
-                  onChange={(e) => handleTypeChange(user.id, e.target.value as any)}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3 py-2 focus:outline-none cursor-pointer text-zinc-700 dark:text-zinc-300 font-bold"
-                >
-                  <option value="STAFF">Staff Utama</option>
-                  <option value="OJT">On the Job Training</option>
-                </select>
+              {/* Selectors and Action Buttons */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full sm:w-auto">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+                  {/* Type Selection */}
+                  <select
+                    value={selectedType}
+                    disabled={isProcessing}
+                    onChange={(e) => handleTypeChange(user.id, e.target.value as any)}
+                    className="w-full sm:w-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer text-zinc-700 dark:text-zinc-300 font-bold"
+                  >
+                    <option value="STAFF">Staff Utama</option>
+                    <option value="OJT">On the Job Training</option>
+                  </select>
 
-                {/* Role select */}
-                <select
-                  value={selectedRole}
-                  disabled={isProcessing}
-                  onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3 py-2 focus:outline-none cursor-pointer text-zinc-700 dark:text-zinc-300 font-bold"
-                >
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
+                  {/* Role select */}
+                  <select
+                    value={selectedRole}
+                    disabled={isProcessing}
+                    onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                    className="w-full sm:w-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3 py-2.5 focus:outline-none cursor-pointer text-zinc-700 dark:text-zinc-300 font-bold"
+                  >
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-                {/* Approve Button */}
-                <button
-                  onClick={() => handleApprove(user.id)}
-                  disabled={isProcessing}
-                  className="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-60"
-                >
-                  {isProcessing ? 'Processing...' : 'Acc User'}
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {/* Approve Button */}
+                  <button
+                    onClick={() => handleApprove(user.id)}
+                    disabled={isProcessing}
+                    className="flex-1 sm:flex-initial bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all disabled:opacity-60 text-center active:scale-95"
+                  >
+                    {isProcessing ? 'Processing...' : 'Acc User'}
+                  </button>
 
-                {/* Reject Button */}
-                <button
-                  onClick={() => handleReject(user.id, user.name)}
-                  disabled={isProcessing}
-                  className="bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-bold text-xs px-4 py-2 rounded-xl transition-all disabled:opacity-60"
-                >
-                  Decline
-                </button>
+                  {/* Reject Button */}
+                  <button
+                    onClick={() => handleReject(user.id, user.name)}
+                    disabled={isProcessing}
+                    className="flex-1 sm:flex-initial bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-bold text-xs px-4 py-2.5 rounded-xl transition-all disabled:opacity-60 text-center active:scale-95"
+                  >
+                    Decline
+                  </button>
+                </div>
               </div>
             </div>
           );
