@@ -12,6 +12,7 @@ import DashboardQuickActions from './components/DashboardQuickActions';
 import BroadcastAnnouncement from './components/BroadcastAnnouncement';
 import DashboardMiniLeaderboard from './components/DashboardMiniLeaderboard';
 import DashboardFeedbackCard from './components/DashboardFeedbackCard';
+import TimeGreeting from './components/TimeGreeting';
 
 interface AnnouncementRow {
   id: string;
@@ -183,11 +184,7 @@ export default async function DashboardPage() {
           <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-zinc-950 to-zinc-600 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent">
             Creative Console
           </h1>
-          <p className="text-zinc-600 dark:text-zinc-400 text-sm mt-1">
-            Glad to have you here,{' '}
-            <span className="text-zinc-900 dark:text-zinc-200 font-bold">{session.name}</span>. Have
-            a wonderful and productive day!
-          </p>
+          <TimeGreeting userName={session.name} />
         </div>
       </div>
 

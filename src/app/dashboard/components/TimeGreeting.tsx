@@ -53,7 +53,11 @@ const QUOTES_BY_TIME = {
   ],
 };
 
-export default function TimeGreeting() {
+interface TimeGreetingProps {
+  userName?: string;
+}
+
+export default function TimeGreeting({ userName }: TimeGreetingProps) {
   const [greeting, setGreeting] = useState('');
 
   useEffect(() => {
@@ -75,7 +79,29 @@ export default function TimeGreeting() {
     setGreeting(quotes[randomIndex]);
   }, []);
 
-  if (!greeting) return null;
+  if (!greeting) {
+    if (userName) {
+      return (
+        <p className="text-zinc-600 dark:text-zinc-400 text-sm mt-1">
+          Senang bertemu denganmu kembali,{' '}
+          <span className="text-zinc-900 dark:text-zinc-200 font-bold">{userName}</span>!
+        </p>
+      );
+    }
+    return null;
+  }
+
+  if (userName) {
+    return (
+      <div className="text-sm text-zinc-600 dark:text-zinc-400 mt-1 flex items-center gap-2 flex-wrap animate-in fade-in duration-300">
+        <span>
+          Halo <span className="text-zinc-900 dark:text-zinc-200 font-bold">{userName}</span>!
+        </span>
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse shrink-0" />
+        <span className="italic text-purple-600 dark:text-purple-400 font-medium">{greeting}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-2 animate-in fade-in duration-300">
