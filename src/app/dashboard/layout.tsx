@@ -49,7 +49,7 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col lg:flex-row transition-colors duration-350">
       {/* Onboarding Modal Overlay */}
-      {showOnboarding && <OnboardingModal initialName={session.name} />}
+      {showOnboarding && <OnboardingModal initialName={session.name} isStaff={ctx.userType === 'STAFF'} />}
 
       {/* Left Sidebar Navigation */}
       <DashboardSidebar

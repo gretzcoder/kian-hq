@@ -90,6 +90,17 @@ export async function updateOjtProfile(payload: {
   const normalizedAvatar = await normalizeAvatarUrl(payload.avatar_url);
   const mainRolesJson = JSON.stringify(payload.main_roles || []);
 
+  const isStaff = (session as any).userType === 'STAFF';
+
+  // For Staff, clear only university, study_program, and semester
+  const finalUniversity = isStaff ? null : (payload.university?.trim() || null);
+  const finalStudyProgram = isStaff ? null : (payload.study_program?.trim() || null);
+  const finalSemester = isStaff ? null : (payload.semester?.trim() || null);
+  const finalMainRolesJson = mainRolesJson;
+  const finalCustomRole = payload.custom_role?.trim() || null;
+  const finalTools = payload.tools?.trim() || null;
+  const finalPortfolioUrl = payload.portfolio_url?.trim() || null;
+
   const db = await getDB();
 
   if (payload.completeOnboarding) {
@@ -113,15 +124,15 @@ export async function updateOjtProfile(payload: {
       `)
       .bind(
         name,
-        payload.university?.trim() || null,
-        payload.study_program?.trim() || null,
-        payload.semester?.trim() || null,
+        finalUniversity,
+        finalStudyProgram,
+        finalSemester,
         payload.whatsapp_number?.trim() || null,
         normalizedAvatar || null,
-        mainRolesJson,
-        payload.custom_role?.trim() || null,
-        payload.tools?.trim() || null,
-        payload.portfolio_url?.trim() || null,
+        finalMainRolesJson,
+        finalCustomRole,
+        finalTools,
+        finalPortfolioUrl,
         payload.department?.trim() || null,
         payload.bio?.trim() || null,
         session.userId
@@ -147,15 +158,15 @@ export async function updateOjtProfile(payload: {
       `)
       .bind(
         name,
-        payload.university?.trim() || null,
-        payload.study_program?.trim() || null,
-        payload.semester?.trim() || null,
+        finalUniversity,
+        finalStudyProgram,
+        finalSemester,
         payload.whatsapp_number?.trim() || null,
         normalizedAvatar || null,
-        mainRolesJson,
-        payload.custom_role?.trim() || null,
-        payload.tools?.trim() || null,
-        payload.portfolio_url?.trim() || null,
+        finalMainRolesJson,
+        finalCustomRole,
+        finalTools,
+        finalPortfolioUrl,
         payload.department?.trim() || null,
         payload.bio?.trim() || null,
         session.userId

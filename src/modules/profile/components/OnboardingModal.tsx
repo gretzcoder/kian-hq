@@ -6,6 +6,7 @@ import { updateOjtProfile } from '@/modules/profile/actions';
 
 interface OnboardingModalProps {
   initialName: string;
+  isStaff?: boolean;
 }
 
 const AVAILABLE_ROLES = [
@@ -15,13 +16,14 @@ const AVAILABLE_ROLES = [
   { key: 'VIDEO_EDITOR', label: 'Video Editor', emoji: '🎬' },
 ];
 
-export default function OnboardingModal({ initialName }: OnboardingModalProps) {
+export default function OnboardingModal({ initialName, isStaff = false }: OnboardingModalProps) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
 
   // Form states
   const [name, setName] = useState(initialName || '');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [department, setDepartment] = useState('');
   const [university, setUniversity] = useState('');
   const [studyProgram, setStudyProgram] = useState('');
   const [semester, setSemester] = useState('');
@@ -30,6 +32,7 @@ export default function OnboardingModal({ initialName }: OnboardingModalProps) {
   const [tools, setTools] = useState('');
   const [portfolioUrl, setPortfolioUrl] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [bio, setBio] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,9 +49,6 @@ export default function OnboardingModal({ initialName }: OnboardingModalProps) {
 
     if (!name.trim()) return setError('Nama lengkap wajib diisi.');
     if (!whatsappNumber.trim()) return setError('Nomor WhatsApp wajib diisi.');
-    if (selectedRoles.length === 0 && !customRole.trim()) {
-      return setError('Pilih minimal 1 Role Utama atau isi Custom Role.');
-    }
 
     setLoading(true);
     try {
@@ -58,6 +58,8 @@ export default function OnboardingModal({ initialName }: OnboardingModalProps) {
         study_program: studyProgram,
         semester,
         whatsapp_number: whatsappNumber,
+        department,
+        bio,
         avatar_url: avatarUrl,
         main_roles: selectedRoles,
         custom_role: customRole,
@@ -96,7 +98,9 @@ export default function OnboardingModal({ initialName }: OnboardingModalProps) {
             Selamat Datang di Kian HQ!
           </h2>
           <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 max-w-md mx-auto">
-            Lengkapi data profil OJT kamu terlebih dahulu agar koordinator & mentor dapat mengenali keahlianmu.
+            {isStaff
+              ? 'Lengkapi data profil kamu terlebih dahulu agar tim & koordinator dapat mengenali peran serta keahlianmu.'
+              : 'Lengkapi data profil kamu terlebih dahulu agar koordinator & mentor dapat mengenali keahlianmu.'}
           </p>
 
           {/* Step Indicator */}
@@ -110,7 +114,7 @@ export default function OnboardingModal({ initialName }: OnboardingModalProps) {
           {step === 1 ? (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-200">
               <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">
-                1. Data Diri & Kampus
+                1. Data Diri {isStaff ? '& Jabatan' : '& Kampus'}
               </p>
 
               <div>
@@ -137,38 +141,51 @@ export default function OnboardingModal({ initialName }: OnboardingModalProps) {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {isStaff ? (
                 <div>
-                  <label className={labelCls}>Universitas</label>
+                  <label className={labelCls}>Jabatan / Divisi</label>
                   <input
                     type="text"
-                    value={university}
-                    onChange={(e) => setUniversity(e.target.value)}
-                    placeholder="e.g. Nama Universitas / Perguruan Tinggi"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    placeholder="e.g. Mentor Lead Content / Head of Design"
                     className={inputCls}
                   />
                 </div>
-                <div>
-                  <label className={labelCls}>Program Studi</label>
-                  <input
-                    type="text"
-                    value={studyProgram}
-                    onChange={(e) => setStudyProgram(e.target.value)}
-                    placeholder="e.g. DKV / Sistem Informasi"
-                    className={inputCls}
-                  />
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className={labelCls}>Universitas</label>
+                    <input
+                      type="text"
+                      value={university}
+                      onChange={(e) => setUniversity(e.target.value)}
+                      placeholder="e.g. Nama Universitas / Perguruan Tinggi"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Program Studi</label>
+                    <input
+                      type="text"
+                      value={studyProgram}
+                      onChange={(e) => setStudyProgram(e.target.value)}
+                      placeholder="e.g. DKV / Sistem Informasi"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Semester</label>
+                    <input
+                      type="text"
+                      value={semester}
+                      onChange={(e) => setSemester(e.target.value)}
+                      placeholder="e.g. 6"
+                      className={inputCls}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className={labelCls}>Semester</label>
-                  <input
-                    type="text"
-                    value={semester}
-                    onChange={(e) => setSemester(e.target.value)}
-                    placeholder="e.g. 6"
-                    className={inputCls}
-                  />
-                </div>
-              </div>
+              )}
 
               <button
                 type="button"
@@ -187,12 +204,12 @@ export default function OnboardingModal({ initialName }: OnboardingModalProps) {
           ) : (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-200">
               <p className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest">
-                2. Minat & Portofolio
+                2. Keahlian & Bio
               </p>
 
               {/* Roles Selection */}
               <div>
-                <label className={labelCls}>Minat Utama *</label>
+                <label className={labelCls}>Minat / Keahlian Utama</label>
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   {AVAILABLE_ROLES.map((r) => {
                     const isSelected = selectedRoles.includes(r.key);
@@ -219,7 +236,7 @@ export default function OnboardingModal({ initialName }: OnboardingModalProps) {
               </div>
 
               <div>
-                <label className={labelCls}>Minat Lainnya (Opsional)</label>
+                <label className={labelCls}>Keahlian / Minat Lainnya (Opsional)</label>
                 <input
                   type="text"
                   value={customRole}
@@ -241,13 +258,13 @@ export default function OnboardingModal({ initialName }: OnboardingModalProps) {
               </div>
 
               <div>
-                <label className={labelCls}>Portofolio / Drive</label>
-                <input
-                  type="url"
-                  value={portfolioUrl}
-                  onChange={(e) => setPortfolioUrl(e.target.value)}
-                  placeholder="https://behance.net/... atau link Drive"
-                  className={inputCls}
+                <label className={labelCls}>Bio / Deskripsi Diri</label>
+                <textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  rows={2}
+                  placeholder={isStaff ? 'e.g. Mentor Divisi Video & Creative Strategy Kian HQ' : 'e.g. Antusias di bidang visual design & motion graphics.'}
+                  className={`${inputCls} resize-none`}
                 />
               </div>
 

@@ -203,8 +203,8 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
                 />
               </div>
 
-              {/* Conditional Fields based on User Type */}
-              {isStaff ? (
+              {/* Department field for Staff */}
+              {isStaff && (
                 <div>
                   <label className={labelCls}>Jabatan / Divisi</label>
                   <input
@@ -215,101 +215,103 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
                     className={inputCls}
                   />
                 </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className={labelCls}>Universitas</label>
-                      <input
-                        type="text"
-                        value={university}
-                        onChange={(e) => setUniversity(e.target.value)}
-                        placeholder="e.g. Nama Universitas / Perguruan Tinggi"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Program Studi</label>
-                      <input
-                        type="text"
-                        value={studyProgram}
-                        onChange={(e) => setStudyProgram(e.target.value)}
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Semester</label>
-                      <input
-                        type="text"
-                        value={semester}
-                        onChange={(e) => setSemester(e.target.value)}
-                        className={inputCls}
-                      />
-                    </div>
-                  </div>
+              )}
 
+              {/* Academic Details (Only for OJT) */}
+              {!isStaff && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className={labelCls}>Minat Utama</label>
-                    <div className="grid grid-cols-2 gap-2 mt-1">
-                      {AVAILABLE_ROLES.map((r) => {
-                        const isSelected = selectedRoles.includes(r.key);
-                        return (
-                          <button
-                            key={r.key}
-                            type="button"
-                            onClick={() => toggleRole(r.key)}
-                            className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-between transition-all ${
-                              isSelected
-                                ? 'bg-purple-500/10 border-purple-500 text-purple-700 dark:text-purple-300'
-                                : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400'
-                            }`}
-                          >
-                            <span className="flex items-center gap-1.5">
-                              <span>{r.emoji}</span>
-                              <span>{r.label}</span>
-                            </span>
-                            {isSelected && <span className="text-purple-600 dark:text-purple-400 text-xs">✓</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className={labelCls}>Minat Lainnya (Opsional)</label>
+                    <label className={labelCls}>Universitas</label>
                     <input
                       type="text"
-                      value={customRole}
-                      onChange={(e) => setCustomRole(e.target.value)}
-                      placeholder="e.g. Copywriter"
+                      value={university}
+                      onChange={(e) => setUniversity(e.target.value)}
+                      placeholder="e.g. Nama Universitas / Perguruan Tinggi"
                       className={inputCls}
                     />
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls}>Tools & Software</label>
-                      <input
-                        type="text"
-                        value={tools}
-                        onChange={(e) => setTools(e.target.value)}
-                        placeholder="e.g. Figma, Premiere"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Portofolio / Drive</label>
-                      <input
-                        type="url"
-                        value={portfolioUrl}
-                        onChange={(e) => setPortfolioUrl(e.target.value)}
-                        placeholder="https://..."
-                        className={inputCls}
-                      />
-                    </div>
+                  <div>
+                    <label className={labelCls}>Program Studi</label>
+                    <input
+                      type="text"
+                      value={studyProgram}
+                      onChange={(e) => setStudyProgram(e.target.value)}
+                      className={inputCls}
+                    />
                   </div>
-                </>
+                  <div>
+                    <label className={labelCls}>Semester</label>
+                    <input
+                      type="text"
+                      value={semester}
+                      onChange={(e) => setSemester(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
               )}
+
+              {/* Minat Utama (For both OJT & Staff) */}
+              <div>
+                <label className={labelCls}>Minat / Keahlian Utama</label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  {AVAILABLE_ROLES.map((r) => {
+                    const isSelected = selectedRoles.includes(r.key);
+                    return (
+                      <button
+                        key={r.key}
+                        type="button"
+                        onClick={() => toggleRole(r.key)}
+                        className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center justify-between transition-all ${
+                          isSelected
+                            ? 'bg-purple-500/10 border-purple-500 text-purple-700 dark:text-purple-300'
+                            : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span>{r.emoji}</span>
+                          <span>{r.label}</span>
+                        </span>
+                        {isSelected && <span className="text-purple-600 dark:text-purple-400 text-xs">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Keahlian / Minat Lainnya (Opsional)</label>
+                <input
+                  type="text"
+                  value={customRole}
+                  onChange={(e) => setCustomRole(e.target.value)}
+                  placeholder="e.g. Copywriter, Branding Strategy"
+                  className={inputCls}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Tools & Software</label>
+                  <input
+                    type="text"
+                    value={tools}
+                    onChange={(e) => setTools(e.target.value)}
+                    placeholder="e.g. Figma, Premiere, Photoshop"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Portofolio / Drive</label>
+                  <input
+                    type="url"
+                    value={portfolioUrl}
+                    onChange={(e) => setPortfolioUrl(e.target.value)}
+                    placeholder="https://..."
+                    className={inputCls}
+                  />
+                </div>
+              </div>
 
               {/* Bio (Available for both OJT & Staff) */}
               <div>

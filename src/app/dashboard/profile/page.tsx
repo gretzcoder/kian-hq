@@ -312,15 +312,15 @@ export default async function ProfilePage() {
               )}
             </p>
 
-            {/* Academic & University Details (Only if present / OJT) */}
-            {(profile?.university || profile?.study_program || profile?.semester) && (
+            {/* Academic & University Details (Only for OJT) */}
+            {profile?.user_type !== 'STAFF' && (profile?.university || profile?.study_program || profile?.semester) && (
               <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 mt-2 flex items-center gap-1.5 flex-wrap">
                 <span>🎓</span>
                 {[profile?.university, profile?.study_program, profile?.semester].filter(Boolean).join(' • ')}
               </p>
             )}
 
-            {/* Main Roles Badges (Standard Order) */}
+            {/* Main Roles / Keahlian Badges */}
             {(parsedMainRoles.length > 0 || profile?.custom_role) && (
               <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
                 {parsedMainRoles.map((r) => (
@@ -337,103 +337,109 @@ export default async function ProfilePage() {
             )}
 
             {/* Tools & Portfolio */}
-            <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
-              {profile?.tools && (
-                <span className="text-zinc-500 dark:text-zinc-400 font-medium">
-                  🧰 <strong className="text-zinc-700 dark:text-zinc-300">Tools:</strong> {profile.tools}
-                </span>
-              )}
-              {profile?.portfolio_url && (
-                <a
-                  href={profile.portfolio_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-purple-600 dark:text-purple-400 font-bold hover:underline inline-flex items-center gap-1"
-                >
-                  🔗 Portofolio / Drive ↗
-                </a>
-              )}
-            </div>
+            {(profile?.tools || profile?.portfolio_url) && (
+              <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
+                {profile?.tools && (
+                  <span className="text-zinc-500 dark:text-zinc-400 font-medium">
+                    🧰 <strong className="text-zinc-700 dark:text-zinc-300">Tools:</strong> {profile.tools}
+                  </span>
+                )}
+                {profile?.portfolio_url && (
+                  <a
+                    href={profile.portfolio_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-purple-600 dark:text-purple-400 font-bold hover:underline inline-flex items-center gap-1"
+                  >
+                    🔗 Portofolio / Drive ↗
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Quick stats row */}
-        <div className="mt-6 pt-5 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: 'Total Steps', value: totalAssignments, color: 'text-zinc-700 dark:text-zinc-200' },
-            { label: 'Disetujui',   value: totalApproved,    color: 'text-emerald-600 dark:text-emerald-400' },
-            { label: 'Berlangsung', value: totalInProgress,  color: 'text-indigo-600 dark:text-indigo-400' },
-            { label: 'Approval',    value: `${approvalRate}%`, color: 'text-purple-600 dark:text-purple-400' },
-          ].map((s) => (
-            <div key={s.label} className="text-center">
-              <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mt-1">{s.label}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── CREATIVE SPARKS & TITLE BADGES ── */}
-      <div className={`${card} p-6 border-purple-500/20 bg-gradient-to-br from-purple-500/[0.03] to-indigo-500/[0.03]`}>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
-          <div>
-            <h3 className="text-xs font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
-              <span>✨ Creative Sparks & Title Badges</span>
-            </h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Akumulasi poin apresiasi kualitas karya dari mentor & koordinator.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-4 py-2 rounded-2xl shrink-0">
-            <span className="text-xl">✨</span>
-            <div>
-              <p className="text-lg font-black text-purple-700 dark:text-purple-300 leading-none">{totalSparks} Sparks</p>
-              <p className="text-[9px] text-purple-600/80 dark:text-purple-400/80 font-bold uppercase tracking-wider">Total Terkumpul</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Titles Row */}
-        {titleBadges.length > 0 && (
-          <div className="pt-4">
-            <p className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5">
-              Gelar Keahlian Utama:
-            </p>
-            <div className="flex gap-3 flex-wrap">
-              {titleBadges.map((tb) => (
-                <div
-                  key={tb.title}
-                  className={`px-4 py-2 rounded-2xl border bg-gradient-to-r ${tb.color} flex items-center gap-2.5 shadow-sm`}
-                >
-                  <span className="text-xl">{tb.emoji}</span>
-                  <div>
-                    <p className="text-xs font-black tracking-wider leading-none">{tb.title}</p>
-                    <p className="text-[9px] opacity-80 font-bold mt-0.5">{tb.desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Quick stats row (Only for OJT) */}
+        {profile?.user_type !== 'STAFF' && (
+          <div className="mt-6 pt-5 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { label: 'Total Steps', value: totalAssignments, color: 'text-zinc-700 dark:text-zinc-200' },
+              { label: 'Disetujui',   value: totalApproved,    color: 'text-emerald-600 dark:text-emerald-400' },
+              { label: 'Berlangsung', value: totalInProgress,  color: 'text-indigo-600 dark:text-indigo-400' },
+              { label: 'Approval',    value: `${approvalRate}%`, color: 'text-purple-600 dark:text-purple-400' },
+            ].map((s) => (
+              <div key={s.label} className="text-center">
+                <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mt-1">{s.label}</p>
+              </div>
+            ))}
           </div>
         )}
-
-        {/* Role Sparks Breakdown (Standardized Order: Researcher -> Planner -> Designer -> Video Editor) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
-          {[
-            { role: 'RESEARCHER', label: 'Researcher Sparks', emoji: '🔍', val: roleSparksMap.RESEARCHER, color: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15' },
-            { role: 'PLANNER', label: 'Planner Sparks', emoji: '🧠', val: roleSparksMap.PLANNER, color: 'text-amber-600 dark:text-amber-400 bg-amber-500/5 border-amber-500/15' },
-            { role: 'DESIGNER', label: 'Designer Sparks', emoji: '🎨', val: roleSparksMap.DESIGNER, color: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15' },
-            { role: 'VIDEO_EDITOR', label: 'Video Editor Sparks', emoji: '🎬', val: roleSparksMap.VIDEO_EDITOR, color: 'text-pink-600 dark:text-pink-400 bg-pink-500/5 border-pink-500/15' },
-          ].map((item) => (
-            <div key={item.role} className={`p-3.5 rounded-2xl border ${item.color} flex items-center justify-between`}>
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{item.emoji}</span>
-                <span className="text-xs font-bold">{item.label}</span>
-              </div>
-              <span className="text-sm font-black font-mono">{item.val} ✨</span>
-            </div>
-          ))}
-        </div>
       </div>
+
+      {/* ── CREATIVE SPARKS & TITLE BADGES (Only for OJT) ── */}
+      {profile?.user_type !== 'STAFF' && (
+        <div className={`${card} p-6 border-purple-500/20 bg-gradient-to-br from-purple-500/[0.03] to-indigo-500/[0.03]`}>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+            <div>
+              <h3 className="text-xs font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                <span>✨ Creative Sparks & Title Badges</span>
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                Akumulasi poin apresiasi kualitas karya dari mentor & koordinator.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-4 py-2 rounded-2xl shrink-0">
+              <span className="text-xl">✨</span>
+              <div>
+                <p className="text-lg font-black text-purple-700 dark:text-purple-300 leading-none">{totalSparks} Sparks</p>
+                <p className="text-[9px] text-purple-600/80 dark:text-purple-400/80 font-bold uppercase tracking-wider">Total Terkumpul</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Dynamic Titles Row */}
+          {titleBadges.length > 0 && (
+            <div className="pt-4">
+              <p className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5">
+                Gelar Keahlian Utama:
+              </p>
+              <div className="flex gap-3 flex-wrap">
+                {titleBadges.map((tb) => (
+                  <div
+                    key={tb.title}
+                    className={`px-4 py-2 rounded-2xl border bg-gradient-to-r ${tb.color} flex items-center gap-2.5 shadow-sm`}
+                  >
+                    <span className="text-xl">{tb.emoji}</span>
+                    <div>
+                      <p className="text-xs font-black tracking-wider leading-none">{tb.title}</p>
+                      <p className="text-[9px] opacity-80 font-bold mt-0.5">{tb.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Role Sparks Breakdown */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+            {[
+              { role: 'RESEARCHER', label: 'Researcher Sparks', emoji: '🔍', val: roleSparksMap.RESEARCHER, color: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15' },
+              { role: 'PLANNER', label: 'Planner Sparks', emoji: '🧠', val: roleSparksMap.PLANNER, color: 'text-amber-600 dark:text-amber-400 bg-amber-500/5 border-amber-500/15' },
+              { role: 'DESIGNER', label: 'Designer Sparks', emoji: '🎨', val: roleSparksMap.DESIGNER, color: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15' },
+              { role: 'VIDEO_EDITOR', label: 'Video Editor Sparks', emoji: '🎬', val: roleSparksMap.VIDEO_EDITOR, color: 'text-pink-600 dark:text-pink-400 bg-pink-500/5 border-pink-500/15' },
+            ].map((item) => (
+              <div key={item.role} className={`p-3.5 rounded-2xl border ${item.color} flex items-center justify-between`}>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">{item.emoji}</span>
+                  <span className="text-xs font-bold">{item.label}</span>
+                </div>
+                <span className="text-sm font-black font-mono">{item.val} ✨</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── METRICS ROW ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -451,8 +457,8 @@ export default async function ProfilePage() {
         ))}
       </div>
 
-      {/* ── BREAKDOWN GRID ── */}
-      {(roleStats.length > 0 || totalAssignments > 0) && (
+      {/* ── BREAKDOWN GRID (Only for OJT) ── */}
+      {profile?.user_type !== 'STAFF' && (roleStats.length > 0 || totalAssignments > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           {/* Role Breakdown */}
           {roleStats.length > 0 && (
