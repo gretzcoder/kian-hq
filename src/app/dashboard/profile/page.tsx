@@ -232,17 +232,9 @@ export default async function ProfilePage({
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-zinc-950 to-zinc-600 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent">
-            {isSelf ? 'My Profile' : `Profil: ${profile?.name || 'User'}`}
-          </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            {isSelf ? 'Informasi akun dan ringkasan kontribusimu.' : 'Detail profil dan statistik kontribusi anggota.'}
-          </p>
-        </div>
-        {isSelf && (
+      {/* Top Edit Profile Button if Self */}
+      {isSelf && (
+        <div className="flex justify-end pb-2">
           <EditProfileButton
             initialData={{
               name: profile?.name || session.name,
@@ -260,8 +252,8 @@ export default async function ProfilePage({
               userType: profile?.user_type || (session as any).userType || undefined,
             }}
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── TOP SECTION: Premium Identity Card with Cover Banner ── */}
       <div className={`${card} overflow-hidden`}>

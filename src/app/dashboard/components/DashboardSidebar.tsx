@@ -52,7 +52,7 @@ export default function DashboardSidebar({
       items: [
         ...(canReview ? [{ href: '/dashboard/review', label: 'Reviews', icon: '📋', exact: false }] : []),
         ...(canCreateBrief ? [{ href: '/dashboard/briefs', label: 'Content Briefs', icon: '📄', exact: false }] : []),
-        { href: '/dashboard/announcements', label: 'Updates', icon: '📢', exact: false },
+        { href: '/dashboard/announcements', label: 'Announcements', icon: '📢', exact: false },
         { href: '/dashboard/kb', label: 'Knowledge Base', icon: '📚', exact: false },
       ],
     },
