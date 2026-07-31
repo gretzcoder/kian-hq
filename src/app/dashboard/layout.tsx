@@ -20,13 +20,14 @@ export default async function DashboardLayout({
 
   const db = await getDB();
 
-  // Check if onboarding is completed
+  // Check if onboarding is completed and fetch current avatar
   const userRow = await db
-    .prepare('SELECT onboarding_completed FROM users WHERE id = ?')
+    .prepare('SELECT onboarding_completed, avatar_url FROM users WHERE id = ?')
     .bind(session.userId)
-    .first() as { onboarding_completed: number } | null;
+    .first() as { onboarding_completed: number; avatar_url: string | null } | null;
 
   const showOnboarding = userRow ? userRow.onboarding_completed === 0 : false;
+  const userAvatar = userRow?.avatar_url || session.avatar || null;
 
   // Batch-fetch all needed permission flags in one call
   const ctx = await getSessionContext(session.userId);
@@ -63,7 +64,7 @@ export default async function DashboardLayout({
         session={{
           name: session.name,
           email: session.email,
-          avatar: session.avatar,
+          avatar: userAvatar,
         }}
       />
 

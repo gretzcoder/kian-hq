@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { addWorkspaceMember, updateWorkspaceMemberRoles, removeWorkspaceMember } from '@/modules/workspaces/actions';
 
 interface Member {
@@ -256,9 +257,13 @@ export default function TeamMemberPanel({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                        <Link
+                          href="/dashboard/profile"
+                          className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate hover:text-purple-600 dark:hover:text-purple-400 hover:underline block"
+                          title={`Lihat profil ${m.userName}`}
+                        >
                           {m.userName || 'Unknown User'}
-                        </p>
+                        </Link>
                         <p className="text-[10px] text-zinc-400 font-mono truncate">
                           {m.userEmail}
                         </p>

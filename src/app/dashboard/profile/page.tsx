@@ -2,6 +2,7 @@ import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import EditProfileButton from '@/modules/profile/components/EditProfileButton';
+import { normalizeWhatsappNumber } from '@/modules/profile/actions';
 
 interface UserProfile {
   id: string;
@@ -266,22 +267,24 @@ export default async function ProfilePage() {
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
               <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{session.name}</h2>
-              {profile?.role_name && (
-                <span className="text-[10px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/15 px-2.5 py-0.5 rounded-full">
-                  {profile.role_name}
-                </span>
-              )}
-              {profile?.user_type && (
-                <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${
-                  profile.user_type === 'OJT'
-                    ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/15'
-                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
-                }`}>
-                  {profile.user_type}
-                </span>
-              )}
+              <div className="flex items-center gap-2 flex-wrap">
+                {profile?.role_name && (
+                  <span className="text-[10px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/15 px-2.5 py-0.5 rounded-full">
+                    {profile.role_name}
+                  </span>
+                )}
+                {profile?.user_type && (
+                  <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${
+                    profile.user_type === 'OJT'
+                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/15'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                  }`}>
+                    {profile.user_type}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Department / Title for Staff */}
@@ -302,7 +305,7 @@ export default async function ProfilePage() {
               <span>{session.email}</span>
               {profile?.whatsapp_number && (
                 <a
-                  href={`https://wa.me/${profile.whatsapp_number.replace(/[^0-9]/g, '')}`}
+                  href={`https://wa.me/${await normalizeWhatsappNumber(profile.whatsapp_number)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline bg-emerald-500/10 px-2 py-0.5 rounded-md"

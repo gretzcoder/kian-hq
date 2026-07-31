@@ -88,8 +88,13 @@ export default function DashboardSidebar({
         </div>
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          <Link href="/dashboard/profile" className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-600 font-bold flex items-center justify-center text-xs border border-purple-500/20">
-            {session.name.substring(0, 2).toUpperCase()}
+          <Link href="/dashboard/profile" className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-600 font-bold flex items-center justify-center text-xs border border-purple-500/20 overflow-hidden shrink-0">
+            {session.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={session.avatar} alt={session.name} className="w-full h-full object-cover" />
+            ) : (
+              session.name.substring(0, 2).toUpperCase()
+            )}
           </Link>
         </div>
       </header>
@@ -104,95 +109,94 @@ export default function DashboardSidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed lg:sticky top-0 z-50 h-screen bg-white dark:bg-[#09090b] border-r border-zinc-200/80 dark:border-zinc-800/80 flex flex-col justify-between transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] ${
+        className={`fixed lg:sticky top-0 z-50 h-screen bg-white dark:bg-[#09090b] border-r border-zinc-200/80 dark:border-zinc-800/80 flex flex-col transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] ${
           collapsed ? 'w-20' : 'w-64'
         } ${mobileOpen ? 'left-0' : '-left-64 lg:left-0'} ${
           isLocked ? 'pointer-events-none select-none opacity-40 blur-[1px]' : ''
         }`}
       >
         {/* Top Logo & Toggle */}
-        <div>
-          <div className="px-4 py-4 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900/60 overflow-hidden h-16">
-            <Link
-              href="/dashboard"
-              onClick={(e) => {
-                if (collapsed) {
-                  e.preventDefault();
-                  setCollapsed(false);
-                }
-              }}
-              className="flex items-center gap-3 min-w-0 group"
-              title={collapsed ? 'Klik Logo untuk Memperluas Navigasi' : undefined}
+        <div className="px-4 py-4 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-900/60 overflow-hidden h-16 shrink-0">
+          <Link
+            href="/dashboard"
+            onClick={(e) => {
+              if (collapsed) {
+                e.preventDefault();
+                setCollapsed(false);
+              }
+            }}
+            className="flex items-center gap-3 min-w-0 group"
+            title={collapsed ? 'Klik Logo untuk Memperluas Navigasi' : undefined}
+          >
+            <span className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-purple-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
+              K
+            </span>
+            <span
+              className={`text-lg font-black tracking-widest bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 bg-clip-text text-transparent whitespace-nowrap transition-all duration-300 ${
+                collapsed ? 'opacity-0 w-0 pointer-events-none' : 'opacity-100 w-auto'
+              }`}
             >
-              <span className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-purple-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
-                K
-              </span>
-              <span
-                className={`text-lg font-black tracking-widest bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 bg-clip-text text-transparent whitespace-nowrap transition-all duration-300 ${
-                  collapsed ? 'opacity-0 w-0 pointer-events-none' : 'opacity-100 w-auto'
-                }`}
-              >
-                KIAN HQ
-              </span>
-            </Link>
+              KIAN HQ
+            </span>
+          </Link>
 
-            {!collapsed && (
-              <button
-                type="button"
-                onClick={() => setCollapsed(true)}
-                className="hidden lg:flex items-center justify-center w-7 h-7 rounded-xl bg-zinc-100/70 hover:bg-purple-500/10 dark:bg-zinc-900/70 dark:hover:bg-purple-500/20 text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200 text-xs shrink-0 active:scale-95"
-                title="Sembunyikan Navigasi"
-              >
-                ◀
-              </button>
-            )}
-          </div>
-
-          {/* Navigation Links Grouped */}
-          <div className="p-3 space-y-6 overflow-y-auto max-h-[calc(100vh-160px)]">
-            {navGroups.map((group) => {
-              const validItems = group.items;
-              if (validItems.length === 0) return null;
-
-              return (
-                <div key={group.title} className="space-y-1">
-                  {!collapsed && (
-                    <p className="px-3 text-[9px] font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-widest mb-1.5 whitespace-nowrap overflow-hidden text-ellipsis">
-                      {group.title}
-                    </p>
-                  )}
-                  {validItems.map((item) => {
-                    const active = isActive(pathname, item.href, item.exact);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMobileOpen(false)}
-                        className={`flex items-center gap-3 py-2.5 rounded-2xl text-xs font-bold transition-all ${
-                          collapsed ? 'justify-center px-0' : 'px-3.5'
-                        } ${
-                          active
-                            ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
-                            : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900/60 hover:text-zinc-900 dark:hover:text-zinc-100'
-                        }`}
-                        title={collapsed ? item.label : undefined}
-                      >
-                        <span className="text-base shrink-0 flex items-center justify-center">{item.icon}</span>
-                        {!collapsed && <span className="truncate">{item.label}</span>}
-                      </Link>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={() => setCollapsed(true)}
+              className="hidden lg:flex items-center justify-center w-7 h-7 rounded-xl bg-zinc-100/70 hover:bg-purple-500/10 dark:bg-zinc-900/70 dark:hover:bg-purple-500/20 text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200 text-xs shrink-0 active:scale-95"
+              title="Sembunyikan Navigasi"
+            >
+              ◀
+            </button>
+          )}
         </div>
 
-        {/* User Footer Profile & Controls */}
-        <div className="p-3 border-t border-zinc-100 dark:border-zinc-900/60 shrink-0 overflow-hidden">
+        {/* Navigation Links Grouped — Independent Scroll */}
+        <div className="p-3 space-y-6 overflow-y-auto flex-1 min-h-0">
+          {navGroups.map((group) => {
+            const validItems = group.items;
+            if (validItems.length === 0) return null;
+
+            return (
+              <div key={group.title} className="space-y-1">
+                {!collapsed && (
+                  <p className="px-3 text-[9px] font-black text-zinc-400 dark:text-zinc-600 uppercase tracking-widest mb-1.5 whitespace-nowrap overflow-hidden text-ellipsis">
+                    {group.title}
+                  </p>
+                )}
+                {validItems.map((item) => {
+                  const active = isActive(pathname, item.href, item.exact);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={`flex items-center gap-3 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                        collapsed ? 'justify-center px-0' : 'px-3.5'
+                      } ${
+                        active
+                          ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+                          : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-900/60 hover:text-zinc-900 dark:hover:text-zinc-100'
+                      }`}
+                      title={collapsed ? item.label : undefined}
+                    >
+                      <span className="text-base shrink-0 flex items-center justify-center">{item.icon}</span>
+                      {!collapsed && <span className="truncate">{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* User Footer Profile & Controls — Fixed Pinned at Bottom */}
+        <div className="p-3 border-t border-zinc-100 dark:border-zinc-900/60 shrink-0 overflow-hidden bg-white dark:bg-[#09090b]">
           <div className="flex items-center justify-between gap-2 min-w-0">
             <Link
               href="/dashboard/profile"
+              onClick={() => setMobileOpen(false)}
               className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-80 transition-opacity overflow-hidden"
               title={session.name}
             >

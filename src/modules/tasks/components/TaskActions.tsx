@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { submitResult, deleteTask, approveAssignment, requestRevision, startWork, updateSparks } from '../actions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { useUI } from '@/components/ui/UIProvider';
@@ -437,7 +438,14 @@ export default function TaskActions({
                       <h4 className="text-xs font-black text-zinc-800 dark:text-zinc-200 truncate">{step.label}</h4>
                       {isCollapsed && assign?.user_name && (
                         <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
-                          Assignee: <span className="font-semibold">{assign.user_name}</span>
+                          Assignee:{' '}
+                          <Link
+                            href="/dashboard/profile"
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-semibold hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                          >
+                            {assign.user_name}
+                          </Link>
                         </p>
                       )}
                     </div>

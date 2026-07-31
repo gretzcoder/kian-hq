@@ -62,6 +62,25 @@ export async function normalizeAvatarUrl(url: string | null | undefined): Promis
 }
 
 /**
+ * Normalizes Indonesian phone/WhatsApp numbers to international format (628...)
+ * e.g., '081234567890' -> '6281234567890'
+ * e.g., '+62 812-3456-7890' -> '6281234567890'
+ * e.g., '81234567890' -> '6281234567890'
+ */
+export async function normalizeWhatsappNumber(phone: string | null | undefined): Promise<string | null> {
+  if (!phone || !phone.trim()) return null;
+  let digits = phone.replace(/[^0-9]/g, '');
+
+  if (digits.startsWith('0')) {
+    digits = '62' + digits.slice(1);
+  } else if (digits.startsWith('8')) {
+    digits = '62' + digits;
+  }
+
+  return digits || null;
+}
+
+/**
  * Update complete OJT user profile data.
  * Updates D1 database and KV session.
  */
@@ -88,6 +107,7 @@ export async function updateOjtProfile(payload: {
   if (name.length > 80) return { success: false, error: 'Nama maksimal 80 karakter.' };
 
   const normalizedAvatar = await normalizeAvatarUrl(payload.avatar_url);
+  const normalizedWhatsapp = normalizeWhatsappNumber(payload.whatsapp_number);
   const mainRolesJson = JSON.stringify(payload.main_roles || []);
 
   const isStaff = (session as any).userType === 'STAFF';
@@ -127,7 +147,7 @@ export async function updateOjtProfile(payload: {
         finalUniversity,
         finalStudyProgram,
         finalSemester,
-        payload.whatsapp_number?.trim() || null,
+        normalizedWhatsapp,
         normalizedAvatar || null,
         finalMainRolesJson,
         finalCustomRole,
@@ -161,7 +181,7 @@ export async function updateOjtProfile(payload: {
         finalUniversity,
         finalStudyProgram,
         finalSemester,
-        payload.whatsapp_number?.trim() || null,
+        normalizedWhatsapp,
         normalizedAvatar || null,
         finalMainRolesJson,
         finalCustomRole,
