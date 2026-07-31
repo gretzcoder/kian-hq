@@ -58,6 +58,12 @@ export async function getDB() {
     } catch (e) {
       // Column parent_id already exists, safe to ignore
     }
+
+    try {
+      await db.prepare("INSERT OR IGNORE INTO roles (id, name, description) VALUES ('role_mentor_troopers', 'MENTOR TROOPERS', 'Pengguna OJT dengan tugas membimbing dan mengelola workspace tertentu')").run();
+    } catch (e) {
+      // Role already seeded
+    }
   }
 
   return db;

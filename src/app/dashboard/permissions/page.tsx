@@ -45,9 +45,10 @@ export default async function PermissionsPage() {
       ORDER BY CASE name
         WHEN 'EXECUTIVE' THEN 1
         WHEN 'COORDINATOR' THEN 2
-        WHEN 'CREATOR' THEN 3
-        WHEN 'COLLABORATOR' THEN 4
-        ELSE 5
+        WHEN 'MENTOR TROOPERS' THEN 3
+        WHEN 'CREATOR' THEN 4
+        WHEN 'COLLABORATOR' THEN 5
+        ELSE 6
       END
     `).all(),
     // All permissions

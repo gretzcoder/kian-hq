@@ -162,16 +162,17 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     .all();
   const users = usersRaw as unknown as UserRow[];
 
-  // Fetch project mentors for workspace mentor selection dropdown
+  // Fetch Mentor Troopers for workspace mentor selection dropdown
   const { results: mentorsRaw } = await db
     .prepare(`
-      SELECT u.id, u.name, u.email
-      FROM project_coordinators pc
-      JOIN users u ON pc.user_id = u.id
-      WHERE pc.project_id = ?
+      SELECT DISTINCT u.id, u.name, u.email
+      FROM users u
+      JOIN user_roles ur ON u.id = ur.user_id
+      JOIN roles r ON ur.role_id = r.id
+      WHERE u.status = 'ACTIVE'
+        AND (r.id = 'role_mentor_troopers' OR r.name = 'MENTOR TROOPERS')
       ORDER BY u.name ASC
     `)
-    .bind(projectId)
     .all();
   const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
 
