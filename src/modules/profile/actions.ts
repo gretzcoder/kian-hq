@@ -107,7 +107,7 @@ export async function updateOjtProfile(payload: {
   if (name.length > 80) return { success: false, error: 'Nama maksimal 80 karakter.' };
 
   const normalizedAvatar = await normalizeAvatarUrl(payload.avatar_url);
-  const normalizedWhatsapp = normalizeWhatsappNumber(payload.whatsapp_number);
+  const normalizedWhatsapp = await normalizeWhatsappNumber(payload.whatsapp_number);
   const mainRolesJson = JSON.stringify(payload.main_roles || []);
 
   const isStaff = (session as any).userType === 'STAFF';
