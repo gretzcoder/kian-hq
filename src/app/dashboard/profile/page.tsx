@@ -232,42 +232,43 @@ export default async function ProfilePage({
 
   return (
     <div className="space-y-6">
-      {/* Top Edit Profile Button if Self */}
-      {isSelf && (
-        <div className="flex justify-end pb-2">
-          <EditProfileButton
-            initialData={{
-              name: profile?.name || session.name,
-              university: profile?.university || undefined,
-              study_program: profile?.study_program || undefined,
-              semester: profile?.semester || undefined,
-              whatsapp_number: profile?.whatsapp_number || undefined,
-              avatar_url: profile?.avatar_url || session.avatar,
-              main_roles: parsedMainRoles,
-              custom_role: profile?.custom_role || undefined,
-              tools: profile?.tools || undefined,
-              portfolio_url: profile?.portfolio_url || undefined,
-              department: (profile as any)?.department || undefined,
-              bio: (profile as any)?.bio || undefined,
-              userType: profile?.user_type || (session as any).userType || undefined,
-            }}
-          />
-        </div>
-      )}
-
-      {/* ── TOP SECTION: Premium Identity Card with Cover Banner ── */}
+      {/* ── TOP SECTION: Premium Compact Identity Card with Cover Banner ── */}
       <div className={`${card} overflow-hidden`}>
         {/* Cover Banner */}
-        <div className="h-32 sm:h-40 bg-gradient-to-r from-purple-900 via-indigo-900 to-zinc-900 relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.3),transparent_50%)]" />
-          <div className="absolute bottom-3 right-4 text-[10px] font-black tracking-widest text-purple-200/50 uppercase select-none">
+        <div className="h-24 sm:h-36 bg-gradient-to-r from-purple-950 via-indigo-950 to-zinc-950 relative overflow-hidden flex items-start justify-between p-3 sm:p-4">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.35),transparent_50%)] pointer-events-none" />
+          
+          <div className="text-[9px] sm:text-[10px] font-black tracking-widest text-purple-200/60 uppercase select-none relative z-10">
             Member Since {memberSince}
           </div>
+
+          {/* Edit Profile Button inside Gradient Banner (High contrast white text) */}
+          {isSelf && (
+            <div className="relative z-10">
+              <EditProfileButton
+                initialData={{
+                  name: profile?.name || session.name,
+                  university: profile?.university || undefined,
+                  study_program: profile?.study_program || undefined,
+                  semester: profile?.semester || undefined,
+                  whatsapp_number: profile?.whatsapp_number || undefined,
+                  avatar_url: profile?.avatar_url || session.avatar,
+                  main_roles: parsedMainRoles,
+                  custom_role: profile?.custom_role || undefined,
+                  tools: profile?.tools || undefined,
+                  portfolio_url: profile?.portfolio_url || undefined,
+                  department: (profile as any)?.department || undefined,
+                  bio: (profile as any)?.bio || undefined,
+                  userType: profile?.user_type || (session as any).userType || undefined,
+                }}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Profile Content Body */}
-        <div className="px-6 pb-6 relative">
-          <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 -mt-14 sm:-mt-16 mb-5">
+        {/* Profile Content Body - Compact spacing on mobile */}
+        <div className="px-4 sm:px-6 pb-4 sm:pb-6 relative">
+          <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-2 sm:gap-4 -mt-10 sm:-mt-14 mb-3 sm:mb-4">
             {/* Overlapping Avatar */}
             <div className="relative group">
               {avatarSrc ? (
@@ -275,23 +276,23 @@ export default async function ProfilePage({
                 <img
                   src={avatarSrc}
                   alt={profile?.name || 'User'}
-                  className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl border-4 border-white dark:border-[#09090b] shadow-2xl object-cover shrink-0 bg-white dark:bg-zinc-900"
+                  className="w-20 h-20 sm:w-28 sm:h-28 rounded-2xl sm:rounded-3xl border-4 border-white dark:border-[#09090b] shadow-xl object-cover shrink-0 bg-white dark:bg-zinc-900"
                 />
               ) : (
-                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl border-4 border-white dark:border-[#09090b] bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-4xl font-black shadow-2xl shrink-0 uppercase select-none">
+                <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-2xl sm:rounded-3xl border-4 border-white dark:border-[#09090b] bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-2xl sm:text-3xl font-black shadow-xl shrink-0 uppercase select-none">
                   {(profile?.name || 'U').substring(0, 2)}
                 </div>
               )}
             </div>
 
-            {/* Quick Actions (WA & Portfolio) */}
-            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+            {/* Desktop Quick Actions (WA & Portfolio) */}
+            <div className="hidden sm:flex items-center gap-2 flex-wrap">
               {profile?.whatsapp_number && (
                 <a
                   href={`https://wa.me/${await normalizeWhatsappNumber(profile.whatsapp_number)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+                  className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 px-3 py-1.5 rounded-xl transition-all shadow-sm active:scale-95"
                 >
                   <span>💬</span> WhatsApp
                 </a>
@@ -301,7 +302,7 @@ export default async function ProfilePage({
                   href={profile.portfolio_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+                  className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 px-3 py-1.5 rounded-xl transition-all shadow-sm active:scale-95"
                 >
                   <span>🔗</span> Portfolio ↗
                 </a>
@@ -310,21 +311,21 @@ export default async function ProfilePage({
           </div>
 
           {/* User Name & Badges */}
-          <div className="space-y-3">
-            <div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
+          <div className="space-y-2 flex flex-col items-center sm:items-start text-center sm:text-left">
+            <div className="flex flex-col items-center sm:items-start">
+              <div className="flex flex-col sm:flex-row items-center gap-1.5 sm:gap-2">
+                <h2 className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
                   {profile?.name || 'User'}
                 </h2>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center justify-center gap-1.5 flex-wrap mt-0.5 sm:mt-0">
                   {profile?.role_name && (
-                    <span className="text-[10px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 px-3 py-1 rounded-full shadow-xs">
+                    <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 px-2.5 py-0.5 rounded-full shadow-xs">
                       {profile.role_name}
                     </span>
                   )}
                   {profile?.user_type && (
                     <span
-                      className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border shadow-xs ${
+                      className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border shadow-xs ${
                         profile.user_type === 'OJT'
                           ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
                           : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700'
@@ -338,14 +339,24 @@ export default async function ProfilePage({
 
               {/* Department / Title for Staff */}
               {(profile as any)?.department && (
-                <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mt-1 flex items-center gap-1.5">
+                <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5 flex items-center justify-center sm:justify-start gap-1">
                   <span>💼</span> {(profile as any).department}
                 </p>
               )}
 
-              {/* Email & Academic info */}
-              <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400 mt-1.5 flex-wrap">
+              {/* Email, WhatsApp & Academic info line */}
+              <div className="flex items-center justify-center sm:justify-start gap-2.5 text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 flex-wrap">
                 <span className="flex items-center gap-1">✉️ {profile?.email}</span>
+                {profile?.whatsapp_number && (
+                  <a
+                    href={`https://wa.me/${await normalizeWhatsappNumber(profile.whatsapp_number)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
+                  >
+                    <span>💬</span> WhatsApp
+                  </a>
+                )}
                 {profile?.user_type !== 'STAFF' &&
                   (profile?.university || profile?.study_program || profile?.semester) && (
                     <span className="flex items-center gap-1 text-zinc-700 dark:text-zinc-300 font-medium">
@@ -357,11 +368,11 @@ export default async function ProfilePage({
 
             {/* Bio - Option A: Clean Intro Line */}
             {(profile as any)?.bio && (
-              <div className="space-y-1">
-                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+              <div className="space-y-0.5 w-full">
+                <p className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center justify-center sm:justify-start gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" /> ABOUT
                 </p>
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed font-normal">
+                <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-snug font-normal max-w-xl">
                   {(profile as any).bio}
                 </p>
               </div>
@@ -369,16 +380,13 @@ export default async function ProfilePage({
 
             {/* Main Roles & Tools Chips */}
             {(parsedMainRoles.length > 0 || profile?.custom_role || profile?.tools) && (
-              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 space-y-2">
+              <div className="pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60 space-y-1.5 w-full flex flex-col items-center sm:items-start">
                 {(parsedMainRoles.length > 0 || profile?.custom_role) && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mr-1">
-                      Keahlian:
-                    </span>
+                  <div className="flex items-center justify-center sm:justify-start gap-1 flex-wrap">
                     {parsedMainRoles.map((r) => (
                       <span
                         key={r}
-                        className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                        className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
                       >
                         {r === 'RESEARCHER'
                           ? '🔍 Researcher'
@@ -392,7 +400,7 @@ export default async function ProfilePage({
                       </span>
                     ))}
                     {profile?.custom_role && (
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-300">
+                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-300">
                         ✨ {profile.custom_role}
                       </span>
                     )}
@@ -400,9 +408,8 @@ export default async function ProfilePage({
                 )}
 
                 {profile?.tools && (
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-1.5">
-                    <span>🧰</span>
-                    <strong className="text-zinc-700 dark:text-zinc-300">Tools:</strong> {profile.tools}
+                  <div className="text-[11px] text-zinc-600 dark:text-zinc-400 font-medium flex items-center justify-center sm:justify-start gap-1">
+                    <span>🧰 {profile.tools}</span>
                   </div>
                 )}
               </div>
@@ -411,7 +418,7 @@ export default async function ProfilePage({
 
           {/* Quick stats row (Only for OJT) */}
           {profile?.user_type !== 'STAFF' && (
-            <div className="mt-6 pt-5 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-4 gap-2 sm:gap-4">
               {[
                 { label: 'Total Steps', value: totalAssignments, color: 'text-zinc-700 dark:text-zinc-200' },
                 { label: 'Disetujui',   value: totalApproved,    color: 'text-emerald-600 dark:text-emerald-400' },
@@ -419,8 +426,8 @@ export default async function ProfilePage({
                 { label: 'Approval',    value: `${approvalRate}%`, color: 'text-purple-600 dark:text-purple-400' },
               ].map((s) => (
                 <div key={s.label} className="text-center">
-                  <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mt-1">{s.label}</p>
+                  <p className={`text-lg sm:text-2xl font-black ${s.color}`}>{s.value}</p>
+                  <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mt-0.5">{s.label}</p>
                 </div>
               ))}
             </div>
@@ -430,21 +437,21 @@ export default async function ProfilePage({
 
       {/* ── CREATIVE SPARKS & TITLE BADGES (Only for OJT) ── */}
       {profile?.user_type !== 'STAFF' && (
-        <div className={`${card} p-6 border-purple-500/20 bg-gradient-to-br from-purple-500/[0.03] to-indigo-500/[0.03]`}>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
+        <div className={`${card} p-4 sm:p-6 border-purple-500/20 bg-gradient-to-br from-purple-500/[0.03] to-indigo-500/[0.03]`}>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 pb-3 sm:pb-4 border-b border-zinc-100 dark:border-zinc-800 text-center sm:text-left">
             <div>
-              <h3 className="text-xs font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-2">
+              <h3 className="text-xs font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center justify-center sm:justify-start gap-2">
                 <span>✨ Creative Sparks & Title Badges</span>
               </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              <p className="text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                 Akumulasi poin apresiasi kualitas karya dari mentor & koordinator.
               </p>
             </div>
-            <div className="flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 px-4 py-2 rounded-2xl shrink-0">
-              <span className="text-xl">✨</span>
-              <div>
-                <p className="text-lg font-black text-purple-700 dark:text-purple-300 leading-none">{totalSparks} Sparks</p>
-                <p className="text-[9px] text-purple-600/80 dark:text-purple-400/80 font-bold uppercase tracking-wider">Total Terkumpul</p>
+            <div className="flex items-center justify-center gap-2 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl w-full sm:w-auto shrink-0">
+              <span className="text-lg sm:text-xl">✨</span>
+              <div className="text-center sm:text-left">
+                <p className="text-base sm:text-lg font-black text-purple-700 dark:text-purple-300 leading-none">{totalSparks} Sparks</p>
+                <p className="text-[8px] sm:text-[9px] text-purple-600/80 dark:text-purple-400/80 font-bold uppercase tracking-wider">Total Terkumpul</p>
               </div>
             </div>
           </div>
@@ -492,18 +499,20 @@ export default async function ProfilePage({
         </div>
       )}
 
-      {/* ── METRICS ROW ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {/* ── METRICS ROW (Sleek & Compact) ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
         {[
           { label: 'Perlu Revisi',    value: totalRevision,  icon: '🔄', colorVal: 'text-red-600 dark:text-red-400',       border: 'border-red-200 dark:border-red-900/40',     bg: 'bg-red-500/5' },
           { label: 'Workspace',       value: workspaceCount, icon: '🗂',  colorVal: 'text-blue-600 dark:text-blue-400',      border: 'border-blue-200 dark:border-blue-900/40',   bg: 'bg-blue-500/5' },
           { label: 'Proyek Terlibat', value: projectCount,   icon: '📁', colorVal: 'text-amber-600 dark:text-amber-400',    border: 'border-amber-200 dark:border-amber-900/40', bg: 'bg-amber-500/5' },
           { label: 'Total Disetujui', value: totalApproved,  icon: '✅', colorVal: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-900/40', bg: 'bg-emerald-500/5' },
         ].map((c) => (
-          <div key={c.label} className={`${card} ${c.bg} ${c.border} p-5 flex flex-col gap-1.5`}>
-            <span className="text-2xl">{c.icon}</span>
-            <p className={`text-3xl font-black ${c.colorVal}`}>{c.value}</p>
-            <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400">{c.label}</p>
+          <div key={c.label} className={`${card} ${c.bg} ${c.border} p-3 sm:p-3.5 flex items-center justify-between gap-2 rounded-2xl`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-lg shrink-0">{c.icon}</span>
+              <p className="text-[10px] sm:text-[11px] font-bold text-zinc-600 dark:text-zinc-300 truncate">{c.label}</p>
+            </div>
+            <p className={`text-base sm:text-lg font-black ${c.colorVal} shrink-0 font-mono`}>{c.value}</p>
           </div>
         ))}
       </div>

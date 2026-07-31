@@ -28,7 +28,7 @@ export default function EditProfileButton({ initialData }: EditProfileButtonProp
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="px-4 py-2 rounded-2xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/20 text-xs font-bold transition-all flex items-center gap-2 shadow-sm active:scale-95 shrink-0"
+        className="px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl sm:rounded-2xl bg-white/15 hover:bg-white/25 text-white border border-white/20 backdrop-blur-md text-xs font-bold transition-all flex items-center gap-1.5 shadow-md active:scale-95 shrink-0"
       >
         <span>✏️ Edit Profil</span>
       </button>
