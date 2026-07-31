@@ -76,6 +76,8 @@ export async function updateOjtProfile(payload: {
   custom_role?: string;
   tools?: string;
   portfolio_url?: string;
+  department?: string;
+  bio?: string;
   completeOnboarding?: boolean;
 }) {
   const session = await getSession();
@@ -87,7 +89,6 @@ export async function updateOjtProfile(payload: {
 
   const normalizedAvatar = await normalizeAvatarUrl(payload.avatar_url);
   const mainRolesJson = JSON.stringify(payload.main_roles || []);
-  const setOnboarding = payload.completeOnboarding ? 1 : 0;
 
   const db = await getDB();
 
@@ -105,6 +106,8 @@ export async function updateOjtProfile(payload: {
           custom_role = ?,
           tools = ?,
           portfolio_url = ?,
+          department = ?,
+          bio = ?,
           onboarding_completed = 1
         WHERE id = ?
       `)
@@ -119,6 +122,8 @@ export async function updateOjtProfile(payload: {
         payload.custom_role?.trim() || null,
         payload.tools?.trim() || null,
         payload.portfolio_url?.trim() || null,
+        payload.department?.trim() || null,
+        payload.bio?.trim() || null,
         session.userId
       )
       .run();
@@ -135,7 +140,9 @@ export async function updateOjtProfile(payload: {
           main_roles = ?,
           custom_role = ?,
           tools = ?,
-          portfolio_url = ?
+          portfolio_url = ?,
+          department = ?,
+          bio = ?
         WHERE id = ?
       `)
       .bind(
@@ -149,6 +156,8 @@ export async function updateOjtProfile(payload: {
         payload.custom_role?.trim() || null,
         payload.tools?.trim() || null,
         payload.portfolio_url?.trim() || null,
+        payload.department?.trim() || null,
+        payload.bio?.trim() || null,
         session.userId
       )
       .run();

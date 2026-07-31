@@ -15,6 +15,9 @@ interface EditProfileButtonProps {
     custom_role?: string;
     tools?: string;
     portfolio_url?: string;
+    department?: string;
+    bio?: string;
+    userType?: string;
   };
 }
 

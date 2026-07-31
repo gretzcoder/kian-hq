@@ -188,7 +188,7 @@ export default function EditProfileForm({ initialData }: EditProfileFormProps) {
                     type="text"
                     value={university}
                     onChange={(e) => setUniversity(e.target.value)}
-                    placeholder="e.g. Universitas Indonesia"
+                    placeholder="e.g. Nama Universitas / Perguruan Tinggi"
                     className={inputCls}
                   />
                 </div>

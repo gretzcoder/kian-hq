@@ -54,7 +54,7 @@ export default async function ProfilePage() {
       SELECT
         u.id, u.email, u.name, u.status, u.user_type, u.created_at, r.name as role_name,
         u.university, u.study_program, u.semester, u.whatsapp_number, u.avatar_url,
-        u.main_roles, u.custom_role, u.tools, u.portfolio_url
+        u.main_roles, u.custom_role, u.tools, u.portfolio_url, u.department, u.bio
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
@@ -243,6 +243,9 @@ export default async function ProfilePage() {
             custom_role: profile?.custom_role || undefined,
             tools: profile?.tools || undefined,
             portfolio_url: profile?.portfolio_url || undefined,
+            department: (profile as any)?.department || undefined,
+            bio: (profile as any)?.bio || undefined,
+            userType: profile?.user_type || (session as any).userType || undefined,
           }}
         />
       </div>
@@ -281,6 +284,20 @@ export default async function ProfilePage() {
               )}
             </div>
 
+            {/* Department / Title for Staff */}
+            {(profile as any)?.department && (
+              <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mb-1 flex items-center gap-1">
+                <span>💼</span> {(profile as any).department}
+              </p>
+            )}
+
+            {/* Bio */}
+            {(profile as any)?.bio && (
+              <p className="text-xs text-zinc-600 dark:text-zinc-300 italic mb-2 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                &ldquo;{(profile as any).bio}&rdquo;
+              </p>
+            )}
+
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 flex items-center gap-2 flex-wrap">
               <span>{session.email}</span>
               {profile?.whatsapp_number && (
@@ -295,7 +312,7 @@ export default async function ProfilePage() {
               )}
             </p>
 
-            {/* Academic & University Details */}
+            {/* Academic & University Details (Only if present / OJT) */}
             {(profile?.university || profile?.study_program || profile?.semester) && (
               <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 mt-2 flex items-center gap-1.5 flex-wrap">
                 <span>🎓</span>
