@@ -40,7 +40,13 @@ export async function getDB() {
         `),
       ]);
     } catch (e) {
-      // Ignore batch error if already initialized
+      // Ignore batch error
+    }
+
+    try {
+      await db.prepare('ALTER TABLE announcement_comments ADD COLUMN parent_id TEXT REFERENCES announcement_comments(id) ON DELETE CASCADE').run();
+    } catch (e) {
+      // Column parent_id already exists, safe to ignore
     }
   }
 

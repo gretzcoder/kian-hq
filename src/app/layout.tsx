@@ -63,7 +63,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 transition-colors duration-200">
+      <body
+        suppressHydrationWarning={true}
+        className="min-h-full flex flex-col bg-zinc-50 dark:bg-black text-zinc-900 dark:text-zinc-100 transition-colors duration-200"
+      >
         <UIProvider>{children}</UIProvider>
       </body>
     </html>
