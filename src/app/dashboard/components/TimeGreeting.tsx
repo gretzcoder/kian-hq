@@ -78,9 +78,9 @@ export default function TimeGreeting() {
   if (!greeting) return null;
 
   return (
-    <div className="text-xs sm:text-sm font-medium text-zinc-600 dark:text-zinc-400 mt-1 flex items-center gap-2 animate-in fade-in duration-300">
-      <span className="inline-block w-2 h-2 rounded-full bg-purple-500 animate-pulse shrink-0" />
-      <span className="italic text-purple-600 dark:text-purple-400 font-medium truncate max-w-xl">{greeting}</span>
+    <div className="text-xs sm:text-sm font-medium text-zinc-600 dark:text-zinc-400 mt-1 flex items-start gap-2 animate-in fade-in duration-300">
+      <span className="inline-block w-2 h-2 rounded-full bg-purple-500 animate-pulse shrink-0 mt-1" />
+      <span className="italic text-purple-600 dark:text-purple-400 font-medium leading-relaxed">{greeting}</span>
     </div>
   );
 }
