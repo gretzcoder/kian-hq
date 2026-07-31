@@ -63,6 +63,7 @@ export default function DashboardSidebar({
         ...(!isOJT ? [{ href: '/dashboard/analytics', label: 'Analytics', icon: '📊', exact: false }] : []),
         ...(canManage
           ? [
+              { href: '/dashboard/feedbacks', label: 'Kritik & Saran', icon: '💌', exact: false },
               { href: '/dashboard/users', label: 'Users', icon: '👥', exact: false },
               { href: '/dashboard/permissions', label: 'Permissions', icon: '🔒', exact: false },
             ]
