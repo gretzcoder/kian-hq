@@ -14,14 +14,12 @@ interface ProjectDetailTabsProps {
 
 export default function ProjectDetailTabs({
   workspacesTab,
-  briefTab,
   timelineTab,
   createWorkspaceForm,
   workspacesCount,
-  hasBrief,
   eventsCount,
-}: ProjectDetailTabsProps) {
-  const [activeTab, setActiveTab] = useState<'workspaces' | 'brief' | 'timeline' | 'create'>('workspaces');
+}: Omit<ProjectDetailTabsProps, 'briefTab' | 'hasBrief'>) {
+  const [activeTab, setActiveTab] = useState<'workspaces' | 'timeline' | 'create'>('workspaces');
 
   return (
     <div className="space-y-6">
@@ -46,20 +44,6 @@ export default function ProjectDetailTabs({
             >
               {workspacesCount}
             </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('brief')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
-              activeTab === 'brief'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
-                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
-            }`}
-          >
-            <span>📄 Content Brief</span>
-            {hasBrief && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            )}
           </button>
 
           <button
@@ -100,8 +84,6 @@ export default function ProjectDetailTabs({
       {/* Tab Panels */}
       <div className="transition-all duration-200">
         {activeTab === 'workspaces' && <div className="animate-in fade-in duration-200">{workspacesTab}</div>}
-
-        {activeTab === 'brief' && <div className="animate-in fade-in duration-200">{briefTab}</div>}
 
         {activeTab === 'timeline' && <div className="animate-in fade-in duration-200">{timelineTab}</div>}
 

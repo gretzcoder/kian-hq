@@ -318,7 +318,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       {/* Project Detail Clean Tabbed Container */}
       <ProjectDetailTabs
         workspacesCount={workspaces.length}
-        hasBrief={!!brief}
         eventsCount={events.length}
         workspacesTab={
           workspaces.length === 0 ? (
@@ -374,25 +373,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               })}
             </div>
           )
-        }
-        briefTab={
-          <div className="max-w-3xl">
-            <ProjectTabs
-              projectId={projectId}
-              tasks={[]}
-              users={users}
-              brief={brief}
-              events={[]}
-              canCreateTask={false}
-              canApproveTask={canApproveTask}
-              canDeleteTask={canDeleteTask}
-              canEditBrief={canEditBrief}
-              currentUserId={session.userId}
-              handleCreateTask={async () => {
-                'use server';
-              }}
-            />
-          </div>
         }
         timelineTab={
           <div className="max-w-3xl">

@@ -65,23 +65,19 @@ export default function ProjectCoordinatorsManager({
   return (
     <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-2xl p-5 space-y-4 shadow-sm">
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            👨‍🏫 Koordinator / Mentor Proyek
-          </h3>
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-            Pengguna yang bertanggung jawab membimbing dan memimpin tim di proyek ini.
-          </p>
-        </div>
+        <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+          Koordinator
+        </h3>
         <button
           type="button"
           onClick={() => {
             setIsEditing((p) => !p);
             setSearch('');
           }}
-          className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-xl transition-all active:scale-[0.97]"
+          title="Kelola Koordinator"
+          className="p-2 rounded-xl text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-purple-500/10 border border-zinc-200 dark:border-zinc-800 transition-all active:scale-[0.95]"
         >
-          {isEditing ? 'Batal' : '⚙️ Kelola Koordinator'}
+          ⚙️
         </button>
       </div>
 
