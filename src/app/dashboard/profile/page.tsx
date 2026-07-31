@@ -36,9 +36,17 @@ interface RecentActivity {
   deadline: number | null;
 }
 
-export default async function ProfilePage() {
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ userId?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect('/');
+
+  const resolvedParams = searchParams ? await searchParams : {};
+  const targetUserId = resolvedParams.userId || session.userId;
+  const isSelf = targetUserId === session.userId;
 
   const db = await getDB();
 
@@ -60,14 +68,14 @@ export default async function ProfilePage() {
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
       WHERE u.id = ?
-    `).bind(session.userId).first(),
+    `).bind(targetUserId).first(),
 
     db.prepare(`
       SELECT status, COUNT(*) as count
       FROM task_assignments
       WHERE user_id = ?
       GROUP BY status
-    `).bind(session.userId).all(),
+    `).bind(targetUserId).all(),
 
     db.prepare(`
       SELECT assignment_role, COUNT(*) as count
@@ -75,7 +83,7 @@ export default async function ProfilePage() {
       WHERE user_id = ?
       GROUP BY assignment_role
       ORDER BY count DESC
-    `).bind(session.userId).all(),
+    `).bind(targetUserId).all(),
 
     db.prepare(`
       SELECT
@@ -94,28 +102,28 @@ export default async function ProfilePage() {
       WHERE ta.user_id = ?
       ORDER BY ta.created_at DESC
       LIMIT 8
-    `).bind(session.userId).all(),
+    `).bind(targetUserId).all(),
 
     db.prepare(`
       SELECT COUNT(DISTINCT t.workspace_id) as count
       FROM task_assignments ta
       JOIN tasks t ON ta.task_id = t.id
       WHERE ta.user_id = ?
-    `).bind(session.userId).first(),
+    `).bind(targetUserId).first(),
 
     db.prepare(`
       SELECT COUNT(DISTINCT t.project_id) as count
       FROM task_assignments ta
       JOIN tasks t ON ta.task_id = t.id
       WHERE ta.user_id = ?
-    `).bind(session.userId).first(),
+    `).bind(targetUserId).first(),
 
     db.prepare(`
       SELECT we.note, ta.assignment_role
       FROM workflow_events we
       JOIN task_assignments ta ON we.entity_id = ta.id
       WHERE ta.user_id = ? AND (we.note LIKE '%[Sparks:%' OR we.note LIKE '%[Badge:%')
-    `).bind(session.userId).all(),
+    `).bind(targetUserId).all(),
   ]);
 
   const profile          = profileRaw as unknown as UserProfile | null;
@@ -228,27 +236,31 @@ export default async function ProfilePage() {
       <div className="flex items-center justify-between pb-4 border-b border-zinc-200 dark:border-zinc-800">
         <div>
           <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-zinc-950 to-zinc-600 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent">
-            My Profile
+            {isSelf ? 'My Profile' : `Profil: ${profile?.name || 'User'}`}
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">Informasi akun dan ringkasan kontribusimu.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+            {isSelf ? 'Informasi akun dan ringkasan kontribusimu.' : 'Detail profil dan statistik kontribusi anggota.'}
+          </p>
         </div>
-        <EditProfileButton
-          initialData={{
-            name: session.name,
-            university: profile?.university || undefined,
-            study_program: profile?.study_program || undefined,
-            semester: profile?.semester || undefined,
-            whatsapp_number: profile?.whatsapp_number || undefined,
-            avatar_url: profile?.avatar_url || session.avatar,
-            main_roles: parsedMainRoles,
-            custom_role: profile?.custom_role || undefined,
-            tools: profile?.tools || undefined,
-            portfolio_url: profile?.portfolio_url || undefined,
-            department: (profile as any)?.department || undefined,
-            bio: (profile as any)?.bio || undefined,
-            userType: profile?.user_type || (session as any).userType || undefined,
-          }}
-        />
+        {isSelf && (
+          <EditProfileButton
+            initialData={{
+              name: profile?.name || session.name,
+              university: profile?.university || undefined,
+              study_program: profile?.study_program || undefined,
+              semester: profile?.semester || undefined,
+              whatsapp_number: profile?.whatsapp_number || undefined,
+              avatar_url: profile?.avatar_url || session.avatar,
+              main_roles: parsedMainRoles,
+              custom_role: profile?.custom_role || undefined,
+              tools: profile?.tools || undefined,
+              portfolio_url: profile?.portfolio_url || undefined,
+              department: (profile as any)?.department || undefined,
+              bio: (profile as any)?.bio || undefined,
+              userType: profile?.user_type || (session as any).userType || undefined,
+            }}
+          />
+        )}
       </div>
 
       {/* ── TOP SECTION: Identity Card Full Width ── */}
@@ -257,18 +269,18 @@ export default async function ProfilePage() {
           {/* Avatar */}
           {avatarSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarSrc} alt={session.name}
+            <img src={avatarSrc} alt={profile?.name || 'User'}
               className="w-24 h-24 rounded-2xl border-2 border-zinc-200 dark:border-zinc-800 shadow object-cover shrink-0" />
           ) : (
             <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-3xl font-black shadow shrink-0 uppercase select-none">
-              {initials}
+              {(profile?.name || 'U').substring(0, 2)}
             </div>
           )}
 
           {/* Info */}
           <div className="flex-1 min-w-0">
             <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
-              <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{session.name}</h2>
+              <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{profile?.name || 'User'}</h2>
               <div className="flex items-center gap-2 flex-wrap">
                 {profile?.role_name && (
                   <span className="text-[10px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/15 px-2.5 py-0.5 rounded-full">
@@ -302,7 +314,7 @@ export default async function ProfilePage() {
             )}
 
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 flex items-center gap-2 flex-wrap">
-              <span>{session.email}</span>
+              <span>{profile?.email}</span>
               {profile?.whatsapp_number && (
                 <a
                   href={`https://wa.me/${await normalizeWhatsappNumber(profile.whatsapp_number)}`}

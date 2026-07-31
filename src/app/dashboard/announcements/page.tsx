@@ -10,6 +10,7 @@ interface AnnouncementRow {
   id: string;
   title: string;
   content: string;
+  author_id?: string | null;
   author_name: string | null;
   author_avatar?: string | null;
   created_at: number;
@@ -39,7 +40,7 @@ export default async function AnnouncementsPage() {
   const db = await getDB();
   const [resultsRaw, commentsRaw, reactionsRaw, ctx] = await Promise.all([
     db.prepare(`
-      SELECT a.id, a.title, a.content, a.created_at, u.name as author_name, u.avatar_url as author_avatar
+      SELECT a.id, a.title, a.content, a.created_at, a.created_by as author_id, u.name as author_name, u.avatar_url as author_avatar
       FROM announcements a
       LEFT JOIN users u ON a.created_by = u.id
       ORDER BY a.created_at DESC
@@ -133,7 +134,10 @@ export default async function AnnouncementsPage() {
                 >
                   {/* Author Header */}
                   <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-zinc-100 dark:border-zinc-900/60">
-                    <Link href="/dashboard/profile" className="flex items-center gap-2.5 group min-w-0">
+                    <Link
+                      href={ann.author_id ? `/dashboard/profile?userId=${ann.author_id}` : '/dashboard/profile'}
+                      className="flex items-center gap-2.5 group min-w-0"
+                    >
                       {ann.author_avatar ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img

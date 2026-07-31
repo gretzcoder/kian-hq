@@ -118,7 +118,7 @@ export function AnnouncementInteractive({
                   className="group flex items-start justify-between gap-3 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-3 text-xs"
                 >
                   <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                    <Link href="/dashboard/profile" className="shrink-0">
+                    <Link href={`/dashboard/profile?userId=${c.user_id}`} className="shrink-0">
                       {c.user_avatar ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
@@ -135,7 +135,7 @@ export function AnnouncementInteractive({
                     <div className="space-y-1 flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link
-                          href="/dashboard/profile"
+                          href={`/dashboard/profile?userId=${c.user_id}`}
                           className="font-bold text-zinc-900 dark:text-zinc-200 hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
                         >
                           {c.user_name || 'Anonymous User'}

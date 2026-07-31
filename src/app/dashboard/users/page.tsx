@@ -97,7 +97,7 @@ export default async function UsersPage() {
               {users.map((user) => (
                 <tr key={user.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/20 transition-colors">
                   <td className="px-6 py-4 font-bold text-zinc-800 dark:text-zinc-100">
-                    <Link href="/dashboard/profile" className="flex items-center gap-3 group w-fit">
+                    <Link href={`/dashboard/profile?userId=${user.id}`} className="flex items-center gap-3 group w-fit">
                       {user.avatar_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
