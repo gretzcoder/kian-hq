@@ -227,7 +227,7 @@ export default function CreateProjectForm({
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-              Coordinators <span className="text-red-500">*</span>
+              Coordinators (Optional)
             </label>
             <button
               type="button"

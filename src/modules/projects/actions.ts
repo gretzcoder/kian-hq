@@ -25,15 +25,12 @@ export async function createProject(formData: FormData) {
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
   const gdriveFolderUrl = formData.get('gdriveFolderUrl') as string;
-  const ojtCoordinatorIds = formData.getAll('ojtCoordinatorIds') as string[];
+  const rawCoordinatorIds = formData.getAll('ojtCoordinatorIds') as string[];
+  const ojtCoordinatorIds = rawCoordinatorIds.filter((id) => id && id.trim().length > 0);
   const briefId = formData.get('briefId') as string | null; // optional: link from brief
 
   if (!name?.trim()) {
-    return { success: false, error: 'Project name is required.' };
-  }
-
-  if (ojtCoordinatorIds.length === 0) {
-    return { success: false, error: 'At least one Coordinator is required.' };
+    return { success: false, error: 'Nama proyek wajib diisi.' };
   }
 
   const db = await getDB();
