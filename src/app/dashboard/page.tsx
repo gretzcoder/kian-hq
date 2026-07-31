@@ -3,12 +3,14 @@ import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { createAnnouncement } from '@/modules/announcements/actions';
+import { getLeaderboardData, LeaderboardUser } from '@/modules/leaderboard/actions';
 import DashboardStats from './components/DashboardStats';
 import DashboardQCReviews, { QCReviewItem } from './components/DashboardQCReviews';
 import DashboardPersonalWorkspace from './components/DashboardPersonalWorkspace';
 import DashboardAnnouncements from './components/DashboardAnnouncements';
 import DashboardQuickActions from './components/DashboardQuickActions';
 import BroadcastAnnouncement from './components/BroadcastAnnouncement';
+import DashboardMiniLeaderboard from './components/DashboardMiniLeaderboard';
 
 interface AnnouncementRow {
   id: string;
@@ -39,7 +41,7 @@ export default async function DashboardPage() {
   // Batch-fetch permissions + roles in ONE call
   const ctx = await getSessionContext(session.userId);
 
-  const [pendingQCCount, inProgressTasksCount, totalOjtCount, announcementsRaw] = await Promise.all([
+  const [pendingQCCount, inProgressTasksCount, totalOjtCount, announcementsRaw, leaderboardResult] = await Promise.all([
     db.prepare("SELECT COUNT(*) as count FROM task_assignments WHERE status = 'WAITING_REVIEW'").first() as Promise<{ count: number }>,
     db.prepare("SELECT COUNT(*) as count FROM tasks WHERE status IN ('TODO', 'IN_PROGRESS', 'REVISION')").first() as Promise<{ count: number }>,
     db.prepare("SELECT COUNT(*) as count FROM users WHERE user_type = 'OJT'").first() as Promise<{ count: number }>,
@@ -50,9 +52,11 @@ export default async function DashboardPage() {
       ORDER BY a.created_at DESC
       LIMIT 4
     `).all(),
+    getLeaderboardData('overall', 'month'),
   ]);
 
   const announcements = announcementsRaw.results as unknown as AnnouncementRow[];
+  const miniLeaderboardUsers = (leaderboardResult.data as LeaderboardUser[]) || [];
 
   // Permission-based widget logic
   const canReview = ctx.can('APPROVE') || ctx.can('REQUEST_REVISION');
@@ -222,6 +226,11 @@ export default async function DashboardPage() {
             canCreate={canCreate}
             canCreateBrief={canCreateBrief}
             canReview={canReview}
+          />
+
+          <DashboardMiniLeaderboard
+            topUsers={miniLeaderboardUsers}
+            currentUserId={session.userId}
           />
 
           {canAnnounce && (
