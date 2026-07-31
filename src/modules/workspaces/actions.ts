@@ -37,6 +37,7 @@ export async function createWorkspace(projectId: string, formData: FormData) {
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
   const deadlineStr = formData.get('deadline') as string;
+  const mentorId = formData.get('mentorId') as string | null;
 
   if (!name?.trim()) {
     return { success: false, error: 'Workspace name is required.' };
@@ -46,7 +47,7 @@ export async function createWorkspace(projectId: string, formData: FormData) {
   const deadline = deadlineStr ? new Date(deadlineStr).getTime() : null;
 
   try {
-    const ojtCoordinatorId = session.userId;
+    const ojtCoordinatorId = mentorId || session.userId;
 
     await db
       .prepare(`

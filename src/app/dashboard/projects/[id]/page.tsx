@@ -162,7 +162,18 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     .all();
   const users = usersRaw as unknown as UserRow[];
 
-  // Project mentor is inherited; no separate workspace mentor dropdown needed
+  // Fetch project mentors for workspace mentor selection dropdown
+  const { results: mentorsRaw } = await db
+    .prepare(`
+      SELECT u.id, u.name, u.email
+      FROM project_coordinators pc
+      JOIN users u ON pc.user_id = u.id
+      WHERE pc.project_id = ?
+      ORDER BY u.name ASC
+    `)
+    .bind(projectId)
+    .all();
+  const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
 
   // Content Brief
   const brief = await db
@@ -403,7 +414,7 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           </div>
         }
         createWorkspaceForm={
-          canCreateWs ? <CreateWorkspaceForm projectId={projectId} /> : undefined
+          canCreateWs ? <CreateWorkspaceForm projectId={projectId} mentors={mentors} /> : undefined
         }
       />
     </div>
