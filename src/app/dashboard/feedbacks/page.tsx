@@ -31,7 +31,7 @@ export default async function FeedbacksPage() {
           </p>
         </div>
         <div className="bg-purple-500/10 border border-purple-500/20 px-3.5 py-1.5 rounded-2xl text-xs font-bold text-purple-700 dark:text-purple-300">
-          {feedbacks.length} Masukan Masuk
+          Total {feedbacks.length} Pesan
         </div>
       </div>
 

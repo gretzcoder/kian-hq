@@ -5,6 +5,7 @@ import { getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import DashboardSidebar from './components/DashboardSidebar';
+import TimeGreeting from './components/TimeGreeting';
 
 import OnboardingModal from '@/modules/profile/components/OnboardingModal';
 
@@ -71,7 +72,8 @@ export default async function DashboardLayout({
       {/* Main Content Area — Fluid Full Width */}
       <main className="flex-1 w-full px-6 sm:px-10 py-6 min-w-0 flex flex-col">
         {/* Top Floating Control Bar */}
-        <div className="hidden lg:flex items-center justify-end pb-3 mb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
+        <div className="hidden lg:flex items-center justify-between pb-3 mb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
+          <TimeGreeting />
           <ThemeToggle />
         </div>
 

@@ -57,7 +57,7 @@ export default function DashboardSidebar({
       ],
     },
     {
-      title: 'INTELLIGENCE & ADMIN',
+      title: 'FITUR & PENGELOLAAN',
       items: [
         ...(canUseAI ? [{ href: '/dashboard/ai', label: 'AI Assistant', icon: '🤖', exact: false }] : []),
         ...(!isOJT ? [{ href: '/dashboard/analytics', label: 'Analytics', icon: '📊', exact: false }] : []),
