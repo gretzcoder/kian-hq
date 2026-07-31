@@ -51,10 +51,11 @@ export async function deleteWorkspaceMessage(messageId: string, workspaceId: str
   const db = await getDB();
 
   try {
-    const msg = await db
+    const msgRaw = await db
       .prepare('SELECT user_id FROM workspace_chats WHERE id = ?')
       .bind(messageId)
-      .first<{ user_id: string }>();
+      .first();
+    const msg = msgRaw as unknown as { user_id: string } | null;
 
     if (!msg) return { success: false, error: 'Pesan tidak ditemukan.' };
 

@@ -106,10 +106,11 @@ export async function deleteAnnouncementComment(commentId: string) {
 
   try {
     // Only allow owner or admin/delete permission
-    const existing = await db
+    const existingRaw = await db
       .prepare('SELECT user_id FROM announcement_comments WHERE id = ?')
       .bind(commentId)
-      .first<{ user_id: string }>();
+      .first();
+    const existing = existingRaw as unknown as { user_id: string } | null;
 
     if (!existing) return { success: false, error: 'Comment not found.' };
 

@@ -112,69 +112,81 @@ export function AnnouncementInteractive({
         <div className="space-y-3 pt-2">
           {comments.length > 0 && (
             <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
-              {comments.map((c) => (
-                <div
-                  key={c.id}
-                  className="group flex items-start justify-between gap-3 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-3 text-xs"
-                >
-                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
-                    <Link href={`/dashboard/profile?userId=${c.user_id}`} className="shrink-0">
-                      {c.user_avatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={c.user_avatar}
-                          alt={c.user_name || 'User'}
-                          className="w-6 h-6 rounded-lg border border-zinc-200 dark:border-zinc-800 object-cover"
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-black uppercase">
-                          {(c.user_name || 'U').substring(0, 2)}
+              {comments.map((c) => {
+                const isReply = c.content.trim().startsWith('@');
+                return (
+                  <div
+                    key={c.id}
+                    className={`group flex items-start justify-between gap-3 rounded-2xl p-3 text-xs transition-all ${
+                      isReply
+                        ? 'ml-5 sm:ml-7 bg-purple-500/[0.04] dark:bg-purple-500/[0.06] border border-purple-500/20 border-l-4 border-l-purple-500'
+                        : 'bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/50 dark:border-zinc-800/50'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                      <Link href={`/dashboard/profile?userId=${c.user_id}`} className="shrink-0">
+                        {c.user_avatar ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={c.user_avatar}
+                            alt={c.user_name || 'User'}
+                            className="w-6 h-6 rounded-lg border border-zinc-200 dark:border-zinc-800 object-cover"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-black uppercase">
+                            {(c.user_name || 'U').substring(0, 2)}
+                          </div>
+                        )}
+                      </Link>
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Link
+                            href={`/dashboard/profile?userId=${c.user_id}`}
+                            className="font-bold text-zinc-900 dark:text-zinc-200 hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                          >
+                            {c.user_name || 'Anonymous User'}
+                          </Link>
+                          {isReply && (
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.2 rounded">
+                              Balasan
+                            </span>
+                          )}
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            {new Date(c.created_at * 1000).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCommentInput(`@${c.user_name || 'User'} `)}
+                            className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline ml-auto sm:ml-0"
+                          >
+                            Balas
+                          </button>
                         </div>
-                      )}
-                    </Link>
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Link
-                          href={`/dashboard/profile?userId=${c.user_id}`}
-                          className="font-bold text-zinc-900 dark:text-zinc-200 hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
-                        >
-                          {c.user_name || 'Anonymous User'}
-                        </Link>
-                        <span className="text-[10px] text-zinc-400 font-mono">
-                          {new Date(c.created_at * 1000).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setCommentInput(`@${c.user_name || 'User'} `)}
-                          className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline ml-auto sm:ml-0"
-                        >
-                          Balas
-                        </button>
-                      </div>
-                      <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                        <MarkdownViewer content={c.content} />
+                        <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                          <MarkdownViewer content={c.content} />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {(c.user_id === currentUserId || canDelete) && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteComment(c.id)}
-                      disabled={isPending}
-                      className="opacity-0 group-hover:opacity-100 text-[10px] text-red-500 hover:text-red-600 dark:text-red-400 transition-opacity p-1 shrink-0"
-                      title="Delete Comment"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              ))}
+                    {(c.user_id === currentUserId || canDelete) && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteComment(c.id)}
+                        disabled={isPending}
+                        className="opacity-0 group-hover:opacity-100 text-[10px] text-red-500 hover:text-red-600 dark:text-red-400 transition-opacity p-1 shrink-0"
+                        title="Delete Comment"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
