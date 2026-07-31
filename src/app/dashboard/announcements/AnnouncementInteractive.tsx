@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import {
   addAnnouncementComment,
   deleteAnnouncementComment,
@@ -12,6 +13,7 @@ export interface CommentItem {
   id: string;
   user_id: string;
   user_name: string | null;
+  user_avatar?: string | null;
   content: string;
   created_at: number;
 }
@@ -115,22 +117,48 @@ export function AnnouncementInteractive({
                   key={c.id}
                   className="group flex items-start justify-between gap-3 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-3 text-xs"
                 >
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-zinc-900 dark:text-zinc-200">
-                        {c.user_name || 'Anonymous User'}
-                      </span>
-                      <span className="text-[10px] text-zinc-400 font-mono">
-                        {new Date(c.created_at * 1000).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
-                    </div>
-                    <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                      <MarkdownViewer content={c.content} />
+                  <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                    <Link href="/dashboard/profile" className="shrink-0">
+                      {c.user_avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={c.user_avatar}
+                          alt={c.user_name || 'User'}
+                          className="w-6 h-6 rounded-lg border border-zinc-200 dark:border-zinc-800 object-cover"
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-black uppercase">
+                          {(c.user_name || 'U').substring(0, 2)}
+                        </div>
+                      )}
+                    </Link>
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          href="/dashboard/profile"
+                          className="font-bold text-zinc-900 dark:text-zinc-200 hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                        >
+                          {c.user_name || 'Anonymous User'}
+                        </Link>
+                        <span className="text-[10px] text-zinc-400 font-mono">
+                          {new Date(c.created_at * 1000).toLocaleDateString('id-ID', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setCommentInput(`@${c.user_name || 'User'} `)}
+                          className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline ml-auto sm:ml-0"
+                        >
+                          Balas
+                        </button>
+                      </div>
+                      <div className="text-zinc-700 dark:text-zinc-300 leading-relaxed">
+                        <MarkdownViewer content={c.content} />
+                      </div>
                     </div>
                   </div>
 
@@ -139,7 +167,7 @@ export function AnnouncementInteractive({
                       type="button"
                       onClick={() => handleDeleteComment(c.id)}
                       disabled={isPending}
-                      className="opacity-0 group-hover:opacity-100 text-[10px] text-red-500 hover:text-red-600 dark:text-red-400 transition-opacity p-1"
+                      className="opacity-0 group-hover:opacity-100 text-[10px] text-red-500 hover:text-red-600 dark:text-red-400 transition-opacity p-1 shrink-0"
                       title="Delete Comment"
                     >
                       ✕

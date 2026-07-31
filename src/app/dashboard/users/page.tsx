@@ -2,6 +2,7 @@ import { getSession } from '@/modules/auth/session';
 import { hasPermission } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
+import Link from 'next/link';
 import RoleSelector from '@/modules/users/components/RoleSelector';
 import UserTypeSelector from '@/modules/users/components/UserTypeSelector';
 import UserStatusSelector from '@/modules/users/components/UserStatusSelector';
@@ -37,7 +38,7 @@ export default async function UsersPage() {
 
   // 2. Fetch all active and inactive users (not pending) mapped to their role and type
   const usersQuery = `
-    SELECT u.id, u.email, u.name, u.status, u.user_type, r.name as role_name, r.id as role_id
+    SELECT u.id, u.email, u.name, u.status, u.user_type, u.avatar_url, r.name as role_name, r.id as role_id
     FROM users u
     LEFT JOIN user_roles ur ON u.id = ur.user_id
     LEFT JOIN roles r ON ur.role_id = r.id
@@ -45,7 +46,7 @@ export default async function UsersPage() {
     ORDER BY u.created_at DESC
   `;
   const { results: usersRaw } = await db.prepare(usersQuery).all();
-  const users = usersRaw as unknown as UserRow[];
+  const users = usersRaw as unknown as (UserRow & { avatar_url?: string | null })[];
 
   // 3. Fetch all system roles for the dropdown select options
   const { results: rolesRaw } = await db.prepare('SELECT id, name FROM roles ORDER BY name ASC').all();
@@ -53,12 +54,13 @@ export default async function UsersPage() {
 
   // 4. Fetch users awaiting approval (status = 'PENDING')
   const { results: pendingUsersRaw } = await db
-    .prepare("SELECT id, name, email, created_at FROM users WHERE status = 'PENDING' ORDER BY created_at ASC")
+    .prepare("SELECT id, name, email, avatar_url, created_at FROM users WHERE status = 'PENDING' ORDER BY created_at ASC")
     .all();
   const pendingUsers = pendingUsersRaw as unknown as Array<{
     id: string;
     name: string;
     email: string;
+    avatar_url?: string | null;
     created_at: number;
   }>;
 
@@ -94,7 +96,25 @@ export default async function UsersPage() {
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/50 text-sm">
               {users.map((user) => (
                 <tr key={user.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/20 transition-colors">
-                  <td className="px-6 py-4 font-bold text-zinc-800 dark:text-zinc-100">{user.name}</td>
+                  <td className="px-6 py-4 font-bold text-zinc-800 dark:text-zinc-100">
+                    <Link href="/dashboard/profile" className="flex items-center gap-3 group w-fit">
+                      {user.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={user.avatar_url}
+                          alt={user.name}
+                          className="w-8 h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0 uppercase">
+                          {user.name.substring(0, 2)}
+                        </div>
+                      )}
+                      <span className="group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:underline">
+                        {user.name}
+                      </span>
+                    </Link>
+                  </td>
                   <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">{user.email}</td>
                   <td className="px-6 py-4">
                     <UserStatusSelector

@@ -1,5 +1,6 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
+import Link from 'next/link';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { createAnnouncement, deleteAnnouncement } from '@/modules/announcements/actions';
 import { AnnouncementInteractive, CommentItem, ReactionItem } from './AnnouncementInteractive';
@@ -10,6 +11,7 @@ interface AnnouncementRow {
   title: string;
   content: string;
   author_name: string | null;
+  author_avatar?: string | null;
   created_at: number;
 }
 
@@ -20,6 +22,7 @@ interface DBCommentRow {
   content: string;
   created_at: number;
   user_name: string | null;
+  user_avatar?: string | null;
 }
 
 interface DBReactionRow {
@@ -36,13 +39,13 @@ export default async function AnnouncementsPage() {
   const db = await getDB();
   const [resultsRaw, commentsRaw, reactionsRaw, ctx] = await Promise.all([
     db.prepare(`
-      SELECT a.id, a.title, a.content, a.created_at, u.name as author_name
+      SELECT a.id, a.title, a.content, a.created_at, u.name as author_name, u.avatar_url as author_avatar
       FROM announcements a
       LEFT JOIN users u ON a.created_by = u.id
       ORDER BY a.created_at DESC
     `).all(),
     db.prepare(`
-      SELECT c.id, c.announcement_id, c.user_id, c.content, c.created_at, u.name as user_name
+      SELECT c.id, c.announcement_id, c.user_id, c.content, c.created_at, u.name as user_name, u.avatar_url as user_avatar
       FROM announcement_comments c
       LEFT JOIN users u ON c.user_id = u.id
       ORDER BY c.created_at ASC
@@ -110,6 +113,7 @@ export default async function AnnouncementsPage() {
                   id: c.id,
                   user_id: c.user_id,
                   user_name: c.user_name,
+                  user_avatar: c.user_avatar,
                   content: c.content,
                   created_at: c.created_at,
                 }));
@@ -127,10 +131,28 @@ export default async function AnnouncementsPage() {
                   key={ann.id}
                   className="border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm border-l-4 border-l-purple-500 hover:shadow-md transition-all duration-300"
                 >
-                  <div className="flex flex-wrap justify-between items-start gap-4 mb-3">
-                    <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex-1">{ann.title}</h3>
+                  {/* Author Header */}
+                  <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-zinc-100 dark:border-zinc-900/60">
+                    <Link href="/dashboard/profile" className="flex items-center gap-2.5 group min-w-0">
+                      {ann.author_avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={ann.author_avatar}
+                          alt={ann.author_name || 'Author'}
+                          className="w-8 h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 object-cover shrink-0"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0 uppercase">
+                          {(ann.author_name || 'A').substring(0, 2)}
+                        </div>
+                      )}
+                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:underline truncate">
+                        {ann.author_name || 'System Operator'}
+                      </span>
+                    </Link>
+
                     <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-mono">
+                      <span className="text-[10px] text-zinc-400 font-mono">
                         {new Date(ann.created_at * 1000).toLocaleDateString('id-ID', {
                           day: 'numeric', month: 'long', year: 'numeric',
                         })}
@@ -149,13 +171,10 @@ export default async function AnnouncementsPage() {
                     </div>
                   </div>
 
+                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 mb-2">{ann.title}</h3>
+
                   <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed my-2">
                     <MarkdownViewer content={ann.content} />
-                  </div>
-
-                  <div className="mt-4 text-[10px] text-zinc-500 font-bold uppercase tracking-wider">
-                    Broadcasted by:{' '}
-                    <span className="text-zinc-700 dark:text-zinc-400 normal-case">{ann.author_name || 'System Operator'}</span>
                   </div>
 
                   {/* Comments and Emoji Reactions */}
