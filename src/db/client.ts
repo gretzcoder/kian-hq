@@ -24,6 +24,7 @@ export async function getDB() {
             id TEXT PRIMARY KEY,
             announcement_id TEXT NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            parent_id TEXT REFERENCES announcement_comments(id) ON DELETE CASCADE,
             content TEXT NOT NULL,
             created_at INTEGER DEFAULT (strftime('%s', 'now'))
           );

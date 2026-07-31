@@ -20,6 +20,7 @@ interface DBCommentRow {
   id: string;
   announcement_id: string;
   user_id: string;
+  parent_id?: string | null;
   content: string;
   created_at: number;
   user_name: string | null;
@@ -46,7 +47,7 @@ export default async function AnnouncementsPage() {
       ORDER BY a.created_at DESC
     `).all(),
     db.prepare(`
-      SELECT c.id, c.announcement_id, c.user_id, c.content, c.created_at, u.name as user_name, u.avatar_url as user_avatar
+      SELECT c.id, c.announcement_id, c.user_id, c.parent_id, c.content, c.created_at, u.name as user_name, u.avatar_url as user_avatar
       FROM announcement_comments c
       LEFT JOIN users u ON c.user_id = u.id
       ORDER BY c.created_at ASC
@@ -113,6 +114,7 @@ export default async function AnnouncementsPage() {
                 .map((c) => ({
                   id: c.id,
                   user_id: c.user_id,
+                  parent_id: c.parent_id,
                   user_name: c.user_name,
                   user_avatar: c.user_avatar,
                   content: c.content,

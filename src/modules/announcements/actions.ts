@@ -71,7 +71,11 @@ export async function deleteAnnouncement(id: string) {
 /**
  * Server Action to add a comment on an announcement.
  */
-export async function addAnnouncementComment(announcementId: string, content: string) {
+export async function addAnnouncementComment(
+  announcementId: string,
+  content: string,
+  parentId?: string | null
+) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
@@ -83,8 +87,8 @@ export async function addAnnouncementComment(announcementId: string, content: st
 
   try {
     await db
-      .prepare('INSERT INTO announcement_comments (id, announcement_id, user_id, content) VALUES (?, ?, ?, ?)')
-      .bind(commentId, announcementId, session.userId, trimmed)
+      .prepare('INSERT INTO announcement_comments (id, announcement_id, user_id, parent_id, content) VALUES (?, ?, ?, ?, ?)')
+      .bind(commentId, announcementId, session.userId, parentId || null, trimmed)
       .run();
 
     revalidatePath('/dashboard/announcements');
