@@ -177,10 +177,10 @@ export default async function ProfilePage({
   const totalRevision    = getCount(['REVISION_REQUESTED']);
   const approvalRate     = totalAssignments > 0 ? Math.round((totalApproved / totalAssignments) * 100) : 0;
 
-  const initials = (session.name || 'KH')
+  const initials = ((profile?.name || session.name || 'KH'))
     .split(' ').map((w: string) => w[0]).join('').substring(0, 2).toUpperCase();
 
-  const avatarSrc = profile?.avatar_url || session.avatar;
+  const avatarSrc = profile?.avatar_url || (isSelf ? session.avatar : null);
 
   const parsedMainRoles: string[] = profile?.main_roles
     ? JSON.parse(profile.main_roles)
@@ -263,133 +263,177 @@ export default async function ProfilePage({
         )}
       </div>
 
-      {/* ── TOP SECTION: Identity Card Full Width ── */}
-      <div className={`${card} p-6`}>
-        <div className="flex flex-col sm:flex-row items-start gap-5">
-          {/* Avatar */}
-          {avatarSrc ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarSrc} alt={profile?.name || 'User'}
-              className="w-24 h-24 rounded-2xl border-2 border-zinc-200 dark:border-zinc-800 shadow object-cover shrink-0" />
-          ) : (
-            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-3xl font-black shadow shrink-0 uppercase select-none">
-              {(profile?.name || 'U').substring(0, 2)}
-            </div>
-          )}
+      {/* ── TOP SECTION: Premium Identity Card with Cover Banner ── */}
+      <div className={`${card} overflow-hidden`}>
+        {/* Cover Banner */}
+        <div className="h-32 sm:h-40 bg-gradient-to-r from-purple-900 via-indigo-900 to-zinc-900 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.3),transparent_50%)]" />
+          <div className="absolute bottom-3 right-4 text-[10px] font-black tracking-widest text-purple-200/50 uppercase select-none">
+            Member Since {memberSince}
+          </div>
+        </div>
 
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
-              <h2 className="text-2xl font-black text-zinc-900 dark:text-zinc-100">{profile?.name || 'User'}</h2>
-              <div className="flex items-center gap-2 flex-wrap">
-                {profile?.role_name && (
-                  <span className="text-[10px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/15 px-2.5 py-0.5 rounded-full">
-                    {profile.role_name}
-                  </span>
-                )}
-                {profile?.user_type && (
-                  <span className={`text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border ${
-                    profile.user_type === 'OJT'
-                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/15'
-                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
-                  }`}>
-                    {profile.user_type}
-                  </span>
-                )}
-              </div>
+        {/* Profile Content Body */}
+        <div className="px-6 pb-6 relative">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4 -mt-14 sm:-mt-16 mb-5">
+            {/* Overlapping Avatar */}
+            <div className="relative group">
+              {avatarSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarSrc}
+                  alt={profile?.name || 'User'}
+                  className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl border-4 border-white dark:border-[#09090b] shadow-2xl object-cover shrink-0 bg-white dark:bg-zinc-900"
+                />
+              ) : (
+                <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-3xl border-4 border-white dark:border-[#09090b] bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-4xl font-black shadow-2xl shrink-0 uppercase select-none">
+                  {(profile?.name || 'U').substring(0, 2)}
+                </div>
+              )}
             </div>
 
-            {/* Department / Title for Staff */}
-            {(profile as any)?.department && (
-              <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mb-1 flex items-center gap-1">
-                <span>💼</span> {(profile as any).department}
-              </p>
-            )}
-
-            {/* Bio */}
-            {(profile as any)?.bio && (
-              <p className="text-xs text-zinc-600 dark:text-zinc-300 italic mb-2 leading-relaxed bg-zinc-50 dark:bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800">
-                &ldquo;{(profile as any).bio}&rdquo;
-              </p>
-            )}
-
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 flex items-center gap-2 flex-wrap">
-              <span>{profile?.email}</span>
+            {/* Quick Actions (WA & Portfolio) */}
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
               {profile?.whatsapp_number && (
                 <a
                   href={`https://wa.me/${await normalizeWhatsappNumber(profile.whatsapp_number)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline bg-emerald-500/10 px-2 py-0.5 rounded-md"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95"
                 >
-                  <span>💬 WA: {profile.whatsapp_number}</span>
+                  <span>💬</span> WhatsApp
                 </a>
               )}
-            </p>
+              {profile?.portfolio_url && (
+                <a
+                  href={profile.portfolio_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 px-3.5 py-2 rounded-xl transition-all shadow-sm active:scale-95"
+                >
+                  <span>🔗</span> Portfolio ↗
+                </a>
+              )}
+            </div>
+          </div>
 
-            {/* Academic & University Details (Only for OJT) */}
-            {profile?.user_type !== 'STAFF' && (profile?.university || profile?.study_program || profile?.semester) && (
-              <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300 mt-2 flex items-center gap-1.5 flex-wrap">
-                <span>🎓</span>
-                {[profile?.university, profile?.study_program, profile?.semester].filter(Boolean).join(' • ')}
-              </p>
-            )}
+          {/* User Name & Badges */}
+          <div className="space-y-3">
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                <h2 className="text-2xl sm:text-3xl font-black text-zinc-900 dark:text-zinc-100 tracking-tight">
+                  {profile?.name || 'User'}
+                </h2>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {profile?.role_name && (
+                    <span className="text-[10px] font-black uppercase tracking-widest bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 px-3 py-1 rounded-full shadow-xs">
+                      {profile.role_name}
+                    </span>
+                  )}
+                  {profile?.user_type && (
+                    <span
+                      className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border shadow-xs ${
+                        profile.user_type === 'OJT'
+                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700'
+                      }`}
+                    >
+                      {profile.user_type}
+                    </span>
+                  )}
+                </div>
+              </div>
 
-            {/* Main Roles / Keahlian Badges */}
-            {(parsedMainRoles.length > 0 || profile?.custom_role) && (
-              <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
-                {parsedMainRoles.map((r) => (
-                  <span key={r} className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-lg border bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300">
-                    {r === 'RESEARCHER' ? '🔍 Researcher' : r === 'PLANNER' ? '🧠 Planner' : r === 'DESIGNER' ? '🎨 Designer' : r === 'VIDEO_EDITOR' ? '🎬 Video Editor' : r}
-                  </span>
-                ))}
-                {profile?.custom_role && (
-                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-lg border bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-300">
-                    ✨ {profile.custom_role}
-                  </span>
-                )}
+              {/* Department / Title for Staff */}
+              {(profile as any)?.department && (
+                <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mt-1 flex items-center gap-1.5">
+                  <span>💼</span> {(profile as any).department}
+                </p>
+              )}
+
+              {/* Email & Academic info */}
+              <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400 mt-1.5 flex-wrap">
+                <span className="flex items-center gap-1">✉️ {profile?.email}</span>
+                {profile?.user_type !== 'STAFF' &&
+                  (profile?.university || profile?.study_program || profile?.semester) && (
+                    <span className="flex items-center gap-1 text-zinc-700 dark:text-zinc-300 font-medium">
+                      🎓 {[profile?.university, profile?.study_program, profile?.semester].filter(Boolean).join(' • ')}
+                    </span>
+                  )}
+              </div>
+            </div>
+
+            {/* Bio - Option A: Clean Intro Line */}
+            {(profile as any)?.bio && (
+              <div className="space-y-1">
+                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" /> ABOUT
+                </p>
+                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed font-normal">
+                  {(profile as any).bio}
+                </p>
               </div>
             )}
 
-            {/* Tools & Portfolio */}
-            {(profile?.tools || profile?.portfolio_url) && (
-              <div className="flex flex-wrap items-center gap-3 mt-3 text-xs">
+            {/* Main Roles & Tools Chips */}
+            {(parsedMainRoles.length > 0 || profile?.custom_role || profile?.tools) && (
+              <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60 space-y-2">
+                {(parsedMainRoles.length > 0 || profile?.custom_role) && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mr-1">
+                      Keahlian:
+                    </span>
+                    {parsedMainRoles.map((r) => (
+                      <span
+                        key={r}
+                        className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                      >
+                        {r === 'RESEARCHER'
+                          ? '🔍 Researcher'
+                          : r === 'PLANNER'
+                          ? '🧠 Planner'
+                          : r === 'DESIGNER'
+                          ? '🎨 Designer'
+                          : r === 'VIDEO_EDITOR'
+                          ? '🎬 Video Editor'
+                          : r}
+                      </span>
+                    ))}
+                    {profile?.custom_role && (
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-300">
+                        ✨ {profile.custom_role}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {profile?.tools && (
-                  <span className="text-zinc-500 dark:text-zinc-400 font-medium">
-                    🧰 <strong className="text-zinc-700 dark:text-zinc-300">Tools:</strong> {profile.tools}
-                  </span>
-                )}
-                {profile?.portfolio_url && (
-                  <a
-                    href={profile.portfolio_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-purple-600 dark:text-purple-400 font-bold hover:underline inline-flex items-center gap-1"
-                  >
-                    🔗 Portofolio / Drive ↗
-                  </a>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium flex items-center gap-1.5">
+                    <span>🧰</span>
+                    <strong className="text-zinc-700 dark:text-zinc-300">Tools:</strong> {profile.tools}
+                  </div>
                 )}
               </div>
             )}
           </div>
-        </div>
 
-        {/* Quick stats row (Only for OJT) */}
-        {profile?.user_type !== 'STAFF' && (
-          <div className="mt-6 pt-5 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              { label: 'Total Steps', value: totalAssignments, color: 'text-zinc-700 dark:text-zinc-200' },
-              { label: 'Disetujui',   value: totalApproved,    color: 'text-emerald-600 dark:text-emerald-400' },
-              { label: 'Berlangsung', value: totalInProgress,  color: 'text-indigo-600 dark:text-indigo-400' },
-              { label: 'Approval',    value: `${approvalRate}%`, color: 'text-purple-600 dark:text-purple-400' },
-            ].map((s) => (
-              <div key={s.label} className="text-center">
-                <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-                <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mt-1">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        )}
+          {/* Quick stats row (Only for OJT) */}
+          {profile?.user_type !== 'STAFF' && (
+            <div className="mt-6 pt-5 border-t border-zinc-100 dark:border-zinc-800 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {[
+                { label: 'Total Steps', value: totalAssignments, color: 'text-zinc-700 dark:text-zinc-200' },
+                { label: 'Disetujui',   value: totalApproved,    color: 'text-emerald-600 dark:text-emerald-400' },
+                { label: 'Berlangsung', value: totalInProgress,  color: 'text-indigo-600 dark:text-indigo-400' },
+                { label: 'Approval',    value: `${approvalRate}%`, color: 'text-purple-600 dark:text-purple-400' },
+              ].map((s) => (
+                <div key={s.label} className="text-center">
+                  <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
+                  <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mt-1">{s.label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── CREATIVE SPARKS & TITLE BADGES (Only for OJT) ── */}
