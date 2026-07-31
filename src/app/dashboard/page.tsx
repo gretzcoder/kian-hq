@@ -227,17 +227,6 @@ export default async function DashboardPage() {
           {canAnnounce && (
             <BroadcastAnnouncement onPostAnnouncement={handlePostAnnouncement} />
           )}
-
-          {/* System Specs */}
-          <div className="border border-purple-500/10 dark:border-purple-500/10 bg-purple-500/5 rounded-3xl p-6">
-            <h4 className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-2">
-              System Specs
-            </h4>
-            <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed font-medium">
-              KIAN HQ Core Engine v2.0. Everything is a Workflow. State machine-driven,
-              permission-aware, and built for creative teams.
-            </p>
-          </div>
         </div>
       </div>
     </div>
