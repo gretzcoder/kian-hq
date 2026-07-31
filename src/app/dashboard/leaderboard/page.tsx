@@ -13,7 +13,7 @@ const CATEGORIES = [
   { id: 'productive', label: '⚡ Most Productive', icon: '⚡' },
   { id: 'quality', label: '🎯 High Quality', icon: '🎯' },
   { id: 'workspace', label: '🏢 Top Workspaces', icon: '🏢' },
-  { id: 'coordinator', label: '👑 Top Coordinators', icon: '👑' },
+  { id: 'coordinator', label: '👑 Top Mentors', icon: '👑' },
   { id: 'role_designer', label: '🎨 Top Designers', icon: '🎨' },
   { id: 'role_editor', label: '🎬 Top Video Editors', icon: '🎬' },
   { id: 'role_planner', label: '💡 Top Planners', icon: '💡' },
@@ -278,7 +278,7 @@ function CoordinatorLeaderboardView({ data, currentUserId }: { data: any[]; curr
     return (
       <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-3xl p-16 text-center">
         <p className="text-4xl mb-3">👑</p>
-        <p className="text-zinc-500 text-sm font-medium">Belum ada data peringkat coordinator.</p>
+        <p className="text-zinc-500 text-sm font-medium">Belum ada data peringkat mentor.</p>
       </div>
     );
   }

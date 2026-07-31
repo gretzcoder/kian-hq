@@ -339,46 +339,63 @@ export default async function ProfilePage({
 
               {/* Department / Title for Staff */}
               {(profile as any)?.department && (
-                <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5 flex items-center justify-center sm:justify-start gap-1">
-                  <span>💼</span> {(profile as any).department}
+                <p className="text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5">
+                  {(profile as any).department}
                 </p>
               )}
 
-              {/* Email, WhatsApp & Academic info line */}
+              {/* Email, WhatsApp, Portfolio & Academic info line (Clean without excessive icons) */}
               <div className="flex items-center justify-center sm:justify-start gap-2.5 text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 flex-wrap">
-                <span className="flex items-center gap-1">✉️ {profile?.email}</span>
+                <span>{profile?.email}</span>
+
                 {profile?.whatsapp_number && (
-                  <a
-                    href={`https://wa.me/${await normalizeWhatsappNumber(profile.whatsapp_number)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
-                  >
-                    <span>💬</span> WhatsApp
-                  </a>
+                  <>
+                    <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                    <a
+                      href={`https://wa.me/${await normalizeWhatsappNumber(profile.whatsapp_number)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
+                    >
+                      WhatsApp
+                    </a>
+                  </>
                 )}
+
+                {profile?.portfolio_url && (
+                  <>
+                    <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                    <a
+                      href={profile.portfolio_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-purple-600 dark:text-purple-400 font-semibold hover:underline"
+                    >
+                      Portfolio ↗
+                    </a>
+                  </>
+                )}
+
                 {profile?.user_type !== 'STAFF' &&
                   (profile?.university || profile?.study_program || profile?.semester) && (
-                    <span className="flex items-center gap-1 text-zinc-700 dark:text-zinc-300 font-medium">
-                      🎓 {[profile?.university, profile?.study_program, profile?.semester].filter(Boolean).join(' • ')}
-                    </span>
+                    <>
+                      <span className="text-zinc-300 dark:text-zinc-700">•</span>
+                      <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                        {[profile?.university, profile?.study_program, profile?.semester].filter(Boolean).join(' • ')}
+                      </span>
+                    </>
                   )}
               </div>
             </div>
 
-            {/* Bio - Option A: Clean Intro Line */}
+            {/* Bio - Clean text paragraph without "ABOUT" header */}
             {(profile as any)?.bio && (
-              <div className="space-y-0.5 w-full">
-                <p className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 flex items-center justify-center sm:justify-start gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 shrink-0" /> ABOUT
-                </p>
-                <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-snug font-normal max-w-xl">
-                  {(profile as any).bio}
-                </p>
-              </div>
+              <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-snug font-normal max-w-xl">
+                {(profile as any).bio}
+              </p>
             )}
 
-            {/* Main Roles & Tools Chips */}
+            {/* Main Roles & Tools Chips (Clean text chips without emoji clutter) */}
             {(parsedMainRoles.length > 0 || profile?.custom_role || profile?.tools) && (
               <div className="pt-1.5 border-t border-zinc-100 dark:border-zinc-800/60 space-y-1.5 w-full flex flex-col items-center sm:items-start">
                 {(parsedMainRoles.length > 0 || profile?.custom_role) && (
@@ -386,22 +403,22 @@ export default async function ProfilePage({
                     {parsedMainRoles.map((r) => (
                       <span
                         key={r}
-                        className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
+                        className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-lg border bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300"
                       >
                         {r === 'RESEARCHER'
-                          ? '🔍 Researcher'
+                          ? 'Researcher'
                           : r === 'PLANNER'
-                          ? '🧠 Planner'
+                          ? 'Planner'
                           : r === 'DESIGNER'
-                          ? '🎨 Designer'
+                          ? 'Designer'
                           : r === 'VIDEO_EDITOR'
-                          ? '🎬 Video Editor'
+                          ? 'Video Editor'
                           : r}
                       </span>
                     ))}
                     {profile?.custom_role && (
-                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-lg border bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-300">
-                        ✨ {profile.custom_role}
+                      <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-lg border bg-purple-500/10 border-purple-500/20 text-purple-700 dark:text-purple-300">
+                        {profile.custom_role}
                       </span>
                     )}
                   </div>
@@ -409,7 +426,7 @@ export default async function ProfilePage({
 
                 {profile?.tools && (
                   <div className="text-[11px] text-zinc-600 dark:text-zinc-400 font-medium flex items-center justify-center sm:justify-start gap-1">
-                    <span>🧰 {profile.tools}</span>
+                    <span>Tools: {profile.tools}</span>
                   </div>
                 )}
               </div>
