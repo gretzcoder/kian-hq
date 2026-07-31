@@ -38,6 +38,16 @@ export async function getDB() {
             PRIMARY KEY (announcement_id, user_id, emoji)
           );
         `),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS executive_feedbacks (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            category TEXT NOT NULL DEFAULT 'KRITIK_SARAN',
+            message TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDING',
+            created_at INTEGER DEFAULT (strftime('%s', 'now'))
+          );
+        `),
       ]);
     } catch (e) {
       // Ignore batch error

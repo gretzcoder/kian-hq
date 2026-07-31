@@ -11,6 +11,7 @@ import DashboardAnnouncements from './components/DashboardAnnouncements';
 import DashboardQuickActions from './components/DashboardQuickActions';
 import BroadcastAnnouncement from './components/BroadcastAnnouncement';
 import DashboardMiniLeaderboard from './components/DashboardMiniLeaderboard';
+import DashboardFeedbackCard from './components/DashboardFeedbackCard';
 
 interface AnnouncementRow {
   id: string;
@@ -227,6 +228,8 @@ export default async function DashboardPage() {
             canCreateBrief={canCreateBrief}
             canReview={canReview}
           />
+
+          <DashboardFeedbackCard />
 
           <DashboardMiniLeaderboard
             topUsers={miniLeaderboardUsers}
