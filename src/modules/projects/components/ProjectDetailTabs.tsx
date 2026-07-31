@@ -34,7 +34,7 @@ export default function ProjectDetailTabs({
                 : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
             }`}
           >
-            <span>🏠 Workspaces</span>
+            <span>Workspaces</span>
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
                 activeTab === 'workspaces'
@@ -54,7 +54,7 @@ export default function ProjectDetailTabs({
                 : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
             }`}
           >
-            <span>📜 Activity Timeline</span>
+            <span>Activities</span>
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
                 activeTab === 'timeline'
