@@ -10,6 +10,7 @@ import {
   deleteAssessmentTask,
   toggleAssessmentReaction,
 } from '@/modules/workspaces/assessmentActions';
+import { getSparkMeta } from '@/app/dashboard/review/components/ReviewActions';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -341,6 +342,7 @@ function MentorSubmissionCard({
   const hasSubmission = !!assignment.result_url || isSubmitted || isApproved;
   const statusBadge   = STATUS_BADGE[assignment.status] ?? STATUS_BADGE.ASSIGNED;
   const statusLabel   = STATUS_LABEL[assignment.status] ?? assignment.status;
+  const currentSparkMeta = getSparkMeta(sparks);
 
   const handleApprove = () => {
     setError(null);
