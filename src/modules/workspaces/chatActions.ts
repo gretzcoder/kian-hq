@@ -73,3 +73,30 @@ export async function deleteWorkspaceMessage(messageId: string, workspaceId: str
     return { success: false, error: err.message || 'Gagal menghapus pesan.' };
   }
 }
+
+/**
+ * Fetch latest messages for a workspace chat room (used for real-time polling).
+ */
+export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceChatMessage[]> {
+  const session = await getSession();
+  if (!session) return [];
+
+  const db = await getDB();
+  try {
+    const { results } = await db
+      .prepare(`
+        SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.created_at, u.name as user_name
+        FROM workspace_chats wc
+        LEFT JOIN users u ON wc.user_id = u.id
+        WHERE wc.workspace_id = ?
+        ORDER BY wc.created_at ASC
+      `)
+      .bind(workspaceId)
+      .all();
+
+    return (results as unknown as WorkspaceChatMessage[]) || [];
+  } catch (err) {
+    console.error('getWorkspaceChats failed:', err);
+    return [];
+  }
+}

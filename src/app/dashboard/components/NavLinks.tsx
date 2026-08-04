@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 interface NavLinksProps {
-  canManage:      boolean;
+  canManageUsers: boolean;
+  canManageRoles: boolean;
   canReview:      boolean;
   canCreateBrief: boolean;
   canUseAI:       boolean;
@@ -21,7 +22,7 @@ function isActive(pathname: string, href: string, exact = false) {
   return exact ? pathname === href : pathname.startsWith(href);
 }
 
-export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT = false, isMentor = false }: NavLinksProps) {
+export function NavLinks({ canManageUsers, canManageRoles, canReview, canCreateBrief, canUseAI, isOJT = false }: NavLinksProps) {
   const pathname = usePathname();
 
   return (
@@ -80,22 +81,21 @@ export function NavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT
         </Link>
       )}
 
-      {/* Admin: MANAGE only */}
-      {canManage && (
-        <>
-          <Link href="/dashboard/users" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/users') ? activeClass : inactiveClass}`}>
-            Users
-          </Link>
-          <Link href="/dashboard/permissions" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/permissions') ? activeClass : inactiveClass}`}>
-            Permissions
-          </Link>
-        </>
+      {canManageUsers && (
+        <Link href="/dashboard/users" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/users') ? activeClass : inactiveClass}`}>
+          Users
+        </Link>
+      )}
+      {canManageRoles && (
+        <Link href="/dashboard/permissions" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/permissions') ? activeClass : inactiveClass}`}>
+          Permissions
+        </Link>
       )}
     </nav>
   );
 }
 
-export function MobileNavLinks({ canManage, canReview, canCreateBrief, canUseAI, isOJT = false, isMentor = false }: NavLinksProps) {
+export function MobileNavLinks({ canManageUsers, canManageRoles, canReview, canCreateBrief, canUseAI, isOJT = false }: NavLinksProps) {
   const pathname = usePathname();
 
   const links = [
@@ -107,12 +107,9 @@ export function MobileNavLinks({ canManage, canReview, canCreateBrief, canUseAI,
     { href: '/dashboard/announcements',label: 'Updates',   exact: false },
     { href: '/dashboard/kb',           label: 'Knowledge', exact: false },
     ...(canUseAI  ? [{ href: '/dashboard/ai',          label: 'AI',       exact: false }] : []),
-    // Analytics only for non-OJT users
     ...(!isOJT ? [{ href: '/dashboard/analytics',    label: 'Analytics', exact: false }] : []),
-    ...(canManage ? [
-      { href: '/dashboard/users',       label: 'Users', exact: false },
-      { href: '/dashboard/permissions', label: 'Perms', exact: false },
-    ] : []),
+    ...(canManageUsers ? [{ href: '/dashboard/users', label: 'Users', exact: false }] : []),
+    ...(canManageRoles ? [{ href: '/dashboard/permissions', label: 'Perms', exact: false }] : []),
   ];
 
   return (

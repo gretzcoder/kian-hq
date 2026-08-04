@@ -4,12 +4,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { submitResult, deleteTask, approveAssignment, requestRevision, startWork, updateSparks } from '../actions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
+import MarkdownInput from '@/components/MarkdownInput';
 import { useUI } from '@/components/ui/UIProvider';
 import ReviewActions from '@/app/dashboard/review/components/ReviewActions';
 
 // ─── CreatorDrivePreview ────────────────────────────────────────────────────
 // Aspect-ratio aware, user-friendly Google Drive preview widget for Creator step
-function CreatorDrivePreview({ url }: { url: string }) {
+export function CreatorDrivePreview({ url }: { url: string }) {
   const [showPreview, setShowPreview] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -129,6 +130,7 @@ interface TaskAssignment {
 
 interface TaskActionsProps {
   taskId:          string;
+  taskType?:       string;
   assignments:     TaskAssignment[];
   currentUserId:   string;
   canDelete:       boolean;
@@ -156,6 +158,7 @@ import EditSparksModal from './EditSparksModal';
 
 export default function TaskActions({
   taskId,
+  taskType,
   assignments,
   currentUserId,
   canDelete,
@@ -358,13 +361,19 @@ export default function TaskActions({
 
   // Render OJT rundown flow
   const renderOJTRundown = () => {
+    // Filter steps strictly based on task_type (DESIGN vs VIDEO)
+    const isVideoTask = taskType === 'VIDEO';
+    const allowedStepRoles = isVideoTask
+      ? ['RESEARCHER', 'PLANNER', 'VIDEO_EDITOR']
+      : ['RESEARCHER', 'PLANNER', 'DESIGNER'];
+
     const steps = [
       { role: 'RESEARCHER', label: 'Step 1: Researcher (Mencari Ide)', desc: 'Mencari referensi & ide konten.' },
       { role: 'PLANNER', label: 'Step 2: Planner (Membuat Brief)', desc: 'Menyusun brief konten detail.' },
       { role: 'DESIGNER', label: 'Step 3: Designer (Desain Visual)', desc: 'Membuat aset desain visual, feed, & thumbnail.' },
       { role: 'VIDEO_EDITOR', label: 'Step 3: Video Editor (Editing Video)', desc: 'Editing video Reels/TikTok/YouTube.' },
       { role: 'CREATOR', label: 'Step 3: Creator (Produksi Konten)', desc: 'Membuat aset media / konten visual.' },
-    ].filter(step => assignments.some(a => a.assignment_role === step.role) || ['RESEARCHER', 'PLANNER'].includes(step.role));
+    ].filter(step => allowedStepRoles.includes(step.role));
 
     // Find the currently active step index (first step that is NOT approved)
     const activeStepIndex = steps.findIndex((step) => {
@@ -609,14 +618,13 @@ export default function TaskActions({
                                         </div>
                                       ) : (
                                         <div className="space-y-2">
-                                          <textarea
-                                            rows={4}
+                                          <MarkdownInput
                                             value={urlInputs[assign.id] ?? ''}
-                                            onChange={(e) => setUrlInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
+                                            onChange={(val) => setUrlInputs((prev) => ({ ...prev, [assign.id]: val }))}
+                                            rows={4}
                                             placeholder={`Tulis laporan hasil pengerjaan ${step.label} (mendukung Markdown: **bold**, *italic*, - list, etc)...`}
-                                            className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl p-3 focus:outline-none transition-all duration-200 resize-none font-mono"
                                           />
-                                          <div className="flex justify-end gap-2">
+                                          <div className="flex justify-end gap-2 pt-1">
                                             <button
                                               type="button"
                                               onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: false }))}

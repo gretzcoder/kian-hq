@@ -15,7 +15,7 @@ export async function updateUserRole(targetUserId: string, newRoleId: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_USERS');
 
   // Phase 0 fix: Prevent self-demotion (EXECUTIVE locking themselves out)
   if (targetUserId === session.userId) {
@@ -45,7 +45,7 @@ export async function approveUser(targetUserId: string, roleId: string, userType
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_USERS');
 
   if (!targetUserId || !roleId) {
     return { success: false, error: 'User ID and Role ID are required.' };
@@ -85,7 +85,7 @@ export async function rejectUser(targetUserId: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_USERS');
 
   if (!targetUserId) {
     return { success: false, error: 'User ID is required.' };
@@ -117,7 +117,7 @@ export async function updateUserType(targetUserId: string, newUserType: 'STAFF' 
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_USERS');
 
   if (targetUserId === session.userId) {
     return { success: false, error: 'You cannot change your own user type.' };
@@ -152,7 +152,7 @@ export async function updateUserStatus(
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_USERS');
 
   if (targetUserId === session.userId) {
     return { success: false, error: 'You cannot change your own status.' };
@@ -184,7 +184,7 @@ export async function resetUserPassword(targetUserId: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_USERS');
 
   const db = await getDB();
   const salt = generateSalt();
@@ -214,7 +214,7 @@ export async function deleteUser(targetUserId: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_USERS');
 
   if (targetUserId === session.userId) {
     return { success: false, error: 'You cannot delete yourself.' };
@@ -223,19 +223,37 @@ export async function deleteUser(targetUserId: string) {
   const db = await getDB();
 
   try {
-    // 1. Delete dependent table entries
-    await db.prepare('DELETE FROM user_roles WHERE user_id = ?').bind(targetUserId).run();
-    await db.prepare('DELETE FROM workspace_members WHERE user_id = ?').bind(targetUserId).run();
-    await db.prepare('DELETE FROM task_assignments WHERE user_id = ?').bind(targetUserId).run();
-    await db.prepare('DELETE FROM project_coordinators WHERE user_id = ?').bind(targetUserId).run();
+    // Helper helper to safely execute cleanup queries without crashing if table/column is optional
+    const safeRun = async (sql: string, params: any[]) => {
+      try {
+        await db.prepare(sql).bind(...params).run();
+      } catch (e) {
+        // Ignore minor schema mismatches during cleanup
+      }
+    };
 
-    // 2. Set null on creator/approver fields to prevent FK errors
-    await db.prepare('UPDATE content_briefs SET approved_by = NULL WHERE approved_by = ?').bind(targetUserId).run();
-    await db.prepare('UPDATE content_briefs SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
-    await db.prepare('UPDATE tasks SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
-    await db.prepare('UPDATE workspaces SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
-    await db.prepare('UPDATE announcements SET created_by = NULL WHERE created_by = ?').bind(targetUserId).run();
-    await db.prepare('UPDATE workflow_events SET triggered_by = NULL WHERE triggered_by = ?').bind(targetUserId).run();
+    // 1. Delete dependent child records where user is a primary member/assignee
+    await safeRun('DELETE FROM user_roles WHERE user_id = ?', [targetUserId]);
+    await safeRun('DELETE FROM workspace_members WHERE user_id = ?', [targetUserId]);
+    await safeRun('DELETE FROM task_assignments WHERE user_id = ?', [targetUserId]);
+    await safeRun('DELETE FROM project_coordinators WHERE user_id = ?', [targetUserId]);
+    await safeRun('DELETE FROM announcement_comments WHERE user_id = ?', [targetUserId]);
+    await safeRun('DELETE FROM announcement_reactions WHERE user_id = ?', [targetUserId]);
+    await safeRun('DELETE FROM workspace_chats WHERE user_id = ?', [targetUserId]);
+
+    // 2. Set NULL on foreign key references where user is a creator/reviewer/coordinator
+    await safeRun('UPDATE task_assignments SET assigned_by = NULL WHERE assigned_by = ?', [targetUserId]);
+    await safeRun('UPDATE workspaces SET ojt_coordinator_id = NULL WHERE ojt_coordinator_id = ?', [targetUserId]);
+    await safeRun('UPDATE workspaces SET created_by = NULL WHERE created_by = ?', [targetUserId]);
+    await safeRun('UPDATE projects SET ojt_coordinator_id = NULL WHERE ojt_coordinator_id = ?', [targetUserId]);
+    await safeRun('UPDATE content_briefs SET approved_by = NULL WHERE approved_by = ?', [targetUserId]);
+    await safeRun('UPDATE content_briefs SET created_by = NULL WHERE created_by = ?', [targetUserId]);
+    await safeRun('UPDATE tasks SET created_by = NULL WHERE created_by = ?', [targetUserId]);
+    await safeRun('UPDATE announcements SET created_by = NULL WHERE created_by = ?', [targetUserId]);
+    await safeRun('UPDATE workflow_events SET triggered_by = NULL WHERE triggered_by = ?', [targetUserId]);
+    await safeRun('UPDATE knowledge_categories SET created_by = NULL WHERE created_by = ?', [targetUserId]);
+    await safeRun('UPDATE knowledge_items SET created_by = NULL WHERE created_by = ?', [targetUserId]);
+    await safeRun('UPDATE knowledge_base SET created_by = NULL WHERE created_by = ?', [targetUserId]);
 
     // 3. Delete user record
     await db.prepare('DELETE FROM users WHERE id = ?').bind(targetUserId).run();

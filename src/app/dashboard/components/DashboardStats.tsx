@@ -69,7 +69,7 @@ export default function DashboardStats({
 
       {/* 3. Total OJT Interns */}
       <Link
-        href="/dashboard/users"
+        href="/dashboard/ojt"
         className="block border border-blue-500/20 dark:border-blue-500/20 bg-blue-500/5 dark:bg-blue-500/5 rounded-3xl p-6 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-350 group"
       >
         <div className="flex justify-between items-start gap-4">
@@ -88,7 +88,7 @@ export default function DashboardStats({
           </div>
         </div>
         <div className="text-[10px] text-blue-600/80 dark:text-blue-400/80 mt-4 font-bold tracking-wide">
-          Manage OJT team &rarr;
+          Lihat OJT Directory &rarr;
         </div>
       </Link>
     </div>

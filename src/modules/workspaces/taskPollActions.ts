@@ -1,0 +1,91 @@
+'use server';
+
+import { getSession } from '@/modules/auth/session';
+import { getDB } from '@/db/client';
+
+export interface PollTaskRow {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  deadline: number | null;
+  created_at: number;
+  task_type: string;
+  parent_task_id: string | null;
+}
+
+export interface PollAssignmentRow {
+  id: string;
+  task_id: string;
+  user_id: string;
+  assignment_role: string;
+  status: string;
+  result_url: string | null;
+  revision_note: string | null;
+  submitted_at: number | null;
+  user_name: string | null;
+  lead_approved: number;
+  mentor_approved: number;
+  coordinator_approved: number;
+  sparks: number | null;
+  deadline: number | null;
+}
+
+export interface WorkspaceTaskData {
+  tasks: PollTaskRow[];
+  assignmentsByTask: Record<string, PollAssignmentRow[]>;
+}
+
+/**
+ * Lightweight server action used by LiveTaskAccordion to poll
+ * tasks + assignments for a workspace without a full page reload.
+ */
+export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskData | null> {
+  const session = await getSession();
+  if (!session) return null;
+
+  const db = await getDB();
+
+  const { results: tasksRaw } = await db
+    .prepare(
+      `SELECT id, title, description, status, priority, deadline, created_at, task_type, parent_task_id
+       FROM tasks
+       WHERE workspace_id = ?
+       ORDER BY
+         CASE priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
+         created_at ASC`
+    )
+    .bind(wsId)
+    .all();
+
+  const tasks = (tasksRaw as unknown as PollTaskRow[]) || [];
+
+  if (tasks.length === 0) {
+    return { tasks: [], assignmentsByTask: {} };
+  }
+
+  const { results: assignmentsRaw } = await db
+    .prepare(
+      `SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
+              ta.status, ta.result_url, ta.revision_note, ta.submitted_at,
+              ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
+              ta.sparks, ta.deadline, u.name as user_name
+       FROM task_assignments ta
+       LEFT JOIN users u ON ta.user_id = u.id
+       WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
+       ORDER BY ta.created_at ASC`
+    )
+    .bind(...tasks.map((t) => t.id))
+    .all();
+
+  const assignments = (assignmentsRaw as unknown as PollAssignmentRow[]) || [];
+
+  const assignmentsByTask: Record<string, PollAssignmentRow[]> = {};
+  for (const a of assignments) {
+    if (!assignmentsByTask[a.task_id]) assignmentsByTask[a.task_id] = [];
+    assignmentsByTask[a.task_id].push(a);
+  }
+
+  return { tasks, assignmentsByTask };
+}

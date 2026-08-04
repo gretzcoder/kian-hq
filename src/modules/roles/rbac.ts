@@ -71,17 +71,20 @@ export async function getUserRoles(userId: string): Promise<string[]> {
 
 /**
  * Checks if a user has a specific permission.
- * MANAGE permission bypasses all other checks (Executive superuser pattern).
+ * ADMIN_SYSTEM permission bypasses all other checks (Executive superuser pattern).
  */
 export async function hasPermission(
   userId: string,
   permissionName: string,
 ): Promise<boolean> {
   const userType = await getUserType(userId);
-  if (userType === 'OJT' && ['MANAGE', 'EXPORT', 'SHARE'].includes(permissionName)) {
+  // OJT Interns cannot execute administrative/export functions
+  if (userType === 'OJT' && ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'EXPORT_DATA', 'MANAGE'].includes(permissionName)) {
     return false;
   }
   const permissions = await getUserPermissions(userId);
+  // Superadmin wildcard check
+  if (permissions.includes('ADMIN_SYSTEM') || permissions.includes('MANAGE')) return true;
   return permissions.includes(permissionName);
 }
 
@@ -183,10 +186,6 @@ export async function getLocalWorkspaceRoles(
 /**
  * Batch-fetch permissions + roles in a single call.
  * Use at page level to avoid multiple round-trips to KV/D1.
- *
- * @example
- * const ctx = await getSessionContext(session.userId);
- * const canCreate = ctx.can('CREATE_PROJECT');
  */
 export async function getSessionContext(userId: string): Promise<{
   can: (permission: string) => boolean;
@@ -201,12 +200,14 @@ export async function getSessionContext(userId: string): Promise<{
   ]);
 
   const permSet = new Set(permissions);
+  const isSuperadmin = permSet.has('ADMIN_SYSTEM') || permSet.has('MANAGE');
 
   return {
     can: (perm: string) => {
-      if (userType === 'OJT' && ['MANAGE', 'EXPORT', 'SHARE'].includes(perm)) {
+      if (userType === 'OJT' && ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'EXPORT_DATA', 'MANAGE'].includes(perm)) {
         return false;
       }
+      if (isSuperadmin) return true;
       return permSet.has(perm);
     },
     permissions: permSet,
@@ -289,14 +290,14 @@ export async function hasWorkspacePermission(
 
   // 4. Check Local OJT Coordinator (Mentor)
   if (isMentor) {
-    if (['CREATE_TASK', 'ASSIGN_TASK', 'DELETE', 'APPROVE', 'REQUEST_REVISION', 'UPDATE_WORKSPACE'].includes(permissionName)) {
+    if (['TASK_CREATE', 'TASK_ASSIGN', 'TASK_REVIEW', 'WORKSPACE_MANAGE', 'CREATE_TASK', 'ASSIGN_TASK', 'UPDATE_WORKSPACE'].includes(permissionName)) {
       return true;
     }
   }
 
   // 5. Check Local OJT Team Leader
   if (isLeader) {
-    if (['CREATE_TASK', 'ASSIGN_TASK', 'DELETE'].includes(permissionName)) {
+    if (['TASK_CREATE', 'TASK_ASSIGN', 'CREATE_TASK', 'ASSIGN_TASK'].includes(permissionName)) {
       return true;
     }
   }
@@ -306,18 +307,6 @@ export async function hasWorkspacePermission(
 
 /**
  * Batch-resolves all workspace permission flags in a single pass.
- * Call this instead of multiple hasWorkspacePermission() calls to avoid
- * redundant KV reads and DB queries per request.
- *
- * Requires the caller to have already fetched:
- *  - ctx: from getSessionContext(userId)
- *  - ojtCoordinatorId: from the workspace row
- *  - memberRoles: team_role[] for the current user from workspace_members
- *
- * @example
- * const ctx = await getSessionContext(session.userId);
- * const perms = resolveWorkspacePermissions(ctx, ws.ojt_coordinator_id, userRoles, userId);
- * const canCreate = perms.canCreateTask;
  */
 export function resolveWorkspacePermissions(
   ctx: Awaited<ReturnType<typeof getSessionContext>>,
@@ -331,15 +320,14 @@ export function resolveWorkspacePermissions(
   canUpdateWs: boolean;
   canManageMembers: boolean;
 } {
-  let isMentor = ojtCoordinatorId === userId;
-  if (!isMentor) {
-    // Check if user is in project_coordinators table
-    isMentor = false;
-  }
-  const isLeader = memberRoles.includes('LEADER');
-  const isGlobalAdmin = ctx.permissions.has('MANAGE');
+  const hasMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isMentor = ojtCoordinatorId === userId || hasMentorRole;
+  const isLeader = memberRoles.includes('LEADER') || hasMentorRole;
+  const isGlobalAdmin =
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.permissions.has('WORKSPACE_MANAGE') ||
+    ctx.permissions.has('MANAGE');
 
-  // Strict Rule: For OJT (Interns), ONLY designated Team Leader (LEADER) or Mentor or Global Admin can manage workspace tasks/members
   const isAuthorized = isLeader || isMentor || isGlobalAdmin;
 
   if (ctx.userType === 'OJT') {
@@ -353,13 +341,13 @@ export function resolveWorkspacePermissions(
   }
 
   const canDo = (perm: string) =>
-    ctx.permissions.has(perm) || isMentor || isLeader;
+    ctx.permissions.has(perm) || isMentor || isLeader || isGlobalAdmin;
 
   return {
-    canCreateTask:    canDo('CREATE_TASK'),
-    canAssignTask:    canDo('ASSIGN_TASK'),
-    canDeleteTask:    canDo('DELETE'),
-    canUpdateWs:      canDo('UPDATE_WORKSPACE'),
-    canManageMembers: canDo('UPDATE_WORKSPACE') || isLeader || isMentor || isGlobalAdmin,
+    canCreateTask:    canDo('TASK_CREATE') || canDo('CREATE_TASK') || canDo('WORKSPACE_MANAGE'),
+    canAssignTask:    canDo('TASK_ASSIGN') || canDo('ASSIGN_TASK') || canDo('WORKSPACE_MANAGE'),
+    canDeleteTask:    canDo('WORKSPACE_MANAGE') || canDo('DELETE'),
+    canUpdateWs:      canDo('WORKSPACE_MANAGE') || canDo('UPDATE_WORKSPACE'),
+    canManageMembers: canDo('WORKSPACE_MEMBER') || canDo('WORKSPACE_MANAGE') || isLeader || isMentor || isGlobalAdmin,
   };
 }

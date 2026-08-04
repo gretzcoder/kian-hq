@@ -9,6 +9,8 @@ interface Mentor {
   email: string;
 }
 
+type WorkspaceType = 'TROOPERS' | 'ASSESSMENT';
+
 export default function CreateWorkspaceForm({
   projectId,
   mentors = [],
@@ -16,22 +18,27 @@ export default function CreateWorkspaceForm({
   projectId: string;
   mentors?: Mentor[];
 }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [loading,       setLoading]       = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
+  const [success,       setSuccess]       = useState(false);
+  const [wsType,        setWsType]        = useState<WorkspaceType>('TROOPERS');
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     setSuccess(false);
+
     const formData = new FormData(e.currentTarget);
+    formData.set('workspace_type', wsType);
+
     try {
       const res = await createWorkspace(projectId, formData);
       if (res.success) {
         (e.target as HTMLFormElement).reset();
+        setWsType('TROOPERS');
         setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
+        setTimeout(() => setSuccess(false), 4000);
       } else {
         setError(res.error ?? 'Failed to create workspace');
       }
@@ -43,37 +50,103 @@ export default function CreateWorkspaceForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
-        <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/5 border border-red-500/10 rounded-xl px-4 py-3">{error}</p>
+        <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/5 border border-red-500/10 rounded-xl px-4 py-3">
+          {error}
+        </p>
       )}
       {success && (
-        <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-3">✓ Workspace created!</p>
+        <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-3">
+          ✓ Workspace berhasil dibuat!
+        </p>
       )}
+
+      {/* Workspace Type Toggle */}
+      <div>
+        <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2.5">
+          Tipe Workspace <span className="text-red-500">*</span>
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          {(['TROOPERS', 'ASSESSMENT'] as WorkspaceType[]).map((type) => {
+            const isSelected = wsType === type;
+            const info = {
+              TROOPERS: {
+                icon: '⚡',
+                label: 'Troopers',
+                desc: 'Workspace tim standar dengan alur OJT',
+              },
+              ASSESSMENT: {
+                icon: '📝',
+                label: 'Assessment',
+                desc: 'Semua OJT & mentor masuk otomatis',
+              },
+            }[type];
+
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setWsType(type)}
+                className={`flex flex-col items-start gap-1 p-3.5 rounded-2xl border text-left transition-all ${
+                  isSelected
+                    ? 'border-purple-500 bg-purple-500/8 dark:bg-purple-500/10 ring-2 ring-purple-500/20'
+                    : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30'
+                }`}
+              >
+                <span className="text-lg">{info.icon}</span>
+                <span className={`text-xs font-black ${isSelected ? 'text-purple-700 dark:text-purple-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                  {info.label}
+                </span>
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
+                  {info.desc}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Assessment info banner */}
+      {wsType === 'ASSESSMENT' && (
+        <div className="flex items-start gap-2.5 bg-blue-500/5 border border-blue-500/15 rounded-xl px-3.5 py-3">
+          <span className="text-blue-500 text-sm shrink-0">ℹ️</span>
+          <p className="text-[11px] text-blue-700 dark:text-blue-400 leading-relaxed">
+            Semua OJT (role <strong>On The Job Training</strong>) dan semua mentor (role <strong>Mentor Troopers</strong>)
+            akan otomatis masuk workspace ini. Tidak perlu pilih mentor.
+          </p>
+        </div>
+      )}
+
+      {/* Name */}
       <div>
         <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-          Name <span className="text-red-500">*</span>
+          Nama Workspace <span className="text-red-500">*</span>
         </label>
         <input
           type="text"
           name="name"
           required
-          placeholder="e.g. Instagram, TikTok, Podcast"
+          placeholder={wsType === 'ASSESSMENT' ? 'e.g. Skill Assessment Batch 3' : 'e.g. Instagram, TikTok'}
           className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all"
         />
       </div>
 
+      {/* Description */}
       <div>
-        <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">Description</label>
+        <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+          Deskripsi
+        </label>
         <input
           type="text"
           name="description"
-          placeholder="Optional context for this workspace..."
+          placeholder="Konteks singkat tentang workspace ini..."
           className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all"
         />
       </div>
 
-      {mentors.length > 0 && (
+      {/* Mentor select — only for TROOPERS */}
+      {wsType === 'TROOPERS' && mentors.length > 0 && (
         <div>
           <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
             Mentor Workspace
@@ -96,7 +169,11 @@ export default function CreateWorkspaceForm({
         disabled={loading}
         className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-[0_4px_16px_rgba(147,51,234,0.15)] hover:shadow-[0_4px_20px_rgba(147,51,234,0.25)] active:scale-[0.98] disabled:opacity-60"
       >
-        {loading ? 'Creating...' : 'Create Workspace'}
+        {loading
+          ? 'Membuat...'
+          : wsType === 'ASSESSMENT'
+          ? '📝 Buat Assessment Workspace'
+          : '⚡ Buat Troopers Workspace'}
       </button>
     </form>
   );

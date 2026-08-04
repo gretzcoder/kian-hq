@@ -48,6 +48,15 @@ export async function getDB() {
             created_at INTEGER DEFAULT (strftime('%s', 'now'))
           );
         `),
+        db.prepare(`
+          CREATE TABLE IF NOT EXISTS assessment_submission_reactions (
+            assignment_id TEXT NOT NULL REFERENCES task_assignments(id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            emoji TEXT NOT NULL,
+            created_at INTEGER DEFAULT (strftime('%s', 'now')),
+            PRIMARY KEY (assignment_id, user_id, emoji)
+          );
+        `),
       ]);
     } catch (e) {
       // Ignore batch error

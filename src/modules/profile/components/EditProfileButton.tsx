@@ -6,6 +6,8 @@ import EditProfileModal from './EditProfileModal';
 interface EditProfileButtonProps {
   initialData: {
     name: string;
+    email?: string;
+    username?: string;
     university?: string;
     study_program?: string;
     semester?: string;

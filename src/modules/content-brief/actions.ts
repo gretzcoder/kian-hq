@@ -32,7 +32,7 @@ export async function createBrief(
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'CREATE_BRIEF');
+  await checkPermission(session.userId, 'BRIEF_REVIEW');
 
   const title = formData.get('title') as string;
   if (!title?.trim()) {

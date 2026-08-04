@@ -1,12 +1,10 @@
 import { getSession } from '@/modules/auth/session';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import DashboardSidebar from './components/DashboardSidebar';
 import TimeGreeting from './components/TimeGreeting';
-
 import OnboardingModal from '@/modules/profile/components/OnboardingModal';
 
 export default async function DashboardLayout({
@@ -21,22 +19,101 @@ export default async function DashboardLayout({
 
   const db = await getDB();
 
-  // Check if onboarding is completed and fetch current avatar
-  const userRow = await db
-    .prepare('SELECT onboarding_completed, avatar_url FROM users WHERE id = ?')
-    .bind(session.userId)
-    .first() as { onboarding_completed: number; avatar_url: string | null } | null;
-
-  const showOnboarding = userRow ? userRow.onboarding_completed === 0 : false;
-  const userAvatar = userRow?.avatar_url || session.avatar || null;
-
-  // Batch-fetch all needed permission flags in one call
+  // Resolve permission flags first — needed to scope queries below
   const ctx = await getSessionContext(session.userId);
-  const canManage      = ctx.can('MANAGE');
-  const canReview      = ctx.can('APPROVE') || ctx.can('REQUEST_REVISION');
-  const canCreateBrief = ctx.can('CREATE_BRIEF') || ctx.can('APPROVE_BRIEF') || ctx.can('SUBMIT_BRIEF') || ctx.can('REQUEST_CHANGES') || ctx.can('UNLOCK_BRIEF');
-  const canUseAI       = ctx.can('USE_AI');
-  const isOJT          = ctx.userType === 'OJT';
+  const isGlobalWorkspaceManager =
+    ctx.userType === 'STAFF' || ctx.can('WORKSPACE_MANAGE') || ctx.can('MANAGE');
+  const canReview    = ctx.can('TASK_REVIEW');
+  const isCoordinator =
+    ctx.userType === 'STAFF' &&
+    (ctx.can('MANAGE') || ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE'));
+
+  // Fetch onboarding status, avatar, and all badge seed data in one parallel batch
+  const [userRow, annRaw, wsDataRaw, reviewCountRaw] = await Promise.all([
+    db
+      .prepare('SELECT onboarding_completed, avatar_url FROM users WHERE id = ?')
+      .bind(session.userId)
+      .first() as Promise<{ onboarding_completed: number; avatar_url: string | null } | null>,
+
+    // All announcement timestamps — no LIMIT (accurate badge count)
+    db
+      .prepare('SELECT created_at FROM announcements ORDER BY created_at DESC')
+      .all() as Promise<{ results: { created_at: number }[] }>,
+
+    // Per-workspace latest activity (workspace / tasks / chat / task assignments)
+    (isGlobalWorkspaceManager || ctx.roles.some((r) => r.toUpperCase().includes('MENTOR')))
+      ? (db
+          .prepare(
+            `SELECT ws.id AS wsId,
+               MAX(
+                 ws.created_at,
+                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
+                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0),
+                 COALESCE((SELECT MAX(ta.created_at) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id), 0)
+               ) AS latestTs
+             FROM workspaces ws
+             WHERE ws.deleted_at IS NULL`
+          )
+          .all() as Promise<{ results: { wsId: string; latestTs: number }[] }>)
+      : (db
+          .prepare(
+            `SELECT ws.id AS wsId,
+               MAX(
+                 ws.created_at,
+                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
+                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0),
+                 COALESCE((SELECT MAX(ta.created_at) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id AND ta.user_id = ?), 0)
+               ) AS latestTs
+             FROM workspaces ws
+             WHERE ws.deleted_at IS NULL
+               AND (
+                 EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
+                 OR ws.ojt_coordinator_id = ?
+                 OR ws.workspace_type = 'ASSESSMENT'
+               )`
+          )
+          .bind(session.userId, session.userId, session.userId)
+          .all() as Promise<{ results: { wsId: string; latestTs: number }[] }>),
+
+    // Pending review count — skipped if user has no TASK_REVIEW permission
+    canReview
+      ? (db
+          .prepare(
+            `SELECT COUNT(DISTINCT ta.id) AS cnt
+             FROM task_assignments ta
+             JOIN tasks t ON ta.task_id = t.id
+             WHERE ta.status = 'WAITING_REVIEW'
+               AND (
+                 (
+                   EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER')
+                   AND ta.lead_approved = 0
+                 )
+                 OR (
+                   EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?)
+                   AND ta.mentor_approved = 0
+                 )
+                 OR (? AND ta.coordinator_approved = 0)
+               )`
+          )
+          .bind(session.userId, session.userId, isCoordinator ? 1 : 0)
+          .first() as Promise<{ cnt: number } | null>)
+      : Promise.resolve(null),
+  ]);
+
+  const showOnboarding    = userRow ? userRow.onboarding_completed === 0 : false;
+  const userAvatar        = userRow?.avatar_url || session.avatar || null;
+  const announcementTimestamps = (annRaw.results || []).map((r) => r.created_at);
+  const workspaceData     = (wsDataRaw.results || []).map((r) => ({ wsId: r.wsId, latestTs: r.latestTs }));
+  const pendingReviewCount = canReview ? (Number((reviewCountRaw as any)?.cnt) || 0) : 0;
+
+  // Remaining permission flags
+  const canManageUsers  = ctx.can('ADMIN_USERS');
+  const canManageRoles  = ctx.can('ADMIN_ROLES');
+  const canViewOJT      = ctx.can('VIEW_OJT_DATA');
+  const canCreateBrief  = ctx.can('BRIEF_CREATE') || ctx.can('BRIEF_REVIEW');
+  const canUseAI        = ctx.can('USE_AI');
+  const canViewProjects = ctx.can('PROJECT_CREATE') || ctx.can('PROJECT_MANAGE');
+  const isOJT           = ctx.userType === 'OJT';
 
   // Detect if OJT user is a project mentor (for simplified nav)
   let isMentor = false;
@@ -55,13 +132,19 @@ export default async function DashboardLayout({
 
       {/* Left Sidebar Navigation */}
       <DashboardSidebar
-        canManage={canManage}
+        canManageUsers={canManageUsers}
+        canManageRoles={canManageRoles}
+        canViewOJT={canViewOJT}
+        canViewProjects={canViewProjects}
         canReview={canReview}
         canCreateBrief={canCreateBrief}
         canUseAI={canUseAI}
         isOJT={isOJT}
         isMentor={isMentor}
         isLocked={showOnboarding}
+        announcementTimestamps={announcementTimestamps}
+        workspaceData={workspaceData}
+        pendingReviewCount={pendingReviewCount}
         session={{
           name: session.name,
           email: session.email,
@@ -69,14 +152,13 @@ export default async function DashboardLayout({
         }}
       />
 
-      {/* Main Content Area — Fluid Full Width */}
+      {/* Main Content Area */}
       <main className="flex-1 w-full px-6 sm:px-10 py-6 min-w-0 flex flex-col">
         {/* Top Floating Control Bar */}
         <div className="hidden lg:flex items-center justify-between pb-3 mb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
           <TimeGreeting />
           <ThemeToggle />
         </div>
-
         {children}
       </main>
     </div>

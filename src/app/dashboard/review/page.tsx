@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/modules/roles/rbac';
 import Link from 'next/link';
 import ReviewActions from './components/ReviewActions';
+import { MarkdownViewer } from '@/components/MarkdownViewer';
+import { CreatorDrivePreview } from '@/modules/tasks/components/TaskActions';
 
 interface ReviewRow {
   assignment_id:   string;
@@ -27,10 +29,14 @@ export default async function ReviewPage() {
 
   const ctx = await getSessionContext(session.userId);
 
-  // Gate: only APPROVE or REQUEST_REVISION permission holders
-  if (!ctx.can('APPROVE') && !ctx.can('REQUEST_REVISION')) redirect('/dashboard');
+  // Gate: only TASK_REVIEW permission holders
+  if (!ctx.can('TASK_REVIEW')) redirect('/dashboard');
 
   const db = await getDB();
+
+  const isLeaderQuery = `EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER')`;
+  const isMentorQuery = `EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?)`;
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
   const { results: rawReviews } = await db.prepare(`
     SELECT
@@ -38,15 +44,18 @@ export default async function ReviewPage() {
       ta.assignment_role,
       ta.result_url,
       ta.submitted_at,
+      ta.lead_approved,
+      ta.mentor_approved,
+      ta.coordinator_approved,
       t.id             AS task_id,
       t.title          AS task_title,
       t.priority       AS task_priority,
       t.workspace_id,
       ws.name          AS workspace_name,
-      t.project_id,
       p.name           AS project_name,
-      u.id             AS creator_id,
-      u.name           AS creator_name
+      u.name           AS creator_name,
+      ${isLeaderQuery} AS is_leader,
+      ${isMentorQuery} AS is_mentor
     FROM task_assignments ta
     JOIN tasks t       ON ta.task_id = t.id
     JOIN projects p    ON t.project_id = p.id
@@ -54,9 +63,23 @@ export default async function ReviewPage() {
     LEFT JOIN users u  ON ta.user_id = u.id
     WHERE ta.status = 'WAITING_REVIEW'
     ORDER BY ta.submitted_at ASC
-  `).all();
+  `).bind(session.userId, session.userId).all();
 
-  const reviews = rawReviews as unknown as ReviewRow[];
+  const allReviews = rawReviews as unknown as (ReviewRow & {
+    lead_approved: number;
+    mentor_approved: number;
+    coordinator_approved: number;
+    is_leader: number;
+    is_mentor: number;
+  })[];
+
+  // Filter out reviews that the current logged in user has ALREADY approved
+  const reviews = allReviews.filter((r) => {
+    if (r.is_leader && r.lead_approved === 1) return false;
+    if (r.is_mentor && r.mentor_approved === 1) return false;
+    if (isCoordinator && r.coordinator_approved === 1) return false;
+    return true;
+  });
 
   const canRequestRevision = ctx.can('REQUEST_REVISION');
 
@@ -158,19 +181,16 @@ export default async function ReviewPage() {
                 )}
               </div>
 
-              {/* Result link */}
+              {/* Result link / Text report */}
               {r.result_url ? (
-                <a
-                  href={r.result_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 bg-purple-500/5 hover:bg-purple-500/10 border border-purple-500/10 dark:border-purple-500/20 px-4 py-3 rounded-xl transition-all"
-                >
-                  <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                  Open Submitted Result
-                </a>
+                ['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(r.assignment_role) ? (
+                  <CreatorDrivePreview url={r.result_url} />
+                ) : (
+                  <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-4 text-xs text-zinc-800 dark:text-zinc-200 max-h-48 overflow-y-auto">
+                    <span className="text-[10px] font-bold text-zinc-400 block mb-1">📝 Laporan Hasil Pengerjaan:</span>
+                    <MarkdownViewer content={r.result_url} />
+                  </div>
+                )
               ) : (
                 <div className="text-xs text-zinc-400 italic">No result URL submitted</div>
               )}

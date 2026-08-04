@@ -461,13 +461,35 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
     const now = Math.floor(Date.now() / 1000);
     const nextStatus = 'WAITING_REVIEW';
 
+    // Option A: If the submitter is Leader, Mentor, or Coordinator, auto-approve their own QC slot
+    const workspaceId = task?.workspace_id || '';
+    const isLeader = workspaceId
+      ? (await db
+          .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+          .bind(workspaceId, session.userId)
+          .first()) !== null
+      : false;
+
+    const isMentor = workspaceId
+      ? (await db
+          .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
+          .bind(workspaceId, session.userId)
+          .first()) !== null
+      : false;
+
+    const ctx = await getSessionContext(session.userId);
+    const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+
     await db
       .prepare(`
         UPDATE task_assignments
-        SET status = ?, result_url = ?, submitted_at = ?
+        SET status = ?, result_url = ?, submitted_at = ?,
+            lead_approved = CASE WHEN ? THEN 1 ELSE lead_approved END,
+            mentor_approved = CASE WHEN ? THEN 1 ELSE mentor_approved END,
+            coordinator_approved = CASE WHEN ? THEN 1 ELSE coordinator_approved END
         WHERE id = ?
       `)
-      .bind(nextStatus, resultUrl.trim(), now, assignmentId)
+      .bind(nextStatus, resultUrl.trim(), now, isLeader ? 1 : 0, isMentor ? 1 : 0, isCoordinator ? 1 : 0, assignmentId)
       .run();
 
     if (task && task.status !== nextStatus) {

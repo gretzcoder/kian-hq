@@ -13,6 +13,7 @@ import BroadcastAnnouncement from './components/BroadcastAnnouncement';
 import DashboardMiniLeaderboard from './components/DashboardMiniLeaderboard';
 import DashboardFeedbackCard from './components/DashboardFeedbackCard';
 import TimeGreeting from './components/TimeGreeting';
+import UnreadAnnouncementBanner from './components/UnreadAnnouncementBanner';
 
 interface AnnouncementRow {
   id: string;
@@ -184,9 +185,20 @@ export default async function DashboardPage() {
           <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-zinc-950 to-zinc-600 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent">
             Creative Console
           </h1>
-          <TimeGreeting />
+          <p className="hidden md:block text-xs sm:text-sm font-medium text-zinc-500 dark:text-zinc-400 mt-1">
+            Pusat manajemen kampanye, kontrol kualitas tugas, dan kolaborasi tim Kian HQ.
+          </p>
+          <div className="md:hidden">
+            <TimeGreeting />
+          </div>
         </div>
       </div>
+
+      {/* Unread Announcement Banner */}
+      <UnreadAnnouncementBanner
+        latestAnnouncement={announcements[0] || null}
+        announcementTimestamps={announcements.map((a) => a.created_at)}
+      />
 
       {/* Metrics Grid Component */}
       <DashboardStats

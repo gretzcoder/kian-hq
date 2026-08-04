@@ -10,6 +10,7 @@ interface WorkspaceTabsProps {
   membersTab: React.ReactNode;
   chatTab: React.ReactNode;
   createTaskForm?: React.ReactNode;
+  isAssessment?: boolean;
 }
 
 export default function WorkspaceTabs({
@@ -20,6 +21,7 @@ export default function WorkspaceTabs({
   membersTab,
   chatTab,
   createTaskForm,
+  isAssessment = false,
 }: WorkspaceTabsProps) {
   const [activeTab, setActiveTab] = useState<'tasks' | 'chat' | 'members' | 'create'>('tasks');
 
@@ -36,7 +38,7 @@ export default function WorkspaceTabs({
                 : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
             }`}
           >
-            <span>📋 Daftar Tugas</span>
+            <span>{isAssessment ? '📝 Assessment' : '📋 Daftar Tugas'}</span>
             <span
               className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
                 activeTab === 'tasks'

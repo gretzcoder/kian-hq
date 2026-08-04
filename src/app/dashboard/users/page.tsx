@@ -29,7 +29,7 @@ export default async function UsersPage() {
   if (!session) redirect('/');
 
   // 1. Enforce RBAC security gate
-  const canManage = await hasPermission(session.userId, 'MANAGE');
+  const canManage = await hasPermission(session.userId, 'ADMIN_USERS');
   if (!canManage) {
     redirect('/dashboard');
   }

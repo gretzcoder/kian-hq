@@ -1,0 +1,1031 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import {
+  createAssessmentTask,
+  submitAssessmentWork,
+  approveAssessmentSubmission,
+  requestAssessmentRevision,
+  approveAssessmentTask,
+  deleteAssessmentTask,
+  toggleAssessmentReaction,
+} from '@/modules/workspaces/assessmentActions';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface ReactionItem {
+  emoji: string;
+  count: number;
+  user_reacted: number;
+}
+
+interface TaskRow {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  created_at: number;
+  deadline?: number | null;
+}
+
+interface AssignmentRow {
+  id: string;
+  task_id: string;
+  user_id: string;
+  user_name: string | null;
+  assignment_role: string;
+  status: string;
+  result_url: string | null;
+  revision_note: string | null;
+  submitted_at: number | null;
+  lead_approved: number;
+  mentor_approved: number;
+  coordinator_approved: number;
+  sparks: number | null;
+}
+
+interface AssessmentPanelProps {
+  workspaceId:        string;
+  tasks:              TaskRow[];
+  assignmentsByTask:  Record<string, AssignmentRow[]>;
+  reactionsMap?:      Record<string, ReactionItem[]>;
+  currentUserId:      string;
+  isLeader:           boolean;   // mentor in assessment context
+  isCoordinator:      boolean;
+  isOJT:              boolean;
+}
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+
+const STATUS_BADGE: Record<string, string> = {
+  ASSIGNED:            'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700',
+  IN_PROGRESS:         'bg-indigo-500/8 text-indigo-600 dark:text-indigo-400 border-indigo-500/15',
+  WAITING_REVIEW:      'bg-yellow-500/8 text-yellow-700 dark:text-yellow-400 border-yellow-500/15',
+  REVISION_REQUESTED:  'bg-red-500/8 text-red-600 dark:text-red-400 border-red-500/15',
+  APPROVED:            'bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 border-emerald-500/15',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  ASSIGNED:            '📋 Belum Mulai',
+  IN_PROGRESS:         '⚙️ Sedang Dikerjakan',
+  WAITING_REVIEW:      '📤 Menunggu Review',
+  REVISION_REQUESTED:  '↩ Revisi',
+  APPROVED:            '✅ Disetujui',
+};
+
+const EXEC_TYPE_LABEL: Record<string, string> = {
+  DESIGNER:     '🎨 Design',
+  VIDEO_EDITOR: '🎬 Video',
+};
+
+// ── Sub-component: Create Assessment Task Form ────────────────────────────────
+
+function CreateAssessmentTaskForm({
+  workspaceId,
+  onCreated,
+}: {
+  workspaceId: string;
+  onCreated: () => void;
+}) {
+  const [open,    setOpen]    = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    const fd = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const res = await createAssessmentTask(workspaceId, fd);
+      if (res.success) {
+        setOpen(false);
+        onCreated();
+      } else {
+        setError(res.error ?? 'Gagal membuat assessment');
+      }
+    });
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98]"
+      >
+        <span>✨</span>
+        <span>Buat Assessment Baru</span>
+      </button>
+
+      {/* Modal Dialog Overlay */}
+      {open && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="w-full max-w-xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 my-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-bold">
+                  📝
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
+                    Ajukan Assessment Baru
+                  </h3>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Draft assessment akan diajukan ke Koordinator untuk di-review sebelum dipublikasikan ke OJT.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-sm transition-all"
+              >
+                ✕
+              </button>
+            </div>
+
+          {error && (
+            <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
+              ⚠️ {error}
+            </p>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Title */}
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                Judul Assessment <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                name="title"
+                required
+                placeholder="e.g. Brand Visual Refresh, Short-Form Video Edit"
+                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+              />
+            </div>
+
+            {/* Brief/Description */}
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                Brief / Instruksi Pengerjaan <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                name="description"
+                required
+                rows={5}
+                placeholder="Jelaskan instruksi lengkap pengerjaan: output yang diharapkan, link referensi/aset, format file submit, deadline, dll..."
+                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100 resize-none leading-relaxed"
+              />
+            </div>
+
+            {/* Deadline */}
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                Tenggat Waktu / Deadline (Opsional)
+              </label>
+              <input
+                type="datetime-local"
+                name="deadline"
+                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+              />
+            </div>
+
+            {/* Exec Type */}
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
+                Tipe Eksekusi / Kategori <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: 'DESIGNER', icon: '🎨', label: 'Design', desc: 'Desain visual, poster, feed, ui/ux' },
+                  { value: 'VIDEO_EDITOR', icon: '🎬', label: 'Video', desc: 'Reels, TikTok, video editing, motion' },
+                ].map((opt) => (
+                  <label
+                    key={opt.value}
+                    className="flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 rounded-2xl p-3.5 cursor-pointer hover:border-purple-400 has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/10 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xl">{opt.icon}</span>
+                      <input type="radio" name="exec_type" value={opt.value} defaultChecked={opt.value === 'DESIGNER'} className="accent-purple-600 w-4 h-4" />
+                    </div>
+                    <span className="text-xs font-black text-zinc-900 dark:text-zinc-100 mt-1">{opt.label}</span>
+                    <span className="text-[10px] text-zinc-400 leading-tight">{opt.desc}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex-1 py-3 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={pending}
+                className="flex-1 py-3 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20 disabled:opacity-60 active:scale-[0.98]"
+              >
+                {pending ? 'Mengirim Ajuan...' : '📩 Buat & Ajukan ke Koordinator'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      )}
+    </>
+  );
+}
+
+// ── Sub-component: OJT Submit Form ───────────────────────────────────────────
+
+function OJTSubmitForm({
+  assignment,
+  workspaceId,
+}: {
+  assignment: AssignmentRow;
+  workspaceId: string;
+}) {
+  const [url,     setUrl]     = useState(assignment.result_url ?? '');
+  const [error,   setError]   = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const isLocked = assignment.status === 'APPROVED';
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const res = await submitAssessmentWork(assignment.id, url, workspaceId);
+      if (!res.success) setError(res.error ?? 'Gagal submit');
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      <div>
+        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">
+          Link Hasil Kerja (Google Drive / URL) <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          required
+          disabled={isLocked}
+          placeholder="https://drive.google.com/..."
+          className="w-full bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm rounded-xl px-4 py-2.5 focus:outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed text-zinc-900 dark:text-zinc-100"
+        />
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-500">{error}</p>
+      )}
+
+      {assignment.revision_note && (
+        <div className="bg-red-500/5 border border-red-500/15 rounded-xl px-3 py-2.5">
+          <p className="text-[10px] font-black uppercase tracking-widest text-red-500 mb-1">Catatan Revisi</p>
+          <p className="text-xs text-red-700 dark:text-red-400">{assignment.revision_note}</p>
+        </div>
+      )}
+
+      {!isLocked && (
+        <button
+          type="submit"
+          disabled={pending || !url.trim()}
+          className="w-full py-2.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all disabled:opacity-50"
+        >
+          {pending ? 'Mengumpulkan...' : assignment.status === 'WAITING_REVIEW' ? '🔄 Update Submission' : '📤 Kumpulkan'}
+        </button>
+      )}
+    </form>
+  );
+}
+
+const DEFAULT_EMOJIS = ['🔥', '👏', '🚀', '❤️', '💡', '💯'];
+
+function getSparkMeta(spark: number): { label: string; emoji: string; color: string } {
+  if (spark >= 9) return { label: 'LEGENDARY SPARK', emoji: '👑', color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' };
+  if (spark >= 7) return { label: 'GREAT SPARK', emoji: '💎', color: 'text-purple-500 bg-purple-500/10 border-purple-500/30' };
+  if (spark >= 5) return { label: 'SOLID SPARK', emoji: '⚡', color: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30' };
+  if (spark >= 3) return { label: 'FAIR SPARK', emoji: '👍', color: 'text-sky-500 bg-sky-500/10 border-sky-500/30' };
+  return { label: 'MINIMUM SPARK', emoji: '🩹', color: 'text-zinc-500 bg-zinc-500/10 border-zinc-500/30' };
+}
+
+// ── Sub-component: Mentor Submission Card ────────────────────────────────────
+
+function MentorSubmissionCard({
+  assignment,
+  workspaceId,
+  isCoordinator,
+  reactions = [],
+}: {
+  assignment: AssignmentRow;
+  workspaceId: string;
+  isCoordinator: boolean;
+  reactions?: ReactionItem[];
+}) {
+  const [expanded,    setExpanded]    = useState(false);
+  const [showSparkModal, setShowSparkModal] = useState(false);
+  const [sparks,      setSparks]      = useState<number>(8);
+  const [revNote,     setRevNote]     = useState('');
+  const [showRevForm, setShowRevForm] = useState(false);
+  const [error,       setError]       = useState<string | null>(null);
+  const [pending,     startTransition] = useTransition();
+
+  const isSubmitted   = ['WAITING_REVIEW', 'RESUBMITTED'].includes(assignment.status);
+  const isApproved    = assignment.status === 'APPROVED';
+  const hasSubmission = !!assignment.result_url || isSubmitted || isApproved;
+  const statusBadge   = STATUS_BADGE[assignment.status] ?? STATUS_BADGE.ASSIGNED;
+  const statusLabel   = STATUS_LABEL[assignment.status] ?? assignment.status;
+
+  const handleApprove = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await approveAssessmentSubmission(assignment.id, workspaceId, sparks);
+      if (res.success) {
+        setShowSparkModal(false);
+      } else {
+        setError(res.error ?? 'Gagal approve');
+      }
+    });
+  };
+
+  const handleRevise = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    startTransition(async () => {
+      const res = await requestAssessmentRevision(assignment.id, workspaceId, revNote);
+      if (res.success) {
+        setShowRevForm(false);
+        setRevNote('');
+      } else {
+        setError(res.error ?? 'Gagal request revisi');
+      }
+    });
+  };
+
+  const handleReaction = (emoji: string) => {
+    startTransition(async () => {
+      await toggleAssessmentReaction(assignment.id, emoji, workspaceId);
+    });
+  };
+
+  return (
+    <div className={`border rounded-2xl transition-all ${isApproved ? 'border-emerald-500/20 bg-emerald-500/3' : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/30'}`}>
+      {/* Header row */}
+      <div
+        className="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+        onClick={() => hasSubmission && setExpanded((p) => !p)}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-7 h-7 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-black flex items-center justify-center uppercase shrink-0">
+            {(assignment.user_name ?? '?').substring(0, 2)}
+          </div>
+          <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate">
+            {assignment.user_name ?? 'OJT User'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {isApproved && assignment.sparks != null && (() => {
+            const meta = getSparkMeta(assignment.sparks);
+            return (
+              <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${meta.color}`}>
+                {meta.emoji} {assignment.sparks} Sparks
+              </span>
+            );
+          })()}
+          <span className={`text-[9px] font-black border px-2 py-0.5 rounded-full ${statusBadge}`}>
+            {statusLabel}
+          </span>
+          {hasSubmission && (
+            <span className="text-zinc-400 text-xs">{expanded ? '▲' : '▼'}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Expanded: submission detail + review actions */}
+      {hasSubmission && expanded && (
+        <div className="px-4 pb-4 space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
+          {assignment.result_url && (
+            <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-3 space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block">
+                🔗 Link Hasil Karya Submit
+              </span>
+              <a
+                href={assignment.result_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline truncate block"
+              >
+                {assignment.result_url} ↗
+              </a>
+
+              {/* Emoji Reactions Bar */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
+                <span className="text-[10px] font-black uppercase text-zinc-400 mr-1">Feedback:</span>
+                {reactions.map((r) => (
+                  <button
+                    key={r.emoji}
+                    type="button"
+                    onClick={() => handleReaction(r.emoji)}
+                    disabled={pending}
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
+                      r.user_reacted
+                        ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold'
+                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                    }`}
+                  >
+                    <span>{r.emoji}</span>
+                    <span className="text-[10px] font-bold">{r.count}</span>
+                  </button>
+                ))}
+
+                {DEFAULT_EMOJIS.filter((e) => !reactions.some((r) => r.emoji === e)).map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => handleReaction(emoji)}
+                    disabled={pending}
+                    className="px-2 py-0.5 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-white dark:hover:bg-zinc-900 transition-all opacity-60 hover:opacity-100"
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+
+          {!isApproved && (!showRevForm && !showSparkModal ? (
+            <div className="flex gap-2 items-center justify-between">
+              {isCoordinator ? (
+                <button
+                  onClick={() => setShowSparkModal(true)}
+                  disabled={pending}
+                  className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1.5"
+                >
+                  <span>✓ Approve & Award Sparks ✨</span>
+                </button>
+              ) : (
+                <div className="flex-1 text-[11px] text-zinc-500 dark:text-zinc-400 italic">
+                  Menunggu peninjauan & pemberian Sparks oleh Koordinator.
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowRevForm(true)}
+                disabled={pending}
+                className="px-3.5 py-2 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all disabled:opacity-50"
+              >
+                ↩ Request Revisi
+              </button>
+            </div>
+          ) : showSparkModal ? (
+            /* 1 to 10 Sparks Selector UI matching Troopers workspace */
+            <div className="space-y-3 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+                  ✨ Berikan Creative Sparks (1 - 10)
+                </label>
+                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${currentSparkMeta.color}`}>
+                  {currentSparkMeta.emoji} {currentSparkMeta.label} ({sparks}/10)
+                </span>
+              </div>
+
+              {/* 1 to 10 Sparks Selector Buttons */}
+              <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                  const isSelected = sparks === num;
+                  return (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setSparks(num)}
+                      className={`py-2 rounded-xl text-xs font-black transition-all ${
+                        isSelected
+                          ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/20 scale-105 ring-2 ring-purple-500/30'
+                          : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2 justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => { setShowSparkModal(false); setError(null); }}
+                  disabled={pending}
+                  className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApprove}
+                  disabled={pending}
+                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-1.5 rounded-xl transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {pending ? 'Menyimpan...' : `Kirim ${sparks} ✨ & Setujui`}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleRevise} className="space-y-2">
+              <textarea
+                value={revNote}
+                onChange={(e) => setRevNote(e.target.value)}
+                required
+                rows={2}
+                placeholder="Tulis catatan revisi..."
+                className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:border-red-400 text-zinc-900 dark:text-zinc-100"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRevForm(false)}
+                  className="flex-1 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-500"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="flex-1 py-1.5 text-xs font-bold bg-red-500 hover:bg-red-400 text-white rounded-lg disabled:opacity-50"
+                >
+                  {pending ? '...' : 'Kirim Revisi'}
+                </button>
+              </div>
+            </form>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Sub-component: Assessment Task Card (Mentor) ──────────────────────────────
+
+function MentorTaskCard({
+  task,
+  assignments,
+  reactionsMap,
+  workspaceId,
+  isCoordinator,
+  canManage = true,
+}: {
+  task: TaskRow;
+  assignments: AssignmentRow[];
+  reactionsMap?: Record<string, ReactionItem[]>;
+  workspaceId: string;
+  isCoordinator: boolean;
+  canManage?: boolean;
+}) {
+  const [showSubmissions, setShowSubmissions] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [pendingApprove, startApproveTransition] = useTransition();
+  const [pendingDelete, startDeleteTransition] = useTransition();
+
+  const isPendingCoordinatorApproval = task.status === 'WAITING_REVIEW';
+  const total     = assignments.length;
+  const submitted = assignments.filter((a) => ['WAITING_REVIEW', 'RESUBMITTED', 'APPROVED'].includes(a.status)).length;
+  const approved  = assignments.filter((a) => a.status === 'APPROVED').length;
+
+  const execType = assignments[0]?.assignment_role ?? 'DESIGNER';
+  const execLabel = EXEC_TYPE_LABEL[execType] ?? execType;
+
+  const handlePublishAssessment = () => {
+    startApproveTransition(async () => {
+      await approveAssessmentTask(task.id, workspaceId, execType);
+    });
+  };
+
+  const handleDeleteAssessment = () => {
+    startDeleteTransition(async () => {
+      const res = await deleteAssessmentTask(task.id, workspaceId);
+      if (res.success) {
+        setShowConfirmDelete(false);
+      }
+    });
+  };
+
+  return (
+    <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl overflow-hidden">
+      {/* Task header */}
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2 py-0.5 rounded-full">
+                {execLabel}
+              </span>
+              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Assessment</span>
+              {task.deadline && (
+                <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span>⏰</span>
+                  <span>{new Date(task.deadline).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </span>
+              )}
+            </div>
+            <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">{task.title}</h3>
+          </div>
+
+          {/* Progress ring summary + Delete button for Koordinator */}
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right">
+              <p className="text-[10px] font-black text-zinc-500">
+                {submitted}/{total} submit
+              </p>
+              {approved > 0 && (
+                <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">
+                  {approved} approved
+                </p>
+              )}
+            </div>
+            {isCoordinator && (
+              <button
+                type="button"
+                onClick={() => setShowConfirmDelete(true)}
+                title="Hapus Assessment Ini"
+                className="w-8 h-8 rounded-xl bg-zinc-100/80 hover:bg-red-500/10 dark:bg-zinc-800/80 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center text-xs shrink-0"
+              >
+                🗑️
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Modal Confirm Delete */}
+        {showConfirmDelete && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-md bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-2xl mx-auto">
+                ⚠️
+              </div>
+              <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
+                Hapus Assessment Ini?
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                Tugas assessment <span className="font-bold text-zinc-900 dark:text-zinc-100">&ldquo;{task.title}&rdquo;</span> beserta seluruh submission peserta OJT akan dihapus dari sistem.
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmDelete(false)}
+                  disabled={pendingDelete}
+                  className="flex-1 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteAssessment}
+                  disabled={pendingDelete}
+                  className="flex-1 py-2.5 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-md shadow-red-500/20 disabled:opacity-60"
+                >
+                  {pendingDelete ? 'Menghapus...' : 'Ya, Hapus'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {task.description && (
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl px-3 py-2 border border-zinc-100 dark:border-zinc-800/60">
+            {task.description}
+          </p>
+        )}
+
+        {/* Status Draft/Approval Banner */}
+        {isPendingCoordinatorApproval && (
+          <div className="mt-3 flex items-center justify-between gap-3 bg-amber-500/8 border border-amber-500/20 rounded-2xl p-3.5">
+            <div className="flex items-center gap-2.5">
+              <span className="text-lg">⏳</span>
+              <div>
+                <p className="text-xs font-black text-amber-700 dark:text-amber-400">
+                  Menunggu Review & Persetujuan Koordinator
+                </p>
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                  {isCoordinator
+                    ? 'Anda adalah Koordinator. Setujui ajuan ini untuk mempublikasikan tugas ke OJT.'
+                    : 'Draft assessment telah diajukan. Tugas akan di-assign ke OJT setelah disetujui Koordinator.'}
+                </p>
+              </div>
+            </div>
+            {isCoordinator && (
+              <button
+                onClick={handlePublishAssessment}
+                disabled={pendingApprove}
+                className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shrink-0 shadow-md shadow-emerald-500/20 disabled:opacity-50"
+              >
+                {pendingApprove ? 'Memproses...' : '✓ Setujui & Publikasikan'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Progress bar */}
+        {!isPendingCoordinatorApproval && (
+          <div className="mt-3">
+            <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500"
+                style={{ width: total > 0 ? `${(submitted / total) * 100}%` : '0%' }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Toggle submissions */}
+      <button
+        type="button"
+        onClick={() => setShowSubmissions((p) => !p)}
+        className="w-full flex items-center justify-between px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 text-xs font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-all"
+      >
+        <span>
+          {showSubmissions ? '▲ Tutup Daftar Submission' : `▼ Lihat Semua (${total} peserta)`}
+        </span>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+          submitted === total
+            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
+        }`}>
+          {submitted === total ? '✅ Semua Submit' : `⏳ ${total - submitted} Belum`}
+        </span>
+      </button>
+
+      {/* Submissions list */}
+      {showSubmissions && (
+        <div className="px-5 pb-5 space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-4">
+          {assignments.length === 0 ? (
+            <p className="text-xs text-zinc-400 text-center py-4">Belum ada peserta yang di-assign.</p>
+          ) : (
+            assignments.map((a) => (
+              <MentorSubmissionCard
+                key={a.id}
+                assignment={a}
+                reactions={reactionsMap?.[a.id] ?? []}
+                workspaceId={workspaceId}
+                isCoordinator={isCoordinator}
+              />
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Sub-component: OJT Task Card ─────────────────────────────────────────────
+
+function OJTTaskCard({
+  task,
+  assignment,
+  reactions = [],
+  workspaceId,
+}: {
+  task: TaskRow;
+  assignment: AssignmentRow;
+  reactions?: ReactionItem[];
+  workspaceId: string;
+}) {
+  const [pending, startTransition] = useTransition();
+  const execLabel = EXEC_TYPE_LABEL[assignment.assignment_role] ?? assignment.assignment_role;
+  const statusBadge = STATUS_BADGE[assignment.status] ?? STATUS_BADGE.ASSIGNED;
+  const statusLabel = STATUS_LABEL[assignment.status] ?? assignment.status;
+
+  const handleReaction = (emoji: string) => {
+    startTransition(async () => {
+      await toggleAssessmentReaction(assignment.id, emoji, workspaceId);
+    });
+  };
+
+  return (
+    <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl p-5 space-y-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2 py-0.5 rounded-full">
+              {execLabel}
+            </span>
+            {task.deadline && (
+              <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span>⏰ Deadline:</span>
+                <span>{new Date(task.deadline).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+              </span>
+            )}
+          </div>
+          <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">{task.title}</h3>
+        </div>
+        <span className={`text-[9px] font-black border px-2.5 py-1 rounded-full shrink-0 ${statusBadge}`}>
+          {statusLabel}
+        </span>
+      </div>
+
+      {/* Brief */}
+      {task.description && (
+        <div className="bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800/60 rounded-xl px-4 py-3">
+          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-1.5">📋 Brief / Instruksi</p>
+          <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
+            {task.description}
+          </p>
+        </div>
+      )}
+
+      {/* Approved result display */}
+      {assignment.status === 'APPROVED' && (
+        <div className="flex items-center justify-between bg-emerald-500/5 border border-emerald-500/15 rounded-xl px-4 py-3">
+          <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">✅ Sudah Disetujui Koordinator</span>
+          {assignment.sparks != null && (() => {
+            const meta = getSparkMeta(assignment.sparks);
+            return (
+              <span className={`text-xs font-black uppercase px-3 py-1 rounded-full border ${meta.color}`}>
+                {meta.emoji} {meta.label} ({assignment.sparks}/10)
+              </span>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Submit form */}
+      {assignment.status !== 'APPROVED' && (
+        <OJTSubmitForm assignment={assignment} workspaceId={workspaceId} />
+      )}
+
+      {/* Already submitted link & Reactions */}
+      {assignment.result_url && (
+        <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+              🔗 Link Hasil Karya Submit Anda
+            </span>
+            <a
+              href={assignment.result_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline truncate"
+            >
+              Buka Karya ↗
+            </a>
+          </div>
+
+          {/* Emoji Reactions Bar for OJT */}
+          <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
+            <span className="text-[10px] font-black uppercase text-zinc-400 mr-1">Feedback Mentor & Tim:</span>
+            {reactions.map((r) => (
+              <button
+                key={r.emoji}
+                type="button"
+                onClick={() => handleReaction(r.emoji)}
+                disabled={pending}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
+                  r.user_reacted
+                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold'
+                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                <span>{r.emoji}</span>
+                <span className="text-[10px] font-bold">{r.count}</span>
+              </button>
+            ))}
+
+            {DEFAULT_EMOJIS.filter((e) => !reactions.some((r) => r.emoji === e)).map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => handleReaction(emoji)}
+                disabled={pending}
+                className="px-2 py-0.5 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-white dark:hover:bg-zinc-900 transition-all opacity-60 hover:opacity-100"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main AssessmentPanel ──────────────────────────────────────────────────────
+
+export function AssessmentPanel({
+  workspaceId,
+  tasks,
+  assignmentsByTask,
+  reactionsMap,
+  currentUserId,
+  isLeader,
+  isCoordinator,
+  isOJT,
+}: AssessmentPanelProps) {
+  // Determine viewing role
+  const canManage = isLeader || isCoordinator;
+  const isOJTTrooper = isOJT && !isLeader;
+
+  // Track reload trigger (simple key increment after creation)
+  const [, setReload] = useState(0);
+
+  // Filter assessment tasks only
+  const assessmentTasks = tasks.filter((t) => t.status !== 'DELETED');
+
+  if (assessmentTasks.length === 0 && !canManage) {
+    return (
+      <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 text-center">
+        <p className="text-3xl mb-3">📝</p>
+        <p className="text-zinc-500 font-bold dark:text-zinc-400 text-sm">Belum ada assessment yang diberikan.</p>
+        <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">Tunggu mentor memberikan tugas assessment.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Header + create button (mentor only) */}
+      {canManage && (
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-black text-zinc-800 dark:text-zinc-200">
+              Manajemen Assessment
+            </h2>
+            <p className="text-[11px] text-zinc-400 mt-0.5">
+              {assessmentTasks.length} assessment · {
+                Object.values(assignmentsByTask).flat().filter((a) => a.status === 'WAITING_REVIEW').length
+              } menunggu review
+            </p>
+          </div>
+          <CreateAssessmentTaskForm
+            workspaceId={workspaceId}
+            onCreated={() => setReload((p) => p + 1)}
+          />
+        </div>
+      )}
+
+      {/* OJT header */}
+      {isOJTTrooper && (
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-black text-zinc-800 dark:text-zinc-200">Assessment Saya</h2>
+          <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2 py-0.5 rounded-full">
+            {assessmentTasks.length} tugas
+          </span>
+        </div>
+      )}
+
+      {/* Task list */}
+      <div className="space-y-4">
+        {assessmentTasks.map((task) => {
+          const allAssignments = assignmentsByTask[task.id] ?? [];
+
+          if (canManage) {
+            return (
+              <MentorTaskCard
+                key={task.id}
+                task={task}
+                assignments={allAssignments}
+                reactionsMap={reactionsMap}
+                workspaceId={workspaceId}
+                isCoordinator={isCoordinator}
+                canManage={canManage}
+              />
+            );
+          }
+
+          // OJT: only show their own assignment
+          const myAssignment = allAssignments.find((a) => a.user_id === currentUserId);
+          if (!myAssignment) return null;
+
+          return (
+            <OJTTaskCard
+              key={task.id}
+              task={task}
+              assignment={myAssignment}
+              reactions={reactionsMap?.[myAssignment.id] ?? []}
+              workspaceId={workspaceId}
+            />
+          );
+        })}
+
+        {/* Empty state for manager */}
+        {canManage && assessmentTasks.length === 0 && (
+          <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 text-center">
+            <p className="text-3xl mb-3">📝</p>
+            <p className="text-zinc-500 font-bold dark:text-zinc-400 text-sm">Belum ada assessment.</p>
+            <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">
+              Klik &ldquo;Buat Assessment&rdquo; untuk memberi tugas ke semua OJT sekaligus.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

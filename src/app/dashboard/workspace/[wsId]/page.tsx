@@ -6,10 +6,12 @@ import { getSessionContext, resolveWorkspacePermissions } from '@/modules/roles/
 import WorkspaceStatusForm from './components/WorkspaceStatusForm';
 import TeamMemberPanel from './components/TeamMemberPanel';
 import CreateTaskForm from './components/CreateTaskForm';
-import TaskAccordion from './components/TaskAccordion';
+import { LiveTaskAccordion } from './components/LiveTaskAccordion';
 import WorkspaceTabs from './components/WorkspaceTabs';
 import { WorkspaceChatRoom } from './components/WorkspaceChatRoom';
 import { WorkspaceChatMessage } from '@/modules/workspaces/chatActions';
+import WorkspaceReadTracker from '../components/WorkspaceReadTracker';
+import { AssessmentPanel } from './components/AssessmentPanel';
 
 
 interface WorkspaceRow {
@@ -22,6 +24,7 @@ interface WorkspaceRow {
   created_at: number;
   creator_name: string | null;
   ojt_coordinator_id: string | null;
+  workspace_type: string; // TROOPERS | ASSESSMENT
 }
 
 interface TaskRow {
@@ -79,13 +82,14 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   // Fetch workspace first (needed for notFound() guard and to extract projectId)
   const workspace = await db
     .prepare(`
-      SELECT ws.*, u.name as creator_name
+      SELECT ws.*, u.name as creator_name, m.name as mentor_name
       FROM workspaces ws
       LEFT JOIN users u ON ws.created_by = u.id
+      LEFT JOIN users m ON ws.ojt_coordinator_id = m.id
       WHERE ws.id = ?
     `)
     .bind(wsId)
-    .first() as WorkspaceRow | null;
+    .first() as (WorkspaceRow & { mentor_name?: string | null }) | null;
 
   if (!workspace) notFound();
 
@@ -107,7 +111,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     db.prepare(`
       SELECT id, title, description, status, priority, deadline, created_at, task_type, parent_task_id
       FROM tasks
-      WHERE workspace_id = ?
+      WHERE workspace_id = ? AND status != 'DELETED'
       ORDER BY
         CASE priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
         created_at ASC
@@ -140,31 +144,53 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   // SECURITY GATE: OJT interns must be a member or mentor of the workspace/project to view it
   if (ctx.userType === 'OJT') {
     const isMember = members.some((m) => m.userId === session.userId);
-    const isMentor = workspace.ojt_coordinator_id === session.userId || ojtCheck !== null;
+    const isMentor = workspace.ojt_coordinator_id === session.userId || ojtCheck !== null || ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
     if (!isMember && !isMentor) {
       redirect('/dashboard');
     }
   }
 
-  // Fetch assignments only when there are tasks (depends on tasks result above)
-  const { results: assignmentsRaw } = tasks.length > 0
-    ? await db
-        .prepare(`
-          SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
-                 ta.status, ta.result_url, ta.revision_note, ta.submitted_at,
-                 ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
-                 ta.sparks, ta.deadline, u.name as user_name
-          FROM task_assignments ta
-          LEFT JOIN users u ON ta.user_id = u.id
-          WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
-          ORDER BY ta.created_at ASC
-        `)
-        .bind(...tasks.map((t) => t.id))
-        .all()
-    : { results: [] };
+  // Fetch assignments & reactions when there are tasks
+  const [{ results: assignmentsRaw }, { results: reactionsRaw }] = tasks.length > 0
+    ? await Promise.all([
+        db
+          .prepare(`
+            SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
+                   ta.status, ta.result_url, ta.revision_note, ta.submitted_at,
+                   ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
+                   ta.sparks, ta.deadline, u.name as user_name
+            FROM task_assignments ta
+            LEFT JOIN users u ON ta.user_id = u.id
+            WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
+            ORDER BY ta.created_at ASC
+          `)
+          .bind(...tasks.map((t) => t.id))
+          .all(),
 
+        db
+          .prepare(`
+            SELECT r.assignment_id, r.emoji, COUNT(*) as count,
+                   MAX(CASE WHEN r.user_id = ? THEN 1 ELSE 0 END) as user_reacted
+            FROM assessment_submission_reactions r
+            JOIN task_assignments ta ON r.assignment_id = ta.id
+            WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
+            GROUP BY r.assignment_id, r.emoji
+          `)
+          .bind(session.userId, ...tasks.map((t) => t.id))
+          .all(),
+      ])
+    : [{ results: [] }, { results: [] }];
 
   const assignments = assignmentsRaw as unknown as AssignmentRow[];
+  const reactionsMap: Record<string, { emoji: string; count: number; user_reacted: number }[]> = {};
+  for (const r of (reactionsRaw as any[])) {
+    if (!reactionsMap[r.assignment_id]) reactionsMap[r.assignment_id] = [];
+    reactionsMap[r.assignment_id].push({
+      emoji: r.emoji,
+      count: Number(r.count),
+      user_reacted: Number(r.user_reacted),
+    });
+  }
 
   // Group assignments by task_id
   const assignmentsByTask: Record<string, AssignmentRow[]> = {};
@@ -188,11 +214,13 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   }
   const membersList = Object.values(membersMap) as any[];
 
-  // Compute roles for the current user (from already-fetched member data — no extra DB call)
+  // Compute roles for the current user
   const currentUserRoles: string[] = membersList.find((m) => m.userId === session.userId)?.teamRoles ?? [];
-  const isLeader = currentUserRoles.includes('LEADER');
-  const isMentor = workspace.ojt_coordinator_id === session.userId;
-  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+  const isAssessmentWs = workspace.workspace_type === 'ASSESSMENT';
+  const hasMentorRole = isAssessmentWs && ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isLeader = currentUserRoles.includes('LEADER') || hasMentorRole;
+  const isMentor = workspace.ojt_coordinator_id === session.userId || hasMentorRole;
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
 
   // Batch-resolve all permissions in ONE synchronous call (no extra DB/KV round-trips)
   const { canCreateTask, canAssignTask, canDeleteTask, canUpdateWs, canManageMembers } =
@@ -209,6 +237,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-8">
+      <WorkspaceReadTracker wsId={wsId} />
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs font-bold text-zinc-500 dark:text-zinc-400">
         {isOJT ? (
@@ -250,9 +279,11 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
               </p>
             )}
             <div className="flex items-center gap-4 mt-3 text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
-              {workspace.creator_name && (
+              {workspace.mentor_name ? (
+                <span className="text-purple-600 dark:text-purple-400 font-black">🎓 Mentor: {workspace.mentor_name}</span>
+              ) : workspace.creator_name ? (
                 <span>👤 Created by: {workspace.creator_name}</span>
-              )}
+              ) : null}
               <span className="text-zinc-300 dark:text-zinc-700">·</span>
               <span>{tasks.length} task{tasks.length !== 1 ? 's' : ''}</span>
             </div>
@@ -270,24 +301,26 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         tasksCount={tasks.length}
         membersCount={membersList.length}
         chatMessagesCount={chatMessages.length}
+        isAssessment={workspace.workspace_type === 'ASSESSMENT'}
         tasksTab={
-          tasks.length === 0 ? (
-            <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-12 text-center bg-white dark:bg-transparent">
-              <p className="text-3xl mb-3">📋</p>
-              <p className="text-zinc-500 font-bold dark:text-zinc-400">
-                Belum ada tugas di workspace ini.
-              </p>
-              {canCreateTask && (
-                <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">
-                  Klik tombol "+ Buat Tugas" di atas untuk memulai penugasan.
-                </p>
-              )}
-            </div>
-          ) : (
-            <TaskAccordion
-              tasks={tasks}
-              assignmentsByTask={assignmentsByTask}
+          workspace.workspace_type === 'ASSESSMENT' ? (
+            <AssessmentPanel
+              workspaceId={wsId}
+              tasks={tasks as any}
+              assignmentsByTask={assignmentsByTask as any}
+              reactionsMap={reactionsMap}
               currentUserId={session.userId}
+              isLeader={isLeader}
+              isCoordinator={isCoordinator}
+              isOJT={isOJT}
+            />
+          ) : (
+            <LiveTaskAccordion
+              workspaceId={wsId}
+              initialTasks={tasks as any}
+              initialAssignmentsByTask={assignmentsByTask as any}
+              currentUserId={session.userId}
+              canCreateTask={canCreateTask}
               canDeleteTask={canDeleteTask}
               canAssignTask={canAssignTask}
               isLeader={isLeader}
@@ -317,7 +350,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
           />
         }
         createTaskForm={
-          canCreateTask ? (
+          workspace.workspace_type !== 'ASSESSMENT' && canCreateTask ? (
             <CreateTaskForm workspaceId={wsId} existingTasks={existingTasks} />
           ) : undefined
         }

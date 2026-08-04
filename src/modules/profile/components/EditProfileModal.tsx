@@ -6,6 +6,8 @@ import { updateOjtProfile, changePassword } from '../actions';
 interface EditProfileModalProps {
   initialData: {
     name: string;
+    email?: string;
+    username?: string;
     university?: string;
     study_program?: string;
     semester?: string;
@@ -36,6 +38,8 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
 
   // Profile Form State
   const [name, setName] = useState(initialData.name || '');
+  const [email, setEmail] = useState(initialData.email || '');
+  const [username, setUsername] = useState(initialData.username || '');
   const [university, setUniversity] = useState(initialData.university || '');
   const [studyProgram, setStudyProgram] = useState(initialData.study_program || '');
   const [semester, setSemester] = useState(initialData.semester || '');
@@ -75,6 +79,8 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
 
     const res = await updateOjtProfile({
       name,
+      email,
+      username,
       university,
       study_program: studyProgram,
       semester,
@@ -171,7 +177,7 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
             <form onSubmit={handleProfileSave} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className={labelCls}>Nama *</label>
+                  <label className={labelCls}>Nama Lengkap *</label>
                   <input
                     type="text"
                     value={name}
@@ -187,6 +193,30 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
                     value={whatsappNumber}
                     onChange={(e) => setWhatsappNumber(e.target.value)}
                     placeholder="081234567890"
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Email *</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="name@company.com"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Username (Unik)</label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.-]/g, ''))}
+                    placeholder="e.g. syaiful_bakhri"
                     className={inputCls}
                   />
                 </div>

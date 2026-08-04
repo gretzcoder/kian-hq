@@ -140,7 +140,7 @@ export default function TeamMemberPanel({
   const canToggleRole = (roleToToggle: 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR') => {
     if (!canManageMembers) return false;
     if (roleToToggle === 'LEADER') {
-      return isMentor; // Only mentor can assign/remove team leader
+      return isMentor || canManageMembers; // Mentor or Staff Coordinator / Admin can assign/remove team leader
     }
     // OJT roles can be toggled by either Mentor or Team Leader (via canManageMembers)
     return true;

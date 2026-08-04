@@ -20,7 +20,7 @@ export async function createProject(formData: FormData) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'CREATE_PROJECT');
+  await checkPermission(session.userId, 'PROJECT_CREATE');
 
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
@@ -109,41 +109,53 @@ export async function updateProject(projectId: string, formData: FormData) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'UPDATE');
+  await checkPermission(session.userId, 'PROJECT_MANAGE');
 
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
   const gdriveFolderUrl = formData.get('gdriveFolderUrl') as string;
-  const status = formData.get('status') as string;
-  const ojtCoordinatorIds = formData.getAll('ojtCoordinatorIds') as string[];
 
   if (!name?.trim()) {
-    return { success: false, error: 'Project name is required.' };
+    return { success: false, error: 'Nama proyek wajib diisi.' };
   }
 
   const db = await getDB();
 
   try {
-    const firstMentorId = ojtCoordinatorIds[0] || null;
+    const rawCoordinators = formData.getAll('ojtCoordinatorIds') as string[];
+    const ojtCoordinatorIds = rawCoordinators.filter((id) => id && id.trim().length > 0);
 
-    await db
-      .prepare(`
-        UPDATE projects
-        SET name = ?, description = ?, gdrive_folder_id = ?, status = ?, ojt_coordinator_id = ?
-        WHERE id = ?
-      `)
-      .bind(name.trim(), description || null, gdriveFolderUrl || null, status || 'PLANNING', firstMentorId, projectId)
-      .run();
+    if (ojtCoordinatorIds.length > 0) {
+      const firstMentorId = ojtCoordinatorIds[0];
 
-    await db
-      .prepare('DELETE FROM project_coordinators WHERE project_id = ?')
-      .bind(projectId)
-      .run();
-
-    for (const mentorId of ojtCoordinatorIds) {
       await db
-        .prepare('INSERT OR IGNORE INTO project_coordinators (project_id, user_id) VALUES (?, ?)')
-        .bind(projectId, mentorId)
+        .prepare(`
+          UPDATE projects
+          SET name = ?, description = ?, gdrive_folder_id = ?, ojt_coordinator_id = ?
+          WHERE id = ?
+        `)
+        .bind(name.trim(), description || null, gdriveFolderUrl || null, firstMentorId, projectId)
+        .run();
+
+      await db
+        .prepare('DELETE FROM project_coordinators WHERE project_id = ?')
+        .bind(projectId)
+        .run();
+
+      for (const mentorId of ojtCoordinatorIds) {
+        await db
+          .prepare('INSERT OR IGNORE INTO project_coordinators (project_id, user_id) VALUES (?, ?)')
+          .bind(projectId, mentorId)
+          .run();
+      }
+    } else {
+      await db
+        .prepare(`
+          UPDATE projects
+          SET name = ?, description = ?, gdrive_folder_id = ?
+          WHERE id = ?
+        `)
+        .bind(name.trim(), description || null, gdriveFolderUrl || null, projectId)
         .run();
     }
 

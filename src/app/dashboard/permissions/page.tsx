@@ -32,8 +32,8 @@ export default async function PermissionsPage() {
   const session = await getSession();
   if (!session) redirect('/');
 
-  // Gate: MANAGE only
-  const canManage = await hasPermission(session.userId, 'MANAGE');
+  // Gate: ADMIN_ROLES required
+  const canManage = await hasPermission(session.userId, 'ADMIN_ROLES');
   if (!canManage) redirect('/dashboard');
 
   const db = await getDB();

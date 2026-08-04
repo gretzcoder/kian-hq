@@ -40,13 +40,13 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
     db.prepare("SELECT id, name, email FROM users WHERE status = 'ACTIVE' ORDER BY email ASC").all(),
   ]);
 
-  if (ctx.userType === 'OJT') {
+  if (ctx.userType === 'OJT' || (!ctx.can('PROJECT_CREATE') && !ctx.can('PROJECT_MANAGE') && !ctx.can('ADMIN_SYSTEM'))) {
     redirect('/dashboard/workspace');
   }
 
   const projects = projectsRaw.results as unknown as Project[];
   const usersList = usersRaw.results as unknown as { id: string; name: string; email: string }[];
-  const canCreateProject = ctx.can('CREATE_PROJECT');
+  const canCreateProject = ctx.can('PROJECT_CREATE');
 
   const { briefId } = await searchParams;
   let briefTitle: string | null = null;

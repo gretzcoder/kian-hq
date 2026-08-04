@@ -29,58 +29,47 @@ const ROLE_COLORS: Record<string, string> = {
   COLLABORATOR:     'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
 };
 
-// Risk levels for all permissions (updated for v2)
+// Risk levels for new domain-based permissions taxonomy
 const PERMISSION_RISK: Record<string, 'low' | 'medium' | 'high'> = {
-  // Content
-  READ: 'low', COMMENT: 'low', DOWNLOAD: 'low',
-  // Brief
-  CREATE_BRIEF: 'low', UPDATE_BRIEF: 'low',
-  SUBMIT_BRIEF: 'low', APPROVE_BRIEF: 'high',
-  REQUEST_CHANGES: 'medium', UNLOCK_BRIEF: 'high',
-  // Project
-  CREATE_PROJECT: 'medium', UPDATE: 'medium', DELETE: 'high',
-  PUBLISH_PROJECT: 'high', ARCHIVE_PROJECT: 'high',
-  // Workspace
-  CREATE_WORKSPACE: 'medium', UPDATE_WORKSPACE: 'medium',
-  // Task
-  CREATE_TASK: 'medium', ASSIGN_TASK: 'medium',
-  UPLOAD: 'medium', APPROVE: 'high', REQUEST_REVISION: 'medium',
-  // System
-  MANAGE: 'high', EXPORT: 'high', SHARE: 'medium',
-  CREATE_ANNOUNCEMENT: 'medium', USE_AI: 'medium',
+  // Admin Domain
+  ADMIN_SYSTEM: 'high', ADMIN_USERS: 'high', ADMIN_ROLES: 'high', VIEW_OJT_DATA: 'medium',
+  // Project & Workspace
+  PROJECT_CREATE: 'low', PROJECT_MANAGE: 'medium',
+  WORKSPACE_MANAGE: 'medium', WORKSPACE_MEMBER: 'medium',
+  // Task Workflow
+  TASK_CREATE: 'low', TASK_ASSIGN: 'medium', TASK_REVIEW: 'high', TASK_EXECUTE: 'low',
+  // Content & Knowledge
+  BRIEF_CREATE: 'low', BRIEF_REVIEW: 'medium', KB_MANAGE: 'low', ANNOUNCEMENT_POST: 'low',
+  // Feature Domain
+  USE_AI: 'low', EXPORT_DATA: 'medium',
 };
 
-// Permission categories for grouping
+// Permission categories for clean UI grouping
 const PERMISSION_CATEGORIES: { label: string; icon: string; permissions: string[] }[] = [
   {
-    label: 'Content & Reading',
-    icon: '📄',
-    permissions: ['READ', 'COMMENT', 'DOWNLOAD'],
+    label: 'Platform Administration',
+    icon: '🛡️',
+    permissions: ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'VIEW_OJT_DATA'],
   },
   {
-    label: 'Content Brief',
-    icon: '📝',
-    permissions: ['CREATE_BRIEF', 'UPDATE_BRIEF', 'SUBMIT_BRIEF', 'APPROVE_BRIEF', 'REQUEST_CHANGES', 'UNLOCK_BRIEF'],
-  },
-  {
-    label: 'Project',
+    label: 'Projects & Workspaces',
     icon: '📁',
-    permissions: ['CREATE_PROJECT', 'UPDATE', 'DELETE', 'PUBLISH_PROJECT', 'ARCHIVE_PROJECT'],
+    permissions: ['PROJECT_CREATE', 'PROJECT_MANAGE', 'WORKSPACE_MANAGE', 'WORKSPACE_MEMBER'],
   },
   {
-    label: 'Workspace',
-    icon: '🏠',
-    permissions: ['CREATE_WORKSPACE', 'UPDATE_WORKSPACE'],
+    label: 'Task Workflow Execution',
+    icon: '⚡',
+    permissions: ['TASK_CREATE', 'TASK_ASSIGN', 'TASK_REVIEW', 'TASK_EXECUTE'],
   },
   {
-    label: 'Task',
-    icon: '✅',
-    permissions: ['CREATE_TASK', 'ASSIGN_TASK', 'UPLOAD', 'APPROVE', 'REQUEST_REVISION'],
+    label: 'Content & Knowledge Base',
+    icon: '📚',
+    permissions: ['BRIEF_CREATE', 'BRIEF_REVIEW', 'KB_MANAGE', 'ANNOUNCEMENT_POST'],
   },
   {
-    label: 'System',
-    icon: '⚙️',
-    permissions: ['MANAGE', 'EXPORT', 'SHARE', 'CREATE_ANNOUNCEMENT', 'USE_AI'],
+    label: 'System Features & Reports',
+    icon: '📊',
+    permissions: ['USE_AI', 'EXPORT_DATA'],
   },
 ];
 

@@ -44,11 +44,8 @@ export default async function BriefsPage() {
 
   // Must have any brief sub-permission to access
   const hasBriefPermission =
-    ctx.can('CREATE_BRIEF') ||
-    ctx.can('APPROVE_BRIEF') ||
-    ctx.can('SUBMIT_BRIEF') ||
-    ctx.can('REQUEST_CHANGES') ||
-    ctx.can('UNLOCK_BRIEF');
+    ctx.can('BRIEF_CREATE') ||
+    ctx.can('BRIEF_REVIEW');
 
   if (!hasBriefPermission) redirect('/dashboard');
 
@@ -91,11 +88,11 @@ export default async function BriefsPage() {
 
   const briefs = rawBriefs as unknown as BriefRow[];
 
-  const canCreate       = ctx.can('CREATE_BRIEF');
-  const canApprove      = ctx.can('APPROVE_BRIEF');
-  const canRequestChg   = ctx.can('REQUEST_CHANGES');
-  const canUnlock       = ctx.can('UNLOCK_BRIEF');
-  const canCreateProject = ctx.can('CREATE_PROJECT');
+  const canCreate       = ctx.can('BRIEF_CREATE');
+  const canApprove      = ctx.can('BRIEF_REVIEW');
+  const canRequestChg   = ctx.can('BRIEF_REVIEW');
+  const canUnlock       = ctx.can('BRIEF_REVIEW');
+  const canCreateProject = ctx.can('PROJECT_CREATE');
 
   return (
     <div className="space-y-8">

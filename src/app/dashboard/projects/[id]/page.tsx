@@ -3,10 +3,11 @@ import { getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { deleteProject, publishProject, archiveProject } from '@/modules/projects/actions';
+import { deleteProject, publishProject, archiveProject, updateProject } from '@/modules/projects/actions';
 import ProjectTabs from '@/modules/projects/components/ProjectTabs';
 import ProjectDetailTabs from '@/modules/projects/components/ProjectDetailTabs';
 import ProjectCoordinatorsManager from '@/modules/projects/components/ProjectCoordinatorsManager';
+import EditProjectModal from '@/modules/projects/components/EditProjectModal';
 import CreateWorkspaceForm from './components/CreateWorkspaceForm';
 import DeleteWorkspaceButton from './components/DeleteWorkspaceButton';
 
@@ -117,15 +118,15 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     redirect('/dashboard/workspace');
   }
 
-  const canCreateTask    = ctx.can('CREATE_TASK');
-  const canApproveTask   = ctx.can('APPROVE');
-  const canDeleteTask    = ctx.can('DELETE');
-  const canDeleteProject = ctx.can('DELETE');
-  const canEditBrief     = ctx.can('UPDATE_BRIEF');
-  const canCreateWs      = ctx.can('CREATE_WORKSPACE') || isProjectMentor;
-  const canDeleteWs      = ctx.can('DELETE') || isProjectMentor;
-  const canPublish       = ctx.can('PUBLISH_PROJECT');
-  const canArchive       = ctx.can('ARCHIVE_PROJECT');
+  const canCreateTask    = ctx.can('TASK_CREATE');
+  const canApproveTask   = ctx.can('TASK_REVIEW');
+  const canDeleteTask    = ctx.can('WORKSPACE_MANAGE');
+  const canDeleteProject = ctx.can('PROJECT_MANAGE');
+  const canEditBrief     = ctx.can('BRIEF_REVIEW');
+  const canCreateWs      = ctx.can('WORKSPACE_MANAGE') || isProjectMentor;
+  const canDeleteWs      = ctx.can('WORKSPACE_MANAGE') || isProjectMentor;
+  const canPublish       = ctx.can('PROJECT_MANAGE');
+  const canArchive       = ctx.can('ARCHIVE_PROJECT') || ctx.can('PROJECT_MANAGE');
 
   // Fetch Workspaces for this project
   const { results: workspacesRaw } = await db
@@ -248,6 +249,18 @@ export default async function ProjectDetailPage({ params }: PageProps) {
           ← {isOJT ? "Back to Workspace" : "Back to Registry"}
         </Link>
         <div className="flex items-center gap-2">
+          {canDeleteProject && (
+            <EditProjectModal
+              projectId={projectId}
+              initialName={project.name}
+              initialDescription={project.description}
+              initialGdriveUrl={project.gdrive_folder_id}
+              onUpdate={async (formData: FormData) => {
+                'use server';
+                return await updateProject(projectId, formData);
+              }}
+            />
+          )}
           {canPublish && project.status === 'IN_REVIEW' && (
             <form action={handlePublish}>
               <button

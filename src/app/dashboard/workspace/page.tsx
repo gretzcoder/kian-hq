@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/modules/roles/rbac';
 import Link from 'next/link';
 import DeleteWorkspaceButton from '../projects/[id]/components/DeleteWorkspaceButton';
+import WorkspaceReadTracker from './components/WorkspaceReadTracker';
+import WorkspaceListCards from './components/WorkspaceListCards';
 
 interface AssignmentRow {
   assignment_id:   string;
@@ -53,26 +55,54 @@ export default async function WorkspacePage() {
   const session = await getSession();
   if (!session) redirect('/');
 
-  // Fetch permissions + all data IN PARALLEL
+  const ctx = await getSessionContext(session.userId);
+  const isGlobalWorkspaceManager = ctx.userType === 'STAFF' || ctx.can('WORKSPACE_MANAGE') || ctx.can('MANAGE');
+
   const [
-    ctx,
     { results: rawWorkspaces },
     { results: rawAssignments },
     { results: rawMentoredProjects },
   ] = await Promise.all([
-    getSessionContext(session.userId),
-    // 1. Fetch workspaces where user is a member, workspace coordinator, or project mentor
-    getDB().then((db) => db.prepare(`
-      SELECT ws.id, ws.name, ws.description, ws.status, ws.deadline, ws.project_id, ws.ojt_coordinator_id, p.name AS project_name,
-             (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role
-      FROM workspaces ws
-      JOIN projects p ON ws.project_id = p.id
-      WHERE (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
-         OR ws.ojt_coordinator_id = ?
-         OR EXISTS (SELECT 1 FROM project_coordinators WHERE project_id = ws.project_id AND user_id = ?))
-        AND ws.deleted_at IS NULL
-      ORDER BY ws.created_at DESC
-    `).bind(session.userId, session.userId, session.userId, session.userId).all()),
+    // 1. Fetch workspaces: all workspaces if Staff/Manager, else only user's own/mentored workspaces + ASSESSMENT workspaces for mentors
+    getDB().then((db) => {
+      if (isGlobalWorkspaceManager) {
+        return db.prepare(`
+          SELECT ws.id, ws.name, ws.description, ws.status, ws.deadline, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
+                 (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role,
+                 MAX(
+                   ws.created_at,
+                   COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
+                   COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0)
+                 ) AS latest_activity_ts
+          FROM workspaces ws
+          JOIN projects p ON ws.project_id = p.id
+          WHERE ws.deleted_at IS NULL
+          ORDER BY ws.created_at DESC
+        `).bind(session.userId).all();
+      }
+
+      const hasMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+
+      return db.prepare(`
+        SELECT ws.id, ws.name, ws.description, ws.status, ws.deadline, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
+               (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role,
+               MAX(
+                 ws.created_at,
+                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
+                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0)
+               ) AS latest_activity_ts
+        FROM workspaces ws
+        JOIN projects p ON ws.project_id = p.id
+        WHERE (
+            EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
+            OR ws.ojt_coordinator_id = ?
+            OR EXISTS (SELECT 1 FROM project_coordinators WHERE project_id = ws.project_id AND user_id = ?)
+            OR (? AND ws.workspace_type = 'ASSESSMENT')
+          )
+          AND ws.deleted_at IS NULL
+        ORDER BY ws.created_at DESC
+      `).bind(session.userId, session.userId, session.userId, session.userId, hasMentorRole ? 1 : 0).all();
+    }),
     // 2. All active assignments for the current user
     getDB().then((db) => db.prepare(`
       SELECT
@@ -125,6 +155,7 @@ export default async function WorkspacePage() {
     ojt_coordinator_id: string | null;
     project_name: string;
     my_team_role: string | null;
+    latest_activity_ts?: number | null;
   }[];
 
   const assignments = rawAssignments as unknown as AssignmentRow[];
@@ -169,6 +200,7 @@ export default async function WorkspacePage() {
 
   return (
     <div className="space-y-10">
+      <WorkspaceReadTracker />
       {/* Header */}
       <div className="pb-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
@@ -229,54 +261,12 @@ export default async function WorkspacePage() {
             {userWorkspaces.length} workspace{userWorkspaces.length !== 1 ? 's' : ''}
           </span>
         </div>
-        {userWorkspaces.length === 0 ? (
-          <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-3xl p-12 text-center text-zinc-400 text-xs font-bold leading-normal">
-            📋 You are not assigned to any workspaces yet.<br />
-            Ask your team leader or coordinator to invite you.
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {userWorkspaces.map((ws) => {
-              const canDeleteWs = canGlobalDelete || ws.ojt_coordinator_id === session.userId || mentoredProjectIds.has(ws.project_id);
-              return (
-                <div
-                  key={ws.id}
-                  className="relative border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between hover:shadow-md shadow-sm hover:-translate-y-0.5 group"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-2 mb-1">
-                      <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 block">
-                        {ws.project_name}
-                      </span>
-                      {canDeleteWs && (
-                        <DeleteWorkspaceButton workspaceId={ws.id} workspaceName={ws.name} />
-                      )}
-                    </div>
-                    <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                      {ws.name}
-                    </h3>
-                    {ws.description && (
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 line-clamp-2 leading-relaxed">
-                        {ws.description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="mt-8 pt-3 border-t border-zinc-100 dark:border-zinc-900/60 flex items-center justify-between gap-2">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 bg-blue-500/5 px-2.5 py-1 rounded-full border border-blue-500/10">
-                      {ws.status}
-                    </span>
-                    <Link
-                      href={`/dashboard/workspace/${ws.id}`}
-                      className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3.5 py-2 rounded-xl bg-white dark:bg-zinc-900/50 transition-all font-bold active:scale-[0.98] shadow-sm"
-                    >
-                      Open Console &rarr;
-                    </Link>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <WorkspaceListCards
+          userWorkspaces={userWorkspaces}
+          canGlobalDelete={canGlobalDelete}
+          mentoredProjectIds={Array.from(mentoredProjectIds)}
+          currentUserId={session.userId}
+        />
       </div>
 
       {/* Assignments List Section */}

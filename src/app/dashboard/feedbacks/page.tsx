@@ -10,8 +10,8 @@ export default async function FeedbacksPage() {
 
   const ctx = await getSessionContext(session.userId);
 
-  // Allow STAFF with MANAGE / EXECUTIVE / COORDINATOR roles
-  const canViewFeedbacks = ctx.can('MANAGE') || ctx.roles.includes('EXECUTIVE') || ctx.roles.includes('COORDINATOR');
+  // Allow users with ADMIN_USERS permission
+  const canViewFeedbacks = ctx.can('ADMIN_USERS') || ctx.can('ADMIN_SYSTEM');
   if (!canViewFeedbacks) redirect('/dashboard');
 
   const feedbacks = await getExecutiveFeedbacks();

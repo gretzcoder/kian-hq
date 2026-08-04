@@ -248,6 +248,8 @@ export default async function ProfilePage({
               <EditProfileButton
                 initialData={{
                   name: profile?.name || session.name,
+                  email: profile?.email || session.email,
+                  username: (profile as any)?.username || '',
                   university: profile?.university || undefined,
                   study_program: profile?.study_program || undefined,
                   semester: profile?.semester || undefined,
@@ -515,24 +517,6 @@ export default async function ProfilePage({
           </div>
         </div>
       )}
-
-      {/* ── METRICS ROW (Sleek & Compact) ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
-        {[
-          { label: 'Perlu Revisi',    value: totalRevision,  icon: '🔄', colorVal: 'text-red-600 dark:text-red-400',       border: 'border-red-200 dark:border-red-900/40',     bg: 'bg-red-500/5' },
-          { label: 'Workspace',       value: workspaceCount, icon: '🗂',  colorVal: 'text-blue-600 dark:text-blue-400',      border: 'border-blue-200 dark:border-blue-900/40',   bg: 'bg-blue-500/5' },
-          { label: 'Proyek Terlibat', value: projectCount,   icon: '📁', colorVal: 'text-amber-600 dark:text-amber-400',    border: 'border-amber-200 dark:border-amber-900/40', bg: 'bg-amber-500/5' },
-          { label: 'Total Disetujui', value: totalApproved,  icon: '✅', colorVal: 'text-emerald-600 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-900/40', bg: 'bg-emerald-500/5' },
-        ].map((c) => (
-          <div key={c.label} className={`${card} ${c.bg} ${c.border} p-3 sm:p-3.5 flex items-center justify-between gap-2 rounded-2xl`}>
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-lg shrink-0">{c.icon}</span>
-              <p className="text-[10px] sm:text-[11px] font-bold text-zinc-600 dark:text-zinc-300 truncate">{c.label}</p>
-            </div>
-            <p className={`text-base sm:text-lg font-black ${c.colorVal} shrink-0 font-mono`}>{c.value}</p>
-          </div>
-        ))}
-      </div>
 
       {/* ── BREAKDOWN GRID (Only for OJT) ── */}
       {profile?.user_type !== 'STAFF' && (roleStats.length > 0 || totalAssignments > 0) && (

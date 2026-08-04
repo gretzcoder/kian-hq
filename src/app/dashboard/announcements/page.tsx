@@ -1,10 +1,9 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
-import Link from 'next/link';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { createAnnouncement, deleteAnnouncement } from '@/modules/announcements/actions';
-import { AnnouncementInteractive, CommentItem, ReactionItem } from './AnnouncementInteractive';
-import { MarkdownViewer } from '@/components/MarkdownViewer';
+import MarkdownInput from '@/components/MarkdownInput';
+import AnnouncementsFeed from './AnnouncementsFeed';
 
 interface AnnouncementRow {
   id: string;
@@ -68,8 +67,8 @@ export default async function AnnouncementsPage() {
   const allComments = commentsRaw.results as unknown as DBCommentRow[];
   const allReactions = reactionsRaw.results as unknown as DBReactionRow[];
 
-  const canCreate = ctx.can('CREATE_ANNOUNCEMENT');
-  const canDelete = ctx.can('DELETE');
+  const canCreate = ctx.can('ANNOUNCEMENT_POST');
+  const canDelete = ctx.can('ANNOUNCEMENT_POST') || ctx.can('ADMIN_SYSTEM');
 
   async function handleCreate(formData: FormData) {
     'use server';
@@ -102,99 +101,14 @@ export default async function AnnouncementsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* Announcements Feed */}
         <div className={canCreate ? 'lg:col-span-2 space-y-5' : 'lg:col-span-3 space-y-5'}>
-          {announcements.length === 0 ? (
-            <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-3xl p-16 text-center">
-              <p className="text-3xl mb-3">📢</p>
-              <p className="text-zinc-500 text-sm font-medium">No announcements yet.</p>
-            </div>
-          ) : (
-            announcements.map((ann) => {
-              const comments: CommentItem[] = allComments
-                .filter((c) => c.announcement_id === ann.id)
-                .map((c) => ({
-                  id: c.id,
-                  user_id: c.user_id,
-                  parent_id: c.parent_id,
-                  user_name: c.user_name,
-                  user_avatar: c.user_avatar,
-                  content: c.content,
-                  created_at: c.created_at,
-                }));
-
-              const reactions: ReactionItem[] = allReactions
-                .filter((r) => r.announcement_id === ann.id)
-                .map((r) => ({
-                  emoji: r.emoji,
-                  count: Number(r.count),
-                  user_reacted: Boolean(r.user_reacted),
-                }));
-
-              return (
-                <div
-                  key={ann.id}
-                  className="border border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-[#09090b]/40 rounded-3xl p-6 shadow-sm border-l-4 border-l-purple-500 hover:shadow-md transition-all duration-300"
-                >
-                  {/* Author Header */}
-                  <div className="flex items-center justify-between gap-3 mb-3 pb-3 border-b border-zinc-100 dark:border-zinc-900/60">
-                    <Link
-                      href={ann.author_id ? `/dashboard/profile?userId=${ann.author_id}` : '/dashboard/profile'}
-                      className="flex items-center gap-2.5 group min-w-0"
-                    >
-                      {ann.author_avatar ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={ann.author_avatar}
-                          alt={ann.author_name || 'Author'}
-                          className="w-8 h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0 uppercase">
-                          {(ann.author_name || 'A').substring(0, 2)}
-                        </div>
-                      )}
-                      <span className="text-xs font-bold text-zinc-900 dark:text-zinc-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:underline truncate">
-                        {ann.author_name || 'System Operator'}
-                      </span>
-                    </Link>
-
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-[10px] text-zinc-400 font-mono">
-                        {new Date(ann.created_at * 1000).toLocaleDateString('id-ID', {
-                          day: 'numeric', month: 'long', year: 'numeric',
-                        })}
-                      </span>
-                      {canDelete && (
-                        <form action={handleDelete}>
-                          <input type="hidden" name="id" value={ann.id} />
-                          <button
-                            type="submit"
-                            className="text-[10px] text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-bold border border-red-500/10 hover:border-red-500/20 hover:bg-red-500/5 px-2.5 py-1 rounded-lg transition-all active:scale-[0.97]"
-                          >
-                            Delete
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                  </div>
-
-                  <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 mb-2">{ann.title}</h3>
-
-                  <div className="text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed my-2">
-                    <MarkdownViewer content={ann.content} />
-                  </div>
-
-                  {/* Comments and Emoji Reactions */}
-                  <AnnouncementInteractive
-                    announcementId={ann.id}
-                    currentUserId={session.userId}
-                    comments={comments}
-                    reactions={reactions}
-                    canDelete={canDelete}
-                  />
-                </div>
-              );
-            })
-          )}
+          <AnnouncementsFeed
+            initialAnnouncements={announcements}
+            initialComments={allComments}
+            initialReactions={allReactions}
+            currentUserId={session.userId}
+            canDelete={canDelete}
+            onDelete={handleDelete}
+          />
         </div>
 
         {/* Right Panel: Create Form (Only if permitted) */}
@@ -220,18 +134,13 @@ export default async function AnnouncementsPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                    Message Content
-                  </label>
-                  <textarea
-                    name="content"
-                    rows={5}
-                    required
-                    placeholder="Type the announcement details, links, or reminders..."
-                    className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all resize-none duration-200"
-                  />
-                </div>
+                <MarkdownInput
+                  name="content"
+                  label="Message Content"
+                  rows={5}
+                  required
+                  placeholder="Ketik detail pengumuman (dukungan Markdown: **tebal**, *miring*, - list, [link](url)...)"
+                />
 
                 <button
                   type="submit"

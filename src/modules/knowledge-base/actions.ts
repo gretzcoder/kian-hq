@@ -12,7 +12,7 @@ export async function createKBArticle(formData: FormData) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized: No active session');
 
-  await checkPermission(session.userId, 'CREATE_KB');
+  await checkPermission(session.userId, 'KB_MANAGE');
 
   const title    = formData.get('title')    as string;
   const content  = formData.get('content')  as string;
@@ -42,7 +42,7 @@ export async function createKBCategory(formData: FormData) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'CREATE_KB');
+  await checkPermission(session.userId, 'KB_MANAGE');
 
   const name        = (formData.get('name')        as string)?.trim();
   const description = (formData.get('description') as string)?.trim() || null;
@@ -69,7 +69,7 @@ export async function deleteKBCategory(id: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'CREATE_KB');
+  await checkPermission(session.userId, 'KB_MANAGE');
 
   const db = await getDB();
   await db.prepare('DELETE FROM knowledge_categories WHERE id = ?').bind(id).run();
@@ -84,7 +84,7 @@ export async function createKBItem(formData: FormData) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'CREATE_KB');
+  await checkPermission(session.userId, 'KB_MANAGE');
 
   const categoryId  = (formData.get('category_id')  as string)?.trim();
   const title       = (formData.get('title')        as string)?.trim();

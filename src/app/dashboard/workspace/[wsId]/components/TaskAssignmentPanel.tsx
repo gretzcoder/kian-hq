@@ -40,6 +40,7 @@ const roleConfig: Record<string, { color: string; label: string; desc: string }>
 
 export default function TaskAssignmentPanel({
   taskId,
+  taskType,
   taskDeadline,
   existingAssignments,
   users,
@@ -47,6 +48,7 @@ export default function TaskAssignmentPanel({
   isOjt = false,
 }: {
   taskId: string;
+  taskType?: string;
   taskDeadline?: number | null;
   existingAssignments: ExistingAssignment[];
   users: User[];
@@ -62,7 +64,9 @@ export default function TaskAssignmentPanel({
   const [open, setOpen] = useState(false);
 
   const activeRoles = isOjt
-    ? (['RESEARCHER', 'PLANNER', 'DESIGNER', 'VIDEO_EDITOR', 'CREATOR'] as const)
+    ? taskType === 'VIDEO'
+      ? (['RESEARCHER', 'PLANNER', 'VIDEO_EDITOR'] as const)
+      : (['RESEARCHER', 'PLANNER', 'DESIGNER'] as const)
     : ASSIGNMENT_ROLES;
 
   const eligibleUsers = users.filter((u) => {

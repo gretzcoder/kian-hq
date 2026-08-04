@@ -13,7 +13,7 @@ export async function createAnnouncement(formData: FormData) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized: No active session');
 
-  await checkPermission(session.userId, 'CREATE_ANNOUNCEMENT');
+  await checkPermission(session.userId, 'ANNOUNCEMENT_POST');
 
   const title   = formData.get('title') as string;
   const content = formData.get('content') as string;
@@ -166,6 +166,50 @@ export async function toggleAnnouncementReaction(announcementId: string, emoji: 
   } catch (err: any) {
     console.error('toggleAnnouncementReaction failed:', err);
     return { success: false, error: err.message || 'Failed to update reaction.' };
+  }
+}
+
+/**
+ * Fetch fresh announcements, comments, and reactions for real-time polling.
+ */
+export async function getAnnouncementsUpdates() {
+  const session = await getSession();
+  if (!session) return null;
+
+  const db = await getDB();
+
+  try {
+    const [announcementsRaw, commentsRaw, reactionsRaw] = await Promise.all([
+      db.prepare(`
+        SELECT a.id, a.title, a.content, a.created_at, a.created_by, u.name as author_name, u.avatar_url as author_avatar
+        FROM announcements a
+        LEFT JOIN users u ON a.created_by = u.id
+        ORDER BY a.created_at DESC
+      `).all(),
+
+      db.prepare(`
+        SELECT ac.id, ac.announcement_id, ac.user_id, ac.parent_id, ac.content, ac.created_at, u.name as user_name, u.avatar_url as user_avatar
+        FROM announcement_comments ac
+        LEFT JOIN users u ON ac.user_id = u.id
+        ORDER BY ac.created_at ASC
+      `).all(),
+
+      db.prepare(`
+        SELECT announcement_id, emoji, COUNT(*) as count,
+               MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as user_reacted
+        FROM announcement_reactions
+        GROUP BY announcement_id, emoji
+      `).bind(session.userId).all(),
+    ]);
+
+    return {
+      announcements: (announcementsRaw.results || []) as any[],
+      comments: (commentsRaw.results || []) as any[],
+      reactions: (reactionsRaw.results || []) as any[],
+    };
+  } catch (err) {
+    console.error('getAnnouncementsUpdates failed:', err);
+    return null;
   }
 }
 

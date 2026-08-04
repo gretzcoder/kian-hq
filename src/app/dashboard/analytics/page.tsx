@@ -1,6 +1,6 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
-import { hasPermission } from '@/modules/roles/rbac';
+import { getSessionContext, hasPermission } from '@/modules/roles/rbac';
 import { redirect } from 'next/navigation';
 
 interface StatusCount { status: string; count: number; }
@@ -13,7 +13,12 @@ export default async function AnalyticsPage() {
   const session = await getSession();
   if (!session) redirect('/');
 
-  const canManage = await hasPermission(session.userId, 'MANAGE');
+  const ctx = await getSessionContext(session.userId);
+  if (!ctx.can('EXPORT_DATA') && !ctx.can('ADMIN_SYSTEM')) {
+    redirect('/dashboard');
+  }
+
+  const canManage = ctx.can('ADMIN_SYSTEM');
   const db = await getDB();
   const nowSec = Math.floor(Date.now() / 1000);
   const thirtyDaysAgo = nowSec - 30 * 24 * 60 * 60;

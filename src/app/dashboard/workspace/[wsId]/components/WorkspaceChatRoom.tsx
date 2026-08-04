@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition, useEffect, useRef } from 'react';
-import { sendWorkspaceMessage, deleteWorkspaceMessage, WorkspaceChatMessage } from '@/modules/workspaces/chatActions';
+import { sendWorkspaceMessage, deleteWorkspaceMessage, getWorkspaceChats, WorkspaceChatMessage } from '@/modules/workspaces/chatActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 
 interface WorkspaceChatRoomProps {
@@ -25,6 +25,33 @@ export function WorkspaceChatRoom({
   useEffect(() => {
     setMessages(initialMessages);
   }, [initialMessages]);
+
+  // Real-time polling every 3 seconds
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchChats = async () => {
+      // Don't overwrite if document is hidden to conserve resources
+      if (document.hidden) return;
+      const latest = await getWorkspaceChats(workspaceId);
+      if (isMounted && latest && latest.length > 0) {
+        setMessages((prev) => {
+          // preserve local optimistic messages starting with temp_
+          const optimistics = prev.filter((m) => m.id.startsWith('temp_'));
+          // deduplicate and merge
+          const serverIds = new Set(latest.map((m) => m.id));
+          const filteredOptimistics = optimistics.filter((m) => !serverIds.has(m.id));
+          return [...latest, ...filteredOptimistics];
+        });
+      }
+    };
+
+    const interval = setInterval(fetchChats, 3000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [workspaceId]);
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });

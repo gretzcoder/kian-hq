@@ -73,7 +73,7 @@ export default async function KnowledgeBasePage({
   const { cat: activeCatParam } = await searchParams;
   const db = await getDB();
   const ctx = await getSessionContext(session.userId);
-  const canManage = ctx.can('CREATE_KB');
+  const canManage = ctx.can('KB_MANAGE');
 
   // Fetch all categories with item count
   const { results: rawCategories } = await db.prepare(`

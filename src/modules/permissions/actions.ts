@@ -14,7 +14,7 @@ export async function grantRolePermission(roleId: string, permissionId: string) 
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_ROLES');
 
   if (!roleId || !permissionId) {
     return { success: false, error: 'Role ID and Permission ID are required.' };
@@ -48,7 +48,7 @@ export async function revokeRolePermission(roleId: string, permissionId: string)
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_ROLES');
 
   if (!roleId || !permissionId) {
     return { success: false, error: 'Role ID and Permission ID are required.' };
@@ -80,7 +80,7 @@ export async function createRoleAction(name: string, description: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_ROLES');
 
   if (!name?.trim()) {
     return { success: false, error: 'Role name is required.' };
@@ -115,7 +115,7 @@ export async function updateRoleAction(roleId: string, name: string, description
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_ROLES');
 
   const protectedRoles = ['role_executive', 'role_coordinator', 'role_creator', 'role_collaborator'];
   if (protectedRoles.includes(roleId)) {
@@ -151,7 +151,7 @@ export async function deleteRoleAction(roleId: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'MANAGE');
+  await checkPermission(session.userId, 'ADMIN_ROLES');
 
   const protectedRoles = ['role_executive', 'role_coordinator', 'role_creator', 'role_collaborator'];
   if (protectedRoles.includes(roleId)) {
