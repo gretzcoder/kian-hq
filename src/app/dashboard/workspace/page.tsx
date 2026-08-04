@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/modules/roles/rbac';
 import Link from 'next/link';
 import DeleteWorkspaceButton from '../projects/[id]/components/DeleteWorkspaceButton';
-import WorkspaceReadTracker from './components/WorkspaceReadTracker';
 import WorkspaceListCards from './components/WorkspaceListCards';
 
 interface AssignmentRow {
@@ -200,7 +199,6 @@ export default async function WorkspacePage() {
 
   return (
     <div className="space-y-10">
-      <WorkspaceReadTracker />
       {/* Header */}
       <div className="pb-4 border-b border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>

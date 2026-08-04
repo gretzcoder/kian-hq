@@ -10,7 +10,6 @@ import {
   deleteAssessmentTask,
   toggleAssessmentReaction,
 } from '@/modules/workspaces/assessmentActions';
-import { getSparkMeta } from '@/app/dashboard/review/components/ReviewActions';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
