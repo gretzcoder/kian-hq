@@ -102,10 +102,10 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     { results: tasksRaw },
     { results: membersRaw },
     { results: usersRaw },
-    { results: ojtUsersRaw },
     { results: chatMessagesRaw },
     ctx,
     { results: mentorsRaw },
+    { results: memberAccountRolesRaw },
   ] = await Promise.all([
     db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
     db.prepare("SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1").bind(projectId).first(),
@@ -118,14 +118,14 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         created_at ASC
     `).bind(wsId).all(),
     db.prepare(`
-      SELECT wm.user_id as userId, u.name as userName, u.email as userEmail, wm.team_role as teamRole
+      SELECT wm.user_id as userId, u.name as userName, u.email as userEmail,
+             wm.team_role as teamRole, u.user_type as userType
       FROM workspace_members wm
       JOIN users u ON wm.user_id = u.id
       WHERE wm.workspace_id = ?
       ORDER BY wm.created_at ASC
     `).bind(wsId).all(),
-    db.prepare('SELECT id, name FROM users ORDER BY name ASC').all(),
-    db.prepare("SELECT id, name, email FROM users WHERE user_type = 'OJT' AND status = 'ACTIVE' ORDER BY email ASC").all(),
+    db.prepare("SELECT id, name, email FROM users WHERE status = 'ACTIVE' ORDER BY name ASC").all(),
     db.prepare(`
       SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.created_at, u.name as user_name
       FROM workspace_chats wc
@@ -143,12 +143,20 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         AND (r.id = 'role_mentor_troopers' OR r.name = 'MENTOR TROOPERS')
       ORDER BY u.name ASC
     `).all(),
+    db.prepare(`
+      SELECT ur.user_id as userId, r.id as roleId, r.name as roleName
+      FROM user_roles ur
+      JOIN roles r ON ur.role_id = r.id
+      WHERE ur.user_id IN (
+        SELECT user_id FROM workspace_members WHERE workspace_id = ?
+      )
+    `).bind(wsId).all(),
   ]);
 
   const isOjtWorkspace = ojtCheck !== null || workspace.ojt_coordinator_id !== null;
   const tasks = tasksRaw as unknown as TaskRow[];
   const users = usersRaw as unknown as UserRow[];
-  const ojtUsers = ojtUsersRaw as unknown as { id: string; name: string; email: string }[];
+  const activeUsers = usersRaw as unknown as { id: string; name: string; email: string }[];
   const members = (membersRaw as any[]);
   const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
 
@@ -210,14 +218,23 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     assignmentsByTask[a.task_id].push(a);
   }
 
-  // Group roles by user to support multiple roles
-  const membersMap: Record<string, { userId: string; userName: string | null; userEmail: string; teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[] }> = {};
+  // Build account roles map: userId → role names[]
+  const memberAccountRolesMap: Record<string, string[]> = {};
+  for (const ar of (memberAccountRolesRaw as any[])) {
+    if (!memberAccountRolesMap[ar.userId]) memberAccountRolesMap[ar.userId] = [];
+    memberAccountRolesMap[ar.userId].push(ar.roleName as string);
+  }
+
+  // Group workspace team-roles by user and merge account roles + userType
+  const membersMap: Record<string, { userId: string; userName: string | null; userEmail: string; userType: string; accountRoles: string[]; teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[] }> = {};
   for (const m of (membersRaw as any[])) {
     if (!membersMap[m.userId]) {
       membersMap[m.userId] = {
         userId: m.userId,
         userName: m.userName,
         userEmail: m.userEmail,
+        userType: (m.userType as string) ?? 'STAFF',
+        accountRoles: memberAccountRolesMap[m.userId] ?? [],
         teamRoles: [],
       };
     }
@@ -369,7 +386,9 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             members={membersList}
             canManageMembers={canManageMembers}
             isMentor={isMentor}
-            ojtUsers={ojtUsers}
+            ojtUsers={activeUsers}
+            isAssessment={workspace.workspace_type === 'ASSESSMENT'}
+            mentorId={workspace.ojt_coordinator_id}
           />
         }
         createTaskForm={

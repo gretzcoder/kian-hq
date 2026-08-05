@@ -10,6 +10,9 @@ import {
   deleteAssessmentTask,
   toggleAssessmentReaction,
 } from '@/modules/workspaces/assessmentActions';
+import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
+import { MarkdownViewer } from '@/components/MarkdownViewer';
+import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,18 +90,26 @@ function CreateAssessmentTaskForm({
   workspaceId: string;
   onCreated: () => void;
 }) {
-  const [open,    setOpen]    = useState(false);
-  const [error,   setError]   = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [open,        setOpen]        = useState(false);
+  const [description, setDescription] = useState('');
+  const [error,       setError]       = useState<string | null>(null);
+  const [pending, startTransition]    = useTransition();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+
+    if (!description.replace(/<[^>]*>/g, '').trim()) {
+      setError('Brief / Instruksi Pengerjaan wajib diisi');
+      return;
+    }
+
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       const res = await createAssessmentTask(workspaceId, fd);
       if (res.success) {
         setOpen(false);
+        setDescription('');
         onCreated();
       } else {
         setError(res.error ?? 'Gagal membuat assessment');
@@ -170,12 +181,12 @@ function CreateAssessmentTaskForm({
               <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
                 Brief / Instruksi Pengerjaan <span className="text-red-500">*</span>
               </label>
-              <textarea
-                name="description"
-                required
-                rows={5}
+              <input type="hidden" name="description" value={description} />
+              <TiptapEditor
+                value={description}
+                onChange={setDescription}
                 placeholder="Jelaskan instruksi lengkap pengerjaan: output yang diharapkan, link referensi/aset, format file submit, deadline, dll..."
-                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100 resize-none leading-relaxed"
+                minHeight="min-h-[220px]"
               />
             </div>
 
@@ -391,7 +402,7 @@ function MentorSubmissionCard({
           </span>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0">
           {isApproved && assignment.sparks != null && (() => {
             const meta = getSparkMeta(assignment.sparks);
             return (
@@ -413,18 +424,15 @@ function MentorSubmissionCard({
       {hasSubmission && expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
           {assignment.result_url && (
-            <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-3 space-y-2">
-              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400 block">
-                🔗 Link Hasil Karya Submit
-              </span>
-              <a
-                href={assignment.result_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline truncate block"
-              >
-                {assignment.result_url} ↗
-              </a>
+            assignment.result_url.includes('<') || assignment.result_url.includes('\n') ? (
+              <DocxDocumentViewer
+                content={assignment.result_url}
+                roleName={`Hasil Submit: ${assignment.user_name ?? 'OJT User'}`}
+              />
+            ) : (
+              <SubmittedLinkPreviewer url={assignment.result_url} />
+            )
+          )}
 
               {/* Emoji Reactions Bar */}
               <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
@@ -458,8 +466,6 @@ function MentorSubmissionCard({
                   </button>
                 ))}
               </div>
-            </div>
-          )}
 
           {error && <p className="text-xs text-red-500">{error}</p>}
 
@@ -590,6 +596,7 @@ function MentorTaskCard({
   isCoordinator: boolean;
   canManage?: boolean;
 }) {
+  const [isCardExpanded, setIsCardExpanded] = useState(true);
   const [showSubmissions, setShowSubmissions] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [pendingApprove, startApproveTransition] = useTransition();
@@ -619,12 +626,15 @@ function MentorTaskCard({
   };
 
   return (
-    <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl overflow-hidden">
-      {/* Task header */}
-      <div className="p-5">
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
+    <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+      {/* Accordion Task Header */}
+      <div
+        onClick={() => setIsCardExpanded((prev) => !prev)}
+        className="p-5 cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30 transition-all select-none"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2 py-0.5 rounded-full">
                 {execLabel}
               </span>
@@ -636,10 +646,10 @@ function MentorTaskCard({
                 </span>
               )}
             </div>
-            <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">{task.title}</h3>
+            <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug">{task.title}</h3>
           </div>
 
-          {/* Progress ring summary + Delete button for Koordinator */}
+          {/* Progress ring summary + Delete button + Accordion Chevron */}
           <div className="flex items-center gap-3 shrink-0">
             <div className="text-right">
               <p className="text-[10px] font-black text-zinc-500">
@@ -654,97 +664,109 @@ function MentorTaskCard({
             {isCoordinator && (
               <button
                 type="button"
-                onClick={() => setShowConfirmDelete(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowConfirmDelete(true);
+                }}
                 title="Hapus Assessment Ini"
                 className="w-8 h-8 rounded-xl bg-zinc-100/80 hover:bg-red-500/10 dark:bg-zinc-800/80 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center text-xs shrink-0"
               >
                 🗑️
               </button>
             )}
+            <div className="w-7 h-7 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 flex items-center justify-center text-xs font-black shrink-0 transition-transform">
+              {isCardExpanded ? '▲' : '▼'}
+            </div>
           </div>
         </div>
-
-        {/* Modal Confirm Delete */}
-        {showConfirmDelete && (
-          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-md bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-2xl mx-auto">
-                ⚠️
-              </div>
-              <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
-                Hapus Assessment Ini?
-              </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Tugas assessment <span className="font-bold text-zinc-900 dark:text-zinc-100">&ldquo;{task.title}&rdquo;</span> beserta seluruh submission peserta OJT akan dihapus dari sistem.
-              </p>
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmDelete(false)}
-                  disabled={pendingDelete}
-                  className="flex-1 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteAssessment}
-                  disabled={pendingDelete}
-                  className="flex-1 py-2.5 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-md shadow-red-500/20 disabled:opacity-60"
-                >
-                  {pendingDelete ? 'Menghapus...' : 'Ya, Hapus'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {task.description && (
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl px-3 py-2 border border-zinc-100 dark:border-zinc-800/60">
-            {task.description}
-          </p>
-        )}
-
-        {/* Status Draft/Approval Banner */}
-        {isPendingCoordinatorApproval && (
-          <div className="mt-3 flex items-center justify-between gap-3 bg-amber-500/8 border border-amber-500/20 rounded-2xl p-3.5">
-            <div className="flex items-center gap-2.5">
-              <span className="text-lg">⏳</span>
-              <div>
-                <p className="text-xs font-black text-amber-700 dark:text-amber-400">
-                  Menunggu Review & Persetujuan Koordinator
-                </p>
-                <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                  {isCoordinator
-                    ? 'Anda adalah Koordinator. Setujui ajuan ini untuk mempublikasikan tugas ke OJT.'
-                    : 'Draft assessment telah diajukan. Tugas akan di-assign ke OJT setelah disetujui Koordinator.'}
-                </p>
-              </div>
-            </div>
-            {isCoordinator && (
-              <button
-                onClick={handlePublishAssessment}
-                disabled={pendingApprove}
-                className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shrink-0 shadow-md shadow-emerald-500/20 disabled:opacity-50"
-              >
-                {pendingApprove ? 'Memproses...' : '✓ Setujui & Publikasikan'}
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Progress bar */}
-        {!isPendingCoordinatorApproval && (
-          <div className="mt-3">
-            <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500"
-                style={{ width: total > 0 ? `${(submitted / total) * 100}%` : '0%' }}
-              />
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Accordion Content Body */}
+      {isCardExpanded && (
+        <div className="px-5 pb-5 pt-0 space-y-4 border-t border-zinc-100 dark:border-zinc-800/60 pt-4">
+          {/* Modal Confirm Delete */}
+          {showConfirmDelete && (
+            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="w-full max-w-md bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-2xl mx-auto">
+                  ⚠️
+                </div>
+                <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
+                  Hapus Assessment Ini?
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  Tugas assessment <span className="font-bold text-zinc-900 dark:text-zinc-100">&ldquo;{task.title}&rdquo;</span> beserta seluruh submission peserta OJT akan dihapus dari sistem.
+                </p>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmDelete(false)}
+                    disabled={pendingDelete}
+                    className="flex-1 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteAssessment}
+                    disabled={pendingDelete}
+                    className="flex-1 py-2.5 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-md shadow-red-500/20 disabled:opacity-60"
+                  >
+                    {pendingDelete ? 'Menghapus...' : 'Ya, Hapus'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {task.description && (
+            <DocxDocumentViewer
+              content={task.description}
+              roleName={`Brief Assessment: ${task.title}`}
+            />
+          )}
+
+          {/* Status Draft/Approval Banner */}
+          {isPendingCoordinatorApproval && (
+            <div className="mt-3 flex items-center justify-between gap-3 bg-amber-500/8 border border-amber-500/20 rounded-2xl p-3.5">
+              <div className="flex items-center gap-2.5">
+                <span className="text-lg">⏳</span>
+                <div>
+                  <p className="text-xs font-black text-amber-700 dark:text-amber-400">
+                    Menunggu Review & Persetujuan Koordinator
+                  </p>
+                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                    {isCoordinator
+                      ? 'Anda adalah Koordinator. Setujui ajuan ini untuk mempublikasikan tugas ke OJT.'
+                      : 'Draft assessment telah diajukan. Tugas akan di-assign ke OJT setelah disetujui Koordinator.'}
+                  </p>
+                </div>
+              </div>
+              {isCoordinator && (
+                <button
+                  onClick={handlePublishAssessment}
+                  disabled={pendingApprove}
+                  className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shrink-0 shadow-md shadow-emerald-500/20 disabled:opacity-50"
+                >
+                  {pendingApprove ? 'Memproses...' : '✓ Setujui & Publikasikan'}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Progress bar */}
+          {!isPendingCoordinatorApproval && (
+            <div className="mt-3">
+              <div className="w-full h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full transition-all duration-500"
+                  style={{ width: total > 0 ? `${(submitted / total) * 100}%` : '0%' }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Toggle submissions */}
       <button
@@ -799,6 +821,7 @@ function OJTTaskCard({
   reactions?: ReactionItem[];
   workspaceId: string;
 }) {
+  const [isCardExpanded, setIsCardExpanded] = useState(true);
   const [pending, startTransition] = useTransition();
   const execLabel = EXEC_TYPE_LABEL[assignment.assignment_role] ?? assignment.assignment_role;
   const statusBadge = STATUS_BADGE[assignment.status] ?? STATUS_BADGE.ASSIGNED;
@@ -811,10 +834,13 @@ function OJTTaskCard({
   };
 
   return (
-    <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl p-5 space-y-4">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+    <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+      {/* Accordion Task Header */}
+      <div
+        onClick={() => setIsCardExpanded((prev) => !prev)}
+        className="p-5 cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30 transition-all select-none flex items-start justify-between gap-3"
+      >
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2 py-0.5 rounded-full">
               {execLabel}
@@ -826,92 +852,96 @@ function OJTTaskCard({
               </span>
             )}
           </div>
-          <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">{task.title}</h3>
+          <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug">{task.title}</h3>
         </div>
-        <span className={`text-[9px] font-black border px-2.5 py-1 rounded-full shrink-0 ${statusBadge}`}>
-          {statusLabel}
-        </span>
+
+        <div className="flex items-center gap-3 shrink-0">
+          <span className={`text-[9px] font-black border px-2.5 py-1 rounded-full shrink-0 ${statusBadge}`}>
+            {statusLabel}
+          </span>
+          <div className="w-7 h-7 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 flex items-center justify-center text-xs font-black shrink-0 transition-transform">
+            {isCardExpanded ? '▲' : '▼'}
+          </div>
+        </div>
       </div>
 
-      {/* Brief */}
-      {task.description && (
-        <div className="bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800/60 rounded-xl px-4 py-3">
-          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-1.5">📋 Brief / Instruksi</p>
-          <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-            {task.description}
-          </p>
-        </div>
-      )}
+      {/* Accordion Content Body */}
+      {isCardExpanded && (
+        <div className="px-5 pb-5 space-y-4 border-t border-zinc-100 dark:border-zinc-800/60 pt-4">
+          {/* Brief */}
+          {task.description && (
+            <DocxDocumentViewer
+              content={task.description}
+              roleName={`Brief Assessment: ${task.title}`}
+            />
+          )}
 
-      {/* Approved result display */}
-      {assignment.status === 'APPROVED' && (
-        <div className="flex items-center justify-between bg-emerald-500/5 border border-emerald-500/15 rounded-xl px-4 py-3">
-          <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">✅ Sudah Disetujui Koordinator</span>
-          {assignment.sparks != null && (() => {
-            const meta = getSparkMeta(assignment.sparks);
-            return (
-              <span className={`text-xs font-black uppercase px-3 py-1 rounded-full border ${meta.color}`}>
-                {meta.emoji} {meta.label} ({assignment.sparks}/10)
-              </span>
-            );
-          })()}
-        </div>
-      )}
+          {/* Approved result display */}
+          {assignment.status === 'APPROVED' && (
+            <div className="flex items-center justify-between bg-emerald-500/5 border border-emerald-500/15 rounded-xl px-4 py-3">
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">✅ Sudah Disetujui Koordinator</span>
+              {assignment.sparks != null && (() => {
+                const meta = getSparkMeta(assignment.sparks);
+                return (
+                  <span className={`text-xs font-black uppercase px-3 py-1 rounded-full border ${meta.color}`}>
+                    {meta.emoji} {meta.label} ({assignment.sparks}/10)
+                  </span>
+                );
+              })()}
+            </div>
+          )}
 
-      {/* Submit form */}
-      {assignment.status !== 'APPROVED' && (
-        <OJTSubmitForm assignment={assignment} workspaceId={workspaceId} />
-      )}
+          {/* Submit form */}
+          {assignment.status !== 'APPROVED' && (
+            <OJTSubmitForm assignment={assignment} workspaceId={workspaceId} />
+          )}
 
-      {/* Already submitted link & Reactions */}
-      {assignment.result_url && (
-        <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-3 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
-              🔗 Link Hasil Karya Submit Anda
-            </span>
-            <a
-              href={assignment.result_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline truncate"
-            >
-              Buka Karya ↗
-            </a>
-          </div>
+          {/* Already submitted link & Reactions */}
+          {assignment.result_url && (
+            (assignment.result_url.includes('<') || assignment.result_url.includes('\n')) ? (
+              <DocxDocumentViewer
+                content={assignment.result_url}
+                roleName="Hasil Submit Assessment Anda"
+              />
+            ) : (
+              <SubmittedLinkPreviewer url={assignment.result_url} />
+            )
+          )}
 
           {/* Emoji Reactions Bar for OJT */}
-          <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
-            <span className="text-[10px] font-black uppercase text-zinc-400 mr-1">Feedback Mentor & Tim:</span>
-            {reactions.map((r) => (
-              <button
-                key={r.emoji}
-                type="button"
-                onClick={() => handleReaction(r.emoji)}
-                disabled={pending}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
-                  r.user_reacted
-                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold'
-                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                }`}
-              >
-                <span>{r.emoji}</span>
-                <span className="text-[10px] font-bold">{r.count}</span>
-              </button>
-            ))}
+          {assignment.result_url && (
+            <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
+              <span className="text-[10px] font-black uppercase text-zinc-400 mr-1">Feedback Mentor & Tim:</span>
+              {reactions.map((r) => (
+                <button
+                  key={r.emoji}
+                  type="button"
+                  onClick={() => handleReaction(r.emoji)}
+                  disabled={pending}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
+                    r.user_reacted
+                      ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold'
+                      : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  <span>{r.emoji}</span>
+                  <span className="text-[10px] font-bold">{r.count}</span>
+                </button>
+              ))}
 
-            {DEFAULT_EMOJIS.filter((e) => !reactions.some((r) => r.emoji === e)).map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => handleReaction(emoji)}
-                disabled={pending}
-                className="px-2 py-0.5 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-white dark:hover:bg-zinc-900 transition-all opacity-60 hover:opacity-100"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
+              {DEFAULT_EMOJIS.filter((e) => !reactions.some((r) => r.emoji === e)).map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => handleReaction(emoji)}
+                  disabled={pending}
+                  className="px-2 py-0.5 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-white dark:hover:bg-zinc-900 transition-all opacity-60 hover:opacity-100"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

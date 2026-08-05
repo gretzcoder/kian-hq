@@ -7,6 +7,9 @@ import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import { getUnreadCount } from '@/modules/announcements/announcementReadState';
 import { getUnreadWorkspaceCount } from '@/modules/workspaces/workspaceReadState';
 import { getSidebarCounts, WorkspaceNotifItem } from '@/modules/notifications/notificationActions';
+import ViewAsRoleTrigger from '@/modules/roles/components/ViewAsRoleTrigger';
+import { ViewAsRoleItem, ActiveSimulatedRole } from '@/modules/roles/viewAsRoleActions';
+import { ImpersonateUserItem } from '@/modules/users/impersonationActions';
 
 // ── Badge colour map ──────────────────────────────────────────────────────────
 const BADGE_BG: Record<'red' | 'amber', string> = {
@@ -37,6 +40,10 @@ interface SidebarProps {
   announcementTimestamps?: number[];
   workspaceData?:  WorkspaceNotifItem[];
   pendingReviewCount?: number;
+  availableRoles?: ViewAsRoleItem[];
+  availableUsers?: ImpersonateUserItem[];
+  activeSimulatedRole?: ActiveSimulatedRole | null;
+  isImpersonating?: boolean;
   session: {
     name:   string;
     email:  string;
@@ -83,6 +90,10 @@ export default function DashboardSidebar({
   announcementTimestamps = [],
   workspaceData  = [],
   pendingReviewCount = 0,
+  availableRoles = [],
+  availableUsers = [],
+  activeSimulatedRole = null,
+  isImpersonating = false,
   session,
 }: SidebarProps) {
   const pathname = usePathname();
@@ -356,6 +367,20 @@ export default function DashboardSidebar({
             );
           })}
         </div>
+
+        {/* View As Role / User Trigger */}
+        {availableRoles && availableRoles.length > 0 && (
+          <div className="px-2 pt-2 border-t border-zinc-100 dark:border-zinc-900/60 shrink-0 bg-white dark:bg-[#09090b]">
+            <ViewAsRoleTrigger
+              availableRoles={availableRoles}
+              availableUsers={availableUsers}
+              activeSimulatedRole={activeSimulatedRole}
+              isImpersonating={isImpersonating}
+              impersonatedName={session.name}
+              collapsed={collapsed}
+            />
+          </div>
+        )}
 
         {/* User Footer */}
         <div className="p-3 border-t border-zinc-100 dark:border-zinc-900/60 shrink-0 overflow-hidden bg-white dark:bg-[#09090b]">

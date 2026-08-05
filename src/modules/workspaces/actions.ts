@@ -279,6 +279,17 @@ export async function addWorkspaceMember(
   email: string,
   teamRole: 'MEMBER' | 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' = 'MEMBER',
 ) {
+  return addWorkspaceMembersBulk(workspaceId, [email], teamRole);
+}
+
+/**
+ * Adds multiple members to a workspace by array of emails or user IDs.
+ */
+export async function addWorkspaceMembersBulk(
+  workspaceId: string,
+  emailsOrIds: string[],
+  teamRole: 'MEMBER' | 'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' = 'MEMBER',
+) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
@@ -286,28 +297,39 @@ export async function addWorkspaceMember(
   const hasAuthority = await checkOJTManagementAuthority(db, workspaceId, session.userId);
   if (!hasAuthority) throw new Error('Forbidden: You are not authorized to manage team members.');
 
-  const targetUser = await db
-    .prepare('SELECT id, user_type FROM users WHERE email = ?')
-    .bind(email.trim().toLowerCase())
-    .first() as { id: string; user_type: string } | null;
-
-  if (!targetUser) {
-    return { success: false, error: `User with email "${email}" not found.` };
+  if (!emailsOrIds || emailsOrIds.length === 0) {
+    return { success: false, error: 'Pilih atau ketik minimal satu anggota untuk ditambahkan.' };
   }
 
-  try {
-    await db
-      .prepare('INSERT INTO workspace_members (workspace_id, user_id, team_role) VALUES (?, ?, ?)')
-      .bind(workspaceId, targetUser.id, teamRole)
-      .run();
+  const cleanInputs = Array.from(new Set(emailsOrIds.map((e) => e.trim().toLowerCase()).filter(Boolean)));
 
-    const ws = await db.prepare('SELECT project_id FROM workspaces WHERE id = ?').bind(workspaceId).first() as { project_id: string } | null;
-    if (ws) {
-      revalidatePath(`/dashboard/workspace/${workspaceId}`);
+  try {
+    let addedCount = 0;
+
+    for (const input of cleanInputs) {
+      // Find user by ID or email
+      const targetUser = await db
+        .prepare('SELECT id FROM users WHERE email = ? OR id = ?')
+        .bind(input, input)
+        .first() as { id: string } | null;
+
+      if (targetUser) {
+        await db
+          .prepare('INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role) VALUES (?, ?, ?)')
+          .bind(workspaceId, targetUser.id, teamRole)
+          .run();
+        addedCount++;
+      }
     }
-    return { success: true };
+
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    return {
+      success: true,
+      addedCount,
+      message: `${addedCount} anggota berhasil ditambahkan ke workspace!`,
+    };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to add member.' };
+    return { success: false, error: err.message || 'Gagal menambahkan anggota tim.' };
   }
 }
 

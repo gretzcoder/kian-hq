@@ -5,7 +5,8 @@ import { getSessionContext } from '@/modules/roles/rbac';
 import Link from 'next/link';
 import ReviewActions from './components/ReviewActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
-import { CreatorDrivePreview } from '@/modules/tasks/components/TaskActions';
+import { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
+import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
 
 interface ReviewRow {
   assignment_id:   string;
@@ -183,13 +184,13 @@ export default async function ReviewPage() {
 
               {/* Result link / Text report */}
               {r.result_url ? (
-                ['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(r.assignment_role) ? (
-                  <CreatorDrivePreview url={r.result_url} />
+                r.result_url.includes('<') || r.result_url.includes('\n') ? (
+                  <DocxDocumentViewer
+                    content={r.result_url}
+                    roleName={`Tugas: ${r.task_title} (${r.assignment_role})`}
+                  />
                 ) : (
-                  <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800/80 rounded-xl p-4 text-xs text-zinc-800 dark:text-zinc-200 max-h-48 overflow-y-auto">
-                    <span className="text-[10px] font-bold text-zinc-400 block mb-1">📝 Laporan Hasil Pengerjaan:</span>
-                    <MarkdownViewer content={r.result_url} />
-                  </div>
+                  <SubmittedLinkPreviewer url={r.result_url} />
                 )
               ) : (
                 <div className="text-xs text-zinc-400 italic">No result URL submitted</div>

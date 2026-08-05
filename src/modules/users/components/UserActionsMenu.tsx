@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { resetUserPassword, deleteUser } from '../actions';
+import { startImpersonatingUser } from '../impersonationActions';
 import { useUI } from '@/components/ui/UIProvider';
 
 export default function UserActionsMenu({
@@ -13,8 +15,26 @@ export default function UserActionsMenu({
   userName: string;
   isSelf: boolean;
 }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const { toast, confirm } = useUI();
+
+  const handleImpersonate = async () => {
+    setLoading(true);
+    try {
+      const res = await startImpersonatingUser(userId);
+      if (res.success) {
+        toast(`Sekarang masuk sebagai akun "${userName}"`, 'success', 'User Impersonation');
+        router.refresh();
+      } else {
+        toast(res.error ?? 'Gagal mensimulasikan akun.', 'error');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Terjadi kesalahan sistem.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleResetPassword = async () => {
     const isConfirmed = await confirm({
@@ -71,7 +91,19 @@ export default function UserActionsMenu({
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
+      {/* Impersonate / Login As Button */}
+      <button
+        onClick={handleImpersonate}
+        disabled={loading}
+        title={`Masuk & uji aplikasi sebagai ${userName}`}
+        className="text-[10px] font-bold text-purple-700 dark:text-purple-300 hover:text-white bg-purple-500/10 hover:bg-purple-600 border border-purple-500/20 px-2.5 py-1 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1"
+      >
+        <span>🎭</span>
+        <span>Login As</span>
+      </button>
+
+      {/* Reset Password Button */}
       <button
         onClick={handleResetPassword}
         disabled={loading}
@@ -80,6 +112,8 @@ export default function UserActionsMenu({
       >
         Reset PW
       </button>
+
+      {/* Delete User Button */}
       <button
         onClick={handleDeleteUser}
         disabled={loading}

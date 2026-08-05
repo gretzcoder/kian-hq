@@ -6,6 +6,14 @@ import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import DashboardSidebar from './components/DashboardSidebar';
 import TimeGreeting from './components/TimeGreeting';
 import OnboardingModal from '@/modules/profile/components/OnboardingModal';
+import ViewAsRoleBanner from '@/modules/roles/components/ViewAsRoleBanner';
+import ImpersonationBanner from '@/modules/users/components/ImpersonationBanner';
+import {
+  isAuthorizedForViewAs,
+  getAvailableRolesForViewAs,
+  getActiveSimulatedRole,
+} from '@/modules/roles/viewAsRoleActions';
+import { getAvailableUsersForImpersonation } from '@/modules/users/impersonationActions';
 
 export default async function DashboardLayout({
   children,
@@ -27,6 +35,12 @@ export default async function DashboardLayout({
   const isCoordinator =
     ctx.userType === 'STAFF' &&
     (ctx.can('MANAGE') || ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE'));
+
+  // Resolve View As Role & Impersonation simulation options
+  const isAuthorizedForViewAsRole = await isAuthorizedForViewAs();
+  const activeSimulatedRole = await getActiveSimulatedRole();
+  const availableRoles = isAuthorizedForViewAsRole ? await getAvailableRolesForViewAs() : [];
+  const availableUsers = isAuthorizedForViewAsRole ? await getAvailableUsersForImpersonation() : [];
 
   // Fetch onboarding status, avatar, and all badge seed data in one parallel batch
   const [userRow, annRaw, wsDataRaw, reviewCountRaw] = await Promise.all([
@@ -126,41 +140,69 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col lg:flex-row transition-colors duration-350">
-      {/* Onboarding Modal Overlay */}
-      {showOnboarding && <OnboardingModal initialName={session.name} isStaff={ctx.userType === 'STAFF'} />}
+    <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col transition-colors duration-350">
+      {/* User Impersonation Banner */}
+      {session.isImpersonating && (
+        <ImpersonationBanner
+          impersonatedName={session.name}
+          impersonatedEmail={session.email}
+          realAdminName={session.realUserName}
+        />
+      )}
 
-      {/* Left Sidebar Navigation */}
-      <DashboardSidebar
-        canManageUsers={canManageUsers}
-        canManageRoles={canManageRoles}
-        canViewOJT={canViewOJT}
-        canViewProjects={canViewProjects}
-        canReview={canReview}
-        canCreateBrief={canCreateBrief}
-        canUseAI={canUseAI}
-        isOJT={isOJT}
-        isMentor={isMentor}
-        isLocked={showOnboarding}
-        announcementTimestamps={announcementTimestamps}
-        workspaceData={workspaceData}
-        pendingReviewCount={pendingReviewCount}
-        session={{
-          name: session.name,
-          email: session.email,
-          avatar: userAvatar,
-        }}
+      {/* View As Role Top Simulation Banner */}
+      <ViewAsRoleBanner
+        activeSimulatedRole={activeSimulatedRole}
+        availableRoles={availableRoles}
+        isAuthorized={isAuthorizedForViewAsRole}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 w-full px-6 sm:px-10 py-6 min-w-0 flex flex-col">
-        {/* Top Floating Control Bar */}
-        <div className="hidden lg:flex items-center justify-between pb-3 mb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
-          <TimeGreeting />
-          <ThemeToggle />
-        </div>
-        {children}
-      </main>
+      <div className="flex-1 w-full flex flex-col lg:flex-row min-w-0">
+        {/* Onboarding Modal Overlay */}
+        {showOnboarding && (
+          <OnboardingModal
+            initialName={session.name}
+            isStaff={ctx.userType === 'STAFF'}
+            isImpersonating={session.isImpersonating}
+          />
+        )}
+
+        {/* Left Sidebar Navigation */}
+        <DashboardSidebar
+          canManageUsers={canManageUsers}
+          canManageRoles={canManageRoles}
+          canViewOJT={canViewOJT}
+          canViewProjects={canViewProjects}
+          canReview={canReview}
+          canCreateBrief={canCreateBrief}
+          canUseAI={canUseAI}
+          isOJT={isOJT}
+          isMentor={isMentor}
+          isLocked={showOnboarding}
+          announcementTimestamps={announcementTimestamps}
+          workspaceData={workspaceData}
+          pendingReviewCount={pendingReviewCount}
+          availableRoles={availableRoles}
+          availableUsers={availableUsers}
+          activeSimulatedRole={activeSimulatedRole}
+          isImpersonating={session.isImpersonating}
+          session={{
+            name: session.name,
+            email: session.email,
+            avatar: userAvatar,
+          }}
+        />
+
+        {/* Main Content Area */}
+        <main className="flex-1 w-full px-6 sm:px-10 py-6 min-w-0 flex flex-col">
+          {/* Top Floating Control Bar */}
+          <div className="hidden lg:flex items-center justify-between pb-3 mb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
+            <TimeGreeting />
+            <ThemeToggle />
+          </div>
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
