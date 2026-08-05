@@ -12,6 +12,17 @@ interface MarkdownViewerProps {
 export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps) {
   if (!content) return null;
 
+  const isHtml = /^\s*<[a-z][\s\S]*>/i.test(content.trim()) || content.includes('</p>') || content.includes('</div>') || content.includes('</span>') || content.includes('</ul>') || content.includes('</ol>');
+
+  if (isHtml) {
+    return (
+      <div
+        className={`prose dark:prose-invert max-w-none text-xs leading-relaxed text-zinc-800 dark:text-zinc-200 [&_a]:text-purple-600 [&_a]:dark:text-purple-400 [&_a]:underline [&_ul]:list-disc [&_ul]:list-inside [&_ol]:list-decimal [&_ol]:list-inside [&_h1]:text-base [&_h1]:font-black [&_h2]:text-sm [&_h2]:font-bold [&_h3]:text-xs [&_h3]:font-bold ${className}`}
+        dangerouslySetInnerHTML={{ __html: content }}
+      />
+    );
+  }
+
   const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
 

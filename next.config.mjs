@@ -1,6 +1,6 @@
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-initOpenNextCloudflareForDev();
+initOpenNextCloudflareForDev({ remoteBindings: false });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {

@@ -7,46 +7,46 @@ import DeleteWorkspaceButton from '../projects/[id]/components/DeleteWorkspaceBu
 import WorkspaceListCards from './components/WorkspaceListCards';
 
 interface AssignmentRow {
-  assignment_id:   string;
+  assignment_id: string;
   assignment_role: string;
   assignment_status: string;
-  result_url:      string | null;
-  revision_note:   string | null;
-  task_id:         string;
-  task_title:      string;
-  task_deadline:   number | null;
-  task_priority:   string;
-  workspace_id:    string | null;
-  workspace_name:  string | null;
-  project_id:      string;
-  project_name:    string;
+  result_url: string | null;
+  revision_note: string | null;
+  task_id: string;
+  task_title: string;
+  task_deadline: number | null;
+  task_priority: string;
+  workspace_id: string | null;
+  workspace_name: string | null;
+  project_id: string;
+  project_name: string;
 }
 
 const statusColors: Record<string, string> = {
-  ASSIGNED:           'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700',
-  IN_PROGRESS:        'bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 border-indigo-500/15',
-  SUBMITTED:          'bg-orange-500/5 text-orange-600 dark:text-orange-400 border-orange-500/15',
-  WAITING_REVIEW:     'bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 border-yellow-500/15',
+  ASSIGNED: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700',
+  IN_PROGRESS: 'bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 border-indigo-500/15',
+  SUBMITTED: 'bg-orange-500/5 text-orange-600 dark:text-orange-400 border-orange-500/15',
+  WAITING_REVIEW: 'bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 border-yellow-500/15',
   REVISION_REQUESTED: 'bg-red-500/5 text-red-600 dark:text-red-400 border-red-500/15',
-  RESUBMITTED:        'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/15',
-  APPROVED:           'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/15',
-  DECLINED:           'bg-red-800/10 text-red-800 dark:text-red-500 border-red-800/20',
+  RESUBMITTED: 'bg-purple-500/5 text-purple-600 dark:text-purple-400 border-purple-500/15',
+  APPROVED: 'bg-emerald-500/5 text-emerald-600 dark:text-emerald-400 border-emerald-500/15',
+  DECLINED: 'bg-red-800/10 text-red-800 dark:text-red-500 border-red-800/20',
 };
 
 const roleColors: Record<string, { text: string; bg: string }> = {
   RESEARCHER: { text: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500/10 border-blue-500/15' },
-  PLANNER:    { text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/15' },
-  CREATOR:    { text: 'text-pink-700 dark:text-pink-400', bg: 'bg-pink-500/10 border-pink-500/15' },
-  PIC:        { text: 'text-purple-700 dark:text-purple-400', bg: 'bg-purple-500/10 border-purple-500/15' },
-  REVIEWER:   { text: 'text-blue-700 dark:text-blue-400',    bg: 'bg-blue-500/10 border-blue-500/15' },
-  HELPER:     { text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/15' },
-  APPROVER:   { text: 'text-amber-700 dark:text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/15' },
+  PLANNER: { text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/15' },
+  CREATOR: { text: 'text-pink-700 dark:text-pink-400', bg: 'bg-pink-500/10 border-pink-500/15' },
+  PIC: { text: 'text-purple-700 dark:text-purple-400', bg: 'bg-purple-500/10 border-purple-500/15' },
+  REVIEWER: { text: 'text-blue-700 dark:text-blue-400', bg: 'bg-blue-500/10 border-blue-500/15' },
+  HELPER: { text: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/15' },
+  APPROVER: { text: 'text-amber-700 dark:text-amber-400', bg: 'bg-amber-500/10 border-amber-500/15' },
 };
 
 const priorityColors: Record<string, string> = {
-  LOW:    'text-zinc-400',
+  LOW: 'text-zinc-400',
   NORMAL: 'text-zinc-500',
-  HIGH:   'text-orange-500',
+  HIGH: 'text-orange-500',
   URGENT: 'text-red-500 font-black',
 };
 
@@ -186,10 +186,10 @@ export default async function WorkspacePage() {
     if (!grouped[key]) {
       grouped[key] = {
         workspaceName: a.workspace_name ?? a.project_name,
-        projectName:   a.project_name,
-        projectId:     a.project_id,
-        workspaceId:   a.workspace_id,
-        items:         [],
+        projectName: a.project_name,
+        projectId: a.project_id,
+        workspaceId: a.workspace_id,
+        items: [],
       };
     }
     grouped[key].items.push(a);
@@ -308,11 +308,10 @@ export default async function WorkspacePage() {
                     return (
                       <div
                         key={a.assignment_id}
-                        className={`border bg-white dark:bg-[#09090b]/40 rounded-3xl p-5 shadow-sm transition-all duration-200 hover:shadow-md ${
-                          ['REVISION_REQUESTED', 'DECLINED'].includes(a.assignment_status)
+                        className={`border bg-white dark:bg-[#09090b]/40 rounded-3xl p-5 shadow-sm transition-all duration-200 hover:shadow-md ${['REVISION_REQUESTED', 'DECLINED'].includes(a.assignment_status)
                             ? 'border-red-500/20 dark:border-red-500/20'
                             : 'border-zinc-200/80 dark:border-zinc-800/80 hover:border-zinc-300 dark:hover:border-zinc-700'
-                        }`}
+                          }`}
                       >
                         <div className="flex items-start justify-between gap-3 mb-3">
                           <div className="min-w-0">
@@ -348,7 +347,7 @@ export default async function WorkspacePage() {
                               rel="noopener noreferrer"
                               className="text-[11px] text-purple-600 dark:text-purple-400 hover:text-purple-500 font-bold underline truncate block"
                             >
-                              🔗 Buka Link Google Drive
+                              🔗 Buka Link
                             </a>
                           </div>
                         )}

@@ -16,7 +16,7 @@ interface UserRow {
   status: string;
   role_name: string | null;
   role_id: string | null;
-  user_type: 'STAFF' | 'OJT';
+  user_type: 'STAFF' | 'OJT' | 'EXTERNAL';
 }
 
 interface RoleRow {

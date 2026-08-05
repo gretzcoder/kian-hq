@@ -4,6 +4,8 @@ import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import PermissionMatrix from '@/modules/permissions/components/PermissionMatrix';
 import RoleSettingsPanel from '@/modules/permissions/components/RoleSettingsPanel';
+import ViewAsRoleCardButton from '@/modules/roles/components/ViewAsRoleCardButton';
+import { getActiveSimulatedRole } from '@/modules/roles/viewAsRoleActions';
 
 interface Role {
   id: string;
@@ -36,6 +38,7 @@ export default async function PermissionsPage() {
   const canManage = await hasPermission(session.userId, 'ADMIN_ROLES');
   if (!canManage) redirect('/dashboard');
 
+  const activeSimRole = await getActiveSimulatedRole();
   const db = await getDB();
 
   const [rolesRaw, permissionsRaw, grantedRaw, memberCountsRaw] = await Promise.all([
@@ -55,11 +58,24 @@ export default async function PermissionsPage() {
     db.prepare(`
       SELECT id, name, description FROM permissions
       ORDER BY CASE name
-        WHEN 'READ' THEN 1 WHEN 'COMMENT' THEN 2 WHEN 'DOWNLOAD' THEN 3
-        WHEN 'UPLOAD' THEN 4 WHEN 'CREATE' THEN 5 WHEN 'UPDATE' THEN 6
-        WHEN 'ASSIGN' THEN 7 WHEN 'SHARE' THEN 8 WHEN 'APPROVE' THEN 9
-        WHEN 'DELETE' THEN 10 WHEN 'EXPORT' THEN 11 WHEN 'MANAGE' THEN 12
-        ELSE 13
+        WHEN 'ADMIN_SYSTEM' THEN 1
+        WHEN 'ADMIN_USERS' THEN 2
+        WHEN 'ADMIN_ROLES' THEN 3
+        WHEN 'VIEW_AS_ROLE' THEN 4
+        WHEN 'PROJECT_CREATE' THEN 5
+        WHEN 'PROJECT_MANAGE' THEN 6
+        WHEN 'WORKSPACE_MANAGE' THEN 7
+        WHEN 'WORKSPACE_MEMBER' THEN 8
+        WHEN 'TASK_CREATE' THEN 9
+        WHEN 'TASK_ASSIGN' THEN 10
+        WHEN 'TASK_REVIEW' THEN 11
+        WHEN 'TASK_EXECUTE' THEN 12
+        WHEN 'BRIEF_REVIEW' THEN 13
+        WHEN 'KB_MANAGE' THEN 14
+        WHEN 'ANNOUNCEMENT_POST' THEN 15
+        WHEN 'USE_AI' THEN 16
+        WHEN 'EXPORT_DATA' THEN 17
+        ELSE 18
       END
     `).all(),
     // All current role_permission assignments
@@ -119,6 +135,7 @@ export default async function PermissionsPage() {
           const grantedCount = (grantedMap[role.id] || []).length;
           const members = memberMap[role.id] ?? 0;
           const pct = Math.round((grantedCount / totalPerms) * 100);
+          const isSimulatingThisRole = activeSimRole?.roleId === role.id;
 
           const colors: Record<string, { card: string; bar: string; badge: string }> = {
             EXECUTIVE:    { card: 'border-purple-500/15', bar: 'bg-purple-500', badge: 'bg-purple-500/10 text-purple-700 dark:text-purple-400' },
@@ -129,16 +146,25 @@ export default async function PermissionsPage() {
           const c = colors[role.name] || { card: 'border-zinc-200 dark:border-zinc-800', bar: 'bg-zinc-400', badge: 'bg-zinc-100 text-zinc-600' };
 
           return (
-            <div key={role.id} className={`border ${c.card} bg-white dark:bg-[#09090b]/40 rounded-2xl p-4 shadow-sm`}>
-              <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${c.badge}`}>
-                {role.name}
-              </span>
-              <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 mt-3">{grantedCount}<span className="text-sm font-bold text-zinc-400">/{totalPerms}</span></p>
-              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider mb-2">Permissions</p>
-              <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-1.5 overflow-hidden mb-2">
-                <div className={`h-1.5 rounded-full ${c.bar} transition-all duration-500`} style={{ width: `${pct}%` }} />
+            <div key={role.id} className={`border ${c.card} bg-white dark:bg-[#09090b]/40 rounded-2xl p-4 shadow-sm flex flex-col justify-between`}>
+              <div>
+                <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${c.badge}`}>
+                  {role.name}
+                </span>
+                <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 mt-3">{grantedCount}<span className="text-sm font-bold text-zinc-400">/{totalPerms}</span></p>
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider mb-2">Permissions</p>
+                <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-1.5 overflow-hidden mb-2">
+                  <div className={`h-1.5 rounded-full ${c.bar} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">{members} member{members !== 1 ? 's' : ''} assigned</p>
               </div>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">{members} member{members !== 1 ? 's' : ''} assigned</p>
+
+              {/* View as Role Button for each role card */}
+              <ViewAsRoleCardButton
+                roleId={role.id}
+                roleName={role.name}
+                isActive={isSimulatingThisRole}
+              />
             </div>
           );
         })}

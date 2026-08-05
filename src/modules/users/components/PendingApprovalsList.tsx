@@ -25,19 +25,22 @@ export default function PendingApprovalsList({
 }) {
   const [loading, setLoading] = useState<string | null>(null);
   const [selectedRoles, setSelectedRoles] = useState<Record<string, string>>({});
-  const [selectedTypes, setSelectedTypes] = useState<Record<string, 'STAFF' | 'OJT'>>({});
+  const [selectedTypes, setSelectedTypes] = useState<Record<string, 'STAFF' | 'OJT' | 'EXTERNAL'>>({});
 
   const handleRoleChange = (userId: string, roleId: string) => {
     setSelectedRoles((prev) => ({ ...prev, [userId]: roleId }));
+    if (roleId === 'role_collaborator' || roleId === 'role_creator') {
+      setSelectedTypes((prev) => ({ ...prev, [userId]: 'EXTERNAL' }));
+    }
   };
 
-  const handleTypeChange = (userId: string, type: 'STAFF' | 'OJT') => {
+  const handleTypeChange = (userId: string, type: 'STAFF' | 'OJT' | 'EXTERNAL') => {
     setSelectedTypes((prev) => ({ ...prev, [userId]: type }));
   };
 
   const handleApprove = async (userId: string) => {
     const roleId = selectedRoles[userId] || 'role_creator';
-    const userType = selectedTypes[userId] || 'STAFF';
+    const userType = selectedTypes[userId] || (roleId === 'role_collaborator' || roleId === 'role_creator' ? 'EXTERNAL' : 'STAFF');
     setLoading(userId);
     try {
       const res = await approveUser(userId, roleId, userType);
@@ -84,7 +87,7 @@ export default function PendingApprovalsList({
       <div className="divide-y divide-amber-500/10">
         {pendingUsers.map((user) => {
           const selectedRole = selectedRoles[user.id] || 'role_creator';
-          const selectedType = selectedTypes[user.id] || 'STAFF';
+          const selectedType = selectedTypes[user.id] || (selectedRole === 'role_collaborator' || selectedRole === 'role_creator' ? 'EXTERNAL' : 'STAFF');
           const isProcessing = loading === user.id;
 
           return (
@@ -124,6 +127,7 @@ export default function PendingApprovalsList({
                   >
                     <option value="STAFF">Staff Utama</option>
                     <option value="OJT">On the Job Training</option>
+                    <option value="EXTERNAL">External</option>
                   </select>
 
                   {/* Role select */}

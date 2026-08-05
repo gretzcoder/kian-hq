@@ -1,4 +1,5 @@
 import ReviewActions from '../review/components/ReviewActions';
+import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
 
 export interface QCReviewItem {
   assignment_id: string;
@@ -78,16 +79,7 @@ export default function DashboardQCReviews({ pendingQCReviews }: DashboardQCRevi
             </div>
 
             {r.result_url && (
-              <div className="bg-white dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 p-2.5 rounded-xl">
-                <a
-                  href={r.result_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-500 font-bold underline truncate block"
-                >
-                  🔗 Buka Link Hasil Kerja (Google Drive)
-                </a>
-              </div>
+              <SubmittedLinkPreviewer url={r.result_url} autoExpand={false} />
             )}
 
             <ReviewActions assignmentId={r.assignment_id} canRequestRevision={true} />

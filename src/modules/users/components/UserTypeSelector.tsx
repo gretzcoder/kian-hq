@@ -8,12 +8,12 @@ export default function UserTypeSelector({
   currentUserType,
 }: {
   userId: string;
-  currentUserType: 'STAFF' | 'OJT';
+  currentUserType: 'STAFF' | 'OJT' | 'EXTERNAL';
 }) {
   const [loading, setLoading] = useState(false);
   const [val, setVal] = useState(currentUserType);
 
-  const handleChange = async (newType: 'STAFF' | 'OJT') => {
+  const handleChange = async (newType: 'STAFF' | 'OJT' | 'EXTERNAL') => {
     setLoading(true);
     try {
       const res = await updateUserType(userId, newType);
@@ -38,6 +38,7 @@ export default function UserTypeSelector({
     >
       <option value="STAFF">Staff Utama</option>
       <option value="OJT">On the Job Training</option>
+      <option value="EXTERNAL">External</option>
     </select>
   );
 }

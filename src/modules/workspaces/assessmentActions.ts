@@ -102,24 +102,25 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
       .bind(taskId, workspaceId, ws.project_id, title, description, initialStatus, deadline, session.userId)
       .run();
 
-    // 2. If Coordinator created (or approved), publish & mass-assign immediately. Otherwise, wait for Coordinator approval.
-    if (isCoordinator) {
-      const { results: ojtMembers } = await db
-        .prepare("SELECT user_id FROM workspace_members WHERE workspace_id = ? AND team_role = 'MEMBER'")
-        .bind(workspaceId)
-        .all();
+    // 2. Create task_assignments for all OJT members with the selected execType (e.g. VIDEO_EDITOR / DESIGNER).
+    // If created by Coordinator, status is 'ASSIGNED'. If created by Mentor, status is 'WAITING_REVIEW'.
+    const { results: ojtMembers } = await db
+      .prepare("SELECT user_id FROM workspace_members WHERE workspace_id = ? AND team_role = 'MEMBER'")
+      .bind(workspaceId)
+      .all();
 
-      for (const m of ojtMembers as { user_id: string }[]) {
-        const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-        await db
-          .prepare(`
-            INSERT OR IGNORE INTO task_assignments
-              (id, task_id, user_id, assignment_role, assigned_by, status, deadline, created_at)
-            VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, strftime('%s', 'now'))
-          `)
-          .bind(assignId, taskId, m.user_id, execType, session.userId, deadline)
-          .run();
-      }
+    const assignmentInitialStatus = isCoordinator ? 'ASSIGNED' : 'WAITING_REVIEW';
+
+    for (const m of ojtMembers as { user_id: string }[]) {
+      const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+      await db
+        .prepare(`
+          INSERT OR IGNORE INTO task_assignments
+            (id, task_id, user_id, assignment_role, assigned_by, status, deadline, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
+        `)
+        .bind(assignId, taskId, m.user_id, execType, session.userId, assignmentInitialStatus, deadline)
+        .run();
     }
 
     await logWorkflowEvent({
@@ -129,8 +130,8 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
       toStatus: initialStatus,
       triggeredBy: session.userId,
       note: isCoordinator
-        ? `Assessment "${title}" dipublikasikan oleh Koordinator dan di-assign ke OJT`
-        : `Assessment "${title}" diajukan oleh Mentor ke Koordinator untuk di-review`,
+        ? `Assessment "${title}" (${execType}) dipublikasikan oleh Koordinator dan di-assign ke OJT`
+        : `Assessment "${title}" (${execType}) diajukan oleh Mentor ke Koordinator untuk di-review`,
     });
 
     revalidatePath(`/dashboard/workspace/${workspaceId}`);
@@ -179,22 +180,35 @@ export async function approveAssessmentTask(taskId: string, workspaceId: string,
       .bind(taskId)
       .run();
 
-    // 2. Mass-assign to all OJT members
-    const { results: ojtMembers } = await db
-      .prepare("SELECT user_id FROM workspace_members WHERE workspace_id = ? AND team_role = 'MEMBER'")
-      .bind(workspaceId)
+    // 2. Check if assignments already exist
+    const { results: existingAssignments } = await db
+      .prepare('SELECT id FROM task_assignments WHERE task_id = ?')
+      .bind(taskId)
       .all();
 
-    for (const m of ojtMembers as { user_id: string }[]) {
-      const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+    if (existingAssignments && existingAssignments.length > 0) {
       await db
-        .prepare(`
-          INSERT OR IGNORE INTO task_assignments
-            (id, task_id, user_id, assignment_role, assigned_by, status, deadline, created_at)
-          VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, strftime('%s', 'now'))
-        `)
-        .bind(assignId, taskId, m.user_id, execType, session.userId, task.deadline)
+        .prepare("UPDATE task_assignments SET status = 'ASSIGNED' WHERE task_id = ? AND status = 'WAITING_REVIEW'")
+        .bind(taskId)
         .run();
+    } else {
+      // Fallback for legacy tasks: Mass-assign to all OJT members
+      const { results: ojtMembers } = await db
+        .prepare("SELECT user_id FROM workspace_members WHERE workspace_id = ? AND team_role = 'MEMBER'")
+        .bind(workspaceId)
+        .all();
+
+      for (const m of ojtMembers as { user_id: string }[]) {
+        const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+        await db
+          .prepare(`
+            INSERT OR IGNORE INTO task_assignments
+              (id, task_id, user_id, assignment_role, assigned_by, status, deadline, created_at)
+            VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, strftime('%s', 'now'))
+          `)
+          .bind(assignId, taskId, m.user_id, execType, session.userId, task.deadline)
+          .run();
+      }
     }
 
     await logWorkflowEvent({
@@ -203,7 +217,7 @@ export async function approveAssessmentTask(taskId: string, workspaceId: string,
       fromStatus: task.status,
       toStatus: 'APPROVED',
       triggeredBy: session.userId,
-      note: `Koordinator menyetujui ajuan assessment dan mempublikasikannya ke ${ojtMembers.length} OJT`,
+      note: `Koordinator menyetujui ajuan assessment dan mempublikasikannya ke OJT`,
     });
 
     revalidatePath(`/dashboard/workspace/${workspaceId}`);

@@ -330,6 +330,8 @@ export default async function ProfilePage({
                       className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full border shadow-xs ${
                         profile.user_type === 'OJT'
                           ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'
+                          : profile.user_type === 'EXTERNAL'
+                          ? 'bg-pink-500/15 text-pink-700 dark:text-pink-300 border-pink-500/30'
                           : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700'
                       }`}
                     >

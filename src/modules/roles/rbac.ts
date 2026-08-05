@@ -1,4 +1,5 @@
 import { getDB, getKV } from '@/db/client';
+import { getActiveSimulatedRole } from './viewAsRoleActions';
 
 const PERMISSIONS_CACHE_TTL = 3600; // 1 hour
 
@@ -7,6 +8,31 @@ const PERMISSIONS_CACHE_TTL = 3600; // 1 hour
  * Uses Cloudflare KV as a fast cache layer before querying D1.
  */
 export async function getUserPermissions(userId: string): Promise<string[]> {
+  const simRole = await getActiveSimulatedRole();
+  if (simRole) {
+    const db = await getDB();
+    try {
+      const targetRoleId = simRole.roleId === 'ojt_intern' ? 'role_creator' : simRole.roleId;
+      const { results } = await db
+        .prepare(`
+          SELECT DISTINCT p.name AS permission_name
+          FROM permissions p
+          JOIN role_permissions rp ON p.id = rp.permission_id
+          WHERE rp.role_id = ?
+        `)
+        .bind(targetRoleId)
+        .all();
+      let permissions = (results || []).map((r: any) => r.permission_name as string);
+      if (simRole.roleId === 'ojt_intern') {
+        permissions = permissions.filter((p: string) => !['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'EXPORT_DATA', 'MANAGE'].includes(p));
+      }
+      return permissions;
+    } catch (err) {
+      console.error('Simulated permissions query failed:', err);
+      return [];
+    }
+  }
+
   const kv = await getKV();
   const cacheKey = `user:permissions:${userId}`;
 
@@ -52,6 +78,11 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
  * (Useful for dashboard context labels, NOT for RBAC logic.)
  */
 export async function getUserRoles(userId: string): Promise<string[]> {
+  const simRole = await getActiveSimulatedRole();
+  if (simRole) {
+    return [simRole.roleName];
+  }
+
   const db = await getDB();
   try {
     const { results } = await db
@@ -77,14 +108,17 @@ export async function hasPermission(
   userId: string,
   permissionName: string,
 ): Promise<boolean> {
+  const simRole = await getActiveSimulatedRole();
   const userType = await getUserType(userId);
+
   // OJT Interns cannot execute administrative/export functions
   if (userType === 'OJT' && ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'EXPORT_DATA', 'MANAGE'].includes(permissionName)) {
     return false;
   }
   const permissions = await getUserPermissions(userId);
-  // Superadmin wildcard check
-  if (permissions.includes('ADMIN_SYSTEM') || permissions.includes('MANAGE')) return true;
+
+  // Superadmin wildcard check (disabled during simulation so admin experiences true role restrictions)
+  if (!simRole && (permissions.includes('ADMIN_SYSTEM') || permissions.includes('MANAGE'))) return true;
   return permissions.includes(permissionName);
 }
 
@@ -107,14 +141,19 @@ export async function checkPermission(
 /**
  * Retrieves the user type (STAFF vs OJT) from D1.
  */
-export async function getUserType(userId: string): Promise<'STAFF' | 'OJT'> {
+export async function getUserType(userId: string): Promise<'STAFF' | 'OJT' | 'EXTERNAL'> {
+  const simRole = await getActiveSimulatedRole();
+  if (simRole && simRole.userType) {
+    return simRole.userType;
+  }
+
   const db = await getDB();
   try {
     const user = await db
       .prepare('SELECT user_type FROM users WHERE id = ?')
       .bind(userId)
       .first() as { user_type: string } | null;
-    return (user?.user_type as 'STAFF' | 'OJT') || 'STAFF';
+    return (user?.user_type as 'STAFF' | 'OJT' | 'EXTERNAL') || 'STAFF';
   } catch (err) {
     console.error('getUserType failed:', err);
     return 'STAFF';
@@ -191,8 +230,11 @@ export async function getSessionContext(userId: string): Promise<{
   can: (permission: string) => boolean;
   permissions: Set<string>;
   roles: string[];
-  userType: 'STAFF' | 'OJT';
+  userType: 'STAFF' | 'OJT' | 'EXTERNAL';
+  simulatedRole?: { roleId: string; roleName: string; userType: 'STAFF' | 'OJT' | 'EXTERNAL' } | null;
 }> {
+  const simRole = await getActiveSimulatedRole();
+
   const [permissions, roles, userType] = await Promise.all([
     getUserPermissions(userId),
     getUserRoles(userId),
@@ -200,11 +242,12 @@ export async function getSessionContext(userId: string): Promise<{
   ]);
 
   const permSet = new Set(permissions);
-  const isSuperadmin = permSet.has('ADMIN_SYSTEM') || permSet.has('MANAGE');
+  const isSuperadmin = !simRole && (permSet.has('ADMIN_SYSTEM') || permSet.has('MANAGE'));
 
   return {
     can: (perm: string) => {
-      if (userType === 'OJT' && ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'EXPORT_DATA', 'MANAGE'].includes(perm)) {
+      const activeUserType = simRole ? simRole.userType : userType;
+      if (activeUserType === 'OJT' && ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'EXPORT_DATA', 'MANAGE'].includes(perm)) {
         return false;
       }
       if (isSuperadmin) return true;
@@ -212,7 +255,8 @@ export async function getSessionContext(userId: string): Promise<{
     },
     permissions: permSet,
     roles,
-    userType,
+    userType: simRole ? simRole.userType : userType,
+    simulatedRole: simRole ? { roleId: simRole.roleId, roleName: simRole.roleName, userType: simRole.userType } : null,
   };
 }
 

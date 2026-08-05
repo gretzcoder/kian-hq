@@ -3,10 +3,12 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateOjtProfile } from '@/modules/profile/actions';
+import { stopImpersonatingUser } from '@/modules/users/impersonationActions';
 
 interface OnboardingModalProps {
   initialName: string;
   isStaff?: boolean;
+  isImpersonating?: boolean;
 }
 
 const AVAILABLE_ROLES = [
@@ -96,9 +98,20 @@ function ErrorBanner({ msg }: { msg: string | null }) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function OnboardingModal({ initialName, isStaff = false }: OnboardingModalProps) {
+export default function OnboardingModal({
+  initialName,
+  isStaff = false,
+  isImpersonating = false,
+}: OnboardingModalProps) {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
+
+  const handleExitImpersonation = () => {
+    setLoading(true);
+    stopImpersonatingUser().then(() => {
+      router.refresh();
+    });
+  };
 
   // Step 1 fields
   const [name,            setName]            = useState(initialName || '');
@@ -221,6 +234,23 @@ export default function OnboardingModal({ initialName, isStaff = false }: Onboar
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-300">
       <div className="w-full max-w-xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 my-auto">
+        {/* Admin Impersonation Exit Alert */}
+        {isImpersonating && (
+          <div className="bg-purple-500/10 border border-purple-500/30 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-purple-700 dark:text-purple-300 font-bold text-xs">
+              <span className="text-base">🎭</span>
+              <span>Mode Impersonation Admin (Profil user ini belum lengkap)</span>
+            </div>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleExitImpersonation}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition-all shadow-sm active:scale-95 disabled:opacity-50 shrink-0"
+            >
+              ✕ Exit Impersonation
+            </button>
+          </div>
+        )}
 
         {/* Header */}
         <div className="text-center space-y-2">

@@ -27,6 +27,12 @@ export async function updateUserRole(targetUserId: string, newRoleId: string) {
   try {
     await db.prepare('DELETE FROM user_roles WHERE user_id = ?').bind(targetUserId).run();
     await db.prepare('INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)').bind(targetUserId, newRoleId).run();
+
+    // Auto-classify Collaborator & Creator roles as EXTERNAL
+    if (newRoleId === 'role_collaborator' || newRoleId === 'role_creator') {
+      await db.prepare('UPDATE users SET user_type = ? WHERE id = ?').bind('EXTERNAL', targetUserId).run();
+    }
+
     await clearPermissionsCache(targetUserId);
 
     revalidatePath('/dashboard/users');
@@ -41,7 +47,7 @@ export async function updateUserRole(targetUserId: string, newRoleId: string) {
  * Server Action to approve a pending user, activate their account, and assign their role.
  * Secured by RBAC ('MANAGE' permission).
  */
-export async function approveUser(targetUserId: string, roleId: string, userType: 'STAFF' | 'OJT' = 'STAFF') {
+export async function approveUser(targetUserId: string, roleId: string, userType: 'STAFF' | 'OJT' | 'EXTERNAL' = 'STAFF') {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
@@ -54,10 +60,15 @@ export async function approveUser(targetUserId: string, roleId: string, userType
   const db = await getDB();
 
   try {
+    let finalUserType = userType;
+    if (roleId === 'role_collaborator' || roleId === 'role_creator') {
+      finalUserType = 'EXTERNAL';
+    }
+
     // 1. Set user status to ACTIVE and assign userType classification
     await db
       .prepare("UPDATE users SET status = 'ACTIVE', user_type = ? WHERE id = ?")
-      .bind(userType, targetUserId)
+      .bind(finalUserType, targetUserId)
       .run();
 
     // 2. Assign their role (clear any existing just in case)
@@ -110,10 +121,10 @@ export async function rejectUser(targetUserId: string) {
 }
 
 /**
- * Server Action to update a user's type (STAFF vs OJT).
+ * Server Action to update a user's type (STAFF vs OJT vs EXTERNAL).
  * Secured by RBAC ('MANAGE' permission).
  */
-export async function updateUserType(targetUserId: string, newUserType: 'STAFF' | 'OJT') {
+export async function updateUserType(targetUserId: string, newUserType: 'STAFF' | 'OJT' | 'EXTERNAL') {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
