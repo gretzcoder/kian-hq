@@ -27,15 +27,7 @@ const BRIEF_TRANSITIONS: Record<string, string[]> = {
   ARCHIVED:        [],
 };
 
-const PROJECT_TRANSITIONS: Record<string, string[]> = {
-  DRAFT:            ['BRIEF_IN_REVIEW', 'PLANNING'],
-  BRIEF_IN_REVIEW:  ['PLANNING'],
-  PLANNING:         ['IN_PROGRESS'],
-  IN_PROGRESS:      ['IN_REVIEW'],
-  IN_REVIEW:        ['PUBLISHED', 'IN_PROGRESS'], // back to IN_PROGRESS if not ready
-  PUBLISHED:        ['ARCHIVED'],
-  ARCHIVED:         [],
-};
+const PROJECT_TRANSITIONS: Record<string, string[]> = {};
 
 const WORKSPACE_TRANSITIONS: Record<string, string[]> = {
   ACTIVE:    ['COMPLETED', 'ARCHIVED'],

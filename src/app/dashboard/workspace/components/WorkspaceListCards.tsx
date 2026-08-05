@@ -10,7 +10,6 @@ interface WorkspaceCardItem {
   name: string;
   description: string | null;
   status: string;
-  deadline: number | null;
   project_id: string;
   ojt_coordinator_id: string | null;
   project_name: string;

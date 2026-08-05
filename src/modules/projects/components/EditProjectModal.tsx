@@ -7,7 +7,6 @@ interface EditProjectModalProps {
   projectId: string;
   initialName: string;
   initialDescription: string | null;
-  initialGdriveUrl: string | null;
   onUpdate: (formData: FormData) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -15,14 +14,12 @@ export default function EditProjectModal({
   projectId,
   initialName,
   initialDescription,
-  initialGdriveUrl,
   onUpdate,
 }: EditProjectModalProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription || '');
-  const [gdriveUrl, setGdriveUrl] = useState(initialGdriveUrl || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,7 +36,6 @@ export default function EditProjectModal({
       const formData = new FormData();
       formData.append('name', name.trim());
       formData.append('description', description.trim());
-      formData.append('gdriveFolderUrl', gdriveUrl.trim());
 
       const res = await onUpdate(formData);
       if (res.success) {
@@ -112,17 +108,6 @@ export default function EditProjectModal({
                   rows={3}
                   placeholder="Deskripsikan tujuan dan detail proyek ini..."
                   className={`${inputCls} resize-none`}
-                />
-              </div>
-
-              <div>
-                <label className={labelCls}>Google Drive Folder URL (Opsional)</label>
-                <input
-                  type="url"
-                  value={gdriveUrl}
-                  onChange={(e) => setGdriveUrl(e.target.value)}
-                  placeholder="https://drive.google.com/drive/folders/..."
-                  className={inputCls}
                 />
               </div>
 

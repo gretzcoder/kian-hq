@@ -9,9 +9,6 @@ interface Project {
   id: string;
   name: string;
   description: string | null;
-  gdrive_folder_id: string | null;
-  status: string;
-  deadline: number | null;
   created_at: number;
 }
 
@@ -20,14 +17,6 @@ interface PageProps {
     briefId?: string;
   }>;
 }
-
-const statusColors: Record<string, string> = {
-  PLANNING: 'bg-blue-500/5 text-blue-600 border-blue-500/10 dark:text-blue-400 dark:border-blue-500/15',
-  IN_PROGRESS: 'bg-purple-500/5 text-purple-600 border-purple-500/10 dark:text-purple-400 dark:border-purple-500/15',
-  IN_REVIEW: 'bg-orange-500/5 text-orange-600 border-orange-500/10 dark:text-orange-400 dark:border-orange-500/15',
-  PUBLISHED: 'bg-emerald-500/5 text-emerald-600 border-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/15',
-  ARCHIVED: 'bg-zinc-500/5 text-zinc-500 border-zinc-500/10 dark:text-zinc-400 dark:border-zinc-500/15',
-};
 
 export default async function ProjectsPage({ searchParams }: PageProps) {
   const session = await getSession();
@@ -90,13 +79,6 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
                 >
                   <div>
                     <div className="flex justify-between items-start gap-3 mb-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[9px] font-black tracking-wider border ${
-                          statusColors[project.status] || statusColors.PLANNING
-                        }`}
-                      >
-                        {project.status.replace('_', ' ')}
-                      </span>
                     </div>
                     <Link
                       href={`/dashboard/projects/${project.id}`}
@@ -109,20 +91,7 @@ export default async function ProjectsPage({ searchParams }: PageProps) {
                     </p>
                   </div>
 
-                  <div className="mt-8 pt-4 border-t border-zinc-100 dark:border-zinc-900/60 flex items-center justify-between gap-4">
-                    {project.gdrive_folder_id ? (
-                      <a
-                        href={project.gdrive_folder_id}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-purple-600 dark:text-purple-400 hover:text-purple-500 font-bold inline-flex items-center gap-1.5"
-                      >
-                        📁 Storage Folder
-                      </a>
-                    ) : (
-                      <span className="text-xs text-zinc-400 dark:text-zinc-500 font-bold">No storage URL</span>
-                    )}
-
+                  <div className="mt-8 pt-4 border-t border-zinc-100 dark:border-zinc-900/60 flex items-center justify-end">
                     <Link
                       href={`/dashboard/projects/${project.id}`}
                       className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 px-3.5 py-1.5 rounded-xl bg-white dark:bg-zinc-900/50 transition-all font-bold tracking-wide active:scale-[0.98] shadow-sm"

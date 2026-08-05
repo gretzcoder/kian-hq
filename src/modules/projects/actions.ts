@@ -4,7 +4,6 @@ import { getSession } from '@/modules/auth/session';
 import { checkPermission } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
-import { validateTransition } from '@/modules/workflow/engine';
 import { logWorkflowEvent } from '@/modules/workflow/events';
 
 // ---------------------------------------------------------------------------
@@ -12,8 +11,7 @@ import { logWorkflowEvent } from '@/modules/workflow/events';
 // ---------------------------------------------------------------------------
 
 /**
- * Creates a new project. Brief must be in LOCKED status.
- * Auto-transitions brief to PROJECT_CREATED after project is made.
+ * Creates a new project.
  * Requires: CREATE_PROJECT permission.
  */
 export async function createProject(formData: FormData) {
@@ -24,10 +22,9 @@ export async function createProject(formData: FormData) {
 
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
-  const gdriveFolderUrl = formData.get('gdriveFolderUrl') as string;
   const rawCoordinatorIds = formData.getAll('ojtCoordinatorIds') as string[];
   const ojtCoordinatorIds = rawCoordinatorIds.filter((id) => id && id.trim().length > 0);
-  const briefId = formData.get('briefId') as string | null; // optional: link from brief
+  const briefId = formData.get('briefId') as string | null;
 
   if (!name?.trim()) {
     return { success: false, error: 'Nama proyek wajib diisi.' };
@@ -41,10 +38,10 @@ export async function createProject(formData: FormData) {
 
     await db
       .prepare(`
-        INSERT INTO projects (id, name, description, gdrive_folder_id, status, deadline, ojt_coordinator_id)
-        VALUES (?, ?, ?, ?, 'PLANNING', NULL, ?)
+        INSERT INTO projects (id, name, description, ojt_coordinator_id)
+        VALUES (?, ?, ?, ?)
       `)
-      .bind(projectId, name.trim(), description || null, gdriveFolderUrl || null, firstMentorId)
+      .bind(projectId, name.trim(), description || null, firstMentorId)
       .run();
 
     for (const mentorId of ojtCoordinatorIds) {
@@ -58,7 +55,7 @@ export async function createProject(formData: FormData) {
       entityType: 'project',
       entityId: projectId,
       fromStatus: null,
-      toStatus: 'PLANNING',
+      toStatus: 'ACTIVE',
       triggeredBy: session.userId,
       note: `Project "${name}" created`,
     });
@@ -103,7 +100,7 @@ export async function createProject(formData: FormData) {
 
 /**
  * Updates project metadata.
- * Requires: UPDATE permission.
+ * Requires: PROJECT_MANAGE permission.
  */
 export async function updateProject(projectId: string, formData: FormData) {
   const session = await getSession();
@@ -113,7 +110,6 @@ export async function updateProject(projectId: string, formData: FormData) {
 
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
-  const gdriveFolderUrl = formData.get('gdriveFolderUrl') as string;
 
   if (!name?.trim()) {
     return { success: false, error: 'Nama proyek wajib diisi.' };
@@ -131,10 +127,10 @@ export async function updateProject(projectId: string, formData: FormData) {
       await db
         .prepare(`
           UPDATE projects
-          SET name = ?, description = ?, gdrive_folder_id = ?, ojt_coordinator_id = ?
+          SET name = ?, description = ?, ojt_coordinator_id = ?
           WHERE id = ?
         `)
-        .bind(name.trim(), description || null, gdriveFolderUrl || null, firstMentorId, projectId)
+        .bind(name.trim(), description || null, firstMentorId, projectId)
         .run();
 
       await db
@@ -152,10 +148,10 @@ export async function updateProject(projectId: string, formData: FormData) {
       await db
         .prepare(`
           UPDATE projects
-          SET name = ?, description = ?, gdrive_folder_id = ?
+          SET name = ?, description = ?
           WHERE id = ?
         `)
-        .bind(name.trim(), description || null, gdriveFolderUrl || null, projectId)
+        .bind(name.trim(), description || null, projectId)
         .run();
     }
 
@@ -223,108 +219,7 @@ export async function updateProjectCoordinators(projectId: string, userIds: stri
   }
 }
 
-// ---------------------------------------------------------------------------
-// PUBLISH PROJECT
-// ---------------------------------------------------------------------------
 
-/**
- * Changes project status to PUBLISHED.
- * Validates via state machine.
- * Requires: PUBLISH_PROJECT permission.
- */
-export async function publishProject(projectId: string) {
-  const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
-
-  await checkPermission(session.userId, 'PUBLISH_PROJECT');
-
-  const db = await getDB();
-
-  const project = await db
-    .prepare('SELECT id, status FROM projects WHERE id = ?')
-    .bind(projectId)
-    .first() as { id: string; status: string } | null;
-
-  if (!project) return { success: false, error: 'Project not found.' };
-
-  try {
-    validateTransition('project', project.status, 'PUBLISHED');
-
-    await db
-      .prepare("UPDATE projects SET status = 'PUBLISHED' WHERE id = ?")
-      .bind(projectId)
-      .run();
-
-    await logWorkflowEvent({
-      entityType: 'project',
-      entityId: projectId,
-      fromStatus: project.status,
-      toStatus: 'PUBLISHED',
-      triggeredBy: session.userId,
-    });
-
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/projects');
-    revalidatePath(`/dashboard/projects/${projectId}`);
-    return { success: true };
-  } catch (err: any) {
-    console.error('publishProject failed:', err);
-    return { success: false, error: err.message };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// ARCHIVE PROJECT
-// ---------------------------------------------------------------------------
-
-/**
- * Archives a project.
- * Requires: ARCHIVE_PROJECT permission.
- */
-export async function archiveProject(projectId: string) {
-  const session = await getSession();
-  if (!session) throw new Error('Unauthorized');
-
-  await checkPermission(session.userId, 'ARCHIVE_PROJECT');
-
-  const db = await getDB();
-
-  const project = await db
-    .prepare('SELECT id, status FROM projects WHERE id = ?')
-    .bind(projectId)
-    .first() as { id: string; status: string } | null;
-
-  if (!project) return { success: false, error: 'Project not found.' };
-
-  try {
-    validateTransition('project', project.status, 'ARCHIVED');
-
-    await db
-      .prepare("UPDATE projects SET status = 'ARCHIVED' WHERE id = ?")
-      .bind(projectId)
-      .run();
-
-    await logWorkflowEvent({
-      entityType: 'project',
-      entityId: projectId,
-      fromStatus: project.status,
-      toStatus: 'ARCHIVED',
-      triggeredBy: session.userId,
-    });
-
-    revalidatePath('/dashboard');
-    revalidatePath('/dashboard/projects');
-    revalidatePath(`/dashboard/projects/${projectId}`);
-    return { success: true };
-  } catch (err: any) {
-    console.error('archiveProject failed:', err);
-    return { success: false, error: err.message };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// DELETE PROJECT
-// ---------------------------------------------------------------------------
 
 /**
  * Permanently deletes a project and all cascading data.

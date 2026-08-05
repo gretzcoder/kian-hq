@@ -36,7 +36,6 @@ export async function createWorkspace(projectId: string, formData: FormData) {
 
   const name          = formData.get('name') as string;
   const description   = formData.get('description') as string;
-  const deadlineStr   = formData.get('deadline') as string;
   const mentorId      = formData.get('mentorId') as string | null;
   const workspaceType = (formData.get('workspace_type') as string) || 'TROOPERS';
 
@@ -45,7 +44,6 @@ export async function createWorkspace(projectId: string, formData: FormData) {
   }
 
   const workspaceId = `ws_${crypto.randomUUID().replace(/-/g, '')}`;
-  const deadline    = deadlineStr ? new Date(deadlineStr).getTime() : null;
 
   try {
     if (workspaceType === 'ASSESSMENT') {
@@ -54,10 +52,10 @@ export async function createWorkspace(projectId: string, formData: FormData) {
       // All "on the job training" OJT are auto-enrolled as MEMBER
       await db
         .prepare(`
-          INSERT INTO workspaces (id, project_id, name, description, status, deadline, created_by, workspace_type, created_at)
-          VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, 'ASSESSMENT', strftime('%s', 'now'))
+          INSERT INTO workspaces (id, project_id, name, description, status, created_by, workspace_type, created_at)
+          VALUES (?, ?, ?, ?, 'ACTIVE', ?, 'ASSESSMENT', strftime('%s', 'now'))
         `)
-        .bind(workspaceId, projectId, name.trim(), description || null, deadline, session.userId)
+        .bind(workspaceId, projectId, name.trim(), description || null, session.userId)
         .run();
 
       // Fetch all OJT users (role = ON THE JOB TRAINING or user_type = OJT)
@@ -120,10 +118,10 @@ export async function createWorkspace(projectId: string, formData: FormData) {
       const ojtCoordinatorId = mentorId || session.userId;
       await db
         .prepare(`
-          INSERT INTO workspaces (id, project_id, name, description, status, deadline, created_by, ojt_coordinator_id, workspace_type, created_at)
-          VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?, 'TROOPERS', strftime('%s', 'now'))
+          INSERT INTO workspaces (id, project_id, name, description, status, created_by, ojt_coordinator_id, workspace_type, created_at)
+          VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, 'TROOPERS', strftime('%s', 'now'))
         `)
-        .bind(workspaceId, projectId, name.trim(), description || null, deadline, session.userId, ojtCoordinatorId)
+        .bind(workspaceId, projectId, name.trim(), description || null, session.userId, ojtCoordinatorId)
         .run();
     }
 
@@ -150,7 +148,7 @@ export async function createWorkspace(projectId: string, formData: FormData) {
 // ---------------------------------------------------------------------------
 
 /**
- * Updates workspace name, description, or deadline.
+ * Updates workspace name, description, or mentor.
  * Requires: UPDATE_WORKSPACE permission.
  */
 export async function updateWorkspace(workspaceId: string, formData: FormData) {
@@ -161,14 +159,12 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
 
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
-  const deadlineStr = formData.get('deadline') as string;
 
   if (!name?.trim()) {
     return { success: false, error: 'Workspace name is required.' };
   }
 
   const db = await getDB();
-  const deadline = deadlineStr ? new Date(deadlineStr).getTime() : null;
 
   try {
     const ws = await db
@@ -182,9 +178,9 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
 
     await db
       .prepare(`
-        UPDATE workspaces SET name = ?, description = ?, deadline = ?, ojt_coordinator_id = ? WHERE id = ?
+        UPDATE workspaces SET name = ?, description = ?, ojt_coordinator_id = ? WHERE id = ?
       `)
-      .bind(name.trim(), description || null, deadline, ojtCoordinatorId || null, workspaceId)
+      .bind(name.trim(), description || null, ojtCoordinatorId || null, workspaceId)
       .run();
 
     revalidatePath(`/dashboard/projects/${ws.project_id}`);

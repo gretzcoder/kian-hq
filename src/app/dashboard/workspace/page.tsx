@@ -66,7 +66,7 @@ export default async function WorkspacePage() {
     getDB().then((db) => {
       if (isGlobalWorkspaceManager) {
         return db.prepare(`
-          SELECT ws.id, ws.name, ws.description, ws.status, ws.deadline, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
+          SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
                  (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role,
                  MAX(
                    ws.created_at,
@@ -83,7 +83,7 @@ export default async function WorkspacePage() {
       const hasMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
 
       return db.prepare(`
-        SELECT ws.id, ws.name, ws.description, ws.status, ws.deadline, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
+        SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
                (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role,
                MAX(
                  ws.created_at,
@@ -136,7 +136,7 @@ export default async function WorkspacePage() {
     `).bind(session.userId).all()),
     // 3. Projects where user is the mentor
     getDB().then((db) => db.prepare(`
-      SELECT DISTINCT p.id, p.name, p.description, p.status, p.deadline
+      SELECT DISTINCT p.id, p.name, p.description, p.status
       FROM projects p
       JOIN project_coordinators pc ON p.id = pc.project_id
       WHERE pc.user_id = ?
@@ -149,7 +149,6 @@ export default async function WorkspacePage() {
     name: string;
     description: string | null;
     status: string;
-    deadline: number | null;
     project_id: string;
     ojt_coordinator_id: string | null;
     project_name: string;
@@ -164,7 +163,6 @@ export default async function WorkspacePage() {
     name: string;
     description: string | null;
     status: string;
-    deadline: number | null;
   }[];
 
   const mentoredProjectIds = new Set(mentoredProjects.map((p) => p.id));

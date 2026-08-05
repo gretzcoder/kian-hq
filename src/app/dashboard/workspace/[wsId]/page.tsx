@@ -12,6 +12,7 @@ import { WorkspaceChatRoom } from './components/WorkspaceChatRoom';
 import { WorkspaceChatMessage } from '@/modules/workspaces/chatActions';
 import WorkspaceReadTracker from '../components/WorkspaceReadTracker';
 import { AssessmentPanel } from './components/AssessmentPanel';
+import EditWorkspaceModal from './components/EditWorkspaceModal';
 
 
 interface WorkspaceRow {
@@ -20,7 +21,6 @@ interface WorkspaceRow {
   name: string;
   description: string | null;
   status: string;
-  deadline: number | null;
   created_at: number;
   creator_name: string | null;
   ojt_coordinator_id: string | null;
@@ -105,6 +105,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     { results: ojtUsersRaw },
     { results: chatMessagesRaw },
     ctx,
+    { results: mentorsRaw },
   ] = await Promise.all([
     db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
     db.prepare("SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1").bind(projectId).first(),
@@ -133,6 +134,15 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       ORDER BY wc.created_at ASC
     `).bind(wsId).all(),
     getSessionContext(session.userId),
+    db.prepare(`
+      SELECT DISTINCT u.id, u.name, u.email
+      FROM users u
+      JOIN user_roles ur ON u.id = ur.user_id
+      JOIN roles r ON ur.role_id = r.id
+      WHERE u.status = 'ACTIVE'
+        AND (r.id = 'role_mentor_troopers' OR r.name = 'MENTOR TROOPERS')
+      ORDER BY u.name ASC
+    `).all(),
   ]);
 
   const isOjtWorkspace = ojtCheck !== null || workspace.ojt_coordinator_id !== null;
@@ -140,6 +150,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const users = usersRaw as unknown as UserRow[];
   const ojtUsers = ojtUsersRaw as unknown as { id: string; name: string; email: string }[];
   const members = (membersRaw as any[]);
+  const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
 
   // SECURITY GATE: OJT interns must be a member or mentor of the workspace/project to view it
   if (ctx.userType === 'OJT') {
@@ -289,10 +300,22 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             </div>
           </div>
 
-          {/* Workspace status controls */}
-          {canUpdateWs && workspace.status === 'ACTIVE' && (
-            <WorkspaceStatusForm workspaceId={wsId} currentStatus={workspace.status} />
-          )}
+          {/* Workspace controls: Edit & Status */}
+          <div className="flex flex-col items-end gap-2">
+            {canUpdateWs && (
+              <EditWorkspaceModal
+                workspaceId={wsId}
+                initialName={workspace.name}
+                initialDescription={workspace.description}
+                initialMentorId={workspace.ojt_coordinator_id}
+                mentors={mentors}
+                isAssessment={workspace.workspace_type === 'ASSESSMENT'}
+              />
+            )}
+            {canUpdateWs && workspace.status === 'ACTIVE' && (
+              <WorkspaceStatusForm workspaceId={wsId} currentStatus={workspace.status} />
+            )}
+          </div>
         </div>
       </div>
 

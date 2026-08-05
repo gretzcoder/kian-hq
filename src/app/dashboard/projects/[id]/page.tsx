@@ -3,7 +3,7 @@ import { getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
-import { deleteProject, publishProject, archiveProject, updateProject } from '@/modules/projects/actions';
+import { deleteProject, updateProject } from '@/modules/projects/actions';
 import ProjectTabs from '@/modules/projects/components/ProjectTabs';
 import ProjectDetailTabs from '@/modules/projects/components/ProjectDetailTabs';
 import ProjectCoordinatorsManager from '@/modules/projects/components/ProjectCoordinatorsManager';
@@ -15,9 +15,6 @@ interface ProjectRow {
   id: string;
   name: string;
   description: string | null;
-  gdrive_folder_id: string | null;
-  status: string;
-  deadline: number | null;
   created_at: number;
   ojt_coordinator_id: string | null;
 }
@@ -27,7 +24,6 @@ interface WorkspaceRow {
   name: string;
   description: string | null;
   status: string;
-  deadline: number | null;
   task_count: number;
 }
 
@@ -64,25 +60,6 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-// Project workflow — visual step bar
-const PROJECT_FLOW = [
-  { status: 'PLANNING',       label: 'Planning' },
-  { status: 'IN_PROGRESS',    label: 'In Progress' },
-  { status: 'IN_REVIEW',      label: 'In Review' },
-  { status: 'PUBLISHED',      label: 'Published' },
-  { status: 'ARCHIVED',       label: 'Archived' },
-];
-
-const projectStatusColors: Record<string, string> = {
-  DRAFT:            'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700',
-  BRIEF_IN_REVIEW:  'text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 border-yellow-500/15',
-  PLANNING:         'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15',
-  IN_PROGRESS:      'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15',
-  IN_REVIEW:        'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/15',
-  PUBLISHED:        'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',
-  ARCHIVED:         'text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800',
-};
-
 const wsStatusColors: Record<string, string> = {
   ACTIVE:    'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15',
   COMPLETED: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',
@@ -118,20 +95,15 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     redirect('/dashboard/workspace');
   }
 
-  const canCreateTask    = ctx.can('TASK_CREATE');
-  const canApproveTask   = ctx.can('TASK_REVIEW');
-  const canDeleteTask    = ctx.can('WORKSPACE_MANAGE');
   const canDeleteProject = ctx.can('PROJECT_MANAGE');
   const canEditBrief     = ctx.can('BRIEF_REVIEW');
   const canCreateWs      = ctx.can('WORKSPACE_MANAGE') || isProjectMentor;
   const canDeleteWs      = ctx.can('WORKSPACE_MANAGE') || isProjectMentor;
-  const canPublish       = ctx.can('PROJECT_MANAGE');
-  const canArchive       = ctx.can('ARCHIVE_PROJECT') || ctx.can('PROJECT_MANAGE');
 
   // Fetch Workspaces for this project
   const { results: workspacesRaw } = await db
     .prepare(`
-      SELECT ws.id, ws.name, ws.description, ws.status, ws.deadline,
+      SELECT ws.id, ws.name, ws.description, ws.status,
              COUNT(t.id) as task_count
       FROM workspaces ws
       LEFT JOIN tasks t ON t.workspace_id = ws.id
@@ -200,29 +172,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   `).bind(projectId, projectId, projectId, projectId, projectId).all();
   const events = eventsRaw as any[];
 
-  // Server Actions
-  async function handleDeleteProject() {
-    'use server';
-    await deleteProject(projectId);
-    redirect('/dashboard/projects');
-  }
-
-  async function handlePublish() {
-    'use server';
-    await publishProject(projectId);
-  }
-
-  async function handleArchive() {
-    'use server';
-    await archiveProject(projectId);
-  }
-
-  const statusColor = projectStatusColors[project.status] ?? projectStatusColors.PLANNING;
-
-  // Determine which steps are complete/current/future
-  const flowStatuses = PROJECT_FLOW.map((step) => step.status);
-  const currentIdx = flowStatuses.indexOf(project.status);
-
   // Fetch current project coordinators & all users for manager dropdown
   const [{ results: currentCoordinatorsRaw }, { results: allUsersRaw }] = await Promise.all([
     db.prepare(`
@@ -237,6 +186,13 @@ export default async function ProjectDetailPage({ params }: PageProps) {
   const currentCoordinators = currentCoordinatorsRaw as unknown as Array<{ id: string; name: string; email: string }>;
   const availableUsers = allUsersRaw as unknown as Array<{ id: string; name: string; email: string }>;
   const canUpdateProject = ctx.can('UPDATE');
+
+  // Server Actions
+  async function handleDeleteProject() {
+    'use server';
+    await deleteProject(projectId);
+    redirect('/dashboard/projects');
+  }
 
   return (
     <div className="space-y-8">
@@ -254,32 +210,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               projectId={projectId}
               initialName={project.name}
               initialDescription={project.description}
-              initialGdriveUrl={project.gdrive_folder_id}
               onUpdate={async (formData: FormData) => {
                 'use server';
                 return await updateProject(projectId, formData);
               }}
             />
-          )}
-          {canPublish && project.status === 'IN_REVIEW' && (
-            <form action={handlePublish}>
-              <button
-                type="submit"
-                className="text-xs font-bold border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 px-4 py-2 rounded-xl transition-all active:scale-[0.97]"
-              >
-                🚀 Publish
-              </button>
-            </form>
-          )}
-          {canArchive && ['PUBLISHED', 'IN_REVIEW'].includes(project.status) && (
-            <form action={handleArchive}>
-              <button
-                type="submit"
-                className="text-xs font-bold border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 px-4 py-2 rounded-xl transition-all active:scale-[0.97]"
-              >
-                Archive
-              </button>
-            </form>
           )}
           {canDeleteProject && (
             <form action={handleDeleteProject}>
@@ -305,19 +240,6 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         <p className="text-zinc-600 dark:text-zinc-400 text-sm leading-relaxed max-w-3xl font-medium">
           {project.description || 'Tidak ada deskripsi proyek.'}
         </p>
-
-        {project.gdrive_folder_id && (
-          <div className="mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-900/60">
-            <a
-              href={project.gdrive_folder_id}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-xs font-bold bg-purple-500/5 hover:bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/10 dark:border-purple-500/20 px-4 py-2 rounded-xl transition-all active:scale-[0.97]"
-            >
-              📂 Buka Google Drive Folder
-            </a>
-          </div>
-        )}
       </div>
 
       {/* Project Coordinators Manager */}
@@ -397,8 +319,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
               brief={null}
               events={events}
               canCreateTask={false}
-              canApproveTask={canApproveTask}
-              canDeleteTask={canDeleteTask}
+              canApproveTask={false}
+              canDeleteTask={false}
               canEditBrief={false}
               currentUserId={session.userId}
               handleCreateTask={async () => {
