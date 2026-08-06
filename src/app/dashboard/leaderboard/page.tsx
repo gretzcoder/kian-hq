@@ -12,16 +12,16 @@ interface LeaderboardPageProps {
 }
 
 const CATEGORIES = [
-  { id: 'overall',         label: '🏆 Champion',          icon: '🏆' },
-  { id: 'productive',      label: '⚡ Most Productive',    icon: '⚡' },
-  { id: 'quality',         label: '🎯 High Quality',       icon: '🎯' },
-  { id: 'workspace',       label: '🏢 Top Workspaces',     icon: '🏢' },
-  { id: 'coordinator',     label: '🎖️ Top Mentors',        icon: '🎖️' },
-  { id: 'role_leader',     label: '👑 Top Team Leaders',   icon: '👑' },
-  { id: 'role_designer',   label: '🎨 Top Designers',      icon: '🎨' },
-  { id: 'role_editor',     label: '🎬 Top Video Editors',  icon: '🎬' },
-  { id: 'role_planner',    label: '📋 Top Planners',       icon: '📋' },
-  { id: 'role_researcher', label: '🔍 Top Researchers',    icon: '🔍' },
+  { id: 'overall', label: '🏆 Champion', icon: '🏆' },
+  { id: 'productive', label: '⚡ Most Productive', icon: '⚡' },
+  { id: 'quality', label: '🎯 High Quality', icon: '🎯' },
+  { id: 'workspace', label: '🏢 Top Workspaces', icon: '🏢' },
+  { id: 'role_mentor_troopers', label: '🎖️ Top Mentors', icon: '🎖️' },
+  { id: 'role_leader', label: '👑 Top Team Leaders', icon: '👑' },
+  { id: 'role_designer', label: '🎨 Top Designers', icon: '🎨' },
+  { id: 'role_editor', label: '🎬 Top Video Editors', icon: '🎬' },
+  { id: 'role_planner', label: '📋 Top Planners', icon: '📋' },
+  { id: 'role_researcher', label: '🔍 Top Researchers', icon: '🔍' },
 ];
 
 const PERIODS = [
@@ -59,11 +59,10 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
             <Link
               key={p.id}
               href={`/dashboard/leaderboard?category=${activeCategory}&period=${p.id}`}
-              className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                activePeriod === p.id
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-              }`}
+              className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activePeriod === p.id
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                }`}
             >
               {p.label}
             </Link>
@@ -84,11 +83,10 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
           <Link
             key={cat.id}
             href={`/dashboard/leaderboard?category=${cat.id}&period=${activePeriod}`}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 border ${
-              activeCategory === cat.id
-                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-transparent shadow-md shadow-purple-500/20'
-                : 'bg-white dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
-            }`}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 border ${activeCategory === cat.id
+              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-transparent shadow-md shadow-purple-500/20'
+              : 'bg-white dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
+              }`}
           >
             {cat.label}
           </Link>
@@ -106,14 +104,6 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
 
       {leaderboardResult.type === 'workspace' && (
         <WorkspaceLeaderboardView data={leaderboardResult.data as any} period={activePeriod} />
-      )}
-
-      {leaderboardResult.type === 'coordinator' && (
-        <CoordinatorLeaderboardView
-          data={leaderboardResult.data as any}
-          currentUserId={session.userId}
-          period={activePeriod}
-        />
       )}
     </div>
   );

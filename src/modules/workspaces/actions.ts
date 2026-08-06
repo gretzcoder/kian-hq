@@ -48,8 +48,8 @@ export async function createWorkspace(projectId: string, formData: FormData) {
   try {
     if (workspaceType === 'ASSESSMENT') {
       // ── Assessment Workspace ─────────────────────────────────────────────
-      // No single mentor — all "mentor troopers" are auto-enrolled as LEADER
-      // All "on the job training" OJT are auto-enrolled as MEMBER
+      // Automatically enroll ONLY Troopers (OJT users / role_troopers) as MEMBER in workspace_members (Daftar Anggota Aktif).
+      // Mentors and all main staff roles retain full access to view, create tasks, and manage Assessment Workspaces.
       await db
         .prepare(`
           INSERT INTO workspaces (id, project_id, name, description, status, created_by, workspace_type, created_at)
@@ -58,61 +58,30 @@ export async function createWorkspace(projectId: string, formData: FormData) {
         .bind(workspaceId, projectId, name.trim(), description || null, session.userId)
         .run();
 
-      // Fetch all OJT users (role = ON THE JOB TRAINING or user_type = OJT)
-      const { results: ojtUsers } = await db
+      // Fetch all Trooper / OJT users
+      const { results: trooperUsers } = await db
         .prepare(`
           SELECT DISTINCT u.id FROM users u
           LEFT JOIN user_roles ur ON u.id = ur.user_id
           LEFT JOIN roles r ON ur.role_id = r.id
           WHERE (
-            LOWER(r.name) LIKE '%job%training%' 
+            LOWER(r.name) LIKE '%trooper%' 
             OR LOWER(r.name) LIKE '%ojt%' 
-            OR r.id = 'role_on_the_job_training'
+            OR r.id = 'role_troopers'
             OR u.user_type = 'OJT'
           )
           AND u.status = 'ACTIVE'
         `)
         .all();
 
-      // Fetch all mentor users (role = MENTOR TROOPERS)
-      const { results: mentorUsers } = await db
-        .prepare(`
-          SELECT DISTINCT u.id FROM users u
-          LEFT JOIN user_roles ur ON u.id = ur.user_id
-          LEFT JOIN roles r ON ur.role_id = r.id
-          WHERE (
-            LOWER(r.name) LIKE '%mentor%' 
-            OR r.id = 'role_mentor_troopers'
-          )
-          AND u.status = 'ACTIVE'
-        `)
-        .all();
-
-      // Enroll all OJT as MEMBER
-      for (const u of ojtUsers as { id: string }[]) {
+      // Enroll all Troopers as MEMBER
+      for (const u of trooperUsers as { id: string }[]) {
         await db
           .prepare(`INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at)
                     VALUES (?, ?, 'MEMBER', strftime('%s', 'now'))`)
           .bind(workspaceId, u.id)
           .run();
       }
-
-      // Enroll all mentors as LEADER
-      for (const u of mentorUsers as { id: string }[]) {
-        await db
-          .prepare(`INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at)
-                    VALUES (?, ?, 'LEADER', strftime('%s', 'now'))`)
-          .bind(workspaceId, u.id)
-          .run();
-      }
-
-      // Always ensure the workspace creator is enrolled as LEADER
-      await db
-        .prepare(`INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at)
-                  VALUES (?, ?, 'LEADER', strftime('%s', 'now'))`)
-        .bind(workspaceId, session.userId)
-        .run();
-
     } else {
       // ── Standard / Troopers Workspace ────────────────────────────────────
       const ojtCoordinatorId = mentorId || session.userId;
@@ -514,6 +483,27 @@ export async function deleteWorkspace(workspaceId: string) {
 
   try {
     const deletedAt = Date.now();
+
+    // 1. Delete task assignments for all tasks in this workspace to clear sparks history
+    await db
+      .prepare(`
+        DELETE FROM task_assignments
+        WHERE task_id IN (SELECT id FROM tasks WHERE workspace_id = ?)
+      `)
+      .bind(workspaceId)
+      .run();
+
+    // 2. Mark all tasks in this workspace as DELETED and clear sparks
+    await db
+      .prepare(`
+        UPDATE tasks
+        SET status = 'DELETED', sparks = NULL
+        WHERE workspace_id = ?
+      `)
+      .bind(workspaceId)
+      .run();
+
+    // 3. Soft-delete the workspace itself
     await db
       .prepare('UPDATE workspaces SET deleted_at = ? WHERE id = ?')
       .bind(deletedAt, workspaceId)
@@ -525,7 +515,7 @@ export async function deleteWorkspace(workspaceId: string) {
       fromStatus: 'ACTIVE',
       toStatus: 'DELETED',
       triggeredBy: session.userId,
-      note: 'Workspace soft-deleted',
+      note: 'Workspace soft-deleted (semua task dan sparks terkait dihapus)',
     });
 
     revalidatePath(`/dashboard/projects/${ws.project_id}`);

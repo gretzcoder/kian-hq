@@ -28,6 +28,8 @@ export async function isAuthorizedForViewAs(): Promise<boolean> {
   const session = await getSession();
   if (!session) return false;
 
+  const realUserId = session.realUserId || session.userId;
+
   const db = await getDB();
   try {
     const { results } = await db
@@ -39,7 +41,7 @@ export async function isAuthorizedForViewAs(): Promise<boolean> {
         LEFT JOIN permissions p ON rp.permission_id = p.id
         WHERE ur.user_id = ?
       `)
-      .bind(session.userId)
+      .bind(realUserId)
       .all();
 
     const perms = (results || []).map((r: any) => String(r.perm_name));
@@ -48,6 +50,7 @@ export async function isAuthorizedForViewAs(): Promise<boolean> {
     return (
       perms.includes('VIEW_AS_ROLE') ||
       perms.includes('ADMIN_ROLES') ||
+      perms.includes('ADMIN_USERS') ||
       perms.includes('ADMIN_SYSTEM') ||
       roles.includes('EXECUTIVE') ||
       roles.includes('COORDINATOR')
@@ -71,19 +74,14 @@ export async function getAvailableRolesForViewAs(): Promise<ViewAsRoleItem[]> {
       .prepare('SELECT id, name, description FROM roles ORDER BY id ASC')
       .all();
 
-    const roles: ViewAsRoleItem[] = (results || []).map((r: any) => ({
-      id: r.id,
-      name: r.name,
-      description: r.description || '',
-      userType: 'STAFF',
-    }));
-
-    // Add OJT Intern simulated option
-    roles.push({
-      id: 'ojt_intern',
-      name: 'OJT INTERN',
-      description: 'Peserta magang OJT (Tampilan terbatas khusus OJT)',
-      userType: 'OJT',
+    const roles: ViewAsRoleItem[] = (results || []).map((r: any) => {
+      const isOjt = r.id === 'role_troopers' || String(r.name).toUpperCase().includes('TROOPERS');
+      return {
+        id: r.id,
+        name: r.name,
+        description: r.description || '',
+        userType: isOjt ? 'OJT' : 'STAFF',
+      };
     });
 
     return roles;

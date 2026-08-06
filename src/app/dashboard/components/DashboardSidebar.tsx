@@ -1,15 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback, useTransition } from 'react';
 import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import { getUnreadCount } from '@/modules/announcements/announcementReadState';
 import { getUnreadWorkspaceCount } from '@/modules/workspaces/workspaceReadState';
 import { getSidebarCounts, WorkspaceNotifItem } from '@/modules/notifications/notificationActions';
 import ViewAsRoleTrigger from '@/modules/roles/components/ViewAsRoleTrigger';
 import { ViewAsRoleItem, ActiveSimulatedRole } from '@/modules/roles/viewAsRoleActions';
-import { ImpersonateUserItem } from '@/modules/users/impersonationActions';
+import { ImpersonateUserItem, stopImpersonatingUser } from '@/modules/users/impersonationActions';
 
 // ── Badge colour map ──────────────────────────────────────────────────────────
 const BADGE_BG: Record<'red' | 'amber', string> = {
@@ -34,6 +34,7 @@ interface SidebarProps {
   canReview:       boolean;
   canCreateBrief:  boolean;
   canUseAI:        boolean;
+  canManageSparks?: boolean;
   isOJT?:          boolean;
   isMentor?:       boolean;
   isLocked?:       boolean;
@@ -85,6 +86,7 @@ export default function DashboardSidebar({
   canReview,
   canCreateBrief,
   canUseAI,
+  canManageSparks = false,
   isOJT         = false,
   isLocked      = false,
   announcementTimestamps = [],
@@ -97,6 +99,8 @@ export default function DashboardSidebar({
   session,
 }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const [collapsed,   setCollapsed]   = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
 
@@ -225,6 +229,9 @@ export default function DashboardSidebar({
           : []),
         ...(canManageRoles
           ? [{ href: '/dashboard/permissions', label: 'Permissions', icon: '🔒', exact: false }]
+          : []),
+        ...(canManageSparks
+          ? [{ href: '/dashboard/sparks', label: 'Sparks', icon: '✨', exact: false }]
           : []),
       ],
     },
@@ -369,7 +376,7 @@ export default function DashboardSidebar({
         </div>
 
         {/* View As Role / User Trigger */}
-        {availableRoles && availableRoles.length > 0 && (
+        {((availableRoles && availableRoles.length > 0) || isImpersonating || !!activeSimulatedRole) && (
           <div className="px-2 pt-2 border-t border-zinc-100 dark:border-zinc-900/60 shrink-0 bg-white dark:bg-[#09090b]">
             <ViewAsRoleTrigger
               availableRoles={availableRoles}
@@ -416,13 +423,30 @@ export default function DashboardSidebar({
             </Link>
 
             {!collapsed && (
-              <a
-                href="/api/auth/logout"
-                title="Keluar Akun"
-                className="w-7 h-7 flex items-center justify-center rounded-xl bg-zinc-100/70 hover:bg-red-500/10 dark:bg-zinc-900/70 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all duration-200 text-xs shrink-0 active:scale-95 ml-auto"
-              >
-                ➔
-              </a>
+              <div className="flex items-center gap-1 shrink-0 ml-auto">
+                {isImpersonating && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      startTransition(async () => {
+                        await stopImpersonatingUser();
+                        router.refresh();
+                      });
+                    }}
+                    title="Exit Impersonation Mode"
+                    className="w-7 h-7 flex items-center justify-center rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 transition-all text-xs font-bold active:scale-95"
+                  >
+                    🎭✕
+                  </button>
+                )}
+                <a
+                  href="/api/auth/logout"
+                  title="Keluar Akun"
+                  className="w-7 h-7 flex items-center justify-center rounded-xl bg-zinc-100/70 hover:bg-red-500/10 dark:bg-zinc-900/70 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all duration-200 text-xs shrink-0 active:scale-95"
+                >
+                  ➔
+                </a>
+              </div>
             )}
           </div>
         </div>

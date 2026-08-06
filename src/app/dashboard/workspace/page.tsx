@@ -68,10 +68,10 @@ export default async function WorkspacePage() {
         return db.prepare(`
           SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
                  (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role,
-                 MAX(
-                   ws.created_at,
-                   COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
-                   COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0)
+                 COALESCE(
+                   (SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id),
+                   (SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id),
+                   ws.created_at
                  ) AS latest_activity_ts
           FROM workspaces ws
           JOIN projects p ON ws.project_id = p.id
@@ -85,10 +85,10 @@ export default async function WorkspacePage() {
       return db.prepare(`
         SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
                (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role,
-               MAX(
-                 ws.created_at,
-                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
-                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0)
+               COALESCE(
+                 (SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id),
+                 (SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id),
+                 ws.created_at
                ) AS latest_activity_ts
         FROM workspaces ws
         JOIN projects p ON ws.project_id = p.id
@@ -100,7 +100,7 @@ export default async function WorkspacePage() {
           )
           AND ws.deleted_at IS NULL
         ORDER BY ws.created_at DESC
-      `).bind(session.userId, session.userId, session.userId, session.userId, hasMentorRole ? 1 : 0).all();
+      `).bind(session.userId, session.userId, session.userId, session.userId, (hasMentorRole || ctx.userType === 'STAFF') ? 1 : 0).all();
     }),
     // 2. All active assignments for the current user
     getDB().then((db) => db.prepare(`
@@ -168,15 +168,9 @@ export default async function WorkspacePage() {
   const mentoredProjectIds = new Set(mentoredProjects.map((p) => p.id));
   const canGlobalDelete = ctx.can('DELETE');
 
-  // Auto-redirect: Mentor with exactly 1 project and no workspace membership → go to project
+  // Auto-redirect: Mentor with exactly 0 workspace memberships and 1 project → go to project
   if (mentoredProjects.length === 1 && userWorkspaces.length === 0) {
     redirect(`/dashboard/projects/${mentoredProjects[0].id}`);
-  }
-
-  // Auto-redirect: Team Leader with exactly 1 workspace and no mentor role → go to workspace
-  const leaderWorkspaces = userWorkspaces.filter((ws) => ws.my_team_role === 'LEADER');
-  if (leaderWorkspaces.length === 1 && mentoredProjects.length === 0) {
-    redirect(`/dashboard/workspace/${leaderWorkspaces[0].id}`);
   }
 
   // Group assignments by workspace

@@ -93,6 +93,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
   const description = formData.get('description') as string;
   const priority = (formData.get('priority') as string) || 'NORMAL';
   const deadlineStr = formData.get('deadline') as string;
+  const startAtStr = (formData.get('start_at') as string) || (formData.get('startAt') as string);
   const outputType = (formData.get('outputType') as string) || 'DESIGN';
   
   // OJT fields
@@ -113,6 +114,12 @@ export async function createTask(workspaceId: string, formData: FormData) {
   const taskId = `task_${crypto.randomUUID().replace(/-/g, '')}`;
   const deadline = new Date(deadlineStr).getTime();
 
+  let startAt: number | null = null;
+  if (startAtStr?.trim()) {
+    startAt = new Date(startAtStr).getTime();
+    if (isNaN(startAt)) startAt = null;
+  }
+
   // Determine initial status based on task type
   const initialStatus = 'DRAFT';
 
@@ -120,8 +127,8 @@ export async function createTask(workspaceId: string, formData: FormData) {
     await db
       .prepare(`
         INSERT INTO tasks
-          (id, project_id, workspace_id, title, description, status, priority, created_by, deadline, task_type, parent_task_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, project_id, workspace_id, title, description, status, priority, created_by, deadline, start_at, task_type, parent_task_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .bind(
         taskId, 
@@ -133,6 +140,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
         priority, 
         session.userId, 
         deadline,
+        startAt,
         outputType,
         parentTaskId
       )
@@ -867,6 +875,77 @@ export async function requestRevision(assignmentId: string, note: string) {
 }
 
 // ---------------------------------------------------------------------------
+// UPDATE TASK
+// ---------------------------------------------------------------------------
+
+/**
+ * Updates a task.
+ * Requires: UPDATE permission.
+ */
+export async function updateTask(taskId: string, formData: FormData) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+
+  const task = await db
+    .prepare('SELECT id, project_id, workspace_id FROM tasks WHERE id = ?')
+    .bind(taskId)
+    .first() as { id: string; project_id: string; workspace_id: string | null } | null;
+
+  if (!task) return { success: false, error: 'Task not found.' };
+
+  const workspaceId = task.workspace_id || '';
+  const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'UPDATE');
+  if (!authorized) {
+    throw new Error('Forbidden: You do not have permission to update this task.');
+  }
+
+  const title = (formData.get('title') as string)?.trim();
+  const description = (formData.get('description') as string)?.trim() || null;
+  const priority = (formData.get('priority') as string) || 'NORMAL';
+  const deadlineStr = formData.get('deadline') as string;
+  const startAtStr = (formData.get('start_at') as string) || (formData.get('startAt') as string);
+  const outputType = (formData.get('outputType') as string) || 'DESIGN';
+  const parentTaskId = (formData.get('parentTaskId') as string) || null;
+
+  if (!title) {
+    return { success: false, error: 'Judul tugas wajib diisi.' };
+  }
+
+  let deadline: number | null = null;
+  if (deadlineStr) {
+    deadline = new Date(deadlineStr).getTime();
+  }
+
+  let startAt: number | null = null;
+  if (startAtStr?.trim()) {
+    startAt = new Date(startAtStr).getTime();
+    if (isNaN(startAt)) startAt = null;
+  }
+
+  try {
+    await db
+      .prepare(`
+        UPDATE tasks
+        SET title = ?, description = ?, priority = ?, deadline = ?, start_at = ?, task_type = ?, parent_task_id = ?
+        WHERE id = ?
+      `)
+      .bind(title, description, priority, deadline, startAt, outputType, parentTaskId, taskId)
+      .run();
+
+    if (task.workspace_id) {
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
+    }
+    revalidatePath('/dashboard/workspace');
+    return { success: true };
+  } catch (err: any) {
+    console.error('updateTask failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // DELETE TASK
 // ---------------------------------------------------------------------------
 
@@ -895,6 +974,7 @@ export async function deleteTask(taskId: string) {
   }
 
   try {
+    await db.prepare('DELETE FROM task_assignments WHERE task_id = ?').bind(taskId).run();
     await db.prepare('DELETE FROM tasks WHERE id = ?').bind(taskId).run();
 
     if (task.workspace_id) {

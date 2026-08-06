@@ -171,7 +171,7 @@ export default function OnboardingModal({
 
   // ── Final submit ────────────────────────────────────────────────────────────
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, exitAfterSave = false) => {
     e.preventDefault();
     setGlobalError(null);
 
@@ -220,6 +220,9 @@ export default function OnboardingModal({
       });
 
       if (res.success) {
+        if (exitAfterSave && isImpersonating) {
+          await stopImpersonatingUser();
+        }
         router.refresh();
       } else {
         setGlobalError(res.error || 'Gagal menyimpan profil onboarding.');
@@ -534,7 +537,7 @@ export default function OnboardingModal({
               {/* Global error */}
               <ErrorBanner msg={globalError} />
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-wrap gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => { setGlobalError(null); setStep(1); }}
@@ -542,6 +545,16 @@ export default function OnboardingModal({
                 >
                   ⬅ Kembali
                 </button>
+                {isImpersonating && (
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={(e) => handleSubmit(e as any, true)}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg text-xs sm:text-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <span>Simpan & Exit 🎭</span>
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={loading}

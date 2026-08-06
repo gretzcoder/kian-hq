@@ -8,6 +8,8 @@ import TimeGreeting from './components/TimeGreeting';
 import OnboardingModal from '@/modules/profile/components/OnboardingModal';
 import ViewAsRoleBanner from '@/modules/roles/components/ViewAsRoleBanner';
 import ImpersonationBanner from '@/modules/users/components/ImpersonationBanner';
+import FloatingNotificationDrawer from '@/modules/notifications/components/FloatingNotificationDrawer';
+import HeaderProfileButton from './components/HeaderProfileButton';
 import {
   isAuthorizedForViewAs,
   getAvailableRolesForViewAs,
@@ -35,6 +37,7 @@ export default async function DashboardLayout({
   const isCoordinator =
     ctx.userType === 'STAFF' &&
     (ctx.can('MANAGE') || ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE'));
+  const canManageSparks = ctx.can('SPARKS_MANAGE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
 
   // Resolve View As Role & Impersonation simulation options
   const isAuthorizedForViewAsRole = await isAuthorizedForViewAs();
@@ -147,6 +150,8 @@ export default async function DashboardLayout({
           impersonatedName={session.name}
           impersonatedEmail={session.email}
           realAdminName={session.realUserName}
+          currentUserId={session.userId}
+          availableUsers={availableUsers}
         />
       )}
 
@@ -176,6 +181,7 @@ export default async function DashboardLayout({
           canReview={canReview}
           canCreateBrief={canCreateBrief}
           canUseAI={canUseAI}
+          canManageSparks={canManageSparks}
           isOJT={isOJT}
           isMentor={isMentor}
           isLocked={showOnboarding}
@@ -198,7 +204,15 @@ export default async function DashboardLayout({
           {/* Top Floating Control Bar */}
           <div className="hidden lg:flex items-center justify-between pb-3 mb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
             <TimeGreeting />
-            <ThemeToggle />
+            <div className="flex items-center gap-3">
+              <FloatingNotificationDrawer
+                canReview={canReview}
+                canManageSparks={canManageSparks}
+                canCreateBrief={canCreateBrief}
+              />
+              <ThemeToggle />
+              <HeaderProfileButton name={session.name} email={session.email} avatar={userAvatar} />
+            </div>
           </div>
           {children}
         </main>

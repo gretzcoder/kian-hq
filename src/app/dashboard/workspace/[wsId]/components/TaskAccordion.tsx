@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import TaskActions from '@/modules/tasks/components/TaskActions';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
+import { updateTask, deleteTask } from '@/modules/tasks/actions';
 
 interface TaskAssignment {
   id: string;
@@ -28,6 +30,7 @@ interface TaskRow {
   status: string;
   priority: string;
   deadline: number | null;
+  start_at?: number | null;
   created_at: number;
   task_type: string;
   parent_task_id: string | null;
@@ -147,8 +150,26 @@ export default function TaskAccordion({
   users,
   members,
 }: TaskAccordionProps) {
-  // First task is open by default
-  const [openTaskId, setOpenTaskId] = useState<string | null>(tasks[0]?.id ?? null);
+  const searchParams = useSearchParams();
+  const targetTaskId = searchParams ? searchParams.get('taskId') : null;
+
+  // Target task or first task open by default
+  const [openTaskId, setOpenTaskId] = useState<string | null>(targetTaskId || (tasks[0]?.id ?? null));
+  const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (targetTaskId) {
+      setOpenTaskId(targetTaskId);
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`task_card_${targetTaskId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [targetTaskId]);
 
   const toggle = (id: string) => {
     setOpenTaskId((prev) => (prev === id ? null : id));
@@ -158,15 +179,19 @@ export default function TaskAccordion({
     <div className="space-y-3">
       {tasks.map((task) => {
         const isOpen = openTaskId === task.id;
+        const isTarget = targetTaskId === task.id;
         const taskAssignments = assignmentsByTask[task.id] ?? [];
         const cfg = statusConfig[task.status] ?? statusConfig.DRAFT;
         const pCfg = priorityConfig[task.priority] ?? priorityConfig.NORMAL;
-        const borderColor = getBorderColor(task.status);
+        const borderColor = isTarget
+          ? 'border-purple-500 ring-2 ring-purple-500 shadow-xl shadow-purple-500/20'
+          : getBorderColor(task.status);
         const totalTaskSparks = taskAssignments.reduce((acc, a) => acc + ((a as any).sparks || 0), 0);
 
         return (
           <div
             key={task.id}
+            id={`task_card_${task.id}`}
             className={`border bg-white dark:bg-[#09090b]/40 rounded-3xl shadow-sm overflow-hidden transition-all duration-300 ${borderColor}`}
           >
               {/* Accordion Header — always visible, click to toggle */}
@@ -189,6 +214,17 @@ export default function TaskAccordion({
                         <span>✨</span> {totalTaskSparks} Total Sparks
                       </span>
                     )}
+                    {task.start_at && (
+                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border flex items-center gap-1 ${
+                        task.start_at > Date.now()
+                          ? 'text-indigo-600 dark:text-indigo-300 bg-indigo-500/10 border-indigo-500/20 font-bold'
+                          : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
+                      }`}>
+                        <span>📅</span>
+                        <span>Mulai: {new Date(task.start_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                        {task.start_at > Date.now() && <span className="text-[8px] bg-indigo-500 text-white px-1.5 py-0.2 rounded-full">Dijadwalkan</span>}
+                      </span>
+                    )}
                     {task.parent_task_id && (
                       <span className="text-[8px] font-bold text-amber-600 bg-amber-500/5 px-2 py-0.5 rounded-md border border-amber-500/10">
                         🔒 Sequential Lock
@@ -209,15 +245,36 @@ export default function TaskAccordion({
                 )}
               </div>
 
-              {/* Far right side: Task Deadline Badge + chevron */}
-              <div className="flex items-center gap-2.5 shrink-0 self-center">
+              {/* Far right side: Task Deadline Badge + Edit/Delete Buttons + chevron */}
+              <div className="flex items-center gap-2 shrink-0 self-center">
                 {getTaskDeadlineBadge(task.deadline, task.status)}
+
+                {(canDeleteTask || isLeader || isMentor || isCoordinator) && (
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setEditingTask(task)}
+                      title="Edit Tugas"
+                      className="w-7 h-7 rounded-xl bg-zinc-100/80 hover:bg-purple-500/10 dark:bg-zinc-800/80 dark:hover:bg-purple-500/20 text-zinc-400 hover:text-purple-500 transition-all flex items-center justify-center text-xs"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeletingTaskId(task.id)}
+                      title="Hapus Tugas"
+                      className="w-7 h-7 rounded-xl bg-zinc-100/80 hover:bg-red-500/10 dark:bg-zinc-800/80 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center text-xs"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                )}
+
                 <span
                   className={`text-zinc-400 dark:text-zinc-600 transition-transform duration-300 ${
                     isOpen ? 'rotate-180' : 'rotate-0'
                   }`}
                 >
-
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                     <path
                       d="M4 6l4 4 4-4"
@@ -277,6 +334,197 @@ export default function TaskAccordion({
           </div>
         );
       })}
+      {/* Edit Task Modal */}
+      {editingTask && (
+        <EditTaskModal
+          task={editingTask}
+          onClose={() => setEditingTask(null)}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingTaskId && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-2xl mx-auto">
+              ⚠️
+            </div>
+            <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
+              Hapus Tugas Ini?
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              Tugas ini beserta seluruh penugasannya akan dihapus dari sistem.
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingTaskId(null)}
+                className="flex-1 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await deleteTask(deletingTaskId);
+                  setDeletingTaskId(null);
+                }}
+                className="flex-1 py-2.5 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-md shadow-red-500/20"
+              >
+                Ya, Hapus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Edit Task Modal ───────────────────────────────────────────────────────────
+
+function EditTaskModal({
+  task,
+  onClose,
+}: {
+  task: TaskRow;
+  onClose: () => void;
+}) {
+  const [priority, setPriority] = useState(task.priority || 'NORMAL');
+  const [outputType, setOutputType] = useState(task.task_type || 'DESIGN');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const defaultStartAt = task.start_at
+    ? new Date(task.start_at - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    : '';
+
+  const defaultDeadline = task.deadline
+    ? new Date(task.deadline).toISOString().split('T')[0]
+    : '';
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    formData.set('priority', priority);
+    formData.set('outputType', outputType);
+
+    try {
+      const res = await updateTask(task.id, formData);
+      if (res.success) {
+        onClose();
+      } else {
+        setError(res.error ?? 'Gagal memperbarui tugas.');
+      }
+    } catch (err: any) {
+      setError(err.message ?? 'Terjadi kesalahan sistem.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 my-auto text-left" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-bold">
+              ✏️
+            </div>
+            <div>
+              <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">Edit Tugas</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Perbarui judul, instruksi, tenggat waktu, atau tanggal mulai tugas.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-sm transition-all"
+          >
+            ✕
+          </button>
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
+            ⚠️ {error}
+          </p>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+              Judul Tugas <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="title"
+              defaultValue={task.title}
+              required
+              className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+              Deskripsi & Instruksi
+            </label>
+            <textarea
+              name="description"
+              defaultValue={task.description ?? ''}
+              rows={3}
+              className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                Tanggal & Jam Mulai (Start Date)
+              </label>
+              <input
+                type="datetime-local"
+                name="start_at"
+                defaultValue={defaultStartAt}
+                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                Tenggat Waktu (Deadline) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                name="deadline"
+                defaultValue={defaultDeadline}
+                required
+                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-3 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-md shadow-purple-500/20 disabled:opacity-60"
+            >
+              {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

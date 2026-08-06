@@ -3,10 +3,12 @@
 import { useState, useTransition } from 'react';
 import {
   createAssessmentTask,
+  updateAssessmentTask,
   submitAssessmentWork,
   approveAssessmentSubmission,
   requestAssessmentRevision,
   approveAssessmentTask,
+  requestAssessmentBriefRevision,
   deleteAssessmentTask,
   toggleAssessmentReaction,
 } from '@/modules/workspaces/assessmentActions';
@@ -29,6 +31,11 @@ interface TaskRow {
   status: string;
   created_at: number;
   deadline?: number | null;
+  start_at?: number | null;
+  revision_note?: string | null;
+  sparks?: number | null;
+  created_by?: string | null;
+  creator_name?: string | null;
 }
 
 interface AssignmentRow {
@@ -190,16 +197,29 @@ function CreateAssessmentTaskForm({
               />
             </div>
 
-            {/* Deadline */}
-            <div>
-              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                Tenggat Waktu / Deadline (Opsional)
-              </label>
-              <input
-                type="datetime-local"
-                name="deadline"
-                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
-              />
+            {/* Start Date & Deadline */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                  Tanggal & Jam Mulai (Start Date)
+                </label>
+                <input
+                  type="datetime-local"
+                  name="start_at"
+                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                  Tenggat Waktu / Deadline
+                </label>
+                <input
+                  type="datetime-local"
+                  name="deadline"
+                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
             </div>
 
             {/* Exec Type */}
@@ -579,6 +599,176 @@ function MentorSubmissionCard({
   );
 }
 
+// ── Sub-component: Edit Assessment Task Modal ─────────────────────────────────
+
+function EditAssessmentTaskModal({
+  task,
+  execType,
+  workspaceId,
+  onClose,
+}: {
+  task: TaskRow;
+  execType: string;
+  workspaceId: string;
+  onClose: () => void;
+}) {
+  const [description, setDescription] = useState(task.description ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+
+    const fd = new FormData(e.currentTarget);
+    startTransition(async () => {
+      const res = await updateAssessmentTask(task.id, workspaceId, fd);
+      if (res.success) {
+        onClose();
+      } else {
+        setError(res.error ?? 'Gagal mengedit assessment');
+      }
+    });
+  };
+
+  const defaultStartAt = task.start_at
+    ? new Date(task.start_at - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    : '';
+
+  const defaultDeadline = task.deadline
+    ? new Date(task.deadline - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+    : '';
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 my-auto text-left">
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-bold">
+              ✏️
+            </div>
+            <div>
+              <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">Edit Assessment</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Perbarui rincian, tenggat waktu, atau jadwal mulai assessment.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-sm transition-all"
+          >
+            ✕
+          </button>
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
+            ⚠️ {error}
+          </p>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+              Judul Assessment <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="title"
+              defaultValue={task.title}
+              required
+              className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+              Brief / Instruksi Pengerjaan
+            </label>
+            <input type="hidden" name="description" value={description} />
+            <TiptapEditor
+              value={description}
+              onChange={setDescription}
+              placeholder="Instruksi pengerjaan..."
+              minHeight="min-h-[180px]"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                Tanggal & Jam Mulai (Start Date)
+              </label>
+              <input
+                type="datetime-local"
+                name="start_at"
+                defaultValue={defaultStartAt}
+                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                Tenggat Waktu / Deadline
+              </label>
+              <input
+                type="datetime-local"
+                name="deadline"
+                defaultValue={defaultDeadline}
+                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
+              Tipe Eksekusi / Kategori <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: 'DESIGNER', icon: '🎨', label: 'Design' },
+                { value: 'VIDEO_EDITOR', icon: '🎬', label: 'Video' },
+              ].map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-2 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 rounded-2xl p-3 cursor-pointer hover:border-purple-400 has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/10 transition-all text-xs font-bold text-zinc-800 dark:text-zinc-200"
+                >
+                  <input
+                    type="radio"
+                    name="exec_type"
+                    value={opt.value}
+                    defaultChecked={execType === opt.value}
+                    className="accent-purple-600"
+                  />
+                  <span>{opt.icon}</span>
+                  <span>{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-3 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={pending}
+              className="flex-1 py-3 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-md shadow-purple-500/20 disabled:opacity-60"
+            >
+              {pending ? 'Menyimpan...' : 'Simpan Perubahan'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Sub-component: Assessment Task Card (Mentor) ──────────────────────────────
 
 function MentorTaskCard({
@@ -598,9 +788,15 @@ function MentorTaskCard({
 }) {
   const [isCardExpanded, setIsCardExpanded] = useState(true);
   const [showSubmissions, setShowSubmissions] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [pendingApprove, startApproveTransition] = useTransition();
   const [pendingDelete, startDeleteTransition] = useTransition();
+
+  const [sparksToGrant, setSparksToGrant] = useState<number>(5);
+  const [showBriefRevisionForm, setShowBriefRevisionForm] = useState(false);
+  const [briefRevisionNote, setBriefRevisionNote] = useState('');
+  const [pendingRevision, startRevisionTransition] = useTransition();
 
   const isPendingCoordinatorApproval = task.status === 'WAITING_REVIEW';
   const total     = assignments.length;
@@ -612,7 +808,19 @@ function MentorTaskCard({
 
   const handlePublishAssessment = () => {
     startApproveTransition(async () => {
-      await approveAssessmentTask(task.id, workspaceId, execType);
+      await approveAssessmentTask(task.id, workspaceId, execType, sparksToGrant);
+    });
+  };
+
+  const handleRequestBriefRevision = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!briefRevisionNote.trim()) return;
+    startRevisionTransition(async () => {
+      const res = await requestAssessmentBriefRevision(task.id, workspaceId, briefRevisionNote);
+      if (res.success) {
+        setShowBriefRevisionForm(false);
+        setBriefRevisionNote('');
+      }
     });
   };
 
@@ -624,6 +832,8 @@ function MentorTaskCard({
       }
     });
   };
+
+  const isScheduled = task.start_at && task.start_at > Date.now();
 
   return (
     <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all">
@@ -639,6 +849,39 @@ function MentorTaskCard({
                 {execLabel}
               </span>
               <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Assessment</span>
+              {task.creator_name && (
+                <span className="text-[9px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1" title="Mentor Pembuat Assessment">
+                  <span>🎓</span>
+                  <span>Mentor: {task.creator_name}</span>
+                </span>
+              )}
+              {task.status === 'WAITING_REVIEW' ? (
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span>⏳</span>
+                  <span>Menunggu ACC Brief</span>
+                </span>
+              ) : task.status === 'REVISION_REQUESTED' ? (
+                <span className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span>↩</span>
+                  <span>Revisi Brief Diminta</span>
+                </span>
+              ) : (
+                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span>✅</span>
+                  <span>Brief Di-ACC {task.sparks != null && `(${task.sparks} ✨)`}</span>
+                </span>
+              )}
+              {task.start_at && (
+                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 border ${
+                  isScheduled
+                    ? 'text-indigo-600 dark:text-indigo-300 bg-indigo-500/10 border-indigo-500/20 font-bold'
+                    : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
+                }`}>
+                  <span>📅</span>
+                  <span>{isScheduled ? 'Mulai: ' : 'Mulai: '}{new Date(task.start_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  {isScheduled && <span className="text-[8px] bg-indigo-500 text-white px-1.5 py-0.2 rounded-full">Dijadwalkan</span>}
+                </span>
+              )}
               {task.deadline && (
                 <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <span>⏰</span>
@@ -649,9 +892,9 @@ function MentorTaskCard({
             <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug">{task.title}</h3>
           </div>
 
-          {/* Progress ring summary + Delete button + Accordion Chevron */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="text-right">
+          {/* Progress ring summary + Edit / Delete buttons + Accordion Chevron */}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-right mr-1">
               <p className="text-[10px] font-black text-zinc-500">
                 {submitted}/{total} submit
               </p>
@@ -661,18 +904,31 @@ function MentorTaskCard({
                 </p>
               )}
             </div>
-            {isCoordinator && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowConfirmDelete(true);
-                }}
-                title="Hapus Assessment Ini"
-                className="w-8 h-8 rounded-xl bg-zinc-100/80 hover:bg-red-500/10 dark:bg-zinc-800/80 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center text-xs shrink-0"
-              >
-                🗑️
-              </button>
+            {(canManage || isCoordinator) && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowEditModal(true);
+                  }}
+                  title="Edit Assessment Ini"
+                  className="w-8 h-8 rounded-xl bg-zinc-100/80 hover:bg-purple-500/10 dark:bg-zinc-800/80 dark:hover:bg-purple-500/20 text-zinc-400 hover:text-purple-500 transition-all flex items-center justify-center text-xs shrink-0"
+                >
+                  ✏️
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowConfirmDelete(true);
+                  }}
+                  title="Hapus Assessment Ini"
+                  className="w-8 h-8 rounded-xl bg-zinc-100/80 hover:bg-red-500/10 dark:bg-zinc-800/80 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center text-xs shrink-0"
+                >
+                  🗑️
+                </button>
+              </>
             )}
             <div className="w-7 h-7 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 flex items-center justify-center text-xs font-black shrink-0 transition-transform">
               {isCardExpanded ? '▲' : '▼'}
@@ -684,6 +940,16 @@ function MentorTaskCard({
       {/* Accordion Content Body */}
       {isCardExpanded && (
         <div className="px-5 pb-5 pt-0 space-y-4 border-t border-zinc-100 dark:border-zinc-800/60 pt-4">
+          {/* Modal Edit Assessment */}
+          {showEditModal && (
+            <EditAssessmentTaskModal
+              task={task}
+              execType={execType}
+              workspaceId={workspaceId}
+              onClose={() => setShowEditModal(false)}
+            />
+          )}
+
           {/* Modal Confirm Delete */}
           {showConfirmDelete && (
             <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -726,30 +992,131 @@ function MentorTaskCard({
             />
           )}
 
+          {/* Banner for REVISION_REQUESTED Brief */}
+          {task.status === 'REVISION_REQUESTED' && (
+            <div className="mt-3 bg-red-500/8 border border-red-500/20 rounded-2xl p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-bold text-xs">
+                  <span>↩</span>
+                  <span>Catatan Revisi Brief dari Koordinator</span>
+                </div>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setShowEditModal(true)}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-sm shrink-0"
+                  >
+                    <span>✏️</span>
+                    <span>Perbaiki Brief & Ajukan Ulang</span>
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-red-700 dark:text-red-300 font-medium">
+                {task.revision_note || 'Brief perlu diperbaiki oleh Mentor sebelum di-ACC Koordinator.'}
+              </p>
+            </div>
+          )}
+
           {/* Status Draft/Approval Banner */}
           {isPendingCoordinatorApproval && (
-            <div className="mt-3 flex items-center justify-between gap-3 bg-amber-500/8 border border-amber-500/20 rounded-2xl p-3.5">
-              <div className="flex items-center gap-2.5">
-                <span className="text-lg">⏳</span>
-                <div>
-                  <p className="text-xs font-black text-amber-700 dark:text-amber-400">
-                    Menunggu Review & Persetujuan Koordinator
-                  </p>
-                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                    {isCoordinator
-                      ? 'Anda adalah Koordinator. Setujui ajuan ini untuk mempublikasikan tugas ke OJT.'
-                      : 'Draft assessment telah diajukan. Tugas akan di-assign ke OJT setelah disetujui Koordinator.'}
-                  </p>
+            <div className="mt-3 bg-amber-500/8 border border-amber-500/20 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-lg">⏳</span>
+                  <div>
+                    <p className="text-xs font-black text-amber-700 dark:text-amber-400">
+                      Menunggu Review & Persetujuan Koordinator
+                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                      {isCoordinator
+                        ? 'Anda adalah Koordinator. Berikan penilaian Sparks dan setujui ajuan ini untuk mempublikasikan tugas ke OJT, atau minta revisi.'
+                        : 'Draft assessment telah diajukan. Tugas akan di-assign ke OJT setelah disetujui Koordinator.'}
+                    </p>
+                  </div>
                 </div>
+                {isCoordinator && !showBriefRevisionForm && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBriefRevisionForm(true)}
+                    disabled={pendingApprove || pendingRevision}
+                    className="px-3.5 py-2 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all shrink-0"
+                  >
+                    ↩ Request Revisi Brief
+                  </button>
+                )}
               </div>
-              {isCoordinator && (
-                <button
-                  onClick={handlePublishAssessment}
-                  disabled={pendingApprove}
-                  className="px-3.5 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shrink-0 shadow-md shadow-emerald-500/20 disabled:opacity-50"
-                >
-                  {pendingApprove ? 'Memproses...' : '✓ Setujui & Publikasikan'}
-                </button>
+
+              {/* Coordinator Review Controls: 1-10 Sparks selector */}
+              {isCoordinator && !showBriefRevisionForm && (
+                <div className="space-y-2 pt-2 border-t border-amber-500/15">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+                      ✨ Penilaian Kualitas Brief Mentor (1 - 10 Sparks)
+                    </label>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                      {sparksToGrant}/10 Sparks
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                      <button
+                        key={num}
+                        type="button"
+                        onClick={() => setSparksToGrant(num)}
+                        className={`py-1.5 rounded-xl text-xs font-black transition-all ${
+                          sparksToGrant === num
+                            ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20 scale-105 ring-2 ring-purple-500/30'
+                            : 'bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handlePublishAssessment}
+                      disabled={pendingApprove}
+                      className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-all shadow-md shadow-emerald-500/20 disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {pendingApprove ? 'Memproses...' : `✓ ACC Brief (${sparksToGrant} ✨) & Publikasikan`}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Brief Revision Form */}
+              {isCoordinator && showBriefRevisionForm && (
+                <form onSubmit={handleRequestBriefRevision} className="space-y-2 pt-2 border-t border-amber-500/15">
+                  <label className="block text-[10px] font-black text-red-500 uppercase tracking-widest">
+                    Tulis Catatan Revisi Brief untuk Mentor:
+                  </label>
+                  <textarea
+                    value={briefRevisionNote}
+                    onChange={(e) => setBriefRevisionNote(e.target.value)}
+                    required
+                    rows={2}
+                    placeholder="Jelaskan bagian brief yang perlu diperbaiki (misal: perjelas instruksi, tambahkan link aset...)"
+                    className="w-full bg-white dark:bg-zinc-900 border border-red-500/30 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:border-red-500 text-zinc-900 dark:text-zinc-100"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowBriefRevisionForm(false)}
+                      className="px-3 py-1.5 text-xs font-bold border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-500"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={pendingRevision || !briefRevisionNote.trim()}
+                      className="px-4 py-1.5 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-xl disabled:opacity-50"
+                    >
+                      {pendingRevision ? 'Mengirim...' : 'Kirim Catatan Revisi Brief'}
+                    </button>
+                  </div>
+                </form>
               )}
             </div>
           )}

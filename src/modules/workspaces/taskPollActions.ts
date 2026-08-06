@@ -2,6 +2,7 @@
 
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
+import { getSessionContext } from '@/modules/roles/rbac';
 
 export interface PollTaskRow {
   id: string;
@@ -10,9 +11,12 @@ export interface PollTaskRow {
   status: string;
   priority: string;
   deadline: number | null;
+  start_at?: number | null;
   created_at: number;
   task_type: string;
   parent_task_id: string | null;
+  revision_note?: string | null;
+  sparks?: number | null;
 }
 
 export interface PollAssignmentRow {
@@ -46,10 +50,11 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
   if (!session) return null;
 
   const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
 
   const { results: tasksRaw } = await db
     .prepare(
-      `SELECT id, title, description, status, priority, deadline, created_at, task_type, parent_task_id
+      `SELECT id, title, description, status, priority, deadline, start_at, created_at, task_type, parent_task_id, revision_note, sparks
        FROM tasks
        WHERE workspace_id = ?
        ORDER BY
@@ -59,7 +64,18 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
     .bind(wsId)
     .all();
 
-  const tasks = (tasksRaw as unknown as PollTaskRow[]) || [];
+  const isMentorUser = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isManagerUser = ctx.userType === 'STAFF' || isMentorUser || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE');
+
+  const now = Date.now();
+  const allTasks = (tasksRaw as unknown as PollTaskRow[]) || [];
+  const tasks = isManagerUser
+    ? allTasks
+    : allTasks.filter((t) => {
+        if (t.start_at && t.start_at > now) return false;
+        if (t.task_type === 'ASSESSMENT') return t.status === 'APPROVED';
+        return t.status !== 'DELETED';
+      });
 
   if (tasks.length === 0) {
     return { tasks: [], assignmentsByTask: {} };

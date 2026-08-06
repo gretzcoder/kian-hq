@@ -1,6 +1,17 @@
 -- Master Seed Script for KIAN HQ Local Development
 
+PRAGMA foreign_keys = OFF;
+
 -- Cleanup existing seed data
+DELETE FROM ai_token_logs;
+DELETE FROM workflow_events;
+DELETE FROM sparks_adjustments;
+DELETE FROM announcement_comments;
+DELETE FROM announcement_reactions;
+DELETE FROM assessment_submission_reactions;
+DELETE FROM executive_feedbacks;
+DELETE FROM project_coordinators;
+DELETE FROM content_briefs;
 DELETE FROM workspace_chats;
 DELETE FROM task_assignments;
 DELETE FROM tasks;
@@ -10,43 +21,27 @@ DELETE FROM projects;
 DELETE FROM announcements;
 DELETE FROM knowledge_items;
 DELETE FROM knowledge_categories;
-DELETE FROM user_roles WHERE user_id = 'usr_executive';
-DELETE FROM users WHERE id = 'usr_executive';
-DELETE FROM user_roles WHERE user_id = 'usr_coordinator';
-DELETE FROM users WHERE id = 'usr_coordinator';
-DELETE FROM user_roles WHERE user_id = 'usr_creator';
-DELETE FROM users WHERE id = 'usr_creator';
-DELETE FROM user_roles WHERE user_id = 'usr_collaborator';
-DELETE FROM users WHERE id = 'usr_collaborator';
-DELETE FROM user_roles WHERE user_id = 'usr_ojt_coord';
-DELETE FROM users WHERE id = 'usr_ojt_coord';
-DELETE FROM user_roles WHERE user_id = 'usr_ojt_leader';
-DELETE FROM users WHERE id = 'usr_ojt_leader';
-DELETE FROM user_roles WHERE user_id = 'usr_ojt_researc';
-DELETE FROM users WHERE id = 'usr_ojt_researc';
-DELETE FROM user_roles WHERE user_id = 'usr_ojt_planner';
-DELETE FROM users WHERE id = 'usr_ojt_planner';
-DELETE FROM user_roles WHERE user_id = 'usr_ojt_creator';
-DELETE FROM users WHERE id = 'usr_ojt_creator';
+DELETE FROM user_roles;
+DELETE FROM users;
 
 -- Insert Users
-INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_executive', 'executive@kian.com', 'executive', 'Executive CEO', 'ACTIVE', 'f0c11154e861e1248b1abfe3e1366365:ce62ba62f8016f384b4b221f323dabb82d9129c1b7a1a78dea4f41b59780876c', 'STAFF');
+INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_executive', 'executive@kian.com', 'executive', 'Executive CEO', 'ACTIVE', 'd755716f615aa19684649c4faaf8c718:7cd9183a566795af1d3fa7079b6f2ad95fe613bdda36e6c69e11b5c9fe11387a', 'STAFF');
 INSERT INTO user_roles (user_id, role_id) VALUES ('usr_executive', 'role_executive');
-INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_coordinator', 'coordinator@kian.com', 'coordinator', 'Project Coordinator', 'ACTIVE', 'f0c11154e861e1248b1abfe3e1366365:ce62ba62f8016f384b4b221f323dabb82d9129c1b7a1a78dea4f41b59780876c', 'STAFF');
+INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_coordinator', 'coordinator@kian.com', 'coordinator', 'Project Coordinator', 'ACTIVE', 'd755716f615aa19684649c4faaf8c718:7cd9183a566795af1d3fa7079b6f2ad95fe613bdda36e6c69e11b5c9fe11387a', 'STAFF');
 INSERT INTO user_roles (user_id, role_id) VALUES ('usr_coordinator', 'role_coordinator');
-INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_creator', 'creator@kian.com', 'creator', 'Content Creator', 'ACTIVE', 'f0c11154e861e1248b1abfe3e1366365:ce62ba62f8016f384b4b221f323dabb82d9129c1b7a1a78dea4f41b59780876c', 'STAFF');
+INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_creator', 'creator@kian.com', 'creator', 'Content Creator', 'ACTIVE', 'd755716f615aa19684649c4faaf8c718:7cd9183a566795af1d3fa7079b6f2ad95fe613bdda36e6c69e11b5c9fe11387a', 'STAFF');
 INSERT INTO user_roles (user_id, role_id) VALUES ('usr_creator', 'role_creator');
-INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_collaborator', 'collaborator@kian.com', 'collaborator', 'External Collaborator', 'ACTIVE', 'f0c11154e861e1248b1abfe3e1366365:ce62ba62f8016f384b4b221f323dabb82d9129c1b7a1a78dea4f41b59780876c', 'STAFF');
+INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_collaborator', 'collaborator@kian.com', 'collaborator', 'External Collaborator', 'ACTIVE', 'd755716f615aa19684649c4faaf8c718:7cd9183a566795af1d3fa7079b6f2ad95fe613bdda36e6c69e11b5c9fe11387a', 'STAFF');
 INSERT INTO user_roles (user_id, role_id) VALUES ('usr_collaborator', 'role_collaborator');
-INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_coord', 'mentor@kian.com', 'mentor', 'Mentor OJT (Staff)', 'ACTIVE', 'f0c11154e861e1248b1abfe3e1366365:ce62ba62f8016f384b4b221f323dabb82d9129c1b7a1a78dea4f41b59780876c', 'STAFF');
+INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_coord', 'mentor@kian.com', 'mentor', 'Mentor OJT (Staff)', 'ACTIVE', 'd755716f615aa19684649c4faaf8c718:7cd9183a566795af1d3fa7079b6f2ad95fe613bdda36e6c69e11b5c9fe11387a', 'STAFF');
 INSERT INTO user_roles (user_id, role_id) VALUES ('usr_ojt_coord', 'role_coordinator');
-INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_leader', 'leader@ojt.com', 'budi_leader', 'Budi (Ketua Tim)', 'ACTIVE', 'f0c11154e861e1248b1abfe3e1366365:ce62ba62f8016f384b4b221f323dabb82d9129c1b7a1a78dea4f41b59780876c', 'OJT');
+INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_leader', 'leader@ojt.com', 'budi_leader', 'Budi (Ketua Tim)', 'ACTIVE', 'd755716f615aa19684649c4faaf8c718:7cd9183a566795af1d3fa7079b6f2ad95fe613bdda36e6c69e11b5c9fe11387a', 'OJT');
 INSERT INTO user_roles (user_id, role_id) VALUES ('usr_ojt_leader', 'role_creator');
-INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_researc', 'researcher@ojt.com', 'ani_researcher', 'Ani (Researcher)', 'ACTIVE', 'f0c11154e861e1248b1abfe3e1366365:ce62ba62f8016f384b4b221f323dabb82d9129c1b7a1a78dea4f41b59780876c', 'OJT');
+INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_researc', 'researcher@ojt.com', 'ani_researcher', 'Ani (Researcher)', 'ACTIVE', 'd755716f615aa19684649c4faaf8c718:7cd9183a566795af1d3fa7079b6f2ad95fe613bdda36e6c69e11b5c9fe11387a', 'OJT');
 INSERT INTO user_roles (user_id, role_id) VALUES ('usr_ojt_researc', 'role_collaborator');
-INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_planner', 'planner@ojt.com', 'candra_planner', 'Candra (Planner)', 'ACTIVE', 'f0c11154e861e1248b1abfe3e1366365:ce62ba62f8016f384b4b221f323dabb82d9129c1b7a1a78dea4f41b59780876c', 'OJT');
+INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_planner', 'planner@ojt.com', 'candra_planner', 'Candra (Planner)', 'ACTIVE', 'd755716f615aa19684649c4faaf8c718:7cd9183a566795af1d3fa7079b6f2ad95fe613bdda36e6c69e11b5c9fe11387a', 'OJT');
 INSERT INTO user_roles (user_id, role_id) VALUES ('usr_ojt_planner', 'role_collaborator');
-INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_creator', 'creator@ojt.com', 'dodi_creator', 'Dodi (Creator)', 'ACTIVE', 'f0c11154e861e1248b1abfe3e1366365:ce62ba62f8016f384b4b221f323dabb82d9129c1b7a1a78dea4f41b59780876c', 'OJT');
+INSERT INTO users (id, email, username, name, status, password_hash, user_type) VALUES ('usr_ojt_creator', 'creator@ojt.com', 'dodi_creator', 'Dodi (Creator)', 'ACTIVE', 'd755716f615aa19684649c4faaf8c718:7cd9183a566795af1d3fa7079b6f2ad95fe613bdda36e6c69e11b5c9fe11387a', 'OJT');
 INSERT INTO user_roles (user_id, role_id) VALUES ('usr_ojt_creator', 'role_creator');
 
 -- Insert Projects

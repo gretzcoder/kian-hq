@@ -2,6 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { getDB } from '@/db/client';
+import { getSession } from '@/modules/auth/session';
 
 const IMPERSONATE_COOKIE = 'impersonate_user_id';
 
@@ -55,9 +56,13 @@ export async function isAuthorizedForImpersonation(realUserId: string): Promise<
 }
 
 /**
- * Retrieves list of active users for quick impersonation shortcut.
+ * Retrieves list of active users for quick impersonation shortcut (excluding the current user).
  */
 export async function getAvailableUsersForImpersonation(): Promise<ImpersonateUserItem[]> {
+  const session = await getSession();
+  if (!session) return [];
+
+  const currentUserId = session.realUserId || session.userId;
   const db = await getDB();
   try {
     const { results } = await db
@@ -66,9 +71,10 @@ export async function getAvailableUsersForImpersonation(): Promise<ImpersonateUs
         FROM users u
         LEFT JOIN user_roles ur ON u.id = ur.user_id
         LEFT JOIN roles r ON ur.role_id = r.id
-        WHERE u.status = 'ACTIVE'
+        WHERE u.status = 'ACTIVE' AND u.id != ?
         ORDER BY u.name ASC
       `)
+      .bind(currentUserId)
       .all();
 
     return (results || []).map((u: any) => ({
@@ -87,10 +93,19 @@ export async function getAvailableUsersForImpersonation(): Promise<ImpersonateUs
  * Starts impersonating a target user by setting the cookie.
  */
 export async function startImpersonatingUser(targetUserId: string): Promise<{ success: boolean; error?: string }> {
-  const cookieStore = await cookies();
-  const sessionId = cookieStore.get('session_id')?.value;
-  if (!sessionId) {
+  const session = await getSession();
+  if (!session) {
     return { success: false, error: 'Unauthorized: Session missing.' };
+  }
+
+  const realUserId = session.realUserId || session.userId;
+  if (targetUserId === realUserId) {
+    return { success: false, error: 'Anda tidak dapat memfasilitasi impersonate akun Anda sendiri.' };
+  }
+
+  const isAuth = await isAuthorizedForImpersonation(realUserId);
+  if (!isAuth) {
+    return { success: false, error: 'Forbidden: You do not have permission to impersonate users.' };
   }
 
   const db = await getDB();
@@ -103,6 +118,7 @@ export async function startImpersonatingUser(targetUserId: string): Promise<{ su
     return { success: false, error: 'User target not found or inactive.' };
   }
 
+  const cookieStore = await cookies();
   cookieStore.set(IMPERSONATE_COOKIE, targetUserId, {
     path: '/',
     httpOnly: true,

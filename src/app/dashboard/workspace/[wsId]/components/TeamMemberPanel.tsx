@@ -17,7 +17,33 @@ interface OjtUser {
   id: string;
   name: string;
   email: string;
+  userType?: string;
+  roleNames?: string | null;
+  roleIds?: string | null;
 }
+
+const ROLE_CATEGORIES = [
+  { id: 'ALL', label: 'Semua Role', icon: '👥' },
+  { id: 'DESIGNER', label: 'Designer', icon: '🎨' },
+  { id: 'EDITOR', label: 'Video Editor', icon: '🎬' },
+  { id: 'PLANNER', label: 'Planner', icon: '📋' },
+  { id: 'RESEARCHER', label: 'Researcher', icon: '🔍' },
+  { id: 'TROOPERS', label: 'Troopers / OJT', icon: '👤' },
+  { id: 'MENTOR', label: 'Mentor', icon: '🎓' },
+];
+
+const userMatchesRoleCategory = (u: OjtUser, catId: string): boolean => {
+  if (catId === 'ALL') return true;
+  const rolesUpper = `${u.roleNames || ''} ${u.roleIds || ''} ${u.userType || ''}`.toUpperCase();
+
+  if (catId === 'DESIGNER') return rolesUpper.includes('DESIGNER');
+  if (catId === 'EDITOR') return rolesUpper.includes('EDITOR') || rolesUpper.includes('VIDEO');
+  if (catId === 'PLANNER') return rolesUpper.includes('PLANNER');
+  if (catId === 'RESEARCHER') return rolesUpper.includes('RESEARCHER');
+  if (catId === 'TROOPERS') return rolesUpper.includes('TROOPER') || rolesUpper.includes('OJT') || rolesUpper.includes('JOB') || rolesUpper.includes('TRAINING');
+  if (catId === 'MENTOR') return rolesUpper.includes('MENTOR');
+  return true;
+};
 
 const roleConfig: Record<'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR', { label: string; activeColor: string; inactiveColor: string }> = {
   LEADER: {
@@ -69,17 +95,51 @@ export default function TeamMemberPanel({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Filter displayMembers for Assessment mode so staff/mentors are excluded from active list & count
+  const displayMembers = isAssessment
+    ? members.filter((m) => {
+        const isStaffOrMentor =
+          m.userType === 'STAFF' ||
+          (m.accountRoles || []).some(
+            (r) =>
+              r.toUpperCase().includes('MENTOR') ||
+              r.toUpperCase().includes('COORDINATOR') ||
+              r.toUpperCase().includes('EXECUTIVE') ||
+              r === 'role_mentor_troopers' ||
+              r === 'role_coordinator' ||
+              r === 'role_executive'
+          ) ||
+          m.userId === mentorId;
+        return !isStaffOrMentor;
+      })
+    : members;
+
+  const [selectedRoleCategory, setSelectedRoleCategory] = useState<string>('ALL');
+
   // Existing member emails set for filtering out already added users
-  const existingEmails = new Set(members.map((m) => m.userEmail.toLowerCase()));
+  const existingEmails = new Set(displayMembers.map((m) => m.userEmail.toLowerCase()));
 
   // Filter available OJT users not yet in the workspace
   const availableOjt = ojtUsers.filter((u) => !existingEmails.has(u.email.toLowerCase()));
 
-  const filteredOjt = availableOjt.filter(
+  const availableOjtForCategory = availableOjt.filter((u) => userMatchesRoleCategory(u, selectedRoleCategory));
+
+  const filteredOjt = availableOjtForCategory.filter(
     (u) =>
       u.email.toLowerCase().includes(search.toLowerCase()) ||
       u.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleSelectAllInCategory = (catId: string) => {
+    const candidates = availableOjt.filter((u) => userMatchesRoleCategory(u, catId));
+    const newItems = [...selectedItems];
+    for (const u of candidates) {
+      if (!newItems.some((item) => item.email.toLowerCase() === u.email.toLowerCase())) {
+        newItems.push({ id: u.id, email: u.email, name: u.name });
+      }
+    }
+    setSelectedItems(newItems);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -302,6 +362,51 @@ export default function TeamMemberPanel({
                 </div>
               )}
 
+              {/* Role Category Filter & Quick Selection Pills */}
+              <div className="space-y-1.5 pb-1">
+                <div className="flex items-center justify-between text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                  <span>Pilih Berdasarkan Kategori Role</span>
+                  {selectedRoleCategory !== 'ALL' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAllInCategory(selectedRoleCategory)}
+                      className="text-purple-600 dark:text-purple-400 hover:underline font-bold text-[10px]"
+                    >
+                      Pilih Semua ({availableOjt.filter((u) => userMatchesRoleCategory(u, selectedRoleCategory)).length})
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-1">
+                  {ROLE_CATEGORIES.map((cat) => {
+                    const count = availableOjt.filter((u) => userMatchesRoleCategory(u, cat.id)).length;
+                    const isActive = selectedRoleCategory === cat.id;
+
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRoleCategory(cat.id);
+                          setIsOpen(true);
+                        }}
+                        className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1 ${
+                          isActive
+                            ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                            : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-purple-300'
+                        }`}
+                      >
+                        <span>{cat.icon}</span>
+                        <span>{cat.label}</span>
+                        <span className={`text-[9px] px-1 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'}`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Input Box with Multi-select Autocomplete Dropdown */}
               <div className="relative" ref={containerRef}>
                 <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-2">
@@ -366,9 +471,16 @@ export default function TeamMemberPanel({
                           >
                             <div className="flex flex-col min-w-0 pr-2">
                               <span className="font-bold truncate">{u.name || u.email}</span>
-                              <span className="text-[10px] text-zinc-400 font-mono truncate">
-                                {u.email}
-                              </span>
+                              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className="text-[10px] text-zinc-400 font-mono truncate">
+                                  {u.email}
+                                </span>
+                                {u.roleNames && (
+                                  <span className="text-[8px] font-black uppercase text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.2 rounded-md">
+                                    {u.roleNames}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                             <span className={`w-5 h-5 rounded-md border flex items-center justify-center text-xs shrink-0 ${
                               isChecked
@@ -407,11 +519,11 @@ export default function TeamMemberPanel({
         <div className={`space-y-4 ${canManageMembers ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Daftar Anggota Aktif ({members.length})
+              Daftar Anggota Aktif ({displayMembers.length})
             </h3>
           </div>
 
-          {members.length === 0 ? (
+          {displayMembers.length === 0 ? (
             <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center bg-white dark:bg-transparent">
               <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">
                 Belum ada anggota tim yang ditambahkan ke workspace ini.
@@ -419,14 +531,14 @@ export default function TeamMemberPanel({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {members.map((m) => {
-                const isSelfUpdating = updating === m.userId;
+              {displayMembers.map((m) => {
+                  const isSelfUpdating = updating === m.userId;
 
-                return (
-                  <div
-                    key={m.userId}
-                    className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between"
-                  >
+                  return (
+                    <div
+                      key={m.userId}
+                      className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between"
+                    >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <Link
@@ -505,36 +617,41 @@ export default function TeamMemberPanel({
   );
 }
 
-// ── Account Role Badge Config ─────────────────────────────────────────────────
+function getAccountRoleBadge(roleStr: string): { label: string; color: string } {
+  const norm = roleStr.toUpperCase();
+  if (norm.includes('EXECUTIVE')) {
+    return { label: `👑 ${roleStr}`, color: 'text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700/50' };
+  }
+  if (norm.includes('COORDINATOR') || norm.includes('KOORDINATOR')) {
+    return { label: `📋 ${roleStr}`, color: 'text-indigo-700 bg-indigo-100 dark:text-indigo-300 dark:bg-indigo-900/40 border-indigo-300 dark:border-indigo-700/50' };
+  }
+  if (norm.includes('MENTOR')) {
+    return { label: `🎓 ${roleStr}`, color: 'text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700/50' };
+  }
+  if (norm.includes('TROOPER') || norm.includes('OJT')) {
+    return { label: `👤 ${roleStr}`, color: 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700/50' };
+  }
+  if (norm.includes('CREATOR')) {
+    return { label: `🎨 ${roleStr}`, color: 'text-pink-700 bg-pink-100 dark:text-pink-300 dark:bg-pink-900/40 border-pink-300 dark:border-pink-700/50' };
+  }
+  if (norm.includes('COLLABORATOR') || norm.includes('KOLABORATOR')) {
+    return { label: `🤝 ${roleStr}`, color: 'text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700/50' };
+  }
 
-const ACCOUNT_ROLE_CONFIG: Record<string, { label: string; color: string }> = {
-  'EXECUTIVE':       { label: '👑 Executive',    color: 'text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700/50' },
-  'COORDINATOR':     { label: '📋 Koordinator',  color: 'text-indigo-700 bg-indigo-100 dark:text-indigo-300 dark:bg-indigo-900/40 border-indigo-300 dark:border-indigo-700/50' },
-  'MENTOR TROOPERS': { label: '🎓 Mentor',       color: 'text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700/50' },
-  'TROOPERS':        { label: '👤 Trooper',      color: 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700/50' },
-  'CREATOR':         { label: '🎨 Creator',      color: 'text-pink-700 bg-pink-100 dark:text-pink-300 dark:bg-pink-900/40 border-pink-300 dark:border-pink-700/50' },
-  'COLLABORATOR':    { label: '🤝 Kolaborator',  color: 'text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700/50' },
-};
+  return { label: roleStr, color: 'text-zinc-600 bg-zinc-100 dark:text-zinc-300 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600' };
+}
 
 function AccountRoleBadges({ member, mentorId }: { member: Member; mentorId?: string | null }) {
   const badges: { label: string; color: string }[] = [];
 
   if (member.accountRoles.length > 0) {
     for (const role of member.accountRoles) {
-      const cfg = ACCOUNT_ROLE_CONFIG[role];
-      if (cfg) {
-        badges.push(cfg);
-      } else {
-        badges.push({
-          label: role,
-          color: 'text-zinc-600 bg-zinc-100 dark:text-zinc-300 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600',
-        });
-      }
+      badges.push(getAccountRoleBadge(role));
     }
   } else if (member.userType === 'OJT') {
-    badges.push(ACCOUNT_ROLE_CONFIG['TROOPERS']);
+    badges.push(getAccountRoleBadge('TROOPERS'));
   } else if (member.userId === mentorId) {
-    badges.push(ACCOUNT_ROLE_CONFIG['MENTOR TROOPERS']);
+    badges.push(getAccountRoleBadge('MENTOR TROOPERS'));
   } else {
     badges.push({ label: '👤 Staff', color: 'text-zinc-600 bg-zinc-100 dark:text-zinc-300 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600' });
   }

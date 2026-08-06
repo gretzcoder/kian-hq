@@ -234,7 +234,32 @@ export async function deleteProject(projectId: string) {
   const db = await getDB();
 
   try {
-    await db.prepare('DELETE FROM projects WHERE id = ?').bind(projectId).run();
+    // 1. Delete all task assignments for tasks in this project
+    await db
+      .prepare(`
+        DELETE FROM task_assignments
+        WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)
+      `)
+      .bind(projectId)
+      .run();
+
+    // 2. Delete all tasks in this project
+    await db
+      .prepare('DELETE FROM tasks WHERE project_id = ?')
+      .bind(projectId)
+      .run();
+
+    // 3. Delete all workspaces in this project
+    await db
+      .prepare('DELETE FROM workspaces WHERE project_id = ?')
+      .bind(projectId)
+      .run();
+
+    // 4. Delete project record
+    await db
+      .prepare('DELETE FROM projects WHERE id = ?')
+      .bind(projectId)
+      .run();
 
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/projects');

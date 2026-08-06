@@ -76,7 +76,7 @@ export async function revokeRolePermission(roleId: string, permissionId: string)
  * Create a new custom role.
  * Requires MANAGE permission.
  */
-export async function createRoleAction(name: string, description: string) {
+export async function createRoleAction(name: string, description: string, color?: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
@@ -88,11 +88,12 @@ export async function createRoleAction(name: string, description: string) {
 
   const roleId = `role_${name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
   const db = await getDB();
+  const roleColor = color?.trim() || '#8B5CF6';
 
   try {
     await db
-      .prepare('INSERT INTO roles (id, name, description) VALUES (?, ?, ?)')
-      .bind(roleId, name.trim().toUpperCase(), description || null)
+      .prepare('INSERT INTO roles (id, name, description, color) VALUES (?, ?, ?, ?)')
+      .bind(roleId, name.trim().toUpperCase(), description || null, roleColor)
       .run();
 
     revalidatePath('/dashboard/permissions');
@@ -108,31 +109,29 @@ export async function createRoleAction(name: string, description: string) {
 }
 
 /**
- * Update an existing custom role's name and description.
+ * Update an existing custom role's name, description, and color.
  * Requires MANAGE permission.
  */
-export async function updateRoleAction(roleId: string, name: string, description: string) {
+export async function updateRoleAction(roleId: string, name: string, description: string, color?: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
   await checkPermission(session.userId, 'ADMIN_ROLES');
-
-  const protectedRoles = ['role_executive', 'role_coordinator', 'role_creator', 'role_collaborator'];
-  if (protectedRoles.includes(roleId)) {
-    return { success: false, error: 'Protected system roles cannot be modified.' };
-  }
 
   if (!name?.trim()) {
     return { success: false, error: 'Role name is required.' };
   }
 
   const db = await getDB();
+  const roleColor = color?.trim() || null;
 
   try {
     await db
-      .prepare('UPDATE roles SET name = ?, description = ? WHERE id = ?')
-      .bind(name.trim().toUpperCase(), description || null, roleId)
+      .prepare('UPDATE roles SET name = ?, description = ?, color = COALESCE(?, color) WHERE id = ?')
+      .bind(name.trim().toUpperCase(), description || null, roleColor, roleId)
       .run();
+
+    await invalidateCacheForRole(roleId);
 
     revalidatePath('/dashboard/permissions');
     revalidatePath('/dashboard/users');
@@ -153,7 +152,14 @@ export async function deleteRoleAction(roleId: string) {
 
   await checkPermission(session.userId, 'ADMIN_ROLES');
 
-  const protectedRoles = ['role_executive', 'role_coordinator', 'role_creator', 'role_collaborator'];
+  const protectedRoles = [
+    'role_executive',
+    'role_coordinator',
+    'role_creator',
+    'role_collaborator',
+    'role_mentor_troopers',
+    'role_troopers',
+  ];
   if (protectedRoles.includes(roleId)) {
     return { success: false, error: 'Protected system roles cannot be deleted.' };
   }

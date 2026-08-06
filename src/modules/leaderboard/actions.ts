@@ -67,7 +67,7 @@ export async function getLeaderboardData(
     | 'productive'
     | 'quality'
     | 'workspace'
-    | 'coordinator'
+    | 'role_mentor_troopers'
     | 'role_designer'
     | 'role_editor'
     | 'role_planner'
@@ -91,14 +91,28 @@ export async function getLeaderboardData(
     return '';
   };
 
+  /** Build a WHERE time-range fragment for tasks table. */
+  const buildTaskTimeClause = (alias: string): string => {
+    if (period === 'week') {
+      const ts = now - 7 * 24 * 60 * 60;
+      return `AND COALESCE(${alias}.start_at, ${alias}.created_at) >= ${ts}`;
+    }
+    if (period === 'month') {
+      const ts = now - 30 * 24 * 60 * 60;
+      return `AND COALESCE(${alias}.start_at, ${alias}.created_at) >= ${ts}`;
+    }
+    return '';
+  };
+
   const timeClause = buildTimeClause('ta');
+  const taskTimeClause = buildTaskTimeClause('t');
 
   // ─────────────────────────────────────────────────────────────────────────────
   // 1. Individual Leaderboards: Overall, Productive, Quality, Role Stars
   //    (excluding role_leader which has its own section)
   // ─────────────────────────────────────────────────────────────────────────────
   if (
-    ['overall', 'productive', 'quality', 'role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(
+    ['overall', 'productive', 'quality', 'role_designer', 'role_editor', 'role_planner', 'role_researcher', 'role_mentor_troopers'].includes(
       category
     )
   ) {
@@ -108,24 +122,79 @@ export async function getLeaderboardData(
     if (category === 'role_planner') roleFilter = "AND ta.assignment_role = 'PLANNER'";
     if (category === 'role_researcher') roleFilter = "AND ta.assignment_role = 'RESEARCHER'";
 
+    let userWhereClause = '';
+    if (category === 'role_mentor_troopers') {
+      userWhereClause = `
+        WHERE u.id IN (
+          SELECT ur.user_id
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.id = 'role_mentor_troopers' OR r.id = 'role_mentor' OR r.name LIKE '%MENTOR%'
+        ) OR u.user_type = 'MENTOR'
+      `;
+    } else {
+      userWhereClause = `
+        WHERE u.id NOT IN (
+          SELECT ur.user_id
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.id IN ('role_coordinator', 'role_executive') OR r.name IN ('COORDINATOR', 'EXECUTIVE', 'KOORDINATOR')
+        )
+      `;
+    }
+
+    const includeMentorBriefs = !['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
+
     const query = `
+      WITH user_task_sparks AS (
+        SELECT
+          ta.user_id AS userId,
+          ta.id AS assignmentId,
+          (COALESCE(ta.sparks, 8) * ${roleWeight('ta')}) * ${disciplineMultiplier('ta')} AS weightedSparks,
+          COALESCE(ta.sparks, 8) AS rawSparks,
+          CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev,
+          CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime,
+          ta.assignment_role AS role
+        FROM task_assignments ta
+        WHERE ta.status = 'APPROVED' ${timeClause} ${roleFilter}
+
+        ${
+          includeMentorBriefs
+            ? `
+        UNION ALL
+
+        SELECT
+          t.created_by AS userId,
+          t.id AS assignmentId,
+          COALESCE(t.sparks, 0) AS weightedSparks,
+          COALESCE(t.sparks, 0) AS rawSparks,
+          1 AS isZeroRev,
+          1 AS isOnTime,
+          'MENTOR' AS role
+        FROM tasks t
+        WHERE t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL ${taskTimeClause}
+        `
+            : ''
+        }
+      )
       SELECT
         u.id    AS userId,
         u.name  AS userName,
         u.email AS userEmail,
-        COUNT(ta.id)                                                         AS tasksCompleted,
-        AVG(COALESCE(ta.sparks, 8))                                          AS avgSparksGiven,
-        SUM(${sparksExpr('ta')})                                             AS rawSparks,
-        SUM(CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END) AS zeroRevisionCount,
-        SUM(CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END) AS onTimeCount,
-        GROUP_CONCAT(DISTINCT ta.assignment_role)                             AS roles
-      FROM task_assignments ta
-      JOIN users u ON ta.user_id = u.id
-      WHERE ta.status = 'APPROVED' ${timeClause} ${roleFilter}
+        COUNT(uts.assignmentId) AS tasksCompleted,
+        AVG(uts.rawSparks) AS avgSparksGiven,
+        SUM(uts.weightedSparks) AS rawSparks,
+        SUM(uts.isZeroRev) AS zeroRevisionCount,
+        SUM(uts.isOnTime) AS onTimeCount,
+        GROUP_CONCAT(DISTINCT uts.role) AS roles
+      FROM users u
+      JOIN user_task_sparks uts ON uts.userId = u.id
+      ${userWhereClause}
       GROUP BY u.id
     `;
 
     const { results } = await db.prepare(query).all();
+
     let items = (results as any[]).map((r) => {
       const completed = Number(r.tasksCompleted) || 0;
       const zeroRev = Number(r.zeroRevisionCount) || 0;
@@ -141,7 +210,7 @@ export async function getLeaderboardData(
         zeroRevisionCount: zeroRev,
         onTimeCount: Number(r.onTimeCount) || 0,
         qualityScore: Number(qualityScore.toFixed(2)),
-        primaryRole: (r.roles || '').split(',')[0] || 'CREATOR',
+        primaryRole: category === 'role_mentor_troopers' ? 'MENTOR' : ((r.roles || '').split(',')[0] || 'CREATOR'),
       };
     });
 
@@ -272,62 +341,7 @@ export async function getLeaderboardData(
     return { type: 'workspace' as const, data: ranked };
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 4. Top Mentor / Coordinator
-  //    Formula: (Total Review × 5) + (Total Sparks Workspace × 10) + Speed Bonus
-  //    Speed Bonus: +3 per review diselesaikan < 2 jam sejak submitted_at
-  // ─────────────────────────────────────────────────────────────────────────────
-  if (category === 'coordinator') {
-    const query = `
-      SELECT
-        u.id    AS userId,
-        u.name  AS userName,
-        u.email AS userEmail,
-        COUNT(DISTINCT ta.id)           AS reviewsProcessed,
-        AVG(COALESCE(ta.sparks, 8))     AS avgSparksGiven,
-        COALESCE(SUM(${sparksExpr('ta')}), 0) AS totalWorkspaceSparks,
-        SUM(
-          CASE
-            WHEN ta.reviewed_at IS NOT NULL
-              AND ta.submitted_at IS NOT NULL
-              AND (ta.reviewed_at - ta.submitted_at) < 7200
-            THEN 1 ELSE 0
-          END
-        ) AS speedBonusCount
-      FROM users u
-      JOIN workspaces ws ON ws.ojt_coordinator_id = u.id
-      JOIN tasks t       ON t.workspace_id = ws.id
-      JOIN task_assignments ta ON ta.task_id = t.id AND ta.status = 'APPROVED' ${timeClause}
-      WHERE ws.deleted_at IS NULL
-      GROUP BY u.id
-    `;
 
-    const { results } = await db.prepare(query).all();
-    const ranked: CoordinatorLeaderboardItem[] = (results as any[])
-      .map((r) => {
-        const reviews = Number(r.reviewsProcessed) || 0;
-        const avgSparks = Number(r.avgSparksGiven) || 0;
-        const totalWorkspaceSparks = Math.round(Number(r.totalWorkspaceSparks || 0));
-        const speedBonusCount = Number(r.speedBonusCount) || 0;
-        // Coordinator Score = (Reviews × 5) + (Workspace Sparks × 10) + (Speed Reviews × 3)
-        const coordinatorScore = reviews * 5 + totalWorkspaceSparks * 10 + speedBonusCount * 3;
-
-        return {
-          userId: r.userId,
-          userName: r.userName || 'Coordinator',
-          userEmail: r.userEmail,
-          reviewsProcessed: reviews,
-          avgSparksAwarded: Number(avgSparks.toFixed(1)),
-          totalSparksGiven: totalWorkspaceSparks,
-          speedBonusCount,
-          coordinatorScore,
-        };
-      })
-      .sort((a, b) => b.coordinatorScore - a.coordinatorScore || b.reviewsProcessed - a.reviewsProcessed)
-      .map((item, idx) => ({ ...item, rank: idx + 1 }));
-
-    return { type: 'coordinator' as const, data: ranked };
-  }
 
   return { type: 'individual' as const, data: [] };
 }
@@ -383,7 +397,7 @@ export async function getSparksHistory(
     // role_leader: show personal task history (idClause stays as user_id)
   }
 
-  const { results } = await db
+  const { results: assignmentResults } = await db
     .prepare(
       `
       SELECT
@@ -408,7 +422,51 @@ export async function getSparksHistory(
     .bind(targetId)
     .all();
 
-  return (results as any[]).map((r) => {
+  let mentorBriefItems: SparksHistoryItem[] = [];
+  if (category !== 'workspace' && category !== 'coordinator') {
+    const { results: mentorTaskResults } = await db
+      .prepare(
+        `
+        SELECT
+          t.id   AS assignmentId,
+          t.title AS taskTitle,
+          'MENTOR' AS assignmentRole,
+          ws.name AS workspaceName,
+          p.name  AS projectName,
+          t.sparks AS rawSparks,
+          COALESCE(t.start_at, t.created_at) AS reviewedAt,
+          t.revision_note AS revisionNote
+        FROM tasks t
+        JOIN projects p ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        WHERE t.created_by = ? AND t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL
+        ORDER BY COALESCE(t.start_at, t.created_at) DESC
+      `
+      )
+      .bind(targetId)
+      .all();
+
+    mentorBriefItems = (mentorTaskResults as any[]).map((r) => {
+      const sparksVal = Number(r.rawSparks) || 0;
+      return {
+        assignmentId: r.assignmentId,
+        taskTitle: `Brief Assessment: ${r.taskTitle}`,
+        assignmentRole: 'MENTOR',
+        workspaceName: r.workspaceName,
+        projectName: r.projectName,
+        sparks: sparksVal,
+        rawSparks: sparksVal,
+        roleMultiplier: 1,
+        qualityMultiplier: 1.0,
+        reviewedAt: Number(r.reviewedAt) || 0,
+        revisionNote: r.revisionNote,
+        isZeroRevision: true,
+        isOnTime: true,
+      };
+    });
+  }
+
+  const assignmentItems: SparksHistoryItem[] = (assignmentResults as any[]).map((r) => {
     const rawSparks = Number(r.rawSparks) || 8;
     const roleMultiplier = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.assignmentRole) ? 2 : 1;
     const isZeroRevision = Boolean(r.isZeroRevision);
@@ -436,4 +494,63 @@ export async function getSparksHistory(
       isOnTime,
     };
   });
+
+  let adjustmentItems: SparksHistoryItem[] = [];
+  if (category !== 'workspace' && category !== 'coordinator') {
+    let saTimeClause = '';
+    if (period === 'week') {
+      const oneWeekAgo = now - 7 * 24 * 60 * 60;
+      saTimeClause = `AND sa.created_at >= ${oneWeekAgo}`;
+    } else if (period === 'month') {
+      const oneMonthAgo = now - 30 * 24 * 60 * 60;
+      saTimeClause = `AND sa.created_at >= ${oneMonthAgo}`;
+    }
+
+    const { results: saResults } = await db
+      .prepare(`
+        SELECT sa.id, sa.type, sa.sparks, sa.category, sa.note, sa.created_at, u.name AS adminName
+        FROM sparks_adjustments sa
+        LEFT JOIN users u ON sa.created_by = u.id
+        WHERE sa.user_id = ? ${saTimeClause}
+        ORDER BY sa.created_at DESC
+      `)
+      .bind(targetId)
+      .all();
+
+    adjustmentItems = (saResults as any[]).map((r) => {
+      const typeLabel =
+        r.type === 'APPRECIATION'
+          ? '✨ Apresiasi Personal'
+          : r.type === 'RESET'
+          ? '🔄 Reset Sparks'
+          : '↩ Pengembalian Sparks (Restore)';
+
+      const roleLabel =
+        r.type === 'APPRECIATION'
+          ? 'APPRECIATION'
+          : r.type === 'RESET'
+          ? 'RESET'
+          : 'RESTORE';
+
+      return {
+        assignmentId: r.id,
+        taskTitle: `${typeLabel}: ${r.note || 'Penyesuaian System'}`,
+        assignmentRole: roleLabel,
+        workspaceName: 'System Adjustment',
+        projectName: `Oleh: ${r.adminName || 'Admin'}`,
+        sparks: Number(r.sparks) || 0,
+        rawSparks: Number(r.sparks) || 0,
+        roleMultiplier: 1,
+        qualityMultiplier: 1.0,
+        reviewedAt: Number(r.created_at) || 0,
+        revisionNote: r.note,
+        isZeroRevision: true,
+        isOnTime: true,
+      };
+    });
+  }
+
+  const combined = [...mentorBriefItems, ...assignmentItems, ...adjustmentItems];
+  combined.sort((a, b) => b.reviewedAt - a.reviewedAt);
+  return combined;
 }

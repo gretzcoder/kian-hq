@@ -21,18 +21,20 @@ export async function updateProfileName(name: string) {
   const db = await getDB();
   await db.prepare('UPDATE users SET name = ? WHERE id = ?').bind(name, session.userId).run();
 
-  // Refresh KV session so the header name updates immediately
-  try {
-    const kv = await getKV();
-    const cookieStore = await cookies();
-    const sessionId = cookieStore.get('session_id')?.value;
-    if (sessionId) {
-      const updated = { ...session, name };
-      const ttlSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
-      await kv.put(`session:${sessionId}`, JSON.stringify(updated), { expirationTtl: ttlSeconds || 3600 });
+  // Refresh KV session so the header name updates immediately (only if not impersonating)
+  if (!session.isImpersonating) {
+    try {
+      const kv = await getKV();
+      const cookieStore = await cookies();
+      const sessionId = cookieStore.get('session_id')?.value;
+      if (sessionId) {
+        const updated = { ...session, name };
+        const ttlSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
+        await kv.put(`session:${sessionId}`, JSON.stringify(updated), { expirationTtl: ttlSeconds || 3600 });
+      }
+    } catch {
+      // non-fatal
     }
-  } catch {
-    // non-fatal
   }
 
   revalidatePath('/dashboard/profile');
@@ -252,23 +254,25 @@ export async function updateOjtProfile(payload: {
       .run();
   }
 
-  // Refresh KV session so email, avatar and name update instantly
-  try {
-    const kv = await getKV();
-    const cookieStore = await cookies();
-    const sessionId = cookieStore.get('session_id')?.value;
-    if (sessionId) {
-      const updated = {
-        ...session,
-        name,
-        email: email || session.email,
-        avatar: normalizedAvatar || session.avatar,
-      };
-      const ttlSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
-      await kv.put(`session:${sessionId}`, JSON.stringify(updated), { expirationTtl: ttlSeconds || 3600 });
+  // Refresh KV session so email, avatar and name update instantly (only if not impersonating)
+  if (!session.isImpersonating) {
+    try {
+      const kv = await getKV();
+      const cookieStore = await cookies();
+      const sessionId = cookieStore.get('session_id')?.value;
+      if (sessionId) {
+        const updated = {
+          ...session,
+          name,
+          email: email || session.email,
+          avatar: normalizedAvatar || session.avatar,
+        };
+        const ttlSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
+        await kv.put(`session:${sessionId}`, JSON.stringify(updated), { expirationTtl: ttlSeconds || 3600 });
+      }
+    } catch {
+      // non-fatal
     }
-  } catch {
-    // non-fatal
   }
 
   revalidatePath('/dashboard');

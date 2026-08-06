@@ -25,9 +25,10 @@ export default function ViewAsRoleTrigger({
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'ROLE' | 'USER'>('ROLE');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
   const [isPending, startTransition] = useTransition();
 
-  if (!availableRoles || availableRoles.length === 0) return null;
+  if ((!availableRoles || availableRoles.length === 0) && !isImpersonating && !activeSimulatedRole) return null;
 
   const handleSelectRole = (roleId: string) => {
     setIsOpen(false);
@@ -190,22 +191,47 @@ export default function ViewAsRoleTrigger({
 
             {/* Tab Content 2: Users */}
             {activeTab === 'USER' && (
-              <div className="max-h-52 overflow-y-auto space-y-0.5">
-                {availableUsers.length === 0 ? (
-                  <p className="text-[11px] text-zinc-400 italic p-2">Tidak ada user tersedia.</p>
-                ) : (
-                  availableUsers.map((u) => (
-                    <button
-                      key={u.id}
-                      disabled={isPending}
-                      onClick={() => handleSelectUser(u.id)}
-                      className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex flex-col"
-                    >
-                      <span className="font-bold truncate">{u.name}</span>
-                      <span className="text-[10px] text-zinc-400 font-mono truncate">{u.email}</span>
-                    </button>
-                  ))
-                )}
+              <div className="space-y-1">
+                <div className="p-1">
+                  <input
+                    type="text"
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    placeholder="🔍 Cari nama / email user..."
+                    className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2.5 py-1 text-xs focus:outline-none focus:border-purple-500 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400"
+                  />
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-0.5">
+                  {availableUsers
+                    .filter((u) => {
+                      if (!userSearchQuery.trim()) return true;
+                      const q = userSearchQuery.toLowerCase();
+                      return (
+                        u.name.toLowerCase().includes(q) ||
+                        u.email.toLowerCase().includes(q) ||
+                        u.roleName.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((u) => (
+                      <button
+                        key={u.id}
+                        disabled={isPending}
+                        onClick={() => handleSelectUser(u.id)}
+                        className="w-full text-left px-2.5 py-1.5 rounded-xl text-xs font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-purple-500/10 hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center justify-between group"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold truncate">{u.name}</p>
+                          <p className="text-[10px] text-zinc-400 font-mono truncate">{u.email}</p>
+                        </div>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 group-hover:bg-purple-500/20 group-hover:text-purple-600 shrink-0 ml-1">
+                          {u.roleName}
+                        </span>
+                      </button>
+                    ))}
+                  {availableUsers.length === 0 && (
+                    <p className="text-[11px] text-zinc-400 italic p-2 text-center">Tidak ada user tersedia.</p>
+                  )}
+                </div>
               </div>
             )}
           </div>

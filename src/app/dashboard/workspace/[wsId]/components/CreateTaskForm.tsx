@@ -125,20 +125,36 @@ export default function CreateTaskForm({
             />
           </div>
 
-          <div>
-            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-              Tenggat Waktu (Deadline) <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              name="deadline"
-              required
-              min={new Date().toISOString().split('T')[0]}
-              onClick={(e) => {
-                try { e.currentTarget.showPicker?.(); } catch {}
-              }}
-              className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                Tanggal Mulai (Start Date)
+              </label>
+              <input
+                type="datetime-local"
+                name="start_at"
+                onClick={(e) => {
+                  try { e.currentTarget.showPicker?.(); } catch {}
+                }}
+                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                Deadline <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                name="deadline"
+                required
+                min={new Date().toISOString().split('T')[0]}
+                onClick={(e) => {
+                  try { e.currentTarget.showPicker?.(); } catch {}
+                }}
+                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
+              />
+            </div>
           </div>
 
           {/* Prerequisite Select Dropdown */}

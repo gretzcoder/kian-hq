@@ -9,7 +9,7 @@ import CreateTaskForm from './components/CreateTaskForm';
 import { LiveTaskAccordion } from './components/LiveTaskAccordion';
 import WorkspaceTabs from './components/WorkspaceTabs';
 import { WorkspaceChatRoom } from './components/WorkspaceChatRoom';
-import { WorkspaceChatMessage } from '@/modules/workspaces/chatActions';
+import { getWorkspaceChats, WorkspaceChatMessage } from '@/modules/workspaces/chatActions';
 import WorkspaceReadTracker from '../components/WorkspaceReadTracker';
 import { AssessmentPanel } from './components/AssessmentPanel';
 import EditWorkspaceModal from './components/EditWorkspaceModal';
@@ -34,9 +34,12 @@ interface TaskRow {
   status: string;
   priority: string;
   deadline: number | null;
+  start_at?: number | null;
   created_at: number;
   task_type: string;
   parent_task_id: string | null;
+  revision_note?: string | null;
+  sparks?: number | null;
 }
 
 interface AssignmentRow {
@@ -102,7 +105,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     { results: tasksRaw },
     { results: membersRaw },
     { results: usersRaw },
-    { results: chatMessagesRaw },
+    chatMessages,
     ctx,
     { results: mentorsRaw },
     { results: memberAccountRolesRaw },
@@ -110,12 +113,13 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
     db.prepare("SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1").bind(projectId).first(),
     db.prepare(`
-      SELECT id, title, description, status, priority, deadline, created_at, task_type, parent_task_id
-      FROM tasks
-      WHERE workspace_id = ? AND status != 'DELETED'
+      SELECT t.id, t.title, t.description, t.status, t.priority, t.deadline, t.start_at, t.created_at, t.task_type, t.parent_task_id, t.revision_note, t.sparks, t.created_by, u.name as creator_name
+      FROM tasks t
+      LEFT JOIN users u ON t.created_by = u.id
+      WHERE t.workspace_id = ?
       ORDER BY
-        CASE priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
-        created_at ASC
+        CASE t.priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
+        t.created_at ASC
     `).bind(wsId).all(),
     db.prepare(`
       SELECT wm.user_id as userId, u.name as userName, u.email as userEmail,
@@ -125,14 +129,18 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       WHERE wm.workspace_id = ?
       ORDER BY wm.created_at ASC
     `).bind(wsId).all(),
-    db.prepare("SELECT id, name, email FROM users WHERE status = 'ACTIVE' ORDER BY name ASC").all(),
     db.prepare(`
-      SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.created_at, u.name as user_name
-      FROM workspace_chats wc
-      LEFT JOIN users u ON wc.user_id = u.id
-      WHERE wc.workspace_id = ?
-      ORDER BY wc.created_at ASC
-    `).bind(wsId).all(),
+      SELECT u.id, u.name, u.email, u.user_type as userType,
+             GROUP_CONCAT(DISTINCT r.name) AS roleNames,
+             GROUP_CONCAT(DISTINCT r.id) AS roleIds
+      FROM users u
+      LEFT JOIN user_roles ur ON u.id = ur.user_id
+      LEFT JOIN roles r ON ur.role_id = r.id
+      WHERE u.status = 'ACTIVE'
+      GROUP BY u.id
+      ORDER BY u.name ASC
+    `).all(),
+    getWorkspaceChats(wsId),
     getSessionContext(session.userId),
     db.prepare(`
       SELECT DISTINCT u.id, u.name, u.email
@@ -154,20 +162,36 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   ]);
 
   const isOjtWorkspace = ojtCheck !== null || workspace.ojt_coordinator_id !== null;
-  const tasks = tasksRaw as unknown as TaskRow[];
   const users = usersRaw as unknown as UserRow[];
   const activeUsers = usersRaw as unknown as { id: string; name: string; email: string }[];
   const members = (membersRaw as any[]);
   const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
 
-  // SECURITY GATE: OJT interns must be a member or mentor of the workspace/project to view it
+  // SECURITY GATE & SCHEDULE FILTER:
+  const isMentorUser = workspace.ojt_coordinator_id === session.userId || ojtCheck !== null || ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isManagerUser = ctx.userType === 'STAFF' || isMentorUser || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE');
+
   if (ctx.userType === 'OJT') {
     const isMember = members.some((m) => m.userId === session.userId);
-    const isMentor = workspace.ojt_coordinator_id === session.userId || ojtCheck !== null || ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
-    if (!isMember && !isMentor) {
+    if (!isMember && !isMentorUser) {
       redirect('/dashboard');
     }
   }
+
+  // Filter tasks for Troopers so:
+  // 1. Scheduled tasks (start_at > now) are hidden until start date
+  // 2. Assessment tasks must be APPROVED by Coordinator (status === 'APPROVED') before Troopers can see them
+  const now = Date.now();
+  const allTasks = tasksRaw as unknown as TaskRow[];
+  const tasks = isManagerUser
+    ? allTasks
+    : allTasks.filter((t) => {
+        if (t.start_at && t.start_at > now) return false;
+        if (t.task_type === 'ASSESSMENT' || workspace.workspace_type === 'ASSESSMENT') {
+          return t.status === 'APPROVED';
+        }
+        return t.status !== 'DELETED';
+      });
 
   // Fetch assignments & reactions when there are tasks
   const [{ results: assignmentsRaw }, { results: reactionsRaw }] = tasks.length > 0
@@ -260,8 +284,6 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   // Compile subset of tasks for prerequisite selection
   const existingTasks = tasks.map((t) => ({ id: t.id, title: t.title }));
-
-  const chatMessages = chatMessagesRaw as unknown as WorkspaceChatMessage[];
 
   return (
     <div className="space-y-8">
@@ -378,6 +400,12 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             currentUserId={session.userId}
             initialMessages={chatMessages}
             canDeleteAny={ctx.can('DELETE')}
+            members={membersList.map((m: any) => ({
+              id: m.userId || m.id || '',
+              name: m.userName || m.name || 'Anggota',
+              avatar_url: m.avatar_url || m.avatarUrl || null,
+              role: m.teamRole || m.role || null,
+            }))}
           />
         }
         membersTab={

@@ -7,6 +7,21 @@ interface Role {
   id: string;
   name: string;
   description: string | null;
+  color?: string | null;
+}
+
+function getRoleBadgeProps(role: Role): { className?: string; style?: React.CSSProperties } {
+  if (role.color) {
+    const c = role.color;
+    return {
+      style: {
+        backgroundColor: `${c}1a`,
+        borderColor: `${c}40`,
+        color: c,
+      },
+    };
+  }
+  return { className: getRoleBadgeStyle(role) };
 }
 
 interface Permission {
@@ -21,13 +36,31 @@ interface PermissionMatrixProps {
   grantedMap: Record<string, string[]>; // roleId → [permissionId, ...]
 }
 
-const ROLE_COLORS: Record<string, string> = {
-  EXECUTIVE:        'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20',
-  COORDINATOR:      'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',
-  'MENTOR TROOPERS': 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
-  CREATOR:          'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
-  COLLABORATOR:     'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
-};
+function getRoleBadgeStyle(role: Role): string {
+  const rId = (role.id || '').toLowerCase();
+  const rName = (role.name || '').toUpperCase();
+
+  if (rId.includes('executive') || rName.includes('EXECUTIVE')) {
+    return 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20';
+  }
+  if (rId.includes('coordinator') || rName.includes('COORDINATOR')) {
+    return 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20';
+  }
+  if (rId.includes('mentor') || rName.includes('MENTOR')) {
+    return 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20';
+  }
+  if (rId.includes('creator') || rName.includes('CREATOR')) {
+    return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20';
+  }
+  if (rId.includes('trooper') || rId.includes('ojt') || rName.includes('TROOPER') || rName.includes('OJT')) {
+    return 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20';
+  }
+  if (rId.includes('collaborator') || rName.includes('COLLABORATOR')) {
+    return 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20';
+  }
+
+  return 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700';
+}
 
 // Risk levels for new domain-based permissions taxonomy
 const PERMISSION_RISK: Record<string, 'low' | 'medium' | 'high'> = {
@@ -41,7 +74,7 @@ const PERMISSION_RISK: Record<string, 'low' | 'medium' | 'high'> = {
   // Content & Knowledge
   BRIEF_CREATE: 'low', BRIEF_REVIEW: 'medium', KB_MANAGE: 'low', ANNOUNCEMENT_POST: 'low',
   // Feature Domain
-  USE_AI: 'low', EXPORT_DATA: 'medium',
+  USE_AI: 'low', EXPORT_DATA: 'medium', SPARKS_MANAGE: 'medium',
 };
 
 // Permission categories for clean UI grouping
@@ -69,7 +102,7 @@ const PERMISSION_CATEGORIES: { label: string; icon: string; permissions: string[
   {
     label: 'System Features & Reports',
     icon: '📊',
-    permissions: ['USE_AI', 'EXPORT_DATA'],
+    permissions: ['USE_AI', 'EXPORT_DATA', 'SPARKS_MANAGE'],
   },
 ];
 
@@ -117,13 +150,19 @@ export default function PermissionMatrix({ roles, permissions, grantedMap }: Per
                   Permission
                 </span>
               </th>
-              {roles.map((role) => (
-                <th key={role.id} className="pb-4 px-4 text-center min-w-[110px]">
-                  <span className={`inline-block text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border ${ROLE_COLORS[role.name] || 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'}`}>
-                    {role.name}
-                  </span>
-                </th>
-              ))}
+              {roles.map((role) => {
+                const bProps = getRoleBadgeProps(role);
+                return (
+                  <th key={role.id} className="pb-4 px-4 text-center min-w-[110px]">
+                    <span
+                      className={`inline-block text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full border ${bProps.className || ''}`}
+                      style={bProps.style}
+                    >
+                      {role.name}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
 

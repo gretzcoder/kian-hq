@@ -3,6 +3,8 @@ import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import EditProfileButton from '@/modules/profile/components/EditProfileButton';
 import { normalizeWhatsappNumber } from '@/modules/profile/actions';
+import ProfileSparksActions from '@/modules/profile/components/ProfileSparksActions';
+import { getSessionContext } from '@/modules/roles/rbac';
 
 interface UserProfile {
   id: string;
@@ -50,6 +52,12 @@ export default async function ProfilePage({
 
   const db = await getDB();
 
+  const ctx = await getSessionContext(session.userId);
+  const isCoordinator =
+    ctx.userType === 'STAFF' &&
+    (ctx.can('MANAGE') || ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE'));
+  const canManageSparks = ctx.can('SPARKS_MANAGE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
+
   const [
     profileRaw,
     assignmentStatsRaw,
@@ -58,6 +66,9 @@ export default async function ProfilePage({
     workspaceCountRaw,
     projectCountRaw,
     earnedBadgesRaw,
+    directAssignmentSparksRaw,
+    mentorAssessmentSparksRaw,
+    sparksAdjustmentsRaw,
   ] = await Promise.all([
     db.prepare(`
       SELECT
@@ -119,19 +130,39 @@ export default async function ProfilePage({
     `).bind(targetUserId).first(),
 
     db.prepare(`
-      SELECT we.note, ta.assignment_role
+      SELECT we.note, ta.assignment_role, ta.id as entity_id
       FROM workflow_events we
       JOIN task_assignments ta ON we.entity_id = ta.id
       WHERE ta.user_id = ? AND (we.note LIKE '%[Sparks:%' OR we.note LIKE '%[Badge:%')
     `).bind(targetUserId).all(),
+
+    db.prepare(`
+      SELECT id, sparks, assignment_role
+      FROM task_assignments
+      WHERE user_id = ? AND status = 'APPROVED' AND sparks IS NOT NULL
+    `).bind(targetUserId).all(),
+
+    db.prepare(`
+      SELECT id, sparks
+      FROM tasks
+      WHERE created_by = ? AND task_type = 'ASSESSMENT' AND status = 'APPROVED' AND sparks IS NOT NULL
+    `).bind(targetUserId).all(),
+
+    db.prepare(`
+      SELECT id, type, sparks, category, note
+      FROM sparks_adjustments
+      WHERE user_id = ?
+    `).bind(targetUserId).all(),
   ]);
 
-  const profile          = profileRaw as unknown as UserProfile | null;
-  const assignmentStats  = assignmentStatsRaw.results as unknown as AssignmentStat[];
-  const roleStats        = roleStatsRaw.results as unknown as RoleStat[];
-  const recentActivity   = recentActivityRaw.results as unknown as RecentActivity[];
-  const workspaceCount   = (workspaceCountRaw as unknown as { count: number } | null)?.count ?? 0;
-  const projectCount     = (projectCountRaw  as unknown as { count: number } | null)?.count ?? 0;
+  const profile                     = profileRaw as unknown as UserProfile | null;
+  const assignmentStats             = assignmentStatsRaw.results as unknown as AssignmentStat[];
+  const roleStats                   = roleStatsRaw.results as unknown as RoleStat[];
+  const recentActivity              = recentActivityRaw.results as unknown as RecentActivity[];
+  const workspaceCount              = (workspaceCountRaw as unknown as { count: number } | null)?.count ?? 0;
+  const projectCount                = (projectCountRaw  as unknown as { count: number } | null)?.count ?? 0;
+  const directAssignmentSparks      = (directAssignmentSparksRaw?.results as any[]) || [];
+  const mentorAssessmentSparks      = (mentorAssessmentSparksRaw?.results as any[]) || [];
 
   // Calculate Creative Sparks & Role Breakdown
   let totalSparks = 0;
@@ -141,17 +172,47 @@ export default async function ProfilePage({
     DESIGNER: 0,
     VIDEO_EDITOR: 0,
     CREATOR: 0,
+    MENTOR: 0,
   };
 
-  (earnedBadgesRaw.results as any[]).forEach((row) => {
-    const sparkMatch = row.note?.match(/\[Sparks:\s*(\d+)\]/);
-    if (sparkMatch && sparkMatch[1]) {
-      const val = parseInt(sparkMatch[1], 10);
+  const countedAssignmentIds = new Set<string>();
+
+  directAssignmentSparks.forEach((row) => {
+    const val = Number(row.sparks) || 0;
+    if (val > 0) {
       totalSparks += val;
+      countedAssignmentIds.add(row.id);
       const r = row.assignment_role || 'CREATOR';
       roleSparksMap[r] = (roleSparksMap[r] || 0) + val;
     }
   });
+
+  mentorAssessmentSparks.forEach((row) => {
+    const val = Number(row.sparks) || 0;
+    if (val > 0) {
+      totalSparks += val;
+      roleSparksMap['MENTOR'] = (roleSparksMap['MENTOR'] || 0) + val;
+    }
+  });
+
+  (earnedBadgesRaw.results as any[]).forEach((row) => {
+    if (!row.entity_id || !countedAssignmentIds.has(row.entity_id)) {
+      const sparkMatch = row.note?.match(/\[Sparks:\s*(\d+)\]/);
+      if (sparkMatch && sparkMatch[1]) {
+        const val = parseInt(sparkMatch[1], 10);
+        totalSparks += val;
+        const r = row.assignment_role || 'CREATOR';
+        roleSparksMap[r] = (roleSparksMap[r] || 0) + val;
+      }
+    }
+  });
+
+  (sparksAdjustmentsRaw?.results as any[] || []).forEach((row) => {
+    const val = Number(row.sparks) || 0;
+    totalSparks += val;
+  });
+
+  totalSparks = Math.max(0, totalSparks);
 
   // Determine Dynamic Title Badges (Standardized Order: Researcher -> Planner -> Designer -> Video Editor)
   const titleBadges: { title: string; emoji: string; desc: string; color: string }[] = [];
@@ -465,19 +526,17 @@ export default async function ProfilePage({
                 <span>✨ Creative Sparks & Title Badges</span>
               </h3>
               <p className="text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                Akumulasi poin apresiasi kualitas karya dari mentor & koordinator.
+                Akumulasi poin apresiasi kualitas karya dari mentor & koordinator. Klik saldo Sparks untuk melihat riwayat lengkap.
               </p>
             </div>
-            <div className="flex items-center justify-center gap-2 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 sm:px-4 sm:py-2 rounded-2xl w-full sm:w-auto shrink-0">
-              <span className="text-lg sm:text-xl">✨</span>
-              <div className="text-center sm:text-left">
-                <p className="text-base sm:text-lg font-black text-purple-700 dark:text-purple-300 leading-none">{totalSparks} Sparks</p>
-                <p className="text-[8px] sm:text-[9px] text-purple-600/80 dark:text-purple-400/80 font-bold uppercase tracking-wider">Total Terkumpul</p>
-              </div>
-            </div>
-          </div>
 
-          {/* Dynamic Titles Row */}
+            <ProfileSparksActions
+              targetUserId={targetUserId}
+              targetUserName={profile?.name || 'User'}
+              canManageSparks={canManageSparks}
+              totalSparks={totalSparks}
+            />
+          </div>
           {titleBadges.length > 0 && (
             <div className="pt-4">
               <p className="text-[10px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest mb-2.5">

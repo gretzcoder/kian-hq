@@ -12,7 +12,6 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
   if (simRole) {
     const db = await getDB();
     try {
-      const targetRoleId = simRole.roleId === 'ojt_intern' ? 'role_creator' : simRole.roleId;
       const { results } = await db
         .prepare(`
           SELECT DISTINCT p.name AS permission_name
@@ -20,13 +19,9 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
           JOIN role_permissions rp ON p.id = rp.permission_id
           WHERE rp.role_id = ?
         `)
-        .bind(targetRoleId)
+        .bind(simRole.roleId)
         .all();
-      let permissions = (results || []).map((r: any) => r.permission_name as string);
-      if (simRole.roleId === 'ojt_intern') {
-        permissions = permissions.filter((p: string) => !['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'EXPORT_DATA', 'MANAGE'].includes(p));
-      }
-      return permissions;
+      return (results || []).map((r: any) => r.permission_name as string);
     } catch (err) {
       console.error('Simulated permissions query failed:', err);
       return [];

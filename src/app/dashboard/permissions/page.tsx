@@ -11,6 +11,7 @@ interface Role {
   id: string;
   name: string;
   description: string | null;
+  color?: string | null;
 }
 
 interface Permission {
@@ -44,15 +45,16 @@ export default async function PermissionsPage() {
   const [rolesRaw, permissionsRaw, grantedRaw, memberCountsRaw] = await Promise.all([
     // All roles ordered by clearance level
     db.prepare(`
-      SELECT id, name, description FROM roles
-      ORDER BY CASE name
-        WHEN 'EXECUTIVE' THEN 1
-        WHEN 'COORDINATOR' THEN 2
-        WHEN 'MENTOR TROOPERS' THEN 3
-        WHEN 'CREATOR' THEN 4
-        WHEN 'COLLABORATOR' THEN 5
-        ELSE 6
-      END
+      SELECT id, name, description, color FROM roles
+      ORDER BY CASE
+        WHEN id = 'role_executive' OR name = 'EXECUTIVE' THEN 1
+        WHEN id = 'role_coordinator' OR name = 'COORDINATOR' THEN 2
+        WHEN id = 'role_mentor_troopers' OR name = 'MENTOR TROOPERS' THEN 3
+        WHEN id = 'role_creator' OR name = 'CREATOR' THEN 4
+        WHEN id = 'role_troopers' OR name = 'TROOPERS' THEN 5
+        WHEN id = 'role_collaborator' OR name = 'COLLABORATOR' THEN 6
+        ELSE 7
+      END, name ASC
     `).all(),
     // All permissions
     db.prepare(`
@@ -137,24 +139,64 @@ export default async function PermissionsPage() {
           const pct = Math.round((grantedCount / totalPerms) * 100);
           const isSimulatingThisRole = activeSimRole?.roleId === role.id;
 
-          const colors: Record<string, { card: string; bar: string; badge: string }> = {
-            EXECUTIVE:    { card: 'border-purple-500/15', bar: 'bg-purple-500', badge: 'bg-purple-500/10 text-purple-700 dark:text-purple-400' },
-            COORDINATOR:  { card: 'border-blue-500/15',   bar: 'bg-blue-500',   badge: 'bg-blue-500/10 text-blue-700 dark:text-blue-400' },
-            CREATOR:      { card: 'border-emerald-500/15',bar: 'bg-emerald-500',badge: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' },
-            COLLABORATOR: { card: 'border-yellow-500/15', bar: 'bg-yellow-500', badge: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' },
+          const getCardColors = (r: Role) => {
+            const rId = (r.id || '').toLowerCase();
+            const rName = (r.name || '').toUpperCase();
+
+            if (rId.includes('executive') || rName.includes('EXECUTIVE')) {
+              return { card: 'border-purple-500/15', bar: 'bg-purple-500', badge: 'bg-purple-500/10 text-purple-700 dark:text-purple-400' };
+            }
+            if (rId.includes('coordinator') || rName.includes('COORDINATOR')) {
+              return { card: 'border-blue-500/15', bar: 'bg-blue-500', badge: 'bg-blue-500/10 text-blue-700 dark:text-blue-400' };
+            }
+            if (rId.includes('mentor') || rName.includes('MENTOR')) {
+              return { card: 'border-amber-500/15', bar: 'bg-amber-500', badge: 'bg-amber-500/10 text-amber-700 dark:text-amber-400' };
+            }
+            if (rId.includes('creator') || rName.includes('CREATOR')) {
+              return { card: 'border-emerald-500/15', bar: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' };
+            }
+            if (rId.includes('trooper') || rId.includes('ojt') || rName.includes('TROOPER') || rName.includes('OJT')) {
+              return { card: 'border-cyan-500/15', bar: 'bg-cyan-500', badge: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400' };
+            }
+            if (rId.includes('collaborator') || rName.includes('COLLABORATOR')) {
+              return { card: 'border-yellow-500/15', bar: 'bg-yellow-500', badge: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400' };
+            }
+            return { card: 'border-zinc-200 dark:border-zinc-800', bar: 'bg-zinc-400', badge: 'bg-zinc-100 text-zinc-600' };
           };
-          const c = colors[role.name] || { card: 'border-zinc-200 dark:border-zinc-800', bar: 'bg-zinc-400', badge: 'bg-zinc-100 text-zinc-600' };
+          const customColor = role.color;
+          const c = getCardColors(role);
 
           return (
-            <div key={role.id} className={`border ${c.card} bg-white dark:bg-[#09090b]/40 rounded-2xl p-4 shadow-sm flex flex-col justify-between`}>
+            <div
+              key={role.id}
+              className={`border ${c.card} bg-white dark:bg-[#09090b]/40 rounded-2xl p-4 shadow-sm flex flex-col justify-between`}
+              style={customColor ? { borderColor: `${customColor}40` } : undefined}
+            >
               <div>
-                <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full ${c.badge}`}>
+                <span
+                  className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${customColor ? '' : c.badge}`}
+                  style={
+                    customColor
+                      ? {
+                          backgroundColor: `${customColor}1a`,
+                          borderColor: `${customColor}40`,
+                          color: customColor,
+                        }
+                      : undefined
+                  }
+                >
                   {role.name}
                 </span>
                 <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 mt-3">{grantedCount}<span className="text-sm font-bold text-zinc-400">/{totalPerms}</span></p>
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-bold uppercase tracking-wider mb-2">Permissions</p>
                 <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-1.5 overflow-hidden mb-2">
-                  <div className={`h-1.5 rounded-full ${c.bar} transition-all duration-500`} style={{ width: `${pct}%` }} />
+                  <div
+                    className={`h-1.5 rounded-full ${c.bar} transition-all duration-500`}
+                    style={{
+                      width: `${pct}%`,
+                      backgroundColor: customColor || undefined,
+                    }}
+                  />
                 </div>
                 <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">{members} member{members !== 1 ? 's' : ''} assigned</p>
               </div>
