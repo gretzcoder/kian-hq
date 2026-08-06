@@ -1,4 +1,4 @@
--- Migration 0044: Ensure deadline and start_at columns exist on task_assignments table
+-- Migration 0044: Ensure deadline, start_at, assigned_by, and all expected columns exist on task_assignments table
 
 CREATE TABLE IF NOT EXISTS task_assignments_v4 (
     id                   TEXT PRIMARY KEY,
@@ -23,16 +23,12 @@ CREATE TABLE IF NOT EXISTS task_assignments_v4 (
 );
 
 INSERT OR IGNORE INTO task_assignments_v4 (
-    id, task_id, user_id, assignment_role, assigned_by, status,
-    result_url, revision_note, submitted_at, reviewed_at, created_at,
-    submission_data, lead_approved, mentor_approved, coordinator_approved,
-    sparks
+    id, task_id, user_id, assignment_role, status,
+    result_url, revision_note, submitted_at, reviewed_at, created_at
 )
 SELECT
-    id, task_id, user_id, assignment_role, assigned_by, status,
-    result_url, revision_note, submitted_at, reviewed_at, created_at,
-    submission_data, lead_approved, mentor_approved, coordinator_approved,
-    sparks
+    id, task_id, user_id, assignment_role, status,
+    result_url, revision_note, submitted_at, reviewed_at, created_at
 FROM task_assignments;
 
 DROP TABLE IF EXISTS task_assignments;
