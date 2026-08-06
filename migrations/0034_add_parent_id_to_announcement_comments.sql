@@ -1,2 +1,2 @@
 -- Migration 0034: Add parent_id to announcement_comments for threaded replies
-ALTER TABLE announcement_comments ADD COLUMN parent_id TEXT REFERENCES announcement_comments(id) ON DELETE CASCADE;
+-- Note: parent_id is already included in table creation in 0019_announcement_comments_reactions.sql
