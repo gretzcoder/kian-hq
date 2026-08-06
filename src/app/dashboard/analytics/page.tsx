@@ -45,7 +45,8 @@ export default async function AnalyticsPage() {
       SELECT t.title, p.name as project_name, t.deadline, u.name as assigned_name
       FROM tasks t
       JOIN projects p ON t.project_id = p.id
-      LEFT JOIN users u ON t.assigned_to = u.id
+      LEFT JOIN task_assignments ta ON t.id = ta.task_id AND ta.assignment_role = 'PIC'
+      LEFT JOIN users u ON ta.user_id = u.id
       WHERE t.deadline IS NOT NULL AND t.deadline < ? AND t.status NOT IN ('COMPLETED', 'APPROVED')
       ORDER BY t.deadline ASC
       LIMIT 10
@@ -53,10 +54,11 @@ export default async function AnalyticsPage() {
     // 5. Top performers: tasks per user
     db.prepare(`
       SELECT u.name,
-        SUM(CASE WHEN t.status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN t.status IN ('COMPLETED', 'APPROVED') THEN 1 ELSE 0 END) as completed,
         COUNT(t.id) as total
       FROM users u
-      LEFT JOIN tasks t ON t.assigned_to = u.id
+      LEFT JOIN task_assignments ta ON ta.user_id = u.id
+      LEFT JOIN tasks t ON ta.task_id = t.id
       GROUP BY u.id, u.name
       HAVING COUNT(t.id) > 0
       ORDER BY completed DESC

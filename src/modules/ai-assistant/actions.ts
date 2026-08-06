@@ -106,7 +106,8 @@ export async function askAIAssistant(prompt: string) {
         SELECT t.title, t.description, t.status, p.name as project_name, t.deadline
         FROM tasks t
         JOIN projects p ON t.project_id = p.id
-        WHERE t.assigned_to = ? OR t.created_by = ?
+        LEFT JOIN task_assignments ta ON t.id = ta.task_id
+        WHERE ta.user_id = ? OR t.created_by = ?
         LIMIT 10
       `;
       const { results: tasks } = await db.prepare(query).bind(session.userId, session.userId).all();

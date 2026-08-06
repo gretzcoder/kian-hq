@@ -120,7 +120,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     .prepare(`
       SELECT t.*, u.name as assigned_name, u.email as assigned_email, c.name as creator_name
       FROM tasks t
-      LEFT JOIN users u ON t.assigned_to = u.id
+      LEFT JOIN task_assignments ta ON t.id = ta.task_id AND ta.assignment_role = 'PIC'
+      LEFT JOIN users u ON ta.user_id = u.id
       LEFT JOIN users c ON t.created_by = c.id
       WHERE t.project_id = ? AND (t.workspace_id IS NULL)
       ORDER BY t.created_at ASC
