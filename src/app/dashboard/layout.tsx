@@ -143,7 +143,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col transition-colors duration-350">
+    <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col transition-colors duration-350 overflow-x-hidden w-full relative">
       {/* User Impersonation Banner */}
       {session.isImpersonating && (
         <ImpersonationBanner
@@ -162,7 +162,7 @@ export default async function DashboardLayout({
         isAuthorized={isAuthorizedForViewAsRole}
       />
 
-      <div className="flex-1 w-full flex flex-col lg:flex-row min-w-0">
+      <div className="flex-1 w-full flex flex-col lg:flex-row min-w-0 overflow-x-hidden">
         {/* Onboarding Modal Overlay */}
         {showOnboarding && (
           <OnboardingModal
@@ -200,7 +200,7 @@ export default async function DashboardLayout({
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 w-full px-3 sm:px-6 md:px-10 py-4 sm:py-6 min-w-0 flex flex-col">
+        <main className="flex-1 w-full px-3 sm:px-6 md:px-10 py-4 sm:py-6 min-w-0 flex flex-col overflow-x-hidden">
           {/* Top Floating Control Bar */}
           <div className="hidden lg:flex items-center justify-between pb-3 mb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
             <TimeGreeting />

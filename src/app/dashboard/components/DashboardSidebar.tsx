@@ -243,7 +243,7 @@ export default function DashboardSidebar({
   return (
     <>
       {/* Mobile Top Header */}
-      <header className="lg:hidden sticky top-0 z-40 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-md px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
+      <header className="lg:hidden sticky top-0 z-40 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-md px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2 w-full max-w-full overflow-hidden">
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => setMobileOpen((p) => !p)}
@@ -275,9 +275,16 @@ export default function DashboardSidebar({
         />
       )}
 
+      {/* Desktop Layout Spacer */}
+      <div
+        className={`hidden lg:block shrink-0 transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] ${
+          collapsed ? 'w-20' : 'w-64'
+        }`}
+      />
+
       {/* Sidebar Container */}
       <aside
-        className={`fixed lg:sticky top-0 z-50 h-screen bg-white dark:bg-[#09090b] border-r border-zinc-200/80 dark:border-zinc-800/80 flex flex-col transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] ${
+        className={`fixed top-0 z-50 h-screen bg-white dark:bg-[#09090b] border-r border-zinc-200/80 dark:border-zinc-800/80 flex flex-col transition-all duration-300 ease-[cubic-bezier(0.2,0,0,1)] ${
           collapsed ? 'w-20' : 'w-64'
         } ${mobileOpen ? 'left-0' : '-left-64 lg:left-0'} ${
           isLocked ? 'pointer-events-none select-none opacity-40 blur-[1px]' : ''

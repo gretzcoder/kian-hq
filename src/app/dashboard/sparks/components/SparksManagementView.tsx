@@ -119,9 +119,9 @@ export default function SparksManagementView({ overview, period }: SparksManagem
   });
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12 w-full min-w-0 overflow-hidden">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-5 min-w-0">
         <div>
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500 to-purple-600 text-white flex items-center justify-center font-bold text-xl shadow-md shadow-purple-500/20">
@@ -139,7 +139,7 @@ export default function SparksManagementView({ overview, period }: SparksManagem
         </div>
 
         {/* Period Switcher */}
-        <div className="flex items-center gap-1.5 p-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+        <div className="grid grid-cols-3 p-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm w-full sm:w-auto gap-1">
           {[
             { id: 'month', label: '🗓️ Bulan Ini' },
             { id: 'week', label: '📅 Minggu Ini' },
@@ -148,10 +148,10 @@ export default function SparksManagementView({ overview, period }: SparksManagem
             <button
               key={p.id}
               onClick={() => handlePeriodChange(p.id as any)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              className={`px-2.5 sm:px-3.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center text-center whitespace-nowrap ${
                 period === p.id
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
-                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/50'
               }`}
             >
               {p.label}
@@ -177,41 +177,77 @@ export default function SparksManagementView({ overview, period }: SparksManagem
       )}
 
       {/* ── Metric Summary Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
-        <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-4 space-y-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">
-            ⚡ Total Sparks Terdistribusi
-          </p>
-          <p className="text-2xl font-black text-purple-600 dark:text-purple-400 font-mono">
-            {overview.stats.totalDistributed.toLocaleString()} ✨
-          </p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+        {/* Card 1 */}
+        <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between space-y-2 shadow-xs hover:border-purple-500/30 transition-all">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 line-clamp-1">
+              Total Sparks
+            </span>
+            <span className="p-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs shrink-0">
+              ⚡
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-xl sm:text-2xl font-black text-purple-600 dark:text-purple-400 font-mono">
+              {overview.stats.totalDistributed.toLocaleString()}
+            </span>
+            <span className="text-xs text-purple-500 font-bold">✨</span>
+          </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-4 space-y-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400">
-            🎨 Troopers Tasks
-          </p>
-          <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
-            {overview.stats.troopersSparks.toLocaleString()} ✨
-          </p>
+        {/* Card 2 */}
+        <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between space-y-2 shadow-xs hover:border-blue-500/30 transition-all">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 line-clamp-1">
+              Troopers Tasks
+            </span>
+            <span className="p-1 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs shrink-0">
+              🎨
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
+              {overview.stats.troopersSparks.toLocaleString()}
+            </span>
+            <span className="text-xs text-amber-500 font-bold">✨</span>
+          </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-4 space-y-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
-            📝 Brief Assessments
-          </p>
-          <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
-            {overview.stats.assessmentSparks.toLocaleString()} ✨
-          </p>
+        {/* Card 3 */}
+        <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between space-y-2 shadow-xs hover:border-amber-500/30 transition-all">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-amber-600 dark:text-amber-400 line-clamp-1">
+              Assessments
+            </span>
+            <span className="p-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs shrink-0">
+              📝
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
+              {overview.stats.assessmentSparks.toLocaleString()}
+            </span>
+            <span className="text-xs text-amber-500 font-bold">✨</span>
+          </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-4 space-y-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-pink-600 dark:text-pink-400">
-            ✨ Apresiasi Personal
-          </p>
-          <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
-            {overview.stats.appreciationSparks.toLocaleString()} ✨
-          </p>
+        {/* Card 4 */}
+        <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between space-y-2 shadow-xs hover:border-pink-500/30 transition-all">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-wider text-pink-600 dark:text-pink-400 line-clamp-1">
+              Personal
+            </span>
+            <span className="p-1 rounded-lg bg-pink-500/10 text-pink-600 dark:text-pink-400 text-xs shrink-0">
+              ✨
+            </span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono">
+              {overview.stats.appreciationSparks.toLocaleString()}
+            </span>
+            <span className="text-xs text-pink-500 font-bold">✨</span>
+          </div>
         </div>
       </div>
 
@@ -229,7 +265,7 @@ export default function SparksManagementView({ overview, period }: SparksManagem
             />
           </div>
 
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+          <div className="grid grid-cols-3 sm:flex items-center gap-1.5 w-full sm:w-auto">
             {[
               { id: 'ALL', label: '👥 Semua' },
               { id: 'TROOPERS', label: '👤 Troopers' },
@@ -238,7 +274,7 @@ export default function SparksManagementView({ overview, period }: SparksManagem
               <button
                 key={r.id}
                 onClick={() => setRoleFilter(r.id)}
-                className={`text-[10px] font-bold px-3 py-1.5 rounded-xl border transition-all shrink-0 ${
+                className={`text-[10px] sm:text-xs font-bold px-3 py-2 sm:py-1.5 rounded-xl border transition-all flex items-center justify-center text-center whitespace-nowrap ${
                   roleFilter === r.id
                     ? 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 border-zinc-900 dark:border-zinc-100'
                     : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-purple-300'

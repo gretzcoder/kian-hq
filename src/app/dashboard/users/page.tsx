@@ -140,11 +140,11 @@ export default async function UsersPage() {
         </div>
 
         {/* Mobile Responsive Cards View */}
-        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+        <div className="block md:hidden space-y-3 p-3">
           {users.map((user) => (
-            <div key={user.id} className="p-4 space-y-3 bg-white dark:bg-zinc-900/40">
-              {/* Header: User Info & Actions */}
-              <div className="flex items-start justify-between gap-2">
+            <div key={user.id} className="p-4 space-y-3 bg-white dark:bg-zinc-900/40 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs">
+              {/* Header: User Profile Info */}
+              <div className="flex items-center gap-3">
                 <Link href={`/dashboard/profile?userId=${user.id}`} className="flex items-center gap-3 min-w-0 flex-1 group">
                   <UserAvatar src={user.avatar_url} name={user.name} size="md" square />
                   <div className="min-w-0 flex-1">
@@ -154,29 +154,27 @@ export default async function UsersPage() {
                     <p className="text-xs text-zinc-400 font-mono truncate">{user.email}</p>
                   </div>
                 </Link>
-                <UserActionsMenu
-                  userId={user.id}
-                  userName={user.name}
-                  isSelf={user.id === session.userId}
-                />
               </div>
 
-              {/* Status, Classification & Role Selectors */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-                <div>
-                  <p className="text-[9px] font-black uppercase text-zinc-400 mb-1">Status</p>
-                  <UserStatusSelector
-                    userId={user.id}
-                    currentStatus={user.status}
-                  />
+              {/* Status, Classification & Role Selectors Grid */}
+              <div className="space-y-2.5 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/60">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[9px] font-black uppercase text-zinc-400 mb-1">Status</p>
+                    <UserStatusSelector
+                      userId={user.id}
+                      currentStatus={user.status}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black uppercase text-zinc-400 mb-1">Klasifikasi</p>
+                    <UserTypeSelector
+                      userId={user.id}
+                      currentUserType={user.user_type || 'STAFF'}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[9px] font-black uppercase text-zinc-400 mb-1">Klasifikasi</p>
-                  <UserTypeSelector
-                    userId={user.id}
-                    currentUserType={user.user_type || 'STAFF'}
-                  />
-                </div>
+
                 <div>
                   <p className="text-[9px] font-black uppercase text-zinc-400 mb-1">Role Utama</p>
                   <RoleSelector
@@ -185,6 +183,16 @@ export default async function UsersPage() {
                     roles={roles}
                   />
                 </div>
+              </div>
+
+              {/* Management Action Buttons Row */}
+              <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-zinc-100 dark:border-zinc-800/60">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Aksi Kelola</span>
+                <UserActionsMenu
+                  userId={user.id}
+                  userName={user.name}
+                  isSelf={user.id === session.userId}
+                />
               </div>
             </div>
           ))}
