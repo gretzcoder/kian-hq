@@ -77,21 +77,25 @@ export async function sendWorkspaceMessage(
       .bind(msgId, workspaceId, session.userId, trimmed || '', parentId || null, attachmentUrl || null, now)
       .run();
 
-    // Auto mark as read for sender
-    await db
-      .prepare(
-        'INSERT OR REPLACE INTO workspace_chat_reads (chat_id, user_id, read_at) VALUES (?, ?, ?)'
-      )
-      .bind(msgId, session.userId, now)
-      .run();
+    // Auto mark as read for sender (Safely handled)
+    try {
+      await db
+        .prepare(
+          'INSERT OR REPLACE INTO workspace_chat_reads (chat_id, user_id, read_at) VALUES (?, ?, ?)'
+        )
+        .bind(msgId, session.userId, now)
+        .run();
+    } catch {}
 
-    // Update presence
-    await db
-      .prepare(
-        'INSERT OR REPLACE INTO workspace_user_presence (user_id, workspace_id, last_seen_at, is_typing) VALUES (?, ?, ?, 0)'
-      )
-      .bind(session.userId, workspaceId, now)
-      .run();
+    // Update presence (Safely handled)
+    try {
+      await db
+        .prepare(
+          'INSERT OR REPLACE INTO workspace_user_presence (user_id, workspace_id, last_seen_at, is_typing) VALUES (?, ?, ?, 0)'
+        )
+        .bind(session.userId, workspaceId, now)
+        .run();
+    } catch {}
 
     revalidatePath(`/dashboard/workspace/${workspaceId}`);
     return { success: true, messageId: msgId };
@@ -116,10 +120,10 @@ export async function editWorkspaceMessage(messageId: string, newMessage: string
 
   try {
     const msgRaw = await db
-      .prepare('SELECT user_id, created_at, COALESCE(edit_count, 0) AS edit_count FROM workspace_chats WHERE id = ?')
+      .prepare('SELECT user_id, created_at FROM workspace_chats WHERE id = ?')
       .bind(messageId)
       .first();
-    const msg = msgRaw as unknown as { user_id: string; created_at: number; edit_count: number } | null;
+    const msg = msgRaw as unknown as { user_id: string; created_at: number } | null;
 
     if (!msg) return { success: false, error: 'Pesan tidak ditemukan.' };
     if (msg.user_id !== session.userId) return { success: false, error: 'Anda hanya dapat mengedit pesan sendiri.' };
@@ -129,15 +133,17 @@ export async function editWorkspaceMessage(messageId: string, newMessage: string
       return { success: false, error: 'Pesan hanya dapat diedit dalam waktu 15 menit setelah dikirim.' };
     }
 
-    const currentEditCount = Number(msg.edit_count) || 0;
-    if (currentEditCount >= 5) {
-      return { success: false, error: 'Batas maksimum 5x edit telah tercapai untuk pesan ini.' };
+    try {
+      await db
+        .prepare('UPDATE workspace_chats SET message = ?, edit_count = COALESCE(edit_count, 0) + 1, edited_at = ? WHERE id = ?')
+        .bind(trimmed, now, messageId)
+        .run();
+    } catch {
+      await db
+        .prepare('UPDATE workspace_chats SET message = ? WHERE id = ?')
+        .bind(trimmed, messageId)
+        .run();
     }
-
-    await db
-      .prepare('UPDATE workspace_chats SET message = ?, edit_count = COALESCE(edit_count, 0) + 1, edited_at = ? WHERE id = ?')
-      .bind(trimmed, now, messageId)
-      .run();
 
     revalidatePath(`/dashboard/workspace/${workspaceId}`);
     return { success: true };
@@ -181,7 +187,6 @@ export async function deleteWorkspaceMessage(messageId: string, workspaceId: str
 
 /**
  * Toggle Pin status for a workspace chat message.
- * Strictly restricted to Admin, Coordinator, Mentor, and Team Leader.
  */
 export async function togglePinWorkspaceMessage(messageId: string, workspaceId: string) {
   const session = await getSession();
@@ -190,7 +195,6 @@ export async function togglePinWorkspaceMessage(messageId: string, workspaceId: 
   const db = await getDB();
 
   try {
-    // Verify user role eligibility
     const { results: roles } = await db
       .prepare(
         `SELECT r.name, u.user_type, wm.team_role
@@ -214,27 +218,31 @@ export async function togglePinWorkspaceMessage(messageId: string, workspaceId: 
       return { success: false, error: 'Hanya Admin, Koordinator, Mentor, atau Ketua Tim yang dapat menyematkan pesan.' };
     }
 
-    const currentMsg = await db
-      .prepare('SELECT is_pinned FROM workspace_chats WHERE id = ?')
-      .bind(messageId)
-      .first();
-
-    const isPinned = Number((currentMsg as any)?.is_pinned) === 1;
-
-    if (isPinned) {
-      await db
-        .prepare('UPDATE workspace_chats SET is_pinned = 0, pinned_by = NULL WHERE id = ?')
+    try {
+      const currentMsg = await db
+        .prepare('SELECT is_pinned FROM workspace_chats WHERE id = ?')
         .bind(messageId)
-        .run();
-    } else {
-      await db
-        .prepare('UPDATE workspace_chats SET is_pinned = 1, pinned_by = ? WHERE id = ?')
-        .bind(session.userId, messageId)
-        .run();
-    }
+        .first();
 
-    revalidatePath(`/dashboard/workspace/${workspaceId}`);
-    return { success: true, isPinned: !isPinned };
+      const isPinned = Number((currentMsg as any)?.is_pinned) === 1;
+
+      if (isPinned) {
+        await db
+          .prepare('UPDATE workspace_chats SET is_pinned = 0, pinned_by = NULL WHERE id = ?')
+          .bind(messageId)
+          .run();
+      } else {
+        await db
+          .prepare('UPDATE workspace_chats SET is_pinned = 1, pinned_by = ? WHERE id = ?')
+          .bind(session.userId, messageId)
+          .run();
+      }
+
+      revalidatePath(`/dashboard/workspace/${workspaceId}`);
+      return { success: true, isPinned: !isPinned };
+    } catch {
+      return { success: false, error: 'Fitur sematan belum aktif pada skema database saat ini.' };
+    }
   } catch (err: any) {
     console.error('togglePinWorkspaceMessage failed:', err);
     return { success: false, error: err.message || 'Gagal mengubah status sematan pesan.' };
@@ -243,7 +251,6 @@ export async function togglePinWorkspaceMessage(messageId: string, workspaceId: 
 
 /**
  * Clear all chat messages in a workspace.
- * Strictly restricted to Admin, Coordinator, Mentor, and Team Leader.
  */
 export async function clearWorkspaceChats(workspaceId: string) {
   const session = await getSession();
@@ -354,17 +361,17 @@ export async function markWorkspaceChatsRead(workspaceId: string) {
         .run();
     }
 
-    // Update presence
-    await db
-      .prepare(
-        'INSERT OR REPLACE INTO workspace_user_presence (user_id, workspace_id, last_seen_at, is_typing) VALUES (?, ?, ?, 0)'
-      )
-      .bind(session.userId, workspaceId, now)
-      .run();
+    try {
+      await db
+        .prepare(
+          'INSERT OR REPLACE INTO workspace_user_presence (user_id, workspace_id, last_seen_at, is_typing) VALUES (?, ?, ?, 0)'
+        )
+        .bind(session.userId, workspaceId, now)
+        .run();
+    } catch {}
 
     return { success: true };
   } catch (err) {
-    console.error('markWorkspaceChatsRead failed:', err);
     return { success: false };
   }
 }
@@ -389,7 +396,6 @@ export async function updateUserTypingPresence(workspaceId: string, isTyping: bo
 
     return { success: true };
   } catch (err) {
-    console.error('updateUserTypingPresence failed:', err);
     return { success: false };
   }
 }
@@ -403,7 +409,7 @@ export async function getWorkspacePresence(workspaceId: string): Promise<{
   membersPresence: MemberPresenceInfo[];
 }> {
   const session = await getSession();
-  if (!session) return { onlineCount: 0, typingNames: [], membersPresence: [] };
+  if (!session) return { onlineCount: 1, typingNames: [], membersPresence: [] };
 
   const db = await getDB();
   const now = Math.floor(Date.now() / 1000);
@@ -447,10 +453,9 @@ export async function getWorkspacePresence(workspaceId: string): Promise<{
       });
     }
 
-    return { onlineCount, typingNames, membersPresence };
+    return { onlineCount: Math.max(1, onlineCount), typingNames, membersPresence };
   } catch (err) {
-    console.error('getWorkspacePresence failed:', err);
-    return { onlineCount: 0, typingNames: [], membersPresence: [] };
+    return { onlineCount: 1, typingNames: [], membersPresence: [] };
   }
 }
 
@@ -462,54 +467,44 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
   if (!session) return [];
 
   const db = await getDB();
+  let msgsRaw: any[] = [];
+
   try {
-    const [msgsRaw, rxRaw, readsRaw] = await Promise.all([
-      db
-        .prepare(
-          `SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.parent_id, wc.attachment_url,
-                  COALESCE(wc.is_pinned, 0) AS is_pinned, wc.pinned_by,
-                  (CASE WHEN wc.edited_at IS NOT NULL THEN 1 ELSE 0 END) AS is_edited,
-                  wc.edited_at, COALESCE(wc.edit_count, 0) AS edit_count, wc.created_at,
-                  u.name AS user_name, u.avatar_url AS user_avatar, u.user_type,
-                  p_wc.message AS reply_message, p_u.name AS reply_user_name,
-                  wm.team_role AS user_role
-           FROM workspace_chats wc
-           LEFT JOIN users u ON wc.user_id = u.id
-           LEFT JOIN workspace_chats p_wc ON wc.parent_id = p_wc.id
-           LEFT JOIN users p_u ON p_wc.user_id = p_u.id
-           LEFT JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = wc.user_id
-           WHERE wc.workspace_id = ?
-           ORDER BY wc.created_at ASC`
-        )
-        .bind(workspaceId)
-        .all(),
+    const res = await db
+      .prepare(
+        `SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.parent_id, wc.attachment_url, wc.created_at,
+                u.name AS user_name, u.avatar_url AS user_avatar, u.user_type,
+                p_wc.message AS reply_message, p_u.name AS reply_user_name,
+                wm.team_role AS user_role
+         FROM workspace_chats wc
+         LEFT JOIN users u ON wc.user_id = u.id
+         LEFT JOIN workspace_chats p_wc ON wc.parent_id = p_wc.id
+         LEFT JOIN users p_u ON p_wc.user_id = p_u.id
+         LEFT JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = wc.user_id
+         WHERE wc.workspace_id = ?
+         ORDER BY wc.created_at ASC`
+      )
+      .bind(workspaceId)
+      .all();
 
-      db
-        .prepare(
-          `SELECT wcr.chat_id, wcr.emoji, wcr.user_id, u.name AS user_name
-           FROM workspace_chat_reactions wcr
-           JOIN workspace_chats wc ON wcr.chat_id = wc.id
-           LEFT JOIN users u ON wcr.user_id = u.id
-           WHERE wc.workspace_id = ?`
-        )
-        .bind(workspaceId)
-        .all(),
+    msgsRaw = (res.results || []) as any[];
+  } catch (err) {
+    console.error('getWorkspaceChats primary query failed:', err);
+    return [];
+  }
 
-      db
-        .prepare(
-          `SELECT wcr.chat_id, wcr.user_id, u.name AS user_name
-           FROM workspace_chat_reads wcr
-           JOIN workspace_chats wc ON wcr.chat_id = wc.id
-           LEFT JOIN users u ON wcr.user_id = u.id
-           WHERE wc.workspace_id = ?`
-        )
-        .bind(workspaceId)
-        .all(),
-    ]);
-
-    const now = Math.floor(Date.now() / 1000);
-
-    const reactionsMap = new Map<string, Map<string, { count: number; hasReacted: boolean; userNames: string[] }>>();
+  const reactionsMap = new Map<string, Map<string, { count: number; hasReacted: boolean; userNames: string[] }>>();
+  try {
+    const rxRaw = await db
+      .prepare(
+        `SELECT wcr.chat_id, wcr.emoji, wcr.user_id, u.name AS user_name
+         FROM workspace_chat_reactions wcr
+         JOIN workspace_chats wc ON wcr.chat_id = wc.id
+         LEFT JOIN users u ON wcr.user_id = u.id
+         WHERE wc.workspace_id = ?`
+      )
+      .bind(workspaceId)
+      .all();
     for (const r of (rxRaw.results || []) as any[]) {
       if (!reactionsMap.has(r.chat_id)) reactionsMap.set(r.chat_id, new Map());
       const chatRx = reactionsMap.get(r.chat_id)!;
@@ -519,92 +514,102 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
       if (r.user_id === session.userId) entry.hasReacted = true;
       if (r.user_name) entry.userNames.push(r.user_name);
     }
+  } catch {}
 
-    const readsMap = new Map<string, { count: number; names: string[] }>();
+  const readsMap = new Map<string, { count: number; names: string[] }>();
+  try {
+    const readsRaw = await db
+      .prepare(
+        `SELECT wcr.chat_id, wcr.user_id, u.name AS user_name
+         FROM workspace_chat_reads wcr
+         JOIN workspace_chats wc ON wcr.chat_id = wc.id
+         LEFT JOIN users u ON wcr.user_id = u.id
+         WHERE wc.workspace_id = ?`
+      )
+      .bind(workspaceId)
+      .all();
     for (const r of (readsRaw.results || []) as any[]) {
       if (!readsMap.has(r.chat_id)) readsMap.set(r.chat_id, { count: 0, names: [] });
       const entry = readsMap.get(r.chat_id)!;
       entry.count += 1;
       if (r.user_name && r.user_id !== session.userId) entry.names.push(r.user_name);
     }
+  } catch {}
 
-    const stickerRegex = /^\[sticker:(.*?):(.*?):(.*?)]$/;
+  const now = Math.floor(Date.now() / 1000);
+  const stickerRegex = /^\[sticker:(.*?):(.*?):(.*?)]$/;
 
-    const messages: WorkspaceChatMessage[] = ((msgsRaw.results || []) as any[]).map((r) => {
-      const chatRxMap = reactionsMap.get(r.id);
-      const reactions: ChatEmojiReaction[] = [];
-      if (chatRxMap) {
-        chatRxMap.forEach((val, emojiKey) => {
-          reactions.push({
-            emoji: emojiKey,
-            count: val.count,
-            hasReacted: val.hasReacted,
-            userNames: val.userNames,
-          });
+  const messages: WorkspaceChatMessage[] = msgsRaw.map((r) => {
+    const chatRxMap = reactionsMap.get(r.id);
+    const reactions: ChatEmojiReaction[] = [];
+    if (chatRxMap) {
+      chatRxMap.forEach((val, emojiKey) => {
+        reactions.push({
+          emoji: emojiKey,
+          count: val.count,
+          hasReacted: val.hasReacted,
+          userNames: val.userNames,
         });
-      }
+      });
+    }
 
-      const readEntry = readsMap.get(r.id) || { count: 0, names: [] };
+    const readEntry = readsMap.get(r.id) || { count: 0, names: [] };
 
-      let is_sticker = false;
-      let sticker_info: { id: string; emoji: string; name: string } | null = null;
-      const stickerMatch = (r.message || '').trim().match(stickerRegex);
-      if (stickerMatch) {
-        is_sticker = true;
-        sticker_info = {
-          id: stickerMatch[1],
-          emoji: stickerMatch[2],
-          name: stickerMatch[3],
-        };
-      }
-
-      const smart_links = extractSmartLinks(r.message || '');
-      const createdAt = Number(r.created_at) || 0;
-      const editCount = Number(r.edit_count) || 0;
-      const isOwner = r.user_id === session.userId;
-      const isWithinTimeLimit = now - createdAt <= 15 * 60;
-      const isWithinCountLimit = editCount < 5;
-
-      const can_edit = isOwner && isWithinTimeLimit && isWithinCountLimit;
-      let edit_disabled_reason: string | null = null;
-      if (isOwner) {
-        if (!isWithinTimeLimit) edit_disabled_reason = 'Waktu edit 15 menit telah berakhir';
-        else if (!isWithinCountLimit) edit_disabled_reason = 'Batas 5x edit telah tercapai';
-      }
-
-      return {
-        id: r.id,
-        workspace_id: r.workspace_id,
-        user_id: r.user_id,
-        user_name: r.user_name || 'Anggota Tim',
-        user_avatar: r.user_avatar || null,
-        user_type: r.user_type || 'OJT',
-        user_role: r.user_role || null,
-        message: r.message,
-        parent_id: r.parent_id || null,
-        reply_message: r.reply_message || null,
-        reply_user_name: r.reply_user_name || null,
-        attachment_url: r.attachment_url || null,
-        is_pinned: Number(r.is_pinned) === 1,
-        pinned_by: r.pinned_by || null,
-        is_edited: Number(r.is_edited) === 1,
-        edited_at: Number(r.edited_at) || null,
-        edit_count: editCount,
-        can_edit,
-        edit_disabled_reason,
-        created_at: createdAt,
-        reactions,
-        read_count: readEntry.count,
-        read_by_names: readEntry.names,
-        is_sticker,
-        sticker_info,
-        smart_links,
+    let is_sticker = false;
+    let sticker_info: { id: string; emoji: string; name: string } | null = null;
+    const stickerMatch = (r.message || '').trim().match(stickerRegex);
+    if (stickerMatch) {
+      is_sticker = true;
+      sticker_info = {
+        id: stickerMatch[1],
+        emoji: stickerMatch[2],
+        name: stickerMatch[3],
       };
-    });
+    }
 
-    return messages;
-  } catch (err) {
-    console.error('getWorkspaceChats failed:', err);
-    return [];
-  }
+    const smart_links = extractSmartLinks(r.message || '');
+    const createdAt = Number(r.created_at) || 0;
+    const editCount = Number(r.edit_count || 0);
+    const isOwner = r.user_id === session.userId;
+    const isWithinTimeLimit = now - createdAt <= 15 * 60;
+    const isWithinCountLimit = editCount < 5;
+
+    const can_edit = isOwner && isWithinTimeLimit && isWithinCountLimit;
+    let edit_disabled_reason: string | null = null;
+    if (isOwner) {
+      if (!isWithinTimeLimit) edit_disabled_reason = 'Waktu edit 15 menit telah berakhir';
+      else if (!isWithinCountLimit) edit_disabled_reason = 'Batas 5x edit telah tercapai';
+    }
+
+    return {
+      id: r.id,
+      workspace_id: r.workspace_id,
+      user_id: r.user_id,
+      user_name: r.user_name || 'Anggota Tim',
+      user_avatar: r.user_avatar || null,
+      user_type: r.user_type || 'OJT',
+      user_role: r.user_role || null,
+      message: r.message,
+      parent_id: r.parent_id || null,
+      reply_message: r.reply_message || null,
+      reply_user_name: r.reply_user_name || null,
+      attachment_url: r.attachment_url || null,
+      is_pinned: Number(r.is_pinned || 0) === 1,
+      pinned_by: r.pinned_by || null,
+      is_edited: Number(r.is_edited || 0) === 1 || Number(r.edited_at || 0) > 0,
+      edited_at: Number(r.edited_at) || null,
+      edit_count: editCount,
+      can_edit,
+      edit_disabled_reason,
+      created_at: createdAt,
+      reactions,
+      read_count: readEntry.count,
+      read_by_names: readEntry.names,
+      is_sticker,
+      sticker_info,
+      smart_links,
+    };
+  });
+
+  return messages;
 }

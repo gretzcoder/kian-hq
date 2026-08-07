@@ -292,6 +292,11 @@ export function WorkspaceChatRoom({
       if (!res.success) {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
         alert(res.error || 'Gagal mengirim pesan');
+      } else {
+        const latest = await getWorkspaceChats(workspaceId);
+        if (latest && Array.isArray(latest)) {
+          setMessages((prev) => mergeAndDeduplicateMessages(latest, prev, currentUserId));
+        }
       }
     });
   };
@@ -325,7 +330,16 @@ export function WorkspaceChatRoom({
     setShowEmojiPicker(false);
 
     startTransition(async () => {
-      await sendWorkspaceMessage(workspaceId, stickerPayload);
+      const res = await sendWorkspaceMessage(workspaceId, stickerPayload);
+      if (!res.success) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        alert(res.error || 'Gagal mengirim stiker');
+      } else {
+        const latest = await getWorkspaceChats(workspaceId);
+        if (latest && Array.isArray(latest)) {
+          setMessages((prev) => mergeAndDeduplicateMessages(latest, prev, currentUserId));
+        }
+      }
     });
   };
 
