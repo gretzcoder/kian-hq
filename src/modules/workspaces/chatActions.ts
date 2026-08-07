@@ -5,6 +5,7 @@ import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
 import { checkPermission } from '@/modules/roles/rbac';
 import { extractSmartLinks, SmartLinkMeta } from './smartLinkParser';
+import { sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
 
 export interface ChatEmojiReaction {
   emoji: string;
@@ -96,6 +97,56 @@ export async function sendWorkspaceMessage(
         .bind(session.userId, workspaceId, now)
         .run();
     } catch {}
+
+    // Async Web Push notification dispatch to workspace members
+    try {
+      const { results: memberRows } = await db
+        .prepare(`
+          SELECT wm.user_id, u.name
+          FROM workspace_members wm
+          JOIN users u ON wm.user_id = u.id
+          WHERE wm.workspace_id = ? AND wm.user_id != ?
+        `)
+        .bind(workspaceId, session.userId)
+        .all();
+
+      const members = (memberRows as any[]) || [];
+      if (members.length > 0) {
+        const mentions = members.filter((m) =>
+          trimmed.toLowerCase().includes(`@${(m.name || '').toLowerCase()}`) ||
+          trimmed.toLowerCase().includes(`@${(m.name || '').split(' ')[0].toLowerCase()}`)
+        );
+
+        const mentionUserIds = mentions.map((m) => m.user_id as string);
+        const regularUserIds = members
+          .map((m) => m.user_id as string)
+          .filter((id) => !mentionUserIds.includes(id));
+
+        const bodySnippet = trimmed.length > 100 ? `${trimmed.slice(0, 97)}...` : trimmed || 'Mengirim lampiran';
+
+        if (mentionUserIds.length > 0) {
+          sendPushNotificationToUsers(mentionUserIds, 'MENTION', {
+            title: `🏷️ Mention dari ${session.name}`,
+            body: bodySnippet,
+            url: `/dashboard/workspace/${workspaceId}`,
+            category: 'MENTION',
+            tag: `ws_${workspaceId}`,
+          }).catch(() => {});
+        }
+
+        if (regularUserIds.length > 0) {
+          sendPushNotificationToUsers(regularUserIds, 'CHAT', {
+            title: `💬 Pesan Chat dari ${session.name}`,
+            body: bodySnippet,
+            url: `/dashboard/workspace/${workspaceId}`,
+            category: 'CHAT',
+            tag: `ws_${workspaceId}`,
+          }).catch(() => {});
+        }
+      }
+    } catch (pushErr) {
+      console.error('Failed to trigger chat Web Push:', pushErr);
+    }
 
     revalidatePath(`/dashboard/workspace/${workspaceId}`);
     return { success: true, messageId: msgId };

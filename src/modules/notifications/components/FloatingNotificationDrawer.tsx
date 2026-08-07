@@ -158,12 +158,25 @@ export default function FloatingNotificationDrawer({
                 </p>
               </div>
 
-              <button
-                onClick={() => setIsOpen(false)}
-                className="w-7 h-7 rounded-full border border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-xs font-bold transition-all shrink-0"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    router.push('/dashboard/settings/notifications');
+                  }}
+                  className="w-7 h-7 rounded-full border border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 hover:border-purple-500/30 flex items-center justify-center text-xs font-bold transition-all"
+                  title="Pengaturan Notifikasi Push"
+                >
+                  ⚙️
+                </button>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="w-7 h-7 rounded-full border border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-xs font-bold transition-all shrink-0"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {/* Subheader Actions & Filter Pills */}

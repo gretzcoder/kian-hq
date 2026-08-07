@@ -4,6 +4,7 @@ import { getSession } from '@/modules/auth/session';
 import { checkPermission } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
+import { sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
 
 /**
  * Server Action to post a new announcement.
@@ -30,6 +31,27 @@ export async function createAnnouncement(formData: FormData) {
       .prepare('INSERT INTO announcements (id, title, content, created_by) VALUES (?, ?, ?, ?)')
       .bind(annId, title, content, session.userId)
       .run();
+
+    // Async Web Push dispatch for announcement
+    try {
+      const { results: userRows } = await db
+        .prepare("SELECT id FROM users WHERE status = 'ACTIVE' AND id != ?")
+        .bind(session.userId)
+        .all();
+
+      const userIds = (userRows as any[] || []).map((u) => u.id as string);
+      if (userIds.length > 0) {
+        sendPushNotificationToUsers(userIds, 'ANNOUNCEMENT', {
+          title: `📢 Pengumuman: ${title}`,
+          body: content.length > 100 ? `${content.slice(0, 97)}...` : content,
+          url: '/dashboard/announcements',
+          category: 'ANNOUNCEMENT',
+          tag: `ann_${annId}`,
+        }).catch(() => {});
+      }
+    } catch (pushErr) {
+      console.error('Failed to trigger announcement Web Push:', pushErr);
+    }
 
     revalidatePath('/dashboard');
     revalidatePath('/dashboard/announcements');

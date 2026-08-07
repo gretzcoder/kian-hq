@@ -5,6 +5,7 @@ import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { revalidatePath } from 'next/cache';
 import { logWorkflowEvent } from '@/modules/workflow/events';
+import { sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -161,6 +162,22 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
         ? `Assessment "${title}" (${execType}) dipublikasikan oleh Koordinator dan di-assign ke OJT`
         : `Assessment "${title}" (${execType}) diajukan oleh Mentor ke Koordinator untuk di-review`,
     });
+
+    // Async Web Push for assigned OJT members if published directly
+    if (isCoordinator && ojtMembers.length > 0) {
+      try {
+        const assignedIds = ojtMembers.map((m) => m.user_id as string);
+        sendPushNotificationToUsers(assignedIds, 'TASK', {
+          title: `📝 Assessment Baru: ${title}`,
+          body: description?.slice(0, 100) || `Assessment baru telah ditugaskan di workspace.`,
+          url: `/dashboard/workspace/${workspaceId}`,
+          category: 'TASK',
+          tag: `task_${taskId}`,
+        }).catch(() => {});
+      } catch (pushErr) {
+        console.error('Failed to trigger assessment Web Push:', pushErr);
+      }
+    }
 
     revalidatePath(`/dashboard/workspace/${workspaceId}`);
     return {

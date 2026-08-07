@@ -100,7 +100,24 @@ export default function HeaderProfileButton({ name, email, avatar }: HeaderProfi
                 </div>
               </button>
 
-              {/* Option 2: Logout */}
+              {/* Option 2: Notification Settings */}
+              <Link
+                href="/dashboard/settings/notifications"
+                onClick={() => setIsOpen(false)}
+                className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-purple-500/10 hover:border-purple-500/20 border border-transparent transition-all group cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-sm font-bold shrink-0 group-hover:scale-105 transition-transform">
+                  🔔
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                    Pengaturan Notifikasi
+                  </p>
+                  <p className="text-[10px] text-zinc-400">Atur notifikasi push HP & desktop</p>
+                </div>
+              </Link>
+
+              {/* Option 3: Logout */}
               <a
                 href="/api/auth/logout"
                 className="w-full flex items-center gap-3 p-2.5 rounded-2xl hover:bg-red-500/10 hover:border-red-500/20 border border-transparent transition-all group"

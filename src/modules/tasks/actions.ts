@@ -6,6 +6,7 @@ import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
 import { validateTransition } from '@/modules/workflow/engine';
 import { logWorkflowEvent } from '@/modules/workflow/events';
+import { sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -154,6 +155,27 @@ export async function createTask(workspaceId: string, formData: FormData) {
       triggeredBy: session.userId,
       note: `Task "${title}" created (Output: ${outputType})`,
     });
+
+    // Async Web Push to workspace members
+    try {
+      const { results: memberRows } = await db
+        .prepare('SELECT user_id FROM workspace_members WHERE workspace_id = ? AND user_id != ?')
+        .bind(workspaceId, session.userId)
+        .all();
+
+      const memberIds = (memberRows as any[] || []).map((m) => m.user_id as string);
+      if (memberIds.length > 0) {
+        sendPushNotificationToUsers(memberIds, 'TASK', {
+          title: `📋 Tugas Baru: ${title}`,
+          body: description?.slice(0, 100) || `Tugas baru telah ditambahkan di workspace.`,
+          url: `/dashboard/workspace/${workspaceId}`,
+          category: 'TASK',
+          tag: `task_${taskId}`,
+        }).catch(() => {});
+      }
+    } catch (pushErr) {
+      console.error('Failed to trigger task Web Push:', pushErr);
+    }
 
     revalidatePath(`/dashboard/workspace/${workspaceId}`);
     revalidatePath('/dashboard/workspace');
