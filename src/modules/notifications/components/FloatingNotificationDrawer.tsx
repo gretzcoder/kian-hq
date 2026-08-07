@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useTransition } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { fetchUserNotifications, NotificationFeedItem } from '../notificationActions';
 
@@ -30,11 +31,16 @@ export default function FloatingNotificationDrawer({
 }: FloatingNotificationDrawerProps) {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [items, setItems] = useState<NotificationFeedItem[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<'ALL' | 'WORKSPACE' | 'REVIEW' | 'SPARKS'>('ALL');
   const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Load saved read notification IDs from localStorage
   useEffect(() => {
@@ -135,9 +141,9 @@ export default function FloatingNotificationDrawer({
         )}
       </button>
 
-      {/* ── Floating Drawer / Popover ── */}
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:justify-end p-3 sm:p-6 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+      {/* ── Floating Drawer / Popover (Portalled to document.body) ── */}
+      {isOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:justify-end p-3 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full sm:max-w-md shadow-2xl space-y-4 overflow-hidden relative max-h-[85vh] flex flex-col animate-in slide-in-from-bottom-4 duration-200">
             {/* Ambient Accent Glow */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -296,7 +302,8 @@ export default function FloatingNotificationDrawer({
               <span className="text-[10px] text-zinc-400 font-mono">1-Click Instant Jump</span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
