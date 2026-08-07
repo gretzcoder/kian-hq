@@ -136,16 +136,16 @@ function CreateAssessmentTaskForm({
 
       {/* Modal Dialog Overlay */}
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="w-full max-w-xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 my-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-in fade-in duration-200">
+          <div className="w-full max-w-4xl max-h-[92vh] bg-white dark:bg-[#09090b] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xl flex flex-col my-auto overflow-hidden text-left">
+            {/* Fixed Header */}
+            <div className="px-6 py-4 sm:px-8 sm:py-5 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 shrink-0 bg-zinc-50/50 dark:bg-zinc-900/30">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-bold">
                   📝
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
+                  <h3 className="text-base sm:text-lg font-black text-zinc-900 dark:text-zinc-100">
                     Ajukan Assessment Baru
                   </h3>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -156,116 +156,120 @@ function CreateAssessmentTaskForm({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-sm transition-all"
+                className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-base transition-all active:scale-95"
               >
                 ✕
               </button>
             </div>
 
-          {error && (
-            <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
-              ⚠️ {error}
-            </p>
-          )}
+            {/* Scrollable Form Body */}
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <div className="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1">
+                {error && (
+                  <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
+                    ⚠️ {error}
+                  </p>
+                )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Title */}
-            <div>
-              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                Judul Assessment <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="title"
-                required
-                placeholder="e.g. Brand Visual Refresh, Short-Form Video Edit"
-                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
-              />
-            </div>
-
-            {/* Brief/Description */}
-            <div>
-              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                Brief / Instruksi Pengerjaan <span className="text-red-500">*</span>
-              </label>
-              <input type="hidden" name="description" value={description} />
-              <TiptapEditor
-                value={description}
-                onChange={setDescription}
-                placeholder="Jelaskan instruksi lengkap pengerjaan: output yang diharapkan, link referensi/aset, format file submit, deadline, dll..."
-                minHeight="min-h-[220px]"
-              />
-            </div>
-
-            {/* Start Date & Deadline */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                  Tanggal & Jam Mulai (Start Date)
-                </label>
-                <input
-                  type="datetime-local"
-                  name="start_at"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                  Tenggat Waktu / Deadline
-                </label>
-                <input
-                  type="datetime-local"
-                  name="deadline"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-            </div>
-
-            {/* Exec Type */}
-            <div>
-              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
-                Tipe Eksekusi / Kategori <span className="text-red-500">*</span>
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { value: 'DESIGNER', icon: '🎨', label: 'Design', desc: 'Desain visual, poster, feed, ui/ux' },
-                  { value: 'VIDEO_EDITOR', icon: '🎬', label: 'Video', desc: 'Reels, TikTok, video editing, motion' },
-                ].map((opt) => (
-                  <label
-                    key={opt.value}
-                    className="flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 rounded-2xl p-3.5 cursor-pointer hover:border-purple-400 has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/10 transition-all"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xl">{opt.icon}</span>
-                      <input type="radio" name="exec_type" value={opt.value} defaultChecked={opt.value === 'DESIGNER'} className="accent-purple-600 w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-black text-zinc-900 dark:text-zinc-100 mt-1">{opt.label}</span>
-                    <span className="text-[10px] text-zinc-400 leading-tight">{opt.desc}</span>
+                {/* Title */}
+                <div>
+                  <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                    Judul Assessment <span className="text-red-500">*</span>
                   </label>
-                ))}
-              </div>
-            </div>
+                  <input
+                    type="text"
+                    name="title"
+                    required
+                    placeholder="e.g. Brand Visual Refresh, Short-Form Video Edit"
+                    className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
 
-            <div className="flex gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="flex-1 py-3 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={pending}
-                className="flex-1 py-3 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20 disabled:opacity-60 active:scale-[0.98]"
-              >
-                {pending ? 'Mengirim Ajuan...' : '📩 Buat & Ajukan ke Koordinator'}
-              </button>
-            </div>
-          </form>
+                {/* Brief/Description */}
+                <div>
+                  <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                    Brief / Instruksi Pengerjaan <span className="text-red-500">*</span>
+                  </label>
+                  <input type="hidden" name="description" value={description} />
+                  <TiptapEditor
+                    value={description}
+                    onChange={setDescription}
+                    placeholder="Jelaskan instruksi lengkap pengerjaan: output yang diharapkan, link referensi/aset, format file submit, deadline, dll..."
+                    minHeight="min-h-[260px]"
+                  />
+                </div>
+
+                {/* Start Date & Deadline */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                      Tanggal & Jam Mulai (Start Date)
+                    </label>
+                    <input
+                      type="datetime-local"
+                      name="start_at"
+                      className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                      Tenggat Waktu / Deadline
+                    </label>
+                    <input
+                      type="datetime-local"
+                      name="deadline"
+                      className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+                </div>
+
+                {/* Exec Type */}
+                <div>
+                  <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
+                    Tipe Eksekusi / Kategori <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { value: 'DESIGNER', icon: '🎨', label: 'Design', desc: 'Desain visual, poster, feed, ui/ux' },
+                      { value: 'VIDEO_EDITOR', icon: '🎬', label: 'Video', desc: 'Reels, TikTok, video editing, motion' },
+                    ].map((opt) => (
+                      <label
+                        key={opt.value}
+                        className="flex flex-col gap-1 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 rounded-2xl p-4 cursor-pointer hover:border-purple-400 has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/10 transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl">{opt.icon}</span>
+                          <input type="radio" name="exec_type" value={opt.value} defaultChecked={opt.value === 'DESIGNER'} className="accent-purple-600 w-4 h-4" />
+                        </div>
+                        <span className="text-xs font-black text-zinc-900 dark:text-zinc-100 mt-1">{opt.label}</span>
+                        <span className="text-[10px] text-zinc-400 leading-tight">{opt.desc}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Fixed Footer */}
+              <div className="px-6 py-4 sm:px-8 border-t border-zinc-100 dark:border-zinc-800/80 shrink-0 bg-white dark:bg-[#09090b] flex items-center justify-end gap-3 rounded-b-3xl">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="px-5 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="px-6 py-2.5 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20 disabled:opacity-60 active:scale-[0.98]"
+                >
+                  {pending ? 'Mengirim Ajuan...' : '📩 Buat & Ajukan ke Koordinator'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
       )}
     </>
   );
@@ -640,125 +644,130 @@ function EditAssessmentTaskModal({
     : '';
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-      <div className="w-full max-w-xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 my-auto text-left">
-        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-4">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-4xl max-h-[92vh] bg-white dark:bg-[#09090b] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xl flex flex-col my-auto overflow-hidden text-left" onClick={(e) => e.stopPropagation()}>
+        {/* Fixed Header */}
+        <div className="px-6 py-4 sm:px-8 sm:py-5 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 shrink-0 bg-zinc-50/50 dark:bg-zinc-900/30">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-bold">
               ✏️
             </div>
             <div>
-              <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">Edit Assessment</h3>
+              <h3 className="text-base sm:text-lg font-black text-zinc-900 dark:text-zinc-100">Edit Assessment</h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Perbarui rincian, tenggat waktu, atau jadwal mulai assessment.</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-sm transition-all"
+            className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-base transition-all active:scale-95"
           >
             ✕
           </button>
         </div>
 
-        {error && (
-          <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
-            ⚠️ {error}
-          </p>
-        )}
+        {/* Scrollable Form Body */}
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1">
+            {error && (
+              <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
+                ⚠️ {error}
+              </p>
+            )}
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div>
-            <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-              Judul Assessment <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="title"
-              defaultValue={task.title}
-              required
-              className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-              Brief / Instruksi Pengerjaan
-            </label>
-            <input type="hidden" name="description" value={description} />
-            <TiptapEditor
-              value={description}
-              onChange={setDescription}
-              placeholder="Instruksi pengerjaan..."
-              minHeight="min-h-[180px]"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                Tanggal & Jam Mulai (Start Date)
+                Judul Assessment <span className="text-red-500">*</span>
               </label>
               <input
-                type="datetime-local"
-                name="start_at"
-                defaultValue={defaultStartAt}
-                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                type="text"
+                name="title"
+                defaultValue={task.title}
+                required
+                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
               />
             </div>
 
             <div>
               <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                Tenggat Waktu / Deadline
+                Brief / Instruksi Pengerjaan
               </label>
-              <input
-                type="datetime-local"
-                name="deadline"
-                defaultValue={defaultDeadline}
-                className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+              <input type="hidden" name="description" value={description} />
+              <TiptapEditor
+                value={description}
+                onChange={setDescription}
+                placeholder="Instruksi pengerjaan..."
+                minHeight="min-h-[240px]"
               />
             </div>
-          </div>
 
-          <div>
-            <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
-              Tipe Eksekusi / Kategori <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { value: 'DESIGNER', icon: '🎨', label: 'Design' },
-                { value: 'VIDEO_EDITOR', icon: '🎬', label: 'Video' },
-              ].map((opt) => (
-                <label
-                  key={opt.value}
-                  className="flex items-center gap-2 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 rounded-2xl p-3 cursor-pointer hover:border-purple-400 has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/10 transition-all text-xs font-bold text-zinc-800 dark:text-zinc-200"
-                >
-                  <input
-                    type="radio"
-                    name="exec_type"
-                    value={opt.value}
-                    defaultChecked={execType === opt.value}
-                    className="accent-purple-600"
-                  />
-                  <span>{opt.icon}</span>
-                  <span>{opt.label}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                  Tanggal & Jam Mulai (Start Date)
                 </label>
-              ))}
+                <input
+                  type="datetime-local"
+                  name="start_at"
+                  defaultValue={defaultStartAt}
+                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                  Tenggat Waktu / Deadline
+                </label>
+                <input
+                  type="datetime-local"
+                  name="deadline"
+                  defaultValue={defaultDeadline}
+                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-4 py-3 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
+                Tipe Eksekusi / Kategori <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: 'DESIGNER', icon: '🎨', label: 'Design' },
+                  { value: 'VIDEO_EDITOR', icon: '🎬', label: 'Video' },
+                ].map((opt) => (
+                  <label
+                    key={opt.value}
+                    className="flex items-center gap-2 border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 rounded-2xl p-3.5 cursor-pointer hover:border-purple-400 has-[:checked]:border-purple-500 has-[:checked]:bg-purple-500/10 transition-all text-xs font-bold text-zinc-800 dark:text-zinc-200"
+                  >
+                    <input
+                      type="radio"
+                      name="exec_type"
+                      value={opt.value}
+                      defaultChecked={execType === opt.value}
+                      className="accent-purple-600 w-4 h-4"
+                    />
+                    <span className="text-lg">{opt.icon}</span>
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
 
-          <div className="flex gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+          {/* Fixed Footer */}
+          <div className="px-6 py-4 sm:px-8 border-t border-zinc-100 dark:border-zinc-800/80 shrink-0 bg-white dark:bg-[#09090b] flex items-center justify-end gap-3 rounded-b-3xl">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+              className="px-5 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
             >
               Batal
             </button>
             <button
               type="submit"
               disabled={pending}
-              className="flex-1 py-3 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-md shadow-purple-500/20 disabled:opacity-60"
+              className="px-6 py-2.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-md shadow-purple-500/20 disabled:opacity-60"
             >
               {pending ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
