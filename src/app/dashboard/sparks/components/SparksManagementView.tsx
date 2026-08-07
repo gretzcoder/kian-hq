@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
   SparksOverviewData,
   UserSparksRankItem,
@@ -281,7 +282,14 @@ export default function SparksManagementView({ overview, period }: SparksManagem
                       <td className="py-3.5 px-3 font-mono font-bold text-zinc-500">{rankBadge}</td>
                       <td className="py-3.5 px-3">
                         <div>
-                          <p className="font-bold text-zinc-900 dark:text-zinc-100">{u.userName}</p>
+                          <Link
+                            href={`/dashboard/profile?userId=${u.userId}`}
+                            className="font-bold text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400 hover:underline transition-colors flex items-center gap-1.5"
+                            title="Kunjungi Profil Pengguna"
+                          >
+                            <span>{u.userName}</span>
+                            <span className="text-[10px] text-zinc-400 font-mono">↗</span>
+                          </Link>
                           <p className="text-[10px] text-zinc-400 font-mono">{u.userEmail}</p>
                         </div>
                       </td>
@@ -307,35 +315,15 @@ export default function SparksManagementView({ overview, period }: SparksManagem
                       <td className="py-3.5 px-3 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => setAppreciationModalUser(u)}
-                            className="px-2.5 py-1 text-[10px] font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 rounded-lg transition-all"
-                            title="Beri Sparks Apresiasi Personal"
-                          >
-                            ✨ + Apresiasi
-                          </button>
-                          <button
-                            onClick={() => setRestoreModalUser(u)}
-                            className="px-2 py-1 text-[10px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20 rounded-lg transition-all"
-                            title="Kembalikan Sparks Historis"
-                          >
-                            ↩ Restore
-                          </button>
-                          <button
-                            onClick={() => setResetModalUser(u)}
-                            className="px-2 py-1 text-[10px] font-bold bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 border border-red-500/20 rounded-lg transition-all"
-                            title="Reset Saldo Sparks ke 0"
-                          >
-                            🔄 Reset
-                          </button>
-                          <button
                             onClick={() => {
                               setHistoryModalUserId(u.userId);
                               setHistoryModalUserName(u.userName);
                             }}
-                            className="px-2 py-1 text-[10px] font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 border border-zinc-200 dark:border-zinc-700 rounded-lg transition-all"
-                            title="Lihat Riwayat Sparks"
+                            className="px-3 py-1.5 text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                            title="Kelola & Lihat Riwayat Sparks Pengguna Ini"
                           >
-                            📜 Log
+                            <span>✨</span>
+                            <span>Kelola & Log Sparks</span>
                           </button>
                         </div>
                       </td>
@@ -348,218 +336,14 @@ export default function SparksManagementView({ overview, period }: SparksManagem
         </div>
       </div>
 
-      {/* ── Modal 1: Personal Appreciation ── */}
-      {appreciationModalUser && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">✨</span>
-                <div>
-                  <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
-                    Beri Apresiasi Personal
-                  </h3>
-                  <p className="text-[11px] text-zinc-500">{appreciationModalUser.userName}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setAppreciationModalUser(null)}
-                className="text-zinc-400 hover:text-zinc-700 text-sm"
-              >
-                ✕
-              </button>
-            </div>
-
-            <form onSubmit={handleAddAppreciationSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                  Jumlah Sparks ✨ <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={500}
-                  value={appreciationAmount}
-                  onChange={(e) => setAppreciationAmount(Number(e.target.value))}
-                  required
-                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-sm font-bold rounded-xl px-4 py-2.5 text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                  Catatan Apresiasi <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  value={appreciationNote}
-                  onChange={(e) => setAppreciationNote(e.target.value)}
-                  required
-                  rows={2}
-                  placeholder="e.g. Apresiasi atas kontribusi luar biasa pada project X"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3 py-2 text-zinc-900 dark:text-zinc-100 resize-none"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setAppreciationModalUser(null)}
-                  className="flex-1 py-2 text-xs font-bold border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-500"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="flex-1 py-2 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl disabled:opacity-50"
-                >
-                  {pending ? 'Menyimpan...' : `Kirim +${appreciationAmount} ✨`}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal 2: Reset Sparks ── */}
-      {resetModalUser && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">🔄</span>
-                <div>
-                  <h3 className="text-sm font-black text-red-600 dark:text-red-400">
-                    Reset Sparks Pengguna
-                  </h3>
-                  <p className="text-[11px] text-zinc-500">{resetModalUser.userName}</p>
-                </div>
-              </div>
-              <button onClick={() => setResetModalUser(null)} className="text-zinc-400 hover:text-zinc-700 text-sm">
-                ✕
-              </button>
-            </div>
-
-            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed bg-red-500/5 p-3 rounded-xl border border-red-500/10">
-              Tindakan ini akan me-reset total saldo Sparks milik <strong>{resetModalUser.userName}</strong> (saat ini {resetModalUser.totalSparks} ✨) menjadi 0. <strong>Riwayat log historis tetap tersimpan 100%.</strong>
-            </p>
-
-            <form onSubmit={handleResetSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                  Catatan Reset (Opsional)
-                </label>
-                <input
-                  type="text"
-                  value={resetNote}
-                  onChange={(e) => setResetNote(e.target.value)}
-                  placeholder="e.g. Reset saldo periode baru"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3.5 py-2 text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setResetModalUser(null)}
-                  className="flex-1 py-2 text-xs font-bold border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-500"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="flex-1 py-2 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-xl disabled:opacity-50"
-                >
-                  {pending ? 'Mereset...' : 'Konfirmasi Reset ke 0'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal 3: Restore Sparks (Category Selectable) ── */}
-      {restoreModalUser && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
-            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">↩</span>
-                <div>
-                  <h3 className="text-sm font-black text-indigo-600 dark:text-indigo-400">
-                    Kembalikan Sparks (Restore)
-                  </h3>
-                  <p className="text-[11px] text-zinc-500">{restoreModalUser.userName}</p>
-                </div>
-              </div>
-              <button onClick={() => setRestoreModalUser(null)} className="text-zinc-400 hover:text-zinc-700 text-sm">
-                ✕
-              </button>
-            </div>
-
-            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed bg-indigo-500/5 p-3 rounded-xl border border-indigo-500/10">
-              Pilih kategori Sparks historis yang ingin dikembalikan. Nilai Sparks yang dikembalikan akan **ditambahkan secara additif** ke total saldo pengguna saat ini.
-            </p>
-
-            <form onSubmit={handleRestoreSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                  Kategori Sumber Pengembalian <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={restoreCategory}
-                  onChange={(e) => setRestoreCategory(e.target.value as any)}
-                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-bold rounded-xl px-3.5 py-2.5 text-zinc-900 dark:text-zinc-100"
-                >
-                  <option value="ALL">👥 Semua Kategori Historis</option>
-                  <option value="TASKS">🎨 Troopers Tasks Sparks</option>
-                  <option value="ASSESSMENT">📝 Brief Assessment Sparks</option>
-                  <option value="APPRECIATION">✨ Apresiasi Personal Sparks</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                  Catatan Pengembalian (Opsional)
-                </label>
-                <input
-                  type="text"
-                  value={restoreNote}
-                  onChange={(e) => setRestoreNote(e.target.value)}
-                  placeholder="e.g. Pengembalian Sparks setelah penyesuaian"
-                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3.5 py-2 text-zinc-900 dark:text-zinc-100"
-                />
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setRestoreModalUser(null)}
-                  className="flex-1 py-2 text-xs font-bold border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-500"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="flex-1 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl disabled:opacity-50"
-                >
-                  {pending ? 'Mengembalikan...' : 'Konfirmasi Pengembalian'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ── Sparks History Log Modal ── */}
+      {/* ── Sparks History & Management Modal (Single Source Design) ── */}
       <SparksHistoryModal
         userId={historyModalUserId}
         userName={historyModalUserName}
         isOpen={!!historyModalUserId}
         onClose={() => setHistoryModalUserId(null)}
         period={period}
+        canManageSparks={true}
       />
     </div>
   );

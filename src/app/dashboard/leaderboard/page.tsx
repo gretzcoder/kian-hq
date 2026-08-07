@@ -2,6 +2,7 @@ import { getSession } from '@/modules/auth/session';
 import { redirect } from 'next/navigation';
 import { getLeaderboardData } from '@/modules/leaderboard/actions';
 import Link from 'next/link';
+import { getSessionContext } from '@/modules/roles/rbac';
 import LeaderboardCategorySelect from '@/modules/leaderboard/components/LeaderboardCategorySelect';
 import { IndividualLeaderboardView } from '@/modules/leaderboard/components/IndividualLeaderboardView';
 import { WorkspaceLeaderboardView } from '@/modules/leaderboard/components/WorkspaceLeaderboardView';
@@ -34,9 +35,16 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
   const session = await getSession();
   if (!session) redirect('/');
 
-  const params = await searchParams;
+  const [params, ctx] = await Promise.all([
+    searchParams,
+    getSessionContext(session.userId),
+  ]);
+
   const activeCategory = (params.category || 'overall') as any;
   const activePeriod = (params.period || 'month') as any;
+
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
+  const canManageSparks = ctx.can('SPARKS_MANAGE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
 
   const leaderboardResult = await getLeaderboardData(activeCategory, activePeriod);
 
@@ -99,11 +107,16 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
           data={leaderboardResult.data as any}
           currentUserId={session.userId}
           category={activeCategory}
+          canManageSparks={canManageSparks}
         />
       )}
 
       {leaderboardResult.type === 'workspace' && (
-        <WorkspaceLeaderboardView data={leaderboardResult.data as any} period={activePeriod} />
+        <WorkspaceLeaderboardView
+          data={leaderboardResult.data as any}
+          period={activePeriod}
+          canManageSparks={canManageSparks}
+        />
       )}
     </div>
   );

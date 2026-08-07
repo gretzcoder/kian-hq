@@ -17,7 +17,7 @@ export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps)
   if (isHtml) {
     return (
       <div
-        className={`prose dark:prose-invert max-w-none text-xs leading-relaxed text-zinc-800 dark:text-zinc-200 [&_a]:text-purple-600 [&_a]:dark:text-purple-400 [&_a]:underline [&_ul]:list-disc [&_ul]:list-inside [&_ol]:list-decimal [&_ol]:list-inside [&_h1]:text-base [&_h1]:font-black [&_h2]:text-sm [&_h2]:font-bold [&_h3]:text-xs [&_h3]:font-bold ${className}`}
+        className={`prose dark:prose-invert max-w-none text-xs leading-relaxed text-inherit [&_a]:text-purple-600 [&_a]:dark:text-purple-400 [&_a]:underline [&_ul]:list-disc [&_ul]:list-inside [&_ol]:list-decimal [&_ol]:list-inside [&_h1]:text-base [&_h1]:font-black [&_h2]:text-sm [&_h2]:font-bold [&_h3]:text-xs [&_h3]:font-bold ${className}`}
         dangerouslySetInnerHTML={{ __html: content }}
       />
     );
@@ -81,7 +81,7 @@ export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps)
     // Handle Headers #, ##, ###
     if (line.startsWith('# ')) {
       elements.push(
-        <h1 key={`h1-${index}`} className="text-base font-extrabold text-zinc-900 dark:text-zinc-100 my-2">
+        <h1 key={`h1-${index}`} className="text-base font-extrabold text-inherit my-2">
           {renderInlineMarkdown(line.slice(2))}
         </h1>
       );
@@ -89,7 +89,7 @@ export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps)
     }
     if (line.startsWith('## ')) {
       elements.push(
-        <h2 key={`h2-${index}`} className="text-sm font-bold text-zinc-900 dark:text-zinc-100 my-2">
+        <h2 key={`h2-${index}`} className="text-sm font-bold text-inherit my-2">
           {renderInlineMarkdown(line.slice(3))}
         </h2>
       );
@@ -97,7 +97,7 @@ export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps)
     }
     if (line.startsWith('### ')) {
       elements.push(
-        <h3 key={`h3-${index}`} className="text-xs font-bold text-zinc-800 dark:text-zinc-200 my-1.5">
+        <h3 key={`h3-${index}`} className="text-xs font-bold text-inherit my-1.5">
           {renderInlineMarkdown(line.slice(4))}
         </h3>
       );
@@ -109,7 +109,7 @@ export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps)
       elements.push(
         <blockquote
           key={`quote-${index}`}
-          className="border-l-4 border-purple-500 pl-3 italic text-zinc-600 dark:text-zinc-400 my-2 text-xs"
+          className="border-l-4 border-purple-500 pl-3 italic text-inherit opacity-90 my-2 text-xs"
         >
           {renderInlineMarkdown(line.slice(2))}
         </blockquote>
@@ -119,7 +119,7 @@ export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps)
 
     // Handle Horizontal Rule --- or ***
     if (line.trim() === '---' || line.trim() === '***') {
-      elements.push(<hr key={`hr-${index}`} className="my-3 border-zinc-200 dark:border-zinc-800" />);
+      elements.push(<hr key={`hr-${index}`} className="my-3 border-zinc-200 dark:border-zinc-800 opacity-40" />);
       return;
     }
 
@@ -131,7 +131,7 @@ export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps)
 
     // Standard Paragraph
     elements.push(
-      <p key={`p-${index}`} className="my-1 text-xs leading-relaxed text-zinc-800 dark:text-zinc-200">
+      <p key={`p-${index}`} className="my-1 text-xs leading-relaxed text-inherit">
         {renderInlineMarkdown(line)}
       </p>
     );
@@ -163,7 +163,7 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
           href={linkMatch[2]}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-purple-600 dark:text-purple-400 font-semibold underline hover:opacity-80"
+          className="text-purple-300 dark:text-purple-300 font-semibold underline hover:opacity-80"
         >
           {linkMatch[1]}
         </a>
@@ -176,7 +176,7 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
       parts.push(
         <code
           key={idx}
-          className="bg-zinc-200/60 dark:bg-zinc-800 text-purple-600 dark:text-purple-300 px-1.5 py-0.5 rounded text-[11px] font-mono"
+          className="bg-black/20 text-inherit px-1.5 py-0.5 rounded text-[11px] font-mono border border-white/20"
         >
           {part.slice(1, -1)}
         </code>
@@ -187,7 +187,7 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
     // Bold: **text**
     if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
       parts.push(
-        <strong key={idx} className="font-bold text-zinc-950 dark:text-white">
+        <strong key={idx} className="font-black text-inherit">
           {part.slice(2, -2)}
         </strong>
       );

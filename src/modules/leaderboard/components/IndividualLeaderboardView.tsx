@@ -1,16 +1,19 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import SparksHistoryModal from '@/modules/leaderboard/components/SparksHistoryModal';
 
 export function IndividualLeaderboardView({
   data,
   currentUserId,
   category,
+  canManageSparks = false,
 }: {
   data: any[];
   currentUserId: string;
   category?: string;
+  canManageSparks?: boolean;
 }) {
   const [selectedUser, setSelectedUser] = useState<{ id: string; name: string; userData?: any } | null>(null);
 
@@ -35,6 +38,7 @@ export function IndividualLeaderboardView({
         category={category}
         isOpen={!!selectedUser}
         onClose={() => setSelectedUser(null)}
+        canManageSparks={canManageSparks}
         leaderMeta={
           category === 'role_leader' && selectedUser?.userData
             ? {
@@ -110,12 +114,23 @@ export function IndividualLeaderboardView({
                     <span className="w-8 text-center text-xs font-black font-mono text-zinc-400">
                       #{user.rank}
                     </span>
-                    <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center font-bold text-sm text-zinc-700 dark:text-zinc-300">
+                    <Link
+                      href={`/dashboard/profile?userId=${user.userId}`}
+                      className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center font-bold text-sm text-zinc-700 dark:text-zinc-300 hover:ring-2 hover:ring-purple-500 transition-all shrink-0"
+                      title="Kunjungi Profil Pengguna"
+                    >
                       {user.userName.charAt(0).toUpperCase()}
-                    </div>
+                    </Link>
                     <div>
                       <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                        <span>{user.userName}</span>
+                        <Link
+                          href={`/dashboard/profile?userId=${user.userId}`}
+                          className="hover:text-purple-600 dark:hover:text-purple-400 hover:underline transition-colors flex items-center gap-1"
+                          title="Kunjungi Profil Pengguna"
+                        >
+                          <span>{user.userName}</span>
+                          <span className="text-[10px] text-zinc-400 font-mono">↗</span>
+                        </Link>
                         {isMe && (
                           <span className="text-[9px] bg-purple-600 text-white font-bold px-2 py-0.5 rounded-full">
                             Anda
@@ -170,11 +185,22 @@ function PodiumCard({
   return (
     <div className={`border rounded-3xl p-6 text-center space-y-3 relative overflow-hidden ${color}`}>
       <div className="text-4xl">{medal}</div>
-      <div className="w-16 h-16 rounded-full bg-zinc-200 dark:bg-zinc-800 border-2 border-purple-500/30 flex items-center justify-center mx-auto text-xl font-bold text-zinc-800 dark:text-zinc-200">
+      <Link
+        href={`/dashboard/profile?userId=${user.userId}`}
+        className="w-16 h-16 rounded-full bg-zinc-200 dark:bg-zinc-800 border-2 border-purple-500/30 hover:border-purple-500 flex items-center justify-center mx-auto text-xl font-bold text-zinc-800 dark:text-zinc-200 transition-all hover:scale-105"
+        title="Kunjungi Profil Pengguna"
+      >
         {user.userName.charAt(0).toUpperCase()}
-      </div>
+      </Link>
       <div>
-        <h4 className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">{user.userName}</h4>
+        <Link
+          href={`/dashboard/profile?userId=${user.userId}`}
+          className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400 hover:underline transition-colors inline-flex items-center gap-1"
+          title="Kunjungi Profil Pengguna"
+        >
+          <span>{user.userName}</span>
+          <span className="text-[10px] text-zinc-400 font-mono">↗</span>
+        </Link>
         <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest block mt-0.5">
           {user.primaryRole}
         </span>

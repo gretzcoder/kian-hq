@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import SparksHistoryModal from '@/modules/leaderboard/components/SparksHistoryModal';
 
 interface CoordinatorItem {
@@ -19,10 +20,12 @@ export function CoordinatorLeaderboardView({
   data,
   currentUserId,
   period,
+  canManageSparks = false,
 }: {
   data: CoordinatorItem[];
   currentUserId: string;
   period?: 'month' | 'week' | 'all';
+  canManageSparks?: boolean;
 }) {
   const [selectedMentor, setSelectedMentor] = useState<{
     id: string;
@@ -54,6 +57,7 @@ export function CoordinatorLeaderboardView({
         period={period}
         isOpen={!!selectedMentor}
         onClose={() => setSelectedMentor(null)}
+        canManageSparks={canManageSparks}
         coordinatorMeta={selectedMentor?.coordinatorMeta}
       />
 
@@ -79,7 +83,14 @@ export function CoordinatorLeaderboardView({
                   </span>
                   <div>
                     <h4 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                      <span>{c.userName}</span>
+                      <Link
+                        href={`/dashboard/profile?userId=${c.userId}`}
+                        className="hover:text-amber-500 hover:underline transition-colors flex items-center gap-1"
+                        title="Kunjungi Profil Pengguna"
+                      >
+                        <span>{c.userName}</span>
+                        <span className="text-[10px] text-zinc-400 font-mono">↗</span>
+                      </Link>
                       {isMe && (
                         <span className="text-[9px] bg-amber-500 text-white font-bold px-2 py-0.5 rounded-full">
                           Anda

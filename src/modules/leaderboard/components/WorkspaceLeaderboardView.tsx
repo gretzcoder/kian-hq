@@ -11,10 +11,19 @@ interface WorkspaceItem {
   totalSparks: number;
   tasksCompleted: number;
   membersCount: number;
+  isMember?: boolean;
 }
 
-export function WorkspaceLeaderboardView({ data, period }: { data: WorkspaceItem[]; period?: 'month' | 'week' | 'all' }) {
-  const [selectedWs, setSelectedWs] = useState<{ id: string; name: string } | null>(null);
+export function WorkspaceLeaderboardView({
+  data,
+  period,
+  canManageSparks = false,
+}: {
+  data: WorkspaceItem[];
+  period?: 'month' | 'week' | 'all';
+  canManageSparks?: boolean;
+}) {
+  const [selectedWs, setSelectedWs] = useState<{ id: string; name: string; isMember?: boolean } | null>(null);
 
   if (data.length === 0) {
     return (
@@ -35,6 +44,8 @@ export function WorkspaceLeaderboardView({ data, period }: { data: WorkspaceItem
         period={period}
         isOpen={!!selectedWs}
         onClose={() => setSelectedWs(null)}
+        canManageSparks={canManageSparks}
+        isWorkspaceMember={selectedWs?.isMember}
       />
 
       <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl overflow-hidden shadow-sm">
@@ -61,7 +72,7 @@ export function WorkspaceLeaderboardView({ data, period }: { data: WorkspaceItem
               <div className="flex items-center gap-6">
                 <button
                   type="button"
-                  onClick={() => setSelectedWs({ id: ws.workspaceId, name: ws.workspaceName })}
+                  onClick={() => setSelectedWs({ id: ws.workspaceId, name: ws.workspaceName, isMember: ws.isMember })}
                   className="text-right group p-2 rounded-2xl hover:bg-purple-500/10 border border-transparent hover:border-purple-500/20 transition-all cursor-pointer"
                   title="Klik untuk melihat riwayat Sparks workspace ini"
                 >

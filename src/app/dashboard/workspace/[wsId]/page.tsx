@@ -224,7 +224,37 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       ])
     : [{ results: [] }, { results: [] }];
 
-  const assignments = assignmentsRaw as unknown as AssignmentRow[];
+  // Build account roles map: userId → role names[]
+  const memberAccountRolesMap: Record<string, string[]> = {};
+  for (const ar of (memberAccountRolesRaw as any[])) {
+    if (!memberAccountRolesMap[ar.userId]) memberAccountRolesMap[ar.userId] = [];
+    memberAccountRolesMap[ar.userId].push(ar.roleName as string);
+  }
+
+  // Identify mentor user IDs (leaders, coordinators, staff, or mentor role holders)
+  const mentorUserIds = new Set<string>();
+  if (workspace.ojt_coordinator_id) mentorUserIds.add(workspace.ojt_coordinator_id);
+  for (const m of (membersRaw as any[])) {
+    if (m.teamRole === 'LEADER') mentorUserIds.add(m.userId);
+  }
+  for (const [uId, rNames] of Object.entries(memberAccountRolesMap)) {
+    if (rNames.some((r) => r.toUpperCase().includes('MENTOR'))) {
+      mentorUserIds.add(uId);
+    }
+  }
+
+  // Filter out any mentor assignments for assessment tasks/workspaces
+  const assessmentTaskIds = new Set(
+    tasks.filter((t) => t.task_type === 'ASSESSMENT' || workspace.workspace_type === 'ASSESSMENT').map((t) => t.id)
+  );
+
+  const assignments = (assignmentsRaw as unknown as AssignmentRow[]).filter((a) => {
+    if (assessmentTaskIds.has(a.task_id) && mentorUserIds.has(a.user_id)) {
+      return false;
+    }
+    return true;
+  });
+
   const reactionsMap: Record<string, { emoji: string; count: number; user_reacted: number }[]> = {};
   for (const r of (reactionsRaw as any[])) {
     if (!reactionsMap[r.assignment_id]) reactionsMap[r.assignment_id] = [];
@@ -240,13 +270,6 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   for (const a of assignments) {
     if (!assignmentsByTask[a.task_id]) assignmentsByTask[a.task_id] = [];
     assignmentsByTask[a.task_id].push(a);
-  }
-
-  // Build account roles map: userId → role names[]
-  const memberAccountRolesMap: Record<string, string[]> = {};
-  for (const ar of (memberAccountRolesRaw as any[])) {
-    if (!memberAccountRolesMap[ar.userId]) memberAccountRolesMap[ar.userId] = [];
-    memberAccountRolesMap[ar.userId].push(ar.roleName as string);
   }
 
   // Group workspace team-roles by user and merge account roles + userType
@@ -398,6 +421,8 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
           <WorkspaceChatRoom
             workspaceId={wsId}
             currentUserId={session.userId}
+            currentUserRole={members.find((m) => m.userId === session.userId)?.teamRole || ctx.roles?.[0] || null}
+            currentUserType={ctx.userType}
             initialMessages={chatMessages}
             canDeleteAny={ctx.can('DELETE')}
             members={membersList.map((m: any) => ({

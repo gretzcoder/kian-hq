@@ -193,7 +193,7 @@ export async function getSparksManagementOverview(
     .sort((a, b) => b.totalSparks - a.totalSparks || b.tasksCompleted - a.tasksCompleted)
     .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
-  const totalDistributed = totalTroopersSparks + totalAssessmentSparks + totalAppreciationSparks + totalRestoredSparks;
+  const totalDistributed = rankedUsers.reduce((sum, u) => sum + u.totalSparks, 0);
 
   return {
     stats: {
@@ -318,88 +318,51 @@ export async function restoreUserSparksAction(
 
   const db = await getDB();
 
-  // 1. Find the latest RESET timestamp for this user if any
-  const latestResetRow = await db
+  // 1. Calculate cumulative total reset penalties for this user
+  const resetStats = await db
     .prepare(`
-      SELECT sparks, created_at
+      SELECT COALESCE(SUM(ABS(sparks)), 0) AS totalResetAmount
       FROM sparks_adjustments
       WHERE user_id = ? AND type = 'RESET'
-      ORDER BY created_at DESC
-      LIMIT 1
     `)
     .bind(targetUserId)
-    .first() as { sparks: number; created_at: number } | null;
+    .first() as { totalResetAmount: number } | null;
+
+  const totalResetAmount = Math.max(0, Number(resetStats?.totalResetAmount) || 0);
+
+  if (totalResetAmount <= 0) {
+    return {
+      success: false,
+      error: 'Pengguna belum pernah mengalami Reset Sparks. Seluruh Sparks historis sudah aktif.',
+    };
+  }
+
+  // 2. Calculate cumulative total Sparks already RESTORED for this user
+  const restoreStats = await db
+    .prepare(`
+      SELECT COALESCE(SUM(sparks), 0) AS totalRestoredAmount
+      FROM sparks_adjustments
+      WHERE user_id = ? AND type = 'RESTORE'
+    `)
+    .bind(targetUserId)
+    .first() as { totalRestoredAmount: number } | null;
+
+  const totalRestoredAmount = Math.max(0, Number(restoreStats?.totalRestoredAmount) || 0);
+  const remainingResetPenalty = totalResetAmount - totalRestoredAmount;
+
+  if (remainingResetPenalty <= 0) {
+    return {
+      success: false,
+      error: `Seluruh Sparks yang di-reset (${totalResetAmount} ✨) sudah dikembalikan.`,
+    };
+  }
 
   let preResetHistoricalSparks = 0;
 
-  if (latestResetRow) {
-    const resetTime = latestResetRow.created_at;
-
-    if (category === 'ALL') {
-      // Amount reset at latest reset time
-      preResetHistoricalSparks = Math.abs(Number(latestResetRow.sparks) || 0);
-    }
-
-    if (preResetHistoricalSparks === 0) {
-      // Calculate category sparks earned BEFORE resetTime
-      if (category === 'ALL' || category === 'TASKS') {
-        const { results: taRows } = await db
-          .prepare(`
-            SELECT ta.sparks, ta.assignment_role AS role,
-                   CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev,
-                   CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
-            FROM task_assignments ta
-            JOIN tasks t ON ta.task_id = t.id
-            WHERE ta.user_id = ? AND ta.status = 'APPROVED' AND t.status != 'DELETED'
-              AND COALESCE(ta.reviewed_at, ta.submitted_at) <= ?
-          `)
-          .bind(targetUserId, resetTime)
-          .all();
-
-        for (const r of taRows as any[]) {
-          const raw = Number(r.sparks) || 8;
-          const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
-          let qualMult = 1.0;
-          if (r.isZeroRev && r.isOnTime) qualMult = 1.21;
-          else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;
-          preResetHistoricalSparks += Math.round(raw * roleMult * qualMult);
-        }
-      }
-
-      if (category === 'ALL' || category === 'ASSESSMENT') {
-        const { results: tRows } = await db
-          .prepare(`
-            SELECT COALESCE(sparks, 0) AS sparks
-            FROM tasks
-            WHERE created_by = ? AND task_type = 'ASSESSMENT' AND status = 'APPROVED' AND sparks IS NOT NULL
-              AND COALESCE(start_at, created_at) <= ?
-          `)
-          .bind(targetUserId, resetTime)
-          .all();
-
-        for (const r of tRows as any[]) {
-          preResetHistoricalSparks += Number(r.sparks) || 0;
-        }
-      }
-
-      if (category === 'ALL' || category === 'APPRECIATION') {
-        const { results: saRows } = await db
-          .prepare(`
-            SELECT COALESCE(sparks, 0) AS sparks
-            FROM sparks_adjustments
-            WHERE user_id = ? AND type = 'APPRECIATION' AND created_at <= ?
-          `)
-          .bind(targetUserId, resetTime)
-          .all();
-
-        for (const r of saRows as any[]) {
-          preResetHistoricalSparks += Number(r.sparks) || 0;
-        }
-      }
-    }
+  if (category === 'ALL') {
+    preResetHistoricalSparks = remainingResetPenalty;
   } else {
-    // No reset ever occurred: calculate all historical sparks in category
-    if (category === 'ALL' || category === 'TASKS') {
+    if (category === 'TASKS') {
       const { results: taRows } = await db
         .prepare(`
           SELECT ta.sparks, ta.assignment_role AS role,
@@ -420,9 +383,7 @@ export async function restoreUserSparksAction(
         else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;
         preResetHistoricalSparks += Math.round(raw * roleMult * qualMult);
       }
-    }
-
-    if (category === 'ALL' || category === 'ASSESSMENT') {
+    } else if (category === 'ASSESSMENT') {
       const { results: tRows } = await db
         .prepare(`
           SELECT COALESCE(sparks, 0) AS sparks
@@ -435,9 +396,7 @@ export async function restoreUserSparksAction(
       for (const r of tRows as any[]) {
         preResetHistoricalSparks += Number(r.sparks) || 0;
       }
-    }
-
-    if (category === 'ALL' || category === 'APPRECIATION') {
+    } else if (category === 'APPRECIATION') {
       const { results: saRows } = await db
         .prepare(`
           SELECT COALESCE(sparks, 0) AS sparks
@@ -451,10 +410,15 @@ export async function restoreUserSparksAction(
         preResetHistoricalSparks += Number(r.sparks) || 0;
       }
     }
+
+    preResetHistoricalSparks = Math.min(preResetHistoricalSparks, remainingResetPenalty);
   }
 
   if (preResetHistoricalSparks <= 0) {
-    return { success: false, error: 'Tidak ada riwayat Sparks historis yang dapat dikembalikan.' };
+    return {
+      success: false,
+      error: `Tidak ada Sparks kategori ${category} yang dapat dikembalikan.`,
+    };
   }
 
   const id = `sa_${crypto.randomUUID().replace(/-/g, '')}`;
@@ -482,10 +446,93 @@ export async function restoreUserSparksAction(
 
     return {
       success: true,
-      message: `✓ +${preResetHistoricalSparks} ✨ Sparks (${catLabel}) berhasil dikembalikan (Total terkini = Saldo saat ini + ${preResetHistoricalSparks})!`,
+      message: `✓ +${preResetHistoricalSparks} ✨ Sparks (${catLabel}) berhasil dikembalikan!`,
     };
   } catch (err: any) {
     console.error('restoreUserSparksAction failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Delete a specific sparks adjustment entry (APPRECIATION, RESET, or RESTORE) by ID.
+ * Only authorized managers (Coordinators / Admins) can perform this.
+ */
+export async function deleteSparksAdjustmentAction(adjustmentId: string) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const isAuth = await canManageSparks(session.userId);
+  if (!isAuth) {
+    return { success: false, error: 'Forbidden: Anda tidak memiliki wewenang menghapus log Sparks.' };
+  }
+
+  const db = await getDB();
+  try {
+    const row = await db
+      .prepare('SELECT user_id, type, sparks FROM sparks_adjustments WHERE id = ?')
+      .bind(adjustmentId)
+      .first() as { user_id: string; type: string; sparks: number } | null;
+
+    if (!row) {
+      return { success: false, error: 'Entri log tidak ditemukan.' };
+    }
+
+    await db.prepare('DELETE FROM sparks_adjustments WHERE id = ?').bind(adjustmentId).run();
+
+    revalidatePath('/dashboard/sparks');
+    revalidatePath('/dashboard/profile');
+    revalidatePath('/dashboard/leaderboard');
+
+    return { success: true, message: '✓ Entri log berhasil dihapus.' };
+  } catch (err: any) {
+    console.error('deleteSparksAdjustmentAction failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Clear all sparks adjustments (APPRECIATION, RESET, RESTORE) for a specific user, or filtered by type.
+ * Only authorized managers (Coordinators / Admins) can perform this.
+ */
+export async function clearAllSparksAdjustmentsAction(
+  targetUserId: string,
+  filterType?: 'ALL' | 'APPRECIATION' | 'ADJUSTMENT'
+) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const isAuth = await canManageSparks(session.userId);
+  if (!isAuth) {
+    return { success: false, error: 'Forbidden: Anda tidak memiliki wewenang membersihkan log Sparks.' };
+  }
+
+  const db = await getDB();
+  try {
+    if (filterType === 'APPRECIATION') {
+      await db
+        .prepare("DELETE FROM sparks_adjustments WHERE user_id = ? AND type = 'APPRECIATION'")
+        .bind(targetUserId)
+        .run();
+    } else if (filterType === 'ADJUSTMENT') {
+      await db
+        .prepare("DELETE FROM sparks_adjustments WHERE user_id = ? AND type IN ('RESET', 'RESTORE')")
+        .bind(targetUserId)
+        .run();
+    } else {
+      await db
+        .prepare('DELETE FROM sparks_adjustments WHERE user_id = ?')
+        .bind(targetUserId)
+        .run();
+    }
+
+    revalidatePath('/dashboard/sparks');
+    revalidatePath('/dashboard/profile');
+    revalidatePath('/dashboard/leaderboard');
+
+    return { success: true, message: '✓ Seluruh log penyesuaian Sparks berhasil dibersihkan.' };
+  } catch (err: any) {
+    console.error('clearAllSparksAdjustmentsAction failed:', err);
     return { success: false, error: err.message };
   }
 }

@@ -1,6 +1,7 @@
 'use server';
 
 import { getDB } from '@/db/client';
+import { getSession } from '@/modules/auth/session';
 
 export interface LeaderboardUser {
   rank: number;
@@ -22,6 +23,7 @@ export interface WorkspaceLeaderboardItem {
   totalSparks: number;
   tasksCompleted: number;
   membersCount: number;
+  isMember?: boolean;
 }
 
 export interface CoordinatorLeaderboardItem {
@@ -55,8 +57,12 @@ const roleWeight = (alias: string) =>
   `CASE WHEN ${alias}.assignment_role IN ('DESIGNER', 'VIDEO_EDITOR') THEN 2 ELSE 1 END`;
 
 /** Full weighted sparks expression for a given alias. */
-const sparksExpr = (alias: string) =>
-  `(COALESCE(${alias}.sparks, 8) * ${roleWeight(alias)}) * ${disciplineMultiplier(alias)}`;
+const sparksExpr = (alias: string) => `
+  CASE
+    WHEN ${alias}.id IS NULL THEN 0
+    ELSE (COALESCE(${alias}.sparks, 8) * ${roleWeight(alias)}) * ${disciplineMultiplier(alias)}
+  END
+`;
 
 /**
  * Fetch Leaderboard Data according to Category & Time Filter
@@ -76,6 +82,8 @@ export async function getLeaderboardData(
   period: 'month' | 'week' | 'all' = 'month'
 ) {
   const db = await getDB();
+  const session = await getSession();
+  const currentUserId = session?.userId || '';
   const now = Math.floor(Date.now() / 1000);
 
   /** Build a WHERE time-range fragment for a given table alias. */
@@ -104,8 +112,22 @@ export async function getLeaderboardData(
     return '';
   };
 
+  /** Build a WHERE time-range fragment for sparks_adjustments table. */
+  const buildAdjustmentTimeClause = (alias: string): string => {
+    if (period === 'week') {
+      const ts = now - 7 * 24 * 60 * 60;
+      return `AND ${alias}.created_at >= ${ts}`;
+    }
+    if (period === 'month') {
+      const ts = now - 30 * 24 * 60 * 60;
+      return `AND ${alias}.created_at >= ${ts}`;
+    }
+    return '';
+  };
+
   const timeClause = buildTimeClause('ta');
   const taskTimeClause = buildTaskTimeClause('t');
+  const saTimeClause = buildAdjustmentTimeClause('sa');
 
   // ─────────────────────────────────────────────────────────────────────────────
   // 1. Individual Leaderboards: Overall, Productive, Quality, Role Stars
@@ -156,7 +178,9 @@ export async function getLeaderboardData(
           CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime,
           ta.assignment_role AS role
         FROM task_assignments ta
-        WHERE ta.status = 'APPROVED' ${timeClause} ${roleFilter}
+        JOIN tasks t ON ta.task_id = t.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        WHERE ta.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${timeClause} ${roleFilter}
 
         ${
           includeMentorBriefs
@@ -172,10 +196,19 @@ export async function getLeaderboardData(
           1 AS isOnTime,
           'MENTOR' AS role
         FROM tasks t
-        WHERE t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL ${taskTimeClause}
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        WHERE t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${taskTimeClause}
         `
             : ''
         }
+      ),
+      user_adjustments AS (
+        SELECT
+          sa.user_id AS userId,
+          COALESCE(SUM(sa.sparks), 0) AS adjustmentSparks
+        FROM sparks_adjustments sa
+        WHERE 1=1 ${saTimeClause}
+        GROUP BY sa.user_id
       )
       SELECT
         u.id    AS userId,
@@ -183,14 +216,16 @@ export async function getLeaderboardData(
         u.email AS userEmail,
         COUNT(uts.assignmentId) AS tasksCompleted,
         AVG(uts.rawSparks) AS avgSparksGiven,
-        SUM(uts.weightedSparks) AS rawSparks,
-        SUM(uts.isZeroRev) AS zeroRevisionCount,
-        SUM(uts.isOnTime) AS onTimeCount,
+        COALESCE(SUM(uts.weightedSparks), 0) + COALESCE(ua.adjustmentSparks, 0) AS totalSparksVal,
+        COALESCE(SUM(uts.isZeroRev), 0) AS zeroRevisionCount,
+        COALESCE(SUM(uts.isOnTime), 0) AS onTimeCount,
         GROUP_CONCAT(DISTINCT uts.role) AS roles
       FROM users u
-      JOIN user_task_sparks uts ON uts.userId = u.id
+      LEFT JOIN user_task_sparks uts ON uts.userId = u.id
+      LEFT JOIN user_adjustments ua ON ua.userId = u.id
       ${userWhereClause}
       GROUP BY u.id
+      HAVING (COALESCE(SUM(uts.weightedSparks), 0) + COALESCE(ua.adjustmentSparks, 0)) > 0
     `;
 
     const { results } = await db.prepare(query).all();
@@ -205,14 +240,14 @@ export async function getLeaderboardData(
         userId: r.userId,
         userName: r.userName || 'Anonymous',
         userEmail: r.userEmail,
-        totalSparks: Math.round(Number(r.rawSparks) || 0),
+        totalSparks: Math.round(Number(r.totalSparksVal) || 0),
         tasksCompleted: completed,
         zeroRevisionCount: zeroRev,
         onTimeCount: Number(r.onTimeCount) || 0,
         qualityScore: Number(qualityScore.toFixed(2)),
         primaryRole: category === 'role_mentor_troopers' ? 'MENTOR' : ((r.roles || '').split(',')[0] || 'CREATOR'),
       };
-    });
+    }).filter((i) => i.totalSparks > 0);
 
     if (category === 'productive') {
       items.sort((a, b) => b.tasksCompleted - a.tasksCompleted || b.totalSparks - a.totalSparks);
@@ -285,20 +320,22 @@ export async function getLeaderboardData(
     `;
 
     const { results } = await db.prepare(query).all();
-    const ranked: LeaderboardUser[] = (results as any[]).map((r, idx) => ({
-      rank: idx + 1,
-      userId: r.userId,
-      userName: r.userName || 'Anonymous',
-      userEmail: r.userEmail,
-      totalSparks: Math.round(Number(r.totalSparks) || 0),
-      tasksCompleted: Number(r.tasksCompleted) || 0,
-      zeroRevisionCount: Number(r.zeroRevisionCount) || 0,
-      onTimeCount: Number(r.onTimeCount) || 0,
-      primaryRole: 'LEADER',
-      // Extra fields for history modal breakdown
-      personalSparks: Math.round(Number(r.personalSparks) || 0),
-      workspaceSparks: Math.round(Number(r.workspaceSparks) || 0),
-    }));
+    const ranked: LeaderboardUser[] = (results as any[])
+      .map((r) => ({
+        userId: r.userId,
+        userName: r.userName || 'Anonymous',
+        userEmail: r.userEmail,
+        totalSparks: Math.round(Number(r.totalSparks) || 0),
+        tasksCompleted: Number(r.tasksCompleted) || 0,
+        zeroRevisionCount: Number(r.zeroRevisionCount) || 0,
+        onTimeCount: Number(r.onTimeCount) || 0,
+        primaryRole: 'LEADER',
+        // Extra fields for history modal breakdown
+        personalSparks: Math.round(Number(r.personalSparks) || 0),
+        workspaceSparks: Math.round(Number(r.workspaceSparks) || 0),
+      }))
+      .filter((u) => u.totalSparks > 0)
+      .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
     return { type: 'individual' as const, data: ranked };
   }
@@ -309,23 +346,39 @@ export async function getLeaderboardData(
   // ─────────────────────────────────────────────────────────────────────────────
   if (category === 'workspace') {
     const query = `
+      WITH workspace_sparks AS (
+        SELECT
+          t.workspace_id,
+          COUNT(DISTINCT ta.id) AS tasksCompleted,
+          COALESCE(SUM(${sparksExpr('ta')}), 0) AS totalSparks
+        FROM tasks t
+        JOIN task_assignments ta ON ta.task_id = t.id AND ta.status = 'APPROVED' ${timeClause}
+        GROUP BY t.workspace_id
+      ),
+      workspace_members_count AS (
+        SELECT
+          workspace_id,
+          COUNT(DISTINCT user_id) AS membersCount
+        FROM workspace_members
+        GROUP BY workspace_id
+      )
       SELECT
         ws.id   AS workspaceId,
         ws.name AS workspaceName,
         p.name  AS projectName,
-        COUNT(DISTINCT wm.user_id)  AS membersCount,
-        COUNT(DISTINCT ta.id)       AS tasksCompleted,
-        COALESCE(SUM(${sparksExpr('ta')}), 0) AS rawSparks
+        COALESCE(wmc.membersCount, 0) AS membersCount,
+        COALESCE(ws_sparks.tasksCompleted, 0) AS tasksCompleted,
+        COALESCE(ws_sparks.totalSparks, 0) AS rawSparks,
+        CASE WHEN wm_me.user_id IS NOT NULL THEN 1 ELSE 0 END AS isMember
       FROM workspaces ws
       JOIN projects p ON ws.project_id = p.id
-      LEFT JOIN workspace_members wm ON ws.id = wm.workspace_id
-      LEFT JOIN tasks t  ON ws.id = t.workspace_id
-      LEFT JOIN task_assignments ta ON t.id = ta.task_id AND ta.status = 'APPROVED' ${timeClause}
+      LEFT JOIN workspace_sparks ws_sparks ON ws.id = ws_sparks.workspace_id
+      LEFT JOIN workspace_members_count wmc ON ws.id = wmc.workspace_id
+      LEFT JOIN workspace_members wm_me ON ws.id = wm_me.workspace_id AND wm_me.user_id = ?
       WHERE ws.deleted_at IS NULL
-      GROUP BY ws.id
     `;
 
-    const { results } = await db.prepare(query).all();
+    const { results } = await db.prepare(query).bind(currentUserId).all();
     const ranked: WorkspaceLeaderboardItem[] = (results as any[])
       .map((r) => ({
         workspaceId: r.workspaceId,
@@ -334,6 +387,7 @@ export async function getLeaderboardData(
         totalSparks: Math.round(Number(r.rawSparks || 0)),
         tasksCompleted: Number(r.tasksCompleted) || 0,
         membersCount: Number(r.membersCount) || 0,
+        isMember: Boolean(r.isMember),
       }))
       .sort((a, b) => b.totalSparks - a.totalSparks || b.tasksCompleted - a.tasksCompleted)
       .map((ws, idx) => ({ ...ws, rank: idx + 1 }));
@@ -523,7 +577,7 @@ export async function getSparksHistory(
           ? '✨ Apresiasi Personal'
           : r.type === 'RESET'
           ? '🔄 Reset Sparks'
-          : '↩ Pengembalian Sparks (Restore)';
+          : '↩ Restore Sparks';
 
       const roleLabel =
         r.type === 'APPRECIATION'
@@ -532,9 +586,14 @@ export async function getSparksHistory(
           ? 'RESET'
           : 'RESTORE';
 
+      let cleanNote = r.note || 'Penyesuaian System';
+      if (cleanNote.startsWith('Pengembalian Sparks (Restore): ')) {
+        cleanNote = cleanNote.replace('Pengembalian Sparks (Restore): ', '');
+      }
+
       return {
         assignmentId: r.id,
-        taskTitle: `${typeLabel}: ${r.note || 'Penyesuaian System'}`,
+        taskTitle: `${typeLabel}: ${cleanNote}`,
         assignmentRole: roleLabel,
         workspaceName: 'System Adjustment',
         projectName: `Oleh: ${r.adminName || 'Admin'}`,

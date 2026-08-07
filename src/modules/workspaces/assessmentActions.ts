@@ -117,18 +117,24 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
         SELECT DISTINCT u.id AS user_id
         FROM users u
         JOIN workspace_members wm ON u.id = wm.user_id
-        LEFT JOIN user_roles ur ON u.id = ur.user_id
-        LEFT JOIN roles r ON ur.role_id = r.id
         WHERE wm.workspace_id = ?
-          AND (
-            u.user_type = 'OJT'
-            OR r.id = 'role_troopers'
-            OR LOWER(r.name) LIKE '%trooper%'
-            OR LOWER(r.name) LIKE '%ojt%'
-          )
+          AND wm.team_role != 'LEADER'
+          AND (u.user_type IS NULL OR u.user_type != 'STAFF')
           AND u.status = 'ACTIVE'
+          AND u.id NOT IN (
+            SELECT ur.user_id
+            FROM user_roles ur
+            JOIN roles r ON ur.role_id = r.id
+            WHERE r.id IN ('role_mentor_troopers', 'role_mentor')
+               OR UPPER(r.name) LIKE '%MENTOR%'
+          )
+          AND u.id NOT IN (
+            SELECT ojt_coordinator_id
+            FROM workspaces
+            WHERE id = ? AND ojt_coordinator_id IS NOT NULL
+          )
       `)
-      .bind(workspaceId)
+      .bind(workspaceId, workspaceId)
       .all();
 
     const assignmentInitialStatus = isCoordinator ? 'ASSIGNED' : 'WAITING_REVIEW';
@@ -247,18 +253,24 @@ export async function approveAssessmentTask(
           SELECT DISTINCT u.id AS user_id
           FROM users u
           JOIN workspace_members wm ON u.id = wm.user_id
-          LEFT JOIN user_roles ur ON u.id = ur.user_id
-          LEFT JOIN roles r ON ur.role_id = r.id
           WHERE wm.workspace_id = ?
-            AND (
-              u.user_type = 'OJT'
-              OR r.id = 'role_troopers'
-              OR LOWER(r.name) LIKE '%trooper%'
-              OR LOWER(r.name) LIKE '%ojt%'
-            )
+            AND wm.team_role != 'LEADER'
+            AND (u.user_type IS NULL OR u.user_type != 'STAFF')
             AND u.status = 'ACTIVE'
+            AND u.id NOT IN (
+              SELECT ur.user_id
+              FROM user_roles ur
+              JOIN roles r ON ur.role_id = r.id
+              WHERE r.id IN ('role_mentor_troopers', 'role_mentor')
+                 OR UPPER(r.name) LIKE '%MENTOR%'
+            )
+            AND u.id NOT IN (
+              SELECT ojt_coordinator_id
+              FROM workspaces
+              WHERE id = ? AND ojt_coordinator_id IS NOT NULL
+            )
         `)
-        .bind(workspaceId)
+        .bind(workspaceId, workspaceId)
         .all();
 
       for (const m of ojtMembers as { user_id: string }[]) {

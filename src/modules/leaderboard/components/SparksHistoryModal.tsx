@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
+import Link from 'next/link';
 import { getSparksHistory, SparksHistoryItem } from '@/modules/leaderboard/actions';
 import {
   addPersonalAppreciationSparksAction,
   resetUserSparksAction,
   restoreUserSparksAction,
+  deleteSparksAdjustmentAction,
+  clearAllSparksAdjustmentsAction,
 } from '@/modules/sparks/sparksActions';
 
 interface CoordinatorMeta {
@@ -29,6 +32,7 @@ interface SparksHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   canManageSparks?: boolean;
+  isWorkspaceMember?: boolean;
   coordinatorMeta?: CoordinatorMeta;
   leaderMeta?: LeaderMeta;
 }
@@ -40,11 +44,13 @@ export default function SparksHistoryModal({
   period = 'month',
   isOpen,
   onClose,
-  canManageSparks = true,
+  canManageSparks = false,
+  isWorkspaceMember = false,
   coordinatorMeta,
   leaderMeta,
 }: SparksHistoryModalProps) {
   const [activePeriod, setActivePeriod] = useState<'month' | 'week' | 'all'>(period);
+  const [activeCategoryTab, setActiveCategoryTab] = useState<'ALL' | 'TASKS' | 'APPRECIATION' | 'ADJUSTMENT'>('ALL');
   const [history, setHistory] = useState<SparksHistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -60,6 +66,13 @@ export default function SparksHistoryModal({
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [restoreCategory, setRestoreCategory] = useState<'ALL' | 'TASKS' | 'ASSESSMENT' | 'APPRECIATION'>('ALL');
   const [restoreNote, setRestoreNote] = useState('');
+
+  // Delete & Clear state
+  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [deletingItemTitle, setDeletingItemTitle] = useState<string | null>(null);
+
+  const [showClearAllModal, setShowClearAllModal] = useState(false);
+  const [clearAllCategory, setClearAllCategory] = useState<'ALL' | 'APPRECIATION' | 'ADJUSTMENT'>('ALL');
 
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -85,6 +98,20 @@ export default function SparksHistoryModal({
   if (!isOpen || !userId) return null;
 
   const totalSparks = history.reduce((sum, item) => sum + item.sparks, 0);
+
+  // Categorize log entries
+  const taskItems = history.filter((i) => !['APPRECIATION', 'RESET', 'RESTORE'].includes(i.assignmentRole));
+  const appreciationItems = history.filter((i) => i.assignmentRole === 'APPRECIATION');
+  const adjustmentItems = history.filter((i) => ['RESET', 'RESTORE'].includes(i.assignmentRole));
+
+  const filteredHistory = history.filter((item) => {
+    if (activeCategoryTab === 'TASKS') return !['APPRECIATION', 'RESET', 'RESTORE'].includes(item.assignmentRole);
+    if (activeCategoryTab === 'APPRECIATION') return item.assignmentRole === 'APPRECIATION';
+    if (activeCategoryTab === 'ADJUSTMENT') return ['RESET', 'RESTORE'].includes(item.assignmentRole);
+    return true;
+  });
+
+  const displayedTotalSparks = filteredHistory.reduce((sum, item) => sum + item.sparks, 0);
 
   // Actions
   const handleAddAppreciationSubmit = (e: React.FormEvent) => {
@@ -132,6 +159,35 @@ export default function SparksHistoryModal({
     });
   };
 
+  const handleConfirmDeleteItem = () => {
+    if (!deletingItemId || !userId) return;
+    startTransition(async () => {
+      const res = await deleteSparksAdjustmentAction(deletingItemId);
+      if (res.success) {
+        setMsg({ type: 'success', text: res.message || 'Entri log berhasil dihapus!' });
+        fetchHistory(userId, category, activePeriod);
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Gagal menghapus entri log' });
+      }
+      setDeletingItemId(null);
+      setDeletingItemTitle(null);
+    });
+  };
+
+  const handleConfirmClearAll = () => {
+    if (!userId) return;
+    startTransition(async () => {
+      const res = await clearAllSparksAdjustmentsAction(userId, clearAllCategory);
+      if (res.success) {
+        setMsg({ type: 'success', text: res.message || 'Seluruh log berhasil dibersihkan!' });
+        fetchHistory(userId, category, activePeriod);
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Gagal membersihkan log' });
+      }
+      setShowClearAllModal(false);
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-2xl space-y-6 relative overflow-hidden max-h-[90vh] overflow-y-auto">
@@ -141,16 +197,41 @@ export default function SparksHistoryModal({
         {/* Modal Header */}
         <div className="flex items-start justify-between gap-4 pb-4 border-b border-zinc-100 dark:border-zinc-900">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-black uppercase tracking-widest bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2.5 py-0.5 rounded-full border border-purple-500/20">
                 ✨ Sparks History
               </span>
+              {userId && (
+                category === 'workspace' ? (
+                  (canManageSparks || isWorkspaceMember) && (
+                    <Link
+                      href={`/dashboard/workspace/${userId}`}
+                      className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:underline flex items-center gap-1 bg-purple-500/5 hover:bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/15 transition-all"
+                      title="Buka Halaman Workspace Ini"
+                    >
+                      <span>📁</span>
+                      <span>Buka Workspace</span>
+                      <span className="text-[9px] font-mono">↗</span>
+                    </Link>
+                  )
+                ) : (
+                  <Link
+                    href={`/dashboard/profile?userId=${userId}`}
+                    className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:underline flex items-center gap-1 bg-purple-500/5 hover:bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/15 transition-all"
+                    title="Kunjungi Halaman Profil Pengguna Ini"
+                  >
+                    <span>👤</span>
+                    <span>Lihat Profil</span>
+                    <span className="text-[9px] font-mono">↗</span>
+                  </Link>
+                )
+              )}
             </div>
             <h2 className="text-xl font-black text-zinc-900 dark:text-zinc-100 mt-1">
               Riwayat Perolehan Sparks: {userName || 'User'}
             </h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Rincian poin apresiasi dari setiap tugas yang diselesaikan.
+              Rincian poin apresiasi dari tugas, assessment, dan penyesuaian sistem.
             </p>
           </div>
 
@@ -200,7 +281,7 @@ export default function SparksHistoryModal({
             ))}
           </div>
 
-          {canManageSparks && (
+          {canManageSparks && category !== 'workspace' && (
             <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={() => setShowAppreciationModal(true)}
@@ -223,11 +304,42 @@ export default function SparksHistoryModal({
               >
                 🔄 Reset
               </button>
+              <button
+                onClick={() => setShowClearAllModal(true)}
+                className="px-2.5 py-1 text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl transition-all flex items-center gap-1"
+                title="Hapus / Bersihkan Log Penyesuaian & Apresiasi"
+              >
+                <span>🗑️</span>
+                <span>Bersihkan Log</span>
+              </button>
             </div>
           )}
         </div>
 
-        {/* ── Summary Card — berbeda per kategori ── */}
+        {/* Category Filter Tabs for Easy Log Tracking */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-zinc-100 dark:border-zinc-800/60">
+          <span className="text-[10px] font-black uppercase text-zinc-400 mr-1 shrink-0">Filter:</span>
+          {[
+            { id: 'ALL', label: `Semua Log (${history.length})` },
+            { id: 'TASKS', label: `🎨 Tugas & Brief (${taskItems.length})` },
+            { id: 'APPRECIATION', label: `✨ Apresiasi (${appreciationItems.length})` },
+            { id: 'ADJUSTMENT', label: `🔄 Log System (${adjustmentItems.length})` },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveCategoryTab(tab.id as any)}
+              className={`px-2.5 py-1 text-[11px] font-bold rounded-lg whitespace-nowrap transition-all ${
+                activeCategoryTab === tab.id
+                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm'
+                  : 'bg-zinc-100 dark:bg-zinc-900/60 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Summary Card — Rincian Terpisah per Kategori ── */}
         {category === 'coordinator' && coordinatorMeta ? (
           <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-amber-950/20 border border-amber-500/20 rounded-2xl p-4 space-y-3">
             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
@@ -266,22 +378,36 @@ export default function SparksHistoryModal({
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4">
             <div>
               <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
-                Total Sparks ({activePeriod === 'week' ? 'Minggu Ini' : activePeriod === 'month' ? 'Bulan Ini' : 'All-Time'})
+                Total Sparks {activeCategoryTab === 'TASKS' ? 'Tugas & Brief' : activeCategoryTab === 'APPRECIATION' ? 'Apresiasi' : activeCategoryTab === 'ADJUSTMENT' ? 'Log System' : ''} ({activePeriod === 'week' ? 'Minggu Ini' : activePeriod === 'month' ? 'Bulan Ini' : 'All-Time'})
               </span>
-              <span className="text-2xl font-black text-purple-600 dark:text-purple-400 font-mono">
-                {Math.max(0, totalSparks).toLocaleString()} ✨
-              </span>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-purple-600 dark:text-purple-400 font-mono">
+                  {Math.max(0, displayedTotalSparks).toLocaleString()} ✨
+                </span>
+                {activeCategoryTab !== 'ALL' && (
+                  <span className="text-xs text-zinc-400 font-mono font-medium">
+                    (dari total {Math.max(0, totalSparks).toLocaleString()} ✨)
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="text-right">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
-                Jumlah Entri Log
+
+            {/* Counter Breakdown */}
+            <div className="flex items-center gap-2 flex-wrap sm:justify-end text-xs font-mono">
+              <span className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 px-2.5 py-1 rounded-xl font-bold">
+                🎨 {taskItems.length} Tugas
               </span>
-              <span className="text-lg font-bold text-zinc-700 dark:text-zinc-300 font-mono">
-                {history.length} tugas/penyesuaian
+              <span className="bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20 px-2.5 py-1 rounded-xl font-bold">
+                ✨ {appreciationItems.length} Apresiasi
               </span>
+              {adjustmentItems.length > 0 && (
+                <span className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-xl font-bold">
+                  🔄 {adjustmentItems.length} Log System
+                </span>
+              )}
             </div>
           </div>
         )}
@@ -292,13 +418,31 @@ export default function SparksHistoryModal({
             <div className="text-center py-8 text-xs text-zinc-400 animate-pulse">
               Memuat riwayat Sparks...
             </div>
-          ) : history.length === 0 ? (
+          ) : filteredHistory.length === 0 ? (
             <div className="text-center py-8 text-xs text-zinc-400 italic">
-              Belum ada riwayat perolehan Sparks untuk periode ini.
+              Belum ada entri log untuk filter ini.
             </div>
           ) : (
-            history.map((item) => {
+            filteredHistory.map((item) => {
               const isAdjustment = ['APPRECIATION', 'RESET', 'RESTORE'].includes(item.assignmentRole);
+
+              // Badge styling per role/type
+              let roleBadgeStyle = 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20';
+              let roleBadgeLabel = item.assignmentRole;
+
+              if (item.assignmentRole === 'APPRECIATION') {
+                roleBadgeStyle = 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20';
+                roleBadgeLabel = '✨ APPRECIATION';
+              } else if (item.assignmentRole === 'RESTORE') {
+                roleBadgeStyle = 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20';
+                roleBadgeLabel = '↩ RESTORE';
+              } else if (item.assignmentRole === 'RESET') {
+                roleBadgeStyle = 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20';
+                roleBadgeLabel = '🔄 RESET';
+              } else if (item.assignmentRole === 'MENTOR') {
+                roleBadgeStyle = 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20';
+                roleBadgeLabel = '📝 BRIEF ASSESSMENT';
+              }
 
               return (
                 <div
@@ -311,8 +455,8 @@ export default function SparksHistoryModal({
                         <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
                           {item.taskTitle}
                         </span>
-                        <span className="text-[9px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-md border border-purple-500/20">
-                          {item.assignmentRole}
+                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border ${roleBadgeStyle}`}>
+                          {roleBadgeLabel}
                         </span>
                       </div>
                       <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -320,18 +464,34 @@ export default function SparksHistoryModal({
                       </p>
                     </div>
 
-                    <div className="text-right shrink-0">
-                      <span className={`text-sm font-black font-mono ${item.sparks >= 0 ? 'text-purple-600 dark:text-purple-400' : 'text-red-500'}`}>
-                        {item.sparks >= 0 ? `+${item.sparks}` : item.sparks} ✨
-                      </span>
-                      {item.reviewedAt > 0 && (
-                        <p className="text-[9px] text-zinc-400 font-mono">
-                          {new Date(item.reviewedAt * 1000).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="text-right">
+                        <span className={`text-sm font-black font-mono ${item.sparks >= 0 ? 'text-purple-600 dark:text-purple-400' : 'text-red-500'}`}>
+                          {item.sparks >= 0 ? `+${item.sparks}` : item.sparks} ✨
+                        </span>
+                        {item.reviewedAt > 0 && (
+                          <p className="text-[9px] text-zinc-400 font-mono">
+                            {new Date(item.reviewedAt * 1000).toLocaleDateString('id-ID', {
+                              day: 'numeric',
+                              month: 'short',
+                              year: 'numeric',
+                            })}
+                          </p>
+                        )}
+                      </div>
+
+                      {canManageSparks && isAdjustment && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeletingItemId(item.assignmentId);
+                            setDeletingItemTitle(item.taskTitle);
+                          }}
+                          className="p-1.5 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all text-xs"
+                          title="Hapus entri log ini"
+                        >
+                          🗑️
+                        </button>
                       )}
                     </div>
                   </div>
@@ -444,6 +604,84 @@ export default function SparksHistoryModal({
                 <button type="submit" disabled={pending} className="flex-1 py-1.5 text-xs font-bold bg-indigo-600 text-white rounded-xl">Konfirmasi</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Submodal 4: Delete Single Item Confirm */}
+      {deletingItemId && (
+        <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <h3 className="text-sm font-black text-rose-600">Hapus Entri Log Sparks?</h3>
+            <p className="text-xs text-zinc-500">
+              Apakah Anda yakin ingin menghapus entri log <span className="font-bold text-zinc-800 dark:text-zinc-200">"{deletingItemTitle}"</span>? Pengaruh penyesuaian/apresiasi poin ini akan dihapus dari saldo Sparks.
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDeletingItemId(null);
+                  setDeletingItemTitle(null);
+                }}
+                className="flex-1 py-1.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteItem}
+                disabled={pending}
+                className="flex-1 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition-all"
+              >
+                {pending ? 'Menghapus...' : 'Hapus Entri'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submodal 5: Clear All Adjustments Confirm */}
+      {showClearAllModal && (
+        <div className="fixed inset-0 z-60 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+            <h3 className="text-sm font-black text-rose-600">Bersihkan Log Penyesuaian Sparks</h3>
+            <p className="text-xs text-zinc-500">
+              Pilih kategori log yang ingin dibersihkan secara massal untuk pengguna ini.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1">Cakupan Pembersihan</label>
+                <select
+                  value={clearAllCategory}
+                  onChange={(e) => setClearAllCategory(e.target.value as any)}
+                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-bold rounded-xl px-3 py-2 text-zinc-900 dark:text-zinc-100"
+                >
+                  <option value="ALL">👥 Semua Log Penyesuaian & Apresiasi</option>
+                  <option value="APPRECIATION">✨ Log Apresiasi Personal Saja</option>
+                  <option value="ADJUSTMENT">🔄 Log Reset & Restore Saja</option>
+                </select>
+              </div>
+              <p className="text-[11px] text-rose-500 font-medium bg-rose-500/10 border border-rose-500/20 p-2.5 rounded-xl">
+                ⚠️ Tindakan ini akan menghapus seluruh entri log yang dipilih dan tidak dapat dibatalkan.
+              </p>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowClearAllModal(false)}
+                  className="flex-1 py-1.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmClearAll}
+                  disabled={pending}
+                  className="flex-1 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-sm transition-all"
+                >
+                  {pending ? 'Membersihkan...' : 'Bersihkan Log'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

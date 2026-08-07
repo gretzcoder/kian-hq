@@ -5,6 +5,7 @@ import EditProfileButton from '@/modules/profile/components/EditProfileButton';
 import { normalizeWhatsappNumber } from '@/modules/profile/actions';
 import ProfileSparksActions from '@/modules/profile/components/ProfileSparksActions';
 import { getSessionContext } from '@/modules/roles/rbac';
+import { getUserSparksSummary } from '@/modules/sparks/calculator';
 
 interface UserProfile {
   id: string;
@@ -164,55 +165,10 @@ export default async function ProfilePage({
   const directAssignmentSparks      = (directAssignmentSparksRaw?.results as any[]) || [];
   const mentorAssessmentSparks      = (mentorAssessmentSparksRaw?.results as any[]) || [];
 
-  // Calculate Creative Sparks & Role Breakdown
-  let totalSparks = 0;
-  const roleSparksMap: Record<string, number> = {
-    RESEARCHER: 0,
-    PLANNER: 0,
-    DESIGNER: 0,
-    VIDEO_EDITOR: 0,
-    CREATOR: 0,
-    MENTOR: 0,
-  };
-
-  const countedAssignmentIds = new Set<string>();
-
-  directAssignmentSparks.forEach((row) => {
-    const val = Number(row.sparks) || 0;
-    if (val > 0) {
-      totalSparks += val;
-      countedAssignmentIds.add(row.id);
-      const r = row.assignment_role || 'CREATOR';
-      roleSparksMap[r] = (roleSparksMap[r] || 0) + val;
-    }
-  });
-
-  mentorAssessmentSparks.forEach((row) => {
-    const val = Number(row.sparks) || 0;
-    if (val > 0) {
-      totalSparks += val;
-      roleSparksMap['MENTOR'] = (roleSparksMap['MENTOR'] || 0) + val;
-    }
-  });
-
-  (earnedBadgesRaw.results as any[]).forEach((row) => {
-    if (!row.entity_id || !countedAssignmentIds.has(row.entity_id)) {
-      const sparkMatch = row.note?.match(/\[Sparks:\s*(\d+)\]/);
-      if (sparkMatch && sparkMatch[1]) {
-        const val = parseInt(sparkMatch[1], 10);
-        totalSparks += val;
-        const r = row.assignment_role || 'CREATOR';
-        roleSparksMap[r] = (roleSparksMap[r] || 0) + val;
-      }
-    }
-  });
-
-  (sparksAdjustmentsRaw?.results as any[] || []).forEach((row) => {
-    const val = Number(row.sparks) || 0;
-    totalSparks += val;
-  });
-
-  totalSparks = Math.max(0, totalSparks);
+  // Calculate Realtime Creative Sparks & Role Breakdown via Central Calculator Engine
+  const sparksSummary = await getUserSparksSummary(targetUserId);
+  const totalSparks = sparksSummary.totalSparks;
+  const roleSparksMap = sparksSummary.roleSparksMap;
 
   // Determine Dynamic Title Badges (Standardized Order: Researcher -> Planner -> Designer -> Video Editor)
   const titleBadges: { title: string; emoji: string; desc: string; color: string }[] = [];
