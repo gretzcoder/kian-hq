@@ -176,8 +176,8 @@ export default function SparksManagementView({ overview, period }: SparksManagem
         </div>
       )}
 
-      {/* ── Category Statistics Cards ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+      {/* ── Metric Summary Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
         <div className="bg-white dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 rounded-2xl p-4 space-y-1">
           <p className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400">
             ⚡ Total Sparks Terdistribusi
@@ -250,8 +250,8 @@ export default function SparksManagementView({ overview, period }: SparksManagem
           </div>
         </div>
 
-        {/* Rankings Table */}
-        <div className="overflow-x-auto">
+        {/* Desktop Rankings Table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="border-b border-zinc-100 dark:border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-400 font-black">
@@ -333,6 +333,81 @@ export default function SparksManagementView({ overview, period }: SparksManagem
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Responsive Rankings Cards View */}
+        <div className="block md:hidden divide-y divide-zinc-100 dark:divide-zinc-800/60">
+          {filteredUsers.length === 0 ? (
+            <div className="py-8 text-center text-zinc-400 italic">
+              Tidak ada pengguna yang cocok dengan filter.
+            </div>
+          ) : (
+            filteredUsers.map((u) => {
+              const rankBadge =
+                u.rank === 1 ? '🥇' : u.rank === 2 ? '🥈' : u.rank === 3 ? '🥉' : `#${u.rank}`;
+
+              return (
+                <div key={u.userId} className="py-4 space-y-3">
+                  {/* Top: Rank, User & Total Sparks */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="font-mono font-bold text-sm text-purple-600 dark:text-purple-400 shrink-0">
+                        {rankBadge}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/dashboard/profile?userId=${u.userId}`}
+                          className="font-bold text-sm text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400 hover:underline flex items-center gap-1 truncate"
+                        >
+                          <span className="truncate">{u.userName}</span>
+                          <span className="text-[10px] text-zinc-400 font-mono">↗</span>
+                        </Link>
+                        <p className="text-[11px] text-zinc-400 font-mono truncate">{u.userEmail}</p>
+                      </div>
+                    </div>
+                    <span className="font-mono font-black text-sm text-purple-600 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-xl shrink-0">
+                      {u.totalSparks.toLocaleString()} ✨
+                    </span>
+                  </div>
+
+                  {/* Role Badge */}
+                  <div>
+                    <span className="text-[9px] font-black uppercase text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                      {u.roleNames || u.userType}
+                    </span>
+                  </div>
+
+                  {/* Sparks Breakdown Grid */}
+                  <div className="grid grid-cols-3 gap-2 bg-zinc-50 dark:bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800 text-center text-xs">
+                    <div>
+                      <p className="text-[9px] font-bold text-zinc-400 uppercase">Tasks</p>
+                      <p className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{u.tasksCompleted}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-zinc-400 uppercase">Assessments</p>
+                      <p className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{u.assessmentsCount}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-zinc-400 uppercase">Apresiasi</p>
+                      <p className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{u.appreciationCount}</p>
+                    </div>
+                  </div>
+
+                  {/* Action Button */}
+                  <button
+                    onClick={() => {
+                      setHistoryModalUserId(u.userId);
+                      setHistoryModalUserName(u.userName);
+                    }}
+                    className="w-full py-2 text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 border border-purple-500/20 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <span>✨</span>
+                    <span>Kelola & Log Sparks</span>
+                  </button>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 

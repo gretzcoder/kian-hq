@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { grantRolePermission, revokeRolePermission } from '@/modules/permissions/actions';
 
 interface Role {
@@ -131,6 +131,9 @@ export default function PermissionMatrix({ roles, permissions, grantedMap }: Per
     high:   'bg-red-500/10 text-red-600 dark:text-red-400',
   };
 
+  const [selectedMobileRoleId, setSelectedMobileRoleId] = useState<string>(roles[0]?.id || '');
+  const activeMobileRole = roles.find((r) => r.id === selectedMobileRoleId) || roles[0];
+
   return (
     <div className={`transition-opacity duration-200 ${pending ? 'opacity-60 pointer-events-none' : 'opacity-100'}`}>
       {pending && (
@@ -140,7 +143,97 @@ export default function PermissionMatrix({ roles, permissions, grantedMap }: Per
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      {/* Mobile Role Selector Bar (block lg:hidden) */}
+      <div className="block lg:hidden mb-6 space-y-4">
+        <div>
+          <label className="text-[10px] font-black text-zinc-400 uppercase tracking-wider block mb-2">
+            Pilih Role untuk Mengelola Izin (Mobile View)
+          </label>
+          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            {roles.map((role) => {
+              const isSel = role.id === selectedMobileRoleId;
+              const bProps = getRoleBadgeProps(role);
+              return (
+                <button
+                  key={role.id}
+                  type="button"
+                  onClick={() => setSelectedMobileRoleId(role.id)}
+                  className={`text-xs font-black uppercase px-3 py-1.5 rounded-2xl border transition-all shrink-0 ${
+                    isSel
+                      ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-900 shadow-md'
+                      : 'opacity-70 hover:opacity-100'
+                  } ${bProps.className || ''}`}
+                  style={bProps.style}
+                >
+                  {role.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Selected Role Permissions Accordion/List for Mobile */}
+        {activeMobileRole && (
+          <div className="space-y-4">
+            {PERMISSION_CATEGORIES.map((category) => {
+              const catPerms = category.permissions.map((name) => permByName[name]).filter(Boolean);
+              if (catPerms.length === 0) return null;
+
+              return (
+                <div key={category.label} className="bg-white dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 space-y-3 shadow-xs">
+                  <div className="flex items-center gap-2 border-b border-zinc-100 dark:border-zinc-800 pb-2">
+                    <span className="text-base">{category.icon}</span>
+                    <span className="text-xs font-black uppercase text-zinc-800 dark:text-zinc-200 tracking-wider">
+                      {category.label}
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                    {catPerms.map((perm) => {
+                      const isGranted = (grantedMap[activeMobileRole.id] ?? []).includes(perm.id);
+                      const risk = PERMISSION_RISK[perm.name] ?? 'low';
+
+                      return (
+                        <div key={perm.id} className="py-3 flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">{perm.name}</p>
+                              <span className={`text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full ${riskStyle[risk]}`}>
+                                {risk}
+                              </span>
+                            </div>
+                            {perm.description && (
+                              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 leading-snug">
+                                {perm.description}
+                              </p>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => toggle(activeMobileRole.id, perm.id, isGranted)}
+                            disabled={pending}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 border flex items-center gap-1.5 active:scale-95 ${
+                              isGranted
+                                ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:border-purple-300'
+                            }`}
+                          >
+                            <span>{isGranted ? '✓ Izinkan' : '✕ Ditolak'}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Table Matrix View (hidden lg:block) */}
+      <div className="hidden lg:block overflow-x-auto">
         <table className="w-full border-collapse">
           {/* Header: Role columns */}
           <thead>

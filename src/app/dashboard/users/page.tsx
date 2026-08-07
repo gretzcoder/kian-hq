@@ -80,9 +80,10 @@ export default async function UsersPage() {
       {/* Approvals Section */}
       <PendingApprovalsList pendingUsers={pendingUsers} roles={roles} />
 
-      {/* Users Table */}
+      {/* Users Table (Desktop) / Cards (Mobile) */}
       <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/10 rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
@@ -136,6 +137,57 @@ export default async function UsersPage() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Responsive Cards View */}
+        <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+          {users.map((user) => (
+            <div key={user.id} className="p-4 space-y-3 bg-white dark:bg-zinc-900/40">
+              {/* Header: User Info & Actions */}
+              <div className="flex items-start justify-between gap-2">
+                <Link href={`/dashboard/profile?userId=${user.id}`} className="flex items-center gap-3 min-w-0 flex-1 group">
+                  <UserAvatar src={user.avatar_url} name={user.name} size="md" square />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:underline">
+                      {user.name}
+                    </p>
+                    <p className="text-xs text-zinc-400 font-mono truncate">{user.email}</p>
+                  </div>
+                </Link>
+                <UserActionsMenu
+                  userId={user.id}
+                  userName={user.name}
+                  isSelf={user.id === session.userId}
+                />
+              </div>
+
+              {/* Status, Classification & Role Selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+                <div>
+                  <p className="text-[9px] font-black uppercase text-zinc-400 mb-1">Status</p>
+                  <UserStatusSelector
+                    userId={user.id}
+                    currentStatus={user.status}
+                  />
+                </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase text-zinc-400 mb-1">Klasifikasi</p>
+                  <UserTypeSelector
+                    userId={user.id}
+                    currentUserType={user.user_type || 'STAFF'}
+                  />
+                </div>
+                <div>
+                  <p className="text-[9px] font-black uppercase text-zinc-400 mb-1">Role Utama</p>
+                  <RoleSelector
+                    userId={user.id}
+                    currentRoleId={user.role_id || 'role_creator'}
+                    roles={roles}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

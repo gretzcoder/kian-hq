@@ -5,6 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useTransition } from 'react';
 import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import UserAvatar from '@/components/ui/UserAvatar';
+import FloatingNotificationDrawer from '@/modules/notifications/components/FloatingNotificationDrawer';
+import HeaderProfileButton from '@/app/dashboard/components/HeaderProfileButton';
 import { getUnreadCount } from '@/modules/announcements/announcementReadState';
 import { getUnreadWorkspaceCount } from '@/modules/workspaces/workspaceReadState';
 import { getSidebarCounts, WorkspaceNotifItem } from '@/modules/notifications/notificationActions';
@@ -241,26 +243,27 @@ export default function DashboardSidebar({
   return (
     <>
       {/* Mobile Top Header */}
-      <header className="lg:hidden sticky top-0 z-40 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-md px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <header className="lg:hidden sticky top-0 z-40 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-md px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => setMobileOpen((p) => !p)}
-            className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400"
+            className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 active:scale-95 transition-transform"
+            title="Buka Menu Navigasi"
           >
             ☰
           </button>
-          <span className="text-base font-black tracking-widest bg-gradient-to-r from-purple-500 to-indigo-500 bg-clip-text text-transparent">
+          <span className="text-sm sm:text-base font-black tracking-widest bg-gradient-to-r from-purple-500 to-indigo-500 bg-clip-text text-transparent truncate">
             KIAN HQ
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          <FloatingNotificationDrawer
+            canReview={canReview}
+            canManageSparks={canManageSparks}
+            canCreateBrief={canCreateBrief}
+          />
           <ThemeToggle />
-          <Link
-            href="/dashboard/profile"
-            className="w-8 h-8 rounded-full border border-purple-500/20 overflow-hidden shrink-0"
-          >
-            <UserAvatar src={session.avatar} name={session.name} size="md" />
-          </Link>
+          <HeaderProfileButton name={session.name} email={session.email} avatar={session.avatar} />
         </div>
       </header>
 

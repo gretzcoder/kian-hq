@@ -3,6 +3,7 @@ import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import UserAvatar from '@/components/ui/UserAvatar';
 
 interface OJTUserRow {
   id: string;
@@ -24,6 +25,7 @@ interface OJTUserRow {
   completed_tasks: number;
   in_progress_tasks: number;
   total_sparks: number;
+  sparks_score: number | null;
 }
 
 export default async function OJTDirectoryPage() {
@@ -60,7 +62,8 @@ export default async function OJTDirectoryPage() {
         r.name as role_name,
         (SELECT COUNT(*) FROM task_assignments ta WHERE ta.user_id = u.id AND ta.status = 'APPROVED') as completed_tasks,
         (SELECT COUNT(*) FROM task_assignments ta WHERE ta.user_id = u.id AND ta.status IN ('ASSIGNED', 'IN_PROGRESS', 'SUBMITTED', 'REVISION')) as in_progress_tasks,
-        (SELECT COALESCE(SUM(COALESCE(ta.sparks, 8)), 0) FROM task_assignments ta WHERE ta.user_id = u.id AND ta.status = 'APPROVED') as total_sparks
+        (SELECT COALESCE(SUM(COALESCE(ta.sparks, 8)), 0) FROM task_assignments ta WHERE ta.user_id = u.id AND ta.status = 'APPROVED') as total_sparks,
+        (SELECT COALESCE(SUM(COALESCE(ta.sparks, 8)), 0) FROM task_assignments ta WHERE ta.user_id = u.id AND ta.status = 'APPROVED') as sparks_score
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
@@ -102,8 +105,10 @@ export default async function OJTDirectoryPage() {
           <p className="text-zinc-400 text-xs mt-1">Pengguna dengan klasifikasi OJT akan tampil secara otomatis di sini.</p>
         </div>
       ) : (
-        <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b]/40 rounded-3xl overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
+        /* Directory Table (Desktop) / Cards List (Mobile) */
+        <div className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/10 rounded-2xl overflow-hidden shadow-sm">
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
@@ -141,18 +146,7 @@ export default async function OJTDirectoryPage() {
                       {/* Name & Avatar */}
                       <td className="px-6 py-4">
                         <Link href={`/dashboard/profile?userId=${user.id}`} className="flex items-center gap-3 group w-fit">
-                          {user.avatar_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={user.avatar_url}
-                              alt={user.name}
-                              className="w-10 h-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 object-cover shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0 uppercase shadow-sm">
-                              {user.name.substring(0, 2)}
-                            </div>
-                          )}
+                          <UserAvatar src={user.avatar_url} name={user.name} size="md" />
                           <div>
                             <p className="font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:underline">
                               {user.name}
@@ -270,6 +264,121 @@ export default async function OJTDirectoryPage() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Responsive Cards View */}
+          <div className="block md:hidden divide-y divide-zinc-200 dark:divide-zinc-800">
+            {ojtUsers.map((user) => {
+              let rolesList: string[] = [];
+              if (user.main_roles) {
+                try {
+                  rolesList = JSON.parse(user.main_roles);
+                } catch {
+                  rolesList = user.main_roles.split(',').map((r) => r.trim());
+                }
+              }
+
+              let toolsList: string[] = [];
+              if (user.tools) {
+                try {
+                  toolsList = JSON.parse(user.tools);
+                } catch {
+                  toolsList = user.tools.split(',').map((t) => t.trim());
+                }
+              }
+
+              return (
+                <div key={user.id} className="p-4 space-y-3 bg-white dark:bg-zinc-900/40">
+                  {/* Top: Avatar, Name & Sparks */}
+                  <div className="flex items-start justify-between gap-3">
+                    <Link href={`/dashboard/profile?userId=${user.id}`} className="flex items-center gap-3 min-w-0 flex-1 group">
+                      <UserAvatar src={user.avatar_url} name={user.name} size="md" square />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-sm text-zinc-900 dark:text-zinc-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:underline">
+                          {user.name}
+                        </p>
+                        <p className="text-xs text-zinc-400 truncate">{user.email}</p>
+                      </div>
+                    </Link>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-black bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 shrink-0">
+                      ⚡ {(user.sparks_score || 0).toLocaleString()}
+                    </span>
+                  </div>
+
+                  {/* Campus Info */}
+                  {(user.university || user.study_program) && (
+                    <div className="bg-zinc-50 dark:bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800 text-xs space-y-0.5">
+                      <p className="font-bold text-zinc-800 dark:text-zinc-200">
+                        🎓 {user.university || 'Universitas Belum Diisi'}
+                      </p>
+                      <p className="text-zinc-500 dark:text-zinc-400 text-[11px]">
+                        {user.study_program ? `${user.study_program} ${user.semester ? `(Sem ${user.semester})` : ''}` : ''}
+                        {user.student_id_number && <span className="font-mono text-purple-600 dark:text-purple-400 font-bold ml-1.5">• NIM: {user.student_id_number}</span>}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Roles & Tools */}
+                  {(rolesList.length > 0 || toolsList.length > 0 || user.custom_role) && (
+                    <div className="space-y-1.5 pt-1">
+                      {rolesList.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {rolesList.map((r, i) => (
+                            <span key={i} className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/15">
+                              {r}
+                            </span>
+                          ))}
+                        </div>
+                      ) : user.custom_role ? (
+                        <span className="text-xs text-zinc-500 font-medium">{user.custom_role}</span>
+                      ) : null}
+
+                      {toolsList.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {toolsList.map((t, i) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded-md text-[9px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+                    <div className="flex items-center gap-2">
+                      {user.whatsapp_number && (
+                        <a
+                          href={`https://wa.me/${user.whatsapp_number.replace(/[^0-9]/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1"
+                        >
+                          📱 WhatsApp
+                        </a>
+                      )}
+                      {user.portfolio_url && (
+                        <a
+                          href={user.portfolio_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-all flex items-center gap-1"
+                        >
+                          🔗 Portofolio
+                        </a>
+                      )}
+                    </div>
+                    <Link
+                      href={`/dashboard/profile?userId=${user.id}`}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-purple-600 hover:text-white transition-all ml-auto"
+                    >
+                      Lihat Profil &rarr;
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

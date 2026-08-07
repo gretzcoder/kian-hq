@@ -38,7 +38,7 @@ export default function HeaderProfileButton({ name, email, avatar }: HeaderProfi
           title="Menu Profil Pengguna"
         >
           <UserAvatar src={avatar} name={name} size="sm" />
-          <span className="font-extrabold max-w-[110px] truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+          <span className="hidden sm:inline font-extrabold max-w-[110px] truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
             {name}
           </span>
           <span
@@ -52,7 +52,7 @@ export default function HeaderProfileButton({ name, email, avatar }: HeaderProfi
 
         {/* Floating Shortcut Menu Popover */}
         {isOpen && (
-          <div className="absolute right-0 top-full mt-2 w-64 rounded-3xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150 overflow-hidden space-y-1">
+          <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] rounded-3xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150 overflow-hidden space-y-1">
             {/* Top User Info Header Card — Clickable to Open Profile */}
             <Link
               href="/dashboard/profile"
