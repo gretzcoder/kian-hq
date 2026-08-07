@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { addWorkspaceMembersBulk, updateWorkspaceMemberRoles, removeWorkspaceMember } from '@/modules/workspaces/actions';
 
 interface Member {
@@ -9,6 +10,7 @@ interface Member {
   userName: string | null;
   userEmail: string;
   userType: string;
+  avatarUrl?: string | null;
   accountRoles: string[];
   teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[];
 }
@@ -540,17 +542,26 @@ export default function TeamMemberPanel({
                       className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between"
                     >
                     <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
+                      <div className="flex items-center gap-3 min-w-0">
                         <Link
-                          href="/dashboard/profile"
-                          className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate hover:text-purple-600 dark:hover:text-purple-400 hover:underline block"
+                          href={`/dashboard/profile?userId=${m.userId}`}
+                          className="shrink-0"
                           title={`Lihat profil ${m.userName}`}
                         >
-                          {m.userName || 'Unknown User'}
+                          <UserAvatar src={m.avatarUrl} name={m.userName} size="sm" square />
                         </Link>
-                        <p className="text-[10px] text-zinc-400 font-mono truncate">
-                          {m.userEmail}
-                        </p>
+                        <div className="min-w-0">
+                          <Link
+                            href={`/dashboard/profile?userId=${m.userId}`}
+                            className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate hover:text-purple-600 dark:hover:text-purple-400 hover:underline block"
+                            title={`Lihat profil ${m.userName}`}
+                          >
+                            {m.userName || 'Unknown User'}
+                          </Link>
+                          <p className="text-[10px] text-zinc-400 font-mono truncate">
+                            {m.userEmail}
+                          </p>
+                        </div>
                       </div>
 
                       {canManageMembers && (

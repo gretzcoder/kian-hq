@@ -123,7 +123,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     `).bind(wsId).all(),
     db.prepare(`
       SELECT wm.user_id as userId, u.name as userName, u.email as userEmail,
-             wm.team_role as teamRole, u.user_type as userType
+             wm.team_role as teamRole, u.user_type as userType, u.avatar_url as avatarUrl
       FROM workspace_members wm
       JOIN users u ON wm.user_id = u.id
       WHERE wm.workspace_id = ?
@@ -273,7 +273,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   }
 
   // Group workspace team-roles by user and merge account roles + userType
-  const membersMap: Record<string, { userId: string; userName: string | null; userEmail: string; userType: string; accountRoles: string[]; teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[] }> = {};
+  const membersMap: Record<string, { userId: string; userName: string | null; userEmail: string; userType: string; avatarUrl?: string | null; accountRoles: string[]; teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR' | 'MEMBER')[] }> = {};
   for (const m of (membersRaw as any[])) {
     if (!membersMap[m.userId]) {
       membersMap[m.userId] = {
@@ -281,6 +281,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         userName: m.userName,
         userEmail: m.userEmail,
         userType: (m.userType as string) ?? 'STAFF',
+        avatarUrl: m.avatarUrl ?? null,
         accountRoles: memberAccountRolesMap[m.userId] ?? [],
         teamRoles: [],
       };

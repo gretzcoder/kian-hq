@@ -447,7 +447,7 @@ export default function TaskActions({
                         <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">
                           Assignee:{' '}
                           <Link
-                            href="/dashboard/profile"
+                            href={assign?.user_id ? `/dashboard/profile?userId=${assign.user_id}` : '/dashboard/profile'}
                             onClick={(e) => e.stopPropagation()}
                             className="font-semibold hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
                           >
