@@ -135,6 +135,71 @@ export default function CommunityChatView({
       .slice(0, 8);
   }, [allMembersList, mentionQuery]);
 
+  // Helper to parse message text and turn @mentions into clickable profile buttons
+  const renderMessageContent = (text: string, isSelf: boolean) => {
+    const parts = text.split(/(@[\w.-]+)/g);
+
+    return parts.map((part, index) => {
+      if (part.startsWith('@') && part.length > 1) {
+        const queryHandle = part.substring(1).toLowerCase();
+
+        // Find member matching handle or name
+        const matchingMember = allMembersList.find((m) => {
+          const firstName = m.name.split(' ')[0].toLowerCase();
+          const fullName = m.name.toLowerCase();
+          const emailUser = m.email.split('@')[0].toLowerCase();
+          return (
+            firstName === queryHandle ||
+            fullName === queryHandle ||
+            emailUser === queryHandle ||
+            m.name.toLowerCase().startsWith(queryHandle)
+          );
+        });
+
+        return (
+          <button
+            key={index}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (matchingMember) {
+                setSelectedMemberCard(matchingMember);
+              } else {
+                const foundAny = allMembersList.find((m) =>
+                  m.name.toLowerCase().includes(queryHandle)
+                );
+                if (foundAny) {
+                  setSelectedMemberCard(foundAny);
+                } else {
+                  // Fallback highlight card
+                  setSelectedMemberCard({
+                    id: `mention_${queryHandle}`,
+                    name: part.substring(1),
+                    email: `${queryHandle}@kian.com`,
+                    role_name: 'Anggota Komunitas',
+                    role_color: '#7c3aed',
+                    is_online: false,
+                  });
+                }
+              }
+            }}
+            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer shadow-2xs ${
+              isSelf
+                ? 'bg-white/25 text-white hover:bg-white/40 ring-1 ring-white/30'
+                : 'bg-purple-500/20 text-purple-600 dark:text-purple-300 hover:bg-purple-500/30 ring-1 ring-purple-500/30'
+            }`}
+            title={`Klik untuk lihat profil ${matchingMember ? matchingMember.name : part}`}
+          >
+            <span>@</span>
+            <span>{matchingMember ? matchingMember.name.split(' ')[0] : part.substring(1)}</span>
+          </button>
+        );
+      }
+
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   // Input change handler with @mention detection
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -707,7 +772,7 @@ export default function CommunityChatView({
                           </div>
                         </div>
                       ) : (
-                        /* Text Bubble */
+                        /* Text Bubble with Interactive Clickable @Mentions */
                         <div
                           className={`text-xs sm:text-sm leading-relaxed p-3 sm:p-3.5 rounded-2xl max-w-[90%] sm:max-w-2xl whitespace-pre-wrap break-words ${
                             isSelf
@@ -715,7 +780,7 @@ export default function CommunityChatView({
                               : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border border-zinc-200/80 dark:border-zinc-800/80 rounded-tl-xs'
                           }`}
                         >
-                          {msg.message}
+                          {renderMessageContent(msg.message, isSelf)}
                           {msg.attachment_url && (
                             <div className="mt-2.5 pt-2 border-t border-white/20 dark:border-zinc-800">
                               <a
