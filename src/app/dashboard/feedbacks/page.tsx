@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { getExecutiveFeedbacks } from '@/modules/feedback/actions';
 import Link from 'next/link';
+import UserAvatar from '@/components/ui/UserAvatar';
 
 export default async function FeedbacksPage() {
   const session = await getSession();
@@ -46,18 +47,7 @@ export default async function FeedbacksPage() {
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="flex items-center gap-3">
                   <Link href={`/dashboard/profile?userId=${fb.user_id}`} className="shrink-0">
-                    {fb.user_avatar ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={fb.user_avatar}
-                        alt={fb.user_name}
-                        className="w-9 h-9 rounded-xl border border-zinc-200 dark:border-zinc-800 object-cover"
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-xs font-black uppercase">
-                        {(fb.user_name || 'U').substring(0, 2)}
-                      </div>
-                    )}
+                    <UserAvatar src={fb.user_avatar} name={fb.user_name} size="w-9 h-9 text-xs font-black" square />
                   </Link>
                   <div>
                     <Link

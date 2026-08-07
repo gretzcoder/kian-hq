@@ -2,6 +2,7 @@ import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import EditProfileButton from '@/modules/profile/components/EditProfileButton';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { normalizeWhatsappNumber } from '@/modules/profile/actions';
 import ProfileSparksActions from '@/modules/profile/components/ProfileSparksActions';
 import { getSessionContext } from '@/modules/roles/rbac';
@@ -290,18 +291,13 @@ export default async function ProfilePage({
           <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-2 sm:gap-4 -mt-10 sm:-mt-14 mb-3 sm:mb-4">
             {/* Overlapping Avatar */}
             <div className="relative group">
-              {avatarSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatarSrc}
-                  alt={profile?.name || 'User'}
-                  className="w-20 h-20 sm:w-28 sm:h-28 rounded-2xl sm:rounded-3xl border-4 border-white dark:border-[#09090b] shadow-xl object-cover shrink-0 bg-white dark:bg-zinc-900"
-                />
-              ) : (
-                <div className="w-20 h-20 sm:w-28 sm:h-28 rounded-2xl sm:rounded-3xl border-4 border-white dark:border-[#09090b] bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-2xl sm:text-3xl font-black shadow-xl shrink-0 uppercase select-none">
-                  {(profile?.name || 'U').substring(0, 2)}
-                </div>
-              )}
+              <UserAvatar
+                src={avatarSrc}
+                name={profile?.name || session.name}
+                size="3xl"
+                square
+                className="rounded-2xl sm:rounded-3xl border-4 border-white dark:border-[#09090b] shadow-xl bg-white dark:bg-zinc-900"
+              />
             </div>
 
             {/* Desktop Quick Actions (WA & Portfolio) */}

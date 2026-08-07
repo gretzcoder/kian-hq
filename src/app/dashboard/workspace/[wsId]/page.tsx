@@ -116,7 +116,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       SELECT t.id, t.title, t.description, t.status, t.priority, t.deadline, t.start_at, t.created_at, t.task_type, t.parent_task_id, t.revision_note, t.sparks, t.created_by, u.name as creator_name
       FROM tasks t
       LEFT JOIN users u ON t.created_by = u.id
-      WHERE t.workspace_id = ?
+      WHERE t.workspace_id = ? AND t.status != 'DELETED'
       ORDER BY
         CASE t.priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
         t.created_at ASC
@@ -182,7 +182,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   // 1. Scheduled tasks (start_at > now) are hidden until start date
   // 2. Assessment tasks must be APPROVED by Coordinator (status === 'APPROVED') before Troopers can see them
   const now = Date.now();
-  const allTasks = tasksRaw as unknown as TaskRow[];
+  const allTasks = (tasksRaw as unknown as TaskRow[]).filter((t) => t.status !== 'DELETED');
   const tasks = isManagerUser
     ? allTasks
     : allTasks.filter((t) => {
@@ -190,7 +190,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         if (t.task_type === 'ASSESSMENT' || workspace.workspace_type === 'ASSESSMENT') {
           return t.status === 'APPROVED';
         }
-        return t.status !== 'DELETED';
+        return true;
       });
 
   // Fetch assignments & reactions when there are tasks

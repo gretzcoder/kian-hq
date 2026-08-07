@@ -56,7 +56,7 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
     .prepare(
       `SELECT id, title, description, status, priority, deadline, start_at, created_at, task_type, parent_task_id, revision_note, sparks
        FROM tasks
-       WHERE workspace_id = ?
+       WHERE workspace_id = ? AND status != 'DELETED'
        ORDER BY
          CASE priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
          created_at ASC`
@@ -68,13 +68,13 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
   const isManagerUser = ctx.userType === 'STAFF' || isMentorUser || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE');
 
   const now = Date.now();
-  const allTasks = (tasksRaw as unknown as PollTaskRow[]) || [];
+  const allTasks = ((tasksRaw as unknown as PollTaskRow[]) || []).filter((t) => t.status !== 'DELETED');
   const tasks = isManagerUser
     ? allTasks
     : allTasks.filter((t) => {
         if (t.start_at && t.start_at > now) return false;
         if (t.task_type === 'ASSESSMENT') return t.status === 'APPROVED';
-        return t.status !== 'DELETED';
+        return true;
       });
 
   if (tasks.length === 0) {

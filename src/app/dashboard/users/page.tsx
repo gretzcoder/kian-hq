@@ -3,6 +3,7 @@ import { hasPermission } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import UserAvatar from '@/components/ui/UserAvatar';
 import RoleSelector from '@/modules/users/components/RoleSelector';
 import UserTypeSelector from '@/modules/users/components/UserTypeSelector';
 import UserStatusSelector from '@/modules/users/components/UserStatusSelector';
@@ -98,18 +99,7 @@ export default async function UsersPage() {
                 <tr key={user.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/20 transition-colors">
                   <td className="px-6 py-4 font-bold text-zinc-800 dark:text-zinc-100">
                     <Link href={`/dashboard/profile?userId=${user.id}`} className="flex items-center gap-3 group w-fit">
-                      {user.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={user.avatar_url}
-                          alt={user.name}
-                          className="w-8 h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 object-cover shrink-0"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0 uppercase">
-                          {user.name.substring(0, 2)}
-                        </div>
-                      )}
+                      <UserAvatar src={user.avatar_url} name={user.name} size="md" square />
                       <span className="group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:underline">
                         {user.name}
                       </span>

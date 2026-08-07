@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState, useEffect, useRef, useCallback, useTransition } from 'react';
 import ThemeToggle from '@/modules/theme/components/ThemeToggle';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { getUnreadCount } from '@/modules/announcements/announcementReadState';
 import { getUnreadWorkspaceCount } from '@/modules/workspaces/workspaceReadState';
 import { getSidebarCounts, WorkspaceNotifItem } from '@/modules/notifications/notificationActions';
@@ -256,14 +257,9 @@ export default function DashboardSidebar({
           <ThemeToggle />
           <Link
             href="/dashboard/profile"
-            className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-600 font-bold flex items-center justify-center text-xs border border-purple-500/20 overflow-hidden shrink-0"
+            className="w-8 h-8 rounded-full border border-purple-500/20 overflow-hidden shrink-0"
           >
-            {session.avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={session.avatar} alt={session.name} className="w-full h-full object-cover" />
-            ) : (
-              session.name.substring(0, 2).toUpperCase()
-            )}
+            <UserAvatar src={session.avatar} name={session.name} size="md" />
           </Link>
         </div>
       </header>
@@ -398,18 +394,7 @@ export default function DashboardSidebar({
               className="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-80 transition-opacity overflow-hidden"
               title={session.name}
             >
-              {session.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={session.avatar}
-                  alt={session.name}
-                  className="w-8 h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 shrink-0 object-cover"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-xs font-black shadow-sm uppercase shrink-0">
-                  {session.name.substring(0, 2)}
-                </div>
-              )}
+              <UserAvatar src={session.avatar} name={session.name} size="md" square />
               {!collapsed && (
                 <div className="min-w-0 flex-1 overflow-hidden">
                   <p className="text-xs font-bold text-zinc-900 dark:text-zinc-200 truncate leading-tight whitespace-nowrap">

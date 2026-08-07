@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { approveUser, rejectUser } from '../actions';
 
 interface PendingUser {
@@ -97,18 +98,7 @@ export default function PendingApprovalsList({
             >
               {/* User info */}
               <div className="flex items-center gap-3 min-w-0">
-                {user.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={user.avatar_url}
-                    alt={user.name}
-                    className="w-9 h-9 rounded-xl border border-amber-500/20 object-cover shrink-0"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center text-xs font-black shrink-0 uppercase">
-                    {user.name.substring(0, 2)}
-                  </div>
-                )}
+                <UserAvatar src={user.avatar_url} name={user.name} size="w-9 h-9 text-xs font-black" square />
                 <div className="min-w-0">
                   <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">{user.name}</p>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-0.5 truncate">{user.email}</p>

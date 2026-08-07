@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from 'react';
 import Link from 'next/link';
+import UserAvatar from '@/components/ui/UserAvatar';
 import {
   addAnnouncementComment,
   deleteAnnouncementComment,
@@ -145,18 +146,7 @@ export function AnnouncementInteractive({
                     <div className="group flex items-start justify-between gap-3 bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/50 dark:border-zinc-800/50 rounded-2xl p-3 text-xs">
                       <div className="flex items-start gap-2.5 flex-1 min-w-0">
                         <Link href={`/dashboard/profile?userId=${c.user_id}`} className="shrink-0">
-                          {c.user_avatar ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={c.user_avatar}
-                              alt={c.user_name || 'User'}
-                              className="w-6 h-6 rounded-lg border border-zinc-200 dark:border-zinc-800 object-cover"
-                            />
-                          ) : (
-                            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-black uppercase">
-                              {(c.user_name || 'U').substring(0, 2)}
-                            </div>
-                          )}
+                          <UserAvatar src={c.user_avatar} name={c.user_name} size="sm" square />
                         </Link>
                         <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -211,18 +201,7 @@ export function AnnouncementInteractive({
                           >
                             <div className="flex items-start gap-2.5 flex-1 min-w-0">
                               <Link href={`/dashboard/profile?userId=${reply.user_id}`} className="shrink-0">
-                                {reply.user_avatar ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={reply.user_avatar}
-                                    alt={reply.user_name || 'User'}
-                                    className="w-6 h-6 rounded-lg border border-zinc-200 dark:border-zinc-800 object-cover"
-                                  />
-                                ) : (
-                                  <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-[10px] font-black uppercase">
-                                    {(reply.user_name || 'U').substring(0, 2)}
-                                  </div>
-                                )}
+                                <UserAvatar src={reply.user_avatar} name={reply.user_name} size="sm" square />
                               </Link>
                               <div className="space-y-1 flex-1 min-w-0">
                                 <div className="flex items-center gap-2 flex-wrap">

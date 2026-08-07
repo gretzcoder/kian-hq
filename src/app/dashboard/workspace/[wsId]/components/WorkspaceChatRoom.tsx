@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns';
@@ -736,15 +737,7 @@ export function WorkspaceChatRoom({
                   >
                     {/* User Avatar with Presence Dot */}
                     <div className="relative shrink-0">
-                      {msg.user_avatar ? (
-                        <div className="relative w-5 h-5 rounded-full overflow-hidden border border-purple-500/30">
-                          <Image src={msg.user_avatar} alt={msg.user_name || ''} fill className="object-cover" />
-                        </div>
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center font-bold text-[9px]">
-                          {userInitials}
-                        </div>
-                      )}
+                      <UserAvatar src={msg.user_avatar} name={msg.user_name} size="xs" />
                       <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-zinc-900 ${presenceDot}`} />
                     </div>
 

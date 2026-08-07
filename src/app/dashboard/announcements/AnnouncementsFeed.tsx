@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { AnnouncementInteractive, CommentItem, ReactionItem } from './AnnouncementInteractive';
 import { getAnnouncementsUpdates } from '@/modules/announcements/actions';
@@ -144,18 +145,7 @@ export default function AnnouncementsFeed({
                 href={authorId ? `/dashboard/profile?userId=${authorId}` : '/dashboard/profile'}
                 className="flex items-center gap-2.5 min-w-0 group"
               >
-                {ann.author_avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={ann.author_avatar}
-                    alt={ann.author_name || 'Author'}
-                    className="w-8 h-8 rounded-xl border border-zinc-200 dark:border-zinc-800 object-cover shrink-0"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center text-xs font-black shrink-0 uppercase">
-                    {(ann.author_name || 'A').substring(0, 2)}
-                  </div>
-                )}
+                <UserAvatar src={ann.author_avatar} name={ann.author_name || 'Author'} size="md" square />
                 <span className="text-xs font-bold text-zinc-900 dark:text-zinc-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:underline truncate">
                   {ann.author_name || 'System Operator'}
                 </span>

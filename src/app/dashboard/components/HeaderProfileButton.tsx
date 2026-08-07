@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
+import UserAvatar from '@/components/ui/UserAvatar';
 import EditProfileModal from '@/modules/profile/components/EditProfileModal';
 
 interface HeaderProfileButtonProps {
@@ -15,8 +15,6 @@ export default function HeaderProfileButton({ name, email, avatar }: HeaderProfi
   const [isOpen, setIsOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const firstLetter = (name || 'U').charAt(0).toUpperCase();
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -39,15 +37,7 @@ export default function HeaderProfileButton({ name, email, avatar }: HeaderProfi
           className="flex items-center gap-2 px-2.5 py-1.5 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:border-purple-500/40 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/80 transition-all text-xs font-bold shadow-xs active:scale-95 group cursor-pointer"
           title="Menu Profil Pengguna"
         >
-          {avatar ? (
-            <div className="relative w-6 h-6 rounded-full overflow-hidden border border-purple-500/30 shrink-0">
-              <Image src={avatar} alt={name} fill className="object-cover" />
-            </div>
-          ) : (
-            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center font-bold text-[11px] shrink-0 shadow-xs">
-              {firstLetter}
-            </div>
-          )}
+          <UserAvatar src={avatar} name={name} size="sm" />
           <span className="font-extrabold max-w-[110px] truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
             {name}
           </span>
@@ -70,15 +60,7 @@ export default function HeaderProfileButton({ name, email, avatar }: HeaderProfi
               className="p-3 bg-zinc-50 dark:bg-zinc-900/60 hover:bg-purple-500/10 hover:border-purple-500/30 transition-all rounded-2xl border border-zinc-100 dark:border-zinc-800/80 flex items-center gap-3 cursor-pointer group"
               title="Buka Halaman Profil Saya"
             >
-              {avatar ? (
-                <div className="relative w-10 h-10 rounded-2xl overflow-hidden border border-purple-500/30 shrink-0 shadow-xs">
-                  <Image src={avatar} alt={name} fill className="object-cover" />
-                </div>
-              ) : (
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center font-black text-base shrink-0 shadow-xs">
-                  {firstLetter}
-                </div>
-              )}
+              <UserAvatar src={avatar} name={name} size="lg" square />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-black text-zinc-900 dark:text-zinc-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
