@@ -188,6 +188,7 @@ export default function DashboardSidebar({
     {
       title: 'KOLABORASI',
       items: [
+        { href: '/dashboard/community', label: 'Community Chat', icon: '💬', exact: false },
         ...(canReview
           ? [{
               href: '/dashboard/review',
