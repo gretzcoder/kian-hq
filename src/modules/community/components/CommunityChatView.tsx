@@ -58,6 +58,26 @@ const STICKER_PACKS = [
   { id: 'STK_GAMING_MODE', icon: '🎮🕹️', label: 'Gas Mabar Main Game!', tag: 'Gaming', bg: 'from-yellow-400 to-amber-500' },
 ];
 
+/**
+ * Checks if a string is a valid image URL or image attachment
+ */
+function isImageUrl(url?: string): boolean {
+  if (!url) return false;
+  const clean = url.trim().split('?')[0].toLowerCase();
+  if (/\.(jpeg|jpg|gif|png|webp|svg|bmp|avif)$/i.test(clean)) return true;
+  if (
+    url.includes('drive.google.com/uc?') ||
+    url.includes('images.unsplash.com') ||
+    url.includes('i.imgur.com') ||
+    url.includes('res.cloudinary.com') ||
+    url.includes('r2.dev') ||
+    url.startsWith('data:image/')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export default function CommunityChatView({
   initialWorkChannels,
   initialGeneralChannels,
@@ -137,9 +157,10 @@ export default function CommunityChatView({
 
   // Helper to parse message text and turn @mentions into clickable profile buttons
   const renderMessageContent = (text: string, isSelf: boolean) => {
-    const parts = text.split(/(@[\w.-]+)/g);
+    const parts = text.split(/(@[\w.-]+|(?:https?:\/\/[^\s]+))/g);
 
     return parts.map((part, index) => {
+      // Handle @mentions
       if (part.startsWith('@') && part.length > 1) {
         const queryHandle = part.substring(1).toLowerCase();
 
@@ -193,6 +214,43 @@ export default function CommunityChatView({
             <span>@</span>
             <span>{matchingMember ? matchingMember.name.split(' ')[0] : part.substring(1)}</span>
           </button>
+        );
+      }
+
+      // Handle embedded HTTP/HTTPS URLs
+      if (part.startsWith('http://') || part.startsWith('https://')) {
+        const isImg = isImageUrl(part);
+        return (
+          <span key={index} className="inline-block my-1">
+            <a
+              href={part}
+              target="_blank"
+              rel="noreferrer"
+              className={`underline font-bold text-xs hover:opacity-80 transition-opacity ${
+                isSelf ? 'text-white' : 'text-purple-600 dark:text-purple-400'
+              }`}
+            >
+              {part} ➔
+            </a>
+            {isImg && (
+              <div className="mt-2 overflow-hidden rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 max-w-sm shadow-md bg-zinc-950/40 group/img relative">
+                <a href={part} target="_blank" rel="noreferrer" className="block relative group/zoom">
+                  <img
+                    src={part}
+                    alt="Pratinjau Gambar Teks"
+                    className="w-full max-h-64 object-cover rounded-2xl group-hover/zoom:scale-[1.02] transition-transform duration-200"
+                    onError={(e) => {
+                      (e.target as HTMLElement).parentElement?.parentElement?.remove();
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/zoom:opacity-100 transition-opacity p-2.5 flex items-end justify-between">
+                    <span className="text-white text-[10px] font-bold truncate">Klik gambar penuh ↗</span>
+                    <span className="text-white text-xs">🔍</span>
+                  </div>
+                </a>
+              </div>
+            )}
+          </span>
         );
       }
 
@@ -772,7 +830,7 @@ export default function CommunityChatView({
                           </div>
                         </div>
                       ) : (
-                        /* Text Bubble with Interactive Clickable @Mentions */
+                        /* Text Bubble with Interactive Mentions & Image Previews */
                         <div
                           className={`text-xs sm:text-sm leading-relaxed p-3 sm:p-3.5 rounded-2xl max-w-[90%] sm:max-w-2xl whitespace-pre-wrap break-words ${
                             isSelf
@@ -781,17 +839,44 @@ export default function CommunityChatView({
                           }`}
                         >
                           {renderMessageContent(msg.message, isSelf)}
+
+                          {/* Attachment Image Preview Card or Link Pill */}
                           {msg.attachment_url && (
                             <div className="mt-2.5 pt-2 border-t border-white/20 dark:border-zinc-800">
-                              <a
-                                href={msg.attachment_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 text-xs underline font-bold hover:opacity-80"
-                              >
-                                <span>📎 Lampiran / Reference Link</span>
-                                <span>➔</span>
-                              </a>
+                              {isImageUrl(msg.attachment_url) ? (
+                                <div className="overflow-hidden rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 max-w-md shadow-md bg-zinc-950/40 group/img relative mt-1">
+                                  <a href={msg.attachment_url} target="_blank" rel="noreferrer" className="block relative group/zoom">
+                                    <img
+                                      src={msg.attachment_url}
+                                      alt="Lampiran Gambar"
+                                      className="w-full max-h-72 object-cover rounded-2xl group-hover/zoom:scale-[1.02] transition-transform duration-200"
+                                      onError={(e) => {
+                                        // Fallback if image fails to render
+                                        (e.target as HTMLElement).style.display = 'none';
+                                      }}
+                                    />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/zoom:opacity-100 transition-opacity p-3 flex items-end justify-between">
+                                      <span className="text-white text-[11px] font-bold truncate">Klik untuk gambar penuh ↗</span>
+                                      <span className="text-white text-xs">🔍</span>
+                                    </div>
+                                  </a>
+                                </div>
+                              ) : (
+                                <a
+                                  href={msg.attachment_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
+                                    isSelf
+                                      ? 'bg-white/20 hover:bg-white/30 text-white border-white/30'
+                                      : 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/20'
+                                  }`}
+                                >
+                                  <span>📎 Lampiran / Reference Link</span>
+                                  <span className="truncate max-w-xs">{msg.attachment_url}</span>
+                                  <span>➔</span>
+                                </a>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1026,7 +1111,7 @@ export default function CommunityChatView({
                 type="url"
                 value={attachmentUrl}
                 onChange={(e) => setAttachmentUrl(e.target.value)}
-                placeholder="Paste URL lampiran / Google Drive / Figma / Referensi..."
+                placeholder="Paste URL lampiran / Google Drive / Figma / Referensi / Gambar..."
                 className="flex-1 bg-transparent text-xs outline-none text-zinc-900 dark:text-zinc-100"
               />
               <button

@@ -3,6 +3,7 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { sendPushNotificationToUser } from '@/modules/notifications/pushActions';
+import { getActiveSimulatedRole } from '@/modules/roles/viewAsRoleActions';
 
 export interface CommunityChannel {
   id: string;
@@ -100,41 +101,40 @@ export async function getCommunityChannels(): Promise<{
     let lastMessageAt = '';
 
     if (session?.userId) {
-      // Get last message in channel
-      const lastMsgRow = (await db
+      const readRow = (await db
         .prepare(
-          `SELECT message, created_at FROM community_messages
-           WHERE channel_id = ?
-           ORDER BY created_at DESC LIMIT 1`
+          `SELECT last_read_at FROM community_channel_reads
+           WHERE channel_id = ? AND user_id = ?`
         )
-        .bind(ch.id)
-        .first()) as { message: string; created_at: string } | null;
+        .bind(ch.id, session.userId)
+        .first()) as { last_read_at: string } | null;
 
-      if (lastMsgRow) {
-        lastMessage = lastMsgRow.message;
-        lastMessageAt = lastMsgRow.created_at;
+      const lastReadAt = readRow?.last_read_at || '1970-01-01 00:00:00';
 
-        // Check read timestamp
-        const readRow = (await db
-          .prepare(
-            `SELECT last_read_at FROM community_channel_reads
-             WHERE channel_id = ? AND user_id = ?`
-          )
-          .bind(ch.id, session.userId)
-          .first()) as { last_read_at: string } | null;
+      const unreadRow = (await db
+        .prepare(
+          `SELECT COUNT(*) as count FROM community_messages
+           WHERE channel_id = ? AND created_at > ?`
+        )
+        .bind(ch.id, lastReadAt)
+        .first()) as { count: number } | null;
 
-        const lastReadAt = readRow?.last_read_at || '1970-01-01 00:00:00';
+      unreadCount = unreadRow?.count || 0;
+    }
 
-        const unreadRow = (await db
-          .prepare(
-            `SELECT COUNT(*) as count FROM community_messages
-             WHERE channel_id = ? AND created_at > ? AND user_id != ?`
-          )
-          .bind(ch.id, lastReadAt, session.userId)
-          .first()) as { count: number } | null;
+    const lastMsgRow = (await db
+      .prepare(
+        `SELECT message, created_at FROM community_messages
+         WHERE channel_id = ?
+         ORDER BY created_at DESC
+         LIMIT 1`
+      )
+      .bind(ch.id)
+      .first()) as { message: string; created_at: string } | null;
 
-        unreadCount = unreadRow?.count || 0;
-      }
+    if (lastMsgRow) {
+      lastMessage = lastMsgRow.message;
+      lastMessageAt = lastMsgRow.created_at;
     }
 
     const item: CommunityChannel = {
@@ -162,6 +162,7 @@ export async function getCommunityMessages(
   limit = 60
 ): Promise<CommunityMessage[]> {
   const session = await getSession();
+  const simRole = await getActiveSimulatedRole();
   const db = await getDB();
 
   const messagesRaw = (await db
@@ -213,6 +214,21 @@ export async function getCommunityMessages(
   const result: CommunityMessage[] = [];
 
   for (const m of messages) {
+    // Check if current user is simulating a role
+    let displayRoleName = m.user_role_name;
+    let displayRoleColor = m.user_role_color;
+
+    if (simRole && currentUserId && m.user_id === currentUserId) {
+      displayRoleName = simRole.roleName;
+      if (simRole.roleName.toUpperCase().includes('TROOPERS')) {
+        displayRoleColor = '#3b82f6';
+      } else if (simRole.roleName.toUpperCase().includes('EXECUTIVE')) {
+        displayRoleColor = '#ec4899';
+      } else if (simRole.roleName.toUpperCase().includes('COORDINATOR')) {
+        displayRoleColor = '#2563eb';
+      }
+    }
+
     // Reactions for this message
     const reactionsRaw = (await db
       .prepare(
@@ -271,8 +287,8 @@ export async function getCommunityMessages(
       user_name: m.user_name,
       user_email: m.user_email,
       user_avatar: m.user_avatar,
-      user_role_name: m.user_role_name,
-      user_role_color: m.user_role_color,
+      user_role_name: displayRoleName,
+      user_role_color: displayRoleColor,
       message: m.message,
       attachment_url: m.attachment_url,
       parent_id: m.parent_id,
@@ -296,6 +312,7 @@ export async function getCommunityMembers(): Promise<{
 }> {
   try {
     const session = await getSession();
+    const simRole = await getActiveSimulatedRole();
     const db = await getDB();
 
     const usersRaw = await db
@@ -378,24 +395,38 @@ export async function getCommunityMembers(): Promise<{
       const lastActiveTime = lastActiveMap.get(u.id) || (u.created_at ? new Date(u.created_at).getTime() : 0);
       const isOnline = nowMs - lastActiveTime < fifteenMinsMs;
 
+      let displayRoleName = u.role_name || 'Anggota Tim';
+      let displayRoleColor = u.role_color || '#7c3aed';
+
+      if (simRole && session?.userId && u.id === session.userId) {
+        displayRoleName = simRole.roleName;
+        if (simRole.roleName.toUpperCase().includes('TROOPERS')) {
+          displayRoleColor = '#3b82f6';
+        } else if (simRole.roleName.toUpperCase().includes('EXECUTIVE')) {
+          displayRoleColor = '#ec4899';
+        } else if (simRole.roleName.toUpperCase().includes('COORDINATOR')) {
+          displayRoleColor = '#2563eb';
+        }
+      }
+
       const memberObj: CommunityMember = {
         id: u.id,
         name: u.name,
         email: u.email,
         avatar_url: u.avatar_url,
         role_id: u.role_id,
-        role_name: u.role_name || 'Anggota Tim',
-        role_color: u.role_color || '#7c3aed',
+        role_name: displayRoleName,
+        role_color: displayRoleColor,
         is_online: isOnline,
         last_active_at: u.created_at ? String(u.created_at) : undefined,
       };
 
       if (isOnline) {
         totalOnline += 1;
-        const roleName = u.role_name || 'Anggota Tim';
-        const existing = onlineGroupMap.get(roleName) || { roleColor: u.role_color || '#7c3aed', members: [] };
+        const groupKey = displayRoleName;
+        const existing = onlineGroupMap.get(groupKey) || { roleColor: displayRoleColor, members: [] };
         existing.members.push(memberObj);
-        onlineGroupMap.set(roleName, existing);
+        onlineGroupMap.set(groupKey, existing);
       } else {
         totalOffline += 1;
         offlineMembersList.push(memberObj);
@@ -440,140 +471,106 @@ export async function getCommunityMembers(): Promise<{
 }
 
 /**
- * Sends a message or reply in a community channel & triggers push notifications
+ * Sends a message to a community channel with @mentions push notifications support
  */
 export async function sendCommunityMessage(
   channelId: string,
   message: string,
   attachmentUrl?: string,
   parentId?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; messageId?: string }> {
   const session = await getSession();
-  if (!session?.userId) {
-    return { success: false, error: 'Unauthorized. Harap login terlebih dahulu.' };
-  }
-
-  const trimmed = message.trim();
-  if (!trimmed && !attachmentUrl) {
-    return { success: false, error: 'Pesan tidak boleh kosong.' };
-  }
+  if (!session) return { success: false };
 
   const db = await getDB();
-  const id = `msg_${session.userId.slice(0, 6)}_${Math.random().toString(36).substring(2, 9)}`;
+  const id = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
   await db
     .prepare(
-      `INSERT INTO community_messages (id, channel_id, user_id, message, attachment_url, parent_id)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO community_messages (id, channel_id, user_id, message, attachment_url, parent_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
     )
-    .bind(id, channelId, session.userId, trimmed, attachmentUrl || null, parentId || null)
+    .bind(id, channelId, session.userId, message, attachmentUrl || null, parentId || null)
     .run();
 
-  // Mark as read for sender
-  await db
-    .prepare(
-      `INSERT INTO community_channel_reads (channel_id, user_id, last_read_at)
-       VALUES (?, ?, CURRENT_TIMESTAMP)
-       ON CONFLICT(channel_id, user_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`
-    )
-    .bind(channelId, session.userId)
-    .run();
+  // Handle @mentions push notifications
+  try {
+    const mentionMatches = message.match(/@([\w.-]+)/g);
+    if (mentionMatches && mentionMatches.length > 0) {
+      const allUsers = (await db.prepare('SELECT id, name, email FROM users').all()) as {
+        results: Array<{ id: string; name: string; email: string }>;
+      };
+      const usersList = allUsers.results || [];
 
-  // Fetch channel name for push notification title
-  const channel = (await db
-    .prepare('SELECT name, icon FROM community_channels WHERE id = ?')
-    .bind(channelId)
-    .first()) as { name: string; icon: string } | null;
+      for (const mText of mentionMatches) {
+        const handle = mText.substring(1).toLowerCase();
+        const targetUser = usersList.find((u) => {
+          const first = u.name.split(' ')[0].toLowerCase();
+          const full = u.name.toLowerCase();
+          const emailUser = u.email.split('@')[0].toLowerCase();
+          return (
+            first === handle ||
+            full === handle ||
+            emailUser === handle ||
+            full.startsWith(handle)
+          );
+        });
 
-  const channelName = channel ? `${channel.icon} ${channel.name}` : 'Community Chat';
-
-  // Handle Push Notification for Reply target user
-  if (parentId) {
-    const parentMsg = (await db
-      .prepare('SELECT user_id FROM community_messages WHERE id = ?')
-      .bind(parentId)
-      .first()) as { user_id: string } | null;
-
-    if (parentMsg && parentMsg.user_id !== session.userId) {
-      sendPushNotificationToUser(parentMsg.user_id, 'MENTION', {
-        title: `${session.name} membalas pesan Anda di ${channelName}`,
-        body: trimmed.slice(0, 120),
-        url: `/dashboard/community?channelId=${channelId}`,
-        tag: `community-reply-${id}`,
-      }).catch((e) => console.error('[Push Error]', e));
-    }
-  }
-
-  // Handle @mentions
-  const mentions = trimmed.match(/@([\w.-]+)/g);
-  if (mentions && mentions.length > 0) {
-    const mentionedNames = mentions.map((m) => m.substring(1).toLowerCase());
-    const usersRaw = (await db.prepare('SELECT id, name, email FROM users').all()) as {
-      results: Array<{ id: string; name: string; email: string }>;
-    };
-
-    const targetUserIds = new Set<string>();
-    for (const u of usersRaw.results || []) {
-      if (u.id === session.userId) continue;
-      const lowerName = u.name.toLowerCase();
-      const lowerEmail = u.email.toLowerCase();
-      for (const mName of mentionedNames) {
-        if (lowerName.includes(mName) || lowerEmail.includes(mName)) {
-          targetUserIds.add(u.id);
+        if (targetUser && targetUser.id !== session.userId) {
+          await sendPushNotificationToUser(
+            targetUser.id,
+            `💬 Mentioned oleh ${session.name}`,
+            `"${message.slice(0, 100)}..."`,
+            `/dashboard/community?channelId=${channelId}`
+          );
         }
       }
     }
-
-    for (const targetId of targetUserIds) {
-      sendPushNotificationToUser(targetId, 'MENTION', {
-        title: `${session.name} menyebut Anda di ${channelName}`,
-        body: trimmed.slice(0, 120),
-        url: `/dashboard/community?channelId=${channelId}`,
-        tag: `community-mention-${id}`,
-      }).catch((e) => console.error('[Push Error]', e));
-    }
+  } catch (err) {
+    console.error('Mention push notification error:', err);
   }
 
-  return { success: true };
+  return { success: true, messageId: id };
 }
 
 /**
- * Toggles an emoji reaction on a community message
+ * Toggles an emoji reaction for a community message
  */
 export async function toggleCommunityReaction(
   messageId: string,
   emoji: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; action: 'added' | 'removed' }> {
   const session = await getSession();
-  if (!session?.userId) {
-    return { success: false, error: 'Unauthorized.' };
-  }
+  if (!session) return { success: false, action: 'removed' };
 
   const db = await getDB();
 
-  const existing = (await db
+  const existing = await db
     .prepare(
       `SELECT id FROM community_message_reactions
        WHERE message_id = ? AND user_id = ? AND emoji = ?`
     )
     .bind(messageId, session.userId, emoji)
-    .first()) as { id: string } | null;
+    .first();
 
   if (existing) {
     await db
-      .prepare('DELETE FROM community_message_reactions WHERE id = ?')
-      .bind(existing.id)
+      .prepare(
+        `DELETE FROM community_message_reactions
+         WHERE message_id = ? AND user_id = ? AND emoji = ?`
+      )
+      .bind(messageId, session.userId, emoji)
       .run();
+    return { success: true, action: 'removed' };
   } else {
-    const id = `react_${Math.random().toString(36).substring(2, 10)}`;
+    const id = `react_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     await db
       .prepare(
-        `INSERT INTO community_message_reactions (id, message_id, user_id, emoji)
-         VALUES (?, ?, ?, ?)`
+        `INSERT INTO community_message_reactions (id, message_id, user_id, emoji, created_at)
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`
       )
       .bind(id, messageId, session.userId, emoji)
       .run();
+    return { success: true, action: 'added' };
   }
-
-  return { success: true };
 }
