@@ -519,9 +519,12 @@ export async function sendCommunityMessage(
         if (targetUser && targetUser.id !== session.userId) {
           await sendPushNotificationToUser(
             targetUser.id,
-            `💬 Mentioned oleh ${session.name}`,
-            `"${message.slice(0, 100)}..."`,
-            `/dashboard/community?channelId=${channelId}`
+            'MENTION',
+            {
+              title: `💬 Mentioned oleh ${session.name}`,
+              body: `"${message.slice(0, 100)}..."`,
+              url: `/dashboard/community?channelId=${channelId}`,
+            }
           );
         }
       }
