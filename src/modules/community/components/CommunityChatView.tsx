@@ -86,6 +86,12 @@ export default function CommunityChatView({
   const [showMemberSidebar, setShowMemberSidebar] = useState(false); // Closed by default on mobile
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
 
+  // Mention Autocomplete State
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionIndex, setMentionIndex] = useState(-1);
+  const [selectedMentionCursor, setSelectedMentionCursor] = useState(0);
+
   // Selected Member for Profile Highlight Card Modal
   const [selectedMemberCard, setSelectedMemberCard] = useState<CommunityMember | null>(null);
 
@@ -108,6 +114,97 @@ export default function CommunityChatView({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  // Unified members array for mentions
+  const allMembersList: CommunityMember[] = React.useMemo(() => {
+    const onlineList = onlineRoleGroups.flatMap((g) => g.members);
+    const combined = [...onlineList, ...offlineMembers];
+    const uniqueMap = new Map<string, CommunityMember>();
+    for (const m of combined) {
+      if (!uniqueMap.has(m.id)) uniqueMap.set(m.id, m);
+    }
+    return Array.from(uniqueMap.values());
+  }, [onlineRoleGroups, offlineMembers]);
+
+  // Mention candidates filter
+  const mentionCandidates = React.useMemo(() => {
+    if (!mentionQuery) return allMembersList.slice(0, 8);
+    const q = mentionQuery.toLowerCase();
+    return allMembersList
+      .filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [allMembersList, mentionQuery]);
+
+  // Input change handler with @mention detection
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    setInputMessage(val);
+
+    const textBeforeCursor = val.slice(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1) {
+      const charBeforeAt = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
+      if (charBeforeAt === ' ' || charBeforeAt === '\n' || lastAtIndex === 0) {
+        const query = textBeforeCursor.slice(lastAtIndex + 1);
+        if (!query.includes(' ') && !query.includes('\n')) {
+          setMentionQuery(query);
+          setMentionIndex(lastAtIndex);
+          setShowMentionSuggestions(true);
+          setSelectedMentionCursor(0);
+          return;
+        }
+      }
+    }
+
+    setShowMentionSuggestions(false);
+  };
+
+  // Insert mention into input text
+  const insertMention = (member: CommunityMember) => {
+    const mentionHandle = member.name.includes(' ') ? member.name.split(' ')[0] : member.name;
+    const beforeAt = inputMessage.slice(0, mentionIndex);
+    const afterCursor = inputMessage.slice(mentionIndex + 1 + mentionQuery.length);
+
+    const newText = `${beforeAt}@${mentionHandle} ${afterCursor}`;
+    setInputMessage(newText);
+    setShowMentionSuggestions(false);
+
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+    }
+  };
+
+  // Handle KeyDown for Navigation & Mentions
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showMentionSuggestions && mentionCandidates.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedMentionCursor((prev) => (prev + 1) % mentionCandidates.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedMentionCursor((prev) => (prev - 1 + mentionCandidates.length) % mentionCandidates.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        insertMention(mentionCandidates[selectedMentionCursor]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowMentionSuggestions(false);
+        return;
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
+  };
 
   // Scroll to bottom of message list
   const scrollToBottom = (smooth = true) => {
@@ -170,6 +267,7 @@ export default function CommunityChatView({
     setMobileChannelOpen(false);
     setReplyingTo(null);
     setShowPickerModal(false);
+    setShowMentionSuggestions(false);
     setReactingToMessageId(null);
     fetchMessages(channel.id, true);
   };
@@ -207,6 +305,7 @@ export default function CommunityChatView({
     setAttachmentUrl('');
     setShowAttachmentInput(false);
     setShowPickerModal(false);
+    setShowMentionSuggestions(false);
     setReplyingTo(null);
 
     try {
@@ -225,6 +324,7 @@ export default function CommunityChatView({
   // Send Sticker
   const handleSendSticker = async (sticker: typeof STICKER_PACKS[0]) => {
     setShowPickerModal(false);
+    setShowMentionSuggestions(false);
     setReactingToMessageId(null);
     setSending(true);
     const stickerPayload = `[STICKER:${sticker.id}|${sticker.icon}|${sticker.label}|${sticker.bg}]`;
@@ -694,6 +794,57 @@ export default function CommunityChatView({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* ── MENTION AUTOCOMPLETE POPOVER DROPDOWN ── */}
+        {showMentionSuggestions && mentionCandidates.length > 0 && (
+          <div className="absolute bottom-20 left-4 right-4 sm:left-24 sm:max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-2.5 z-40 animate-in fade-in slide-in-from-bottom-2">
+            <div className="px-3 py-1.5 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 mb-1.5">
+              <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                <span>⚡ Mention Anggota Komunitas</span>
+              </span>
+              <span className="text-[9px] font-bold text-zinc-400">Gunakan ↑↓ & Enter</span>
+            </div>
+
+            <div className="max-h-52 overflow-y-auto space-y-1">
+              {mentionCandidates.map((member, idx) => {
+                const isSelected = idx === selectedMentionCursor;
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => insertMention(member)}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-2xl text-left transition-all ${
+                      isSelected
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20 font-bold'
+                        : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-800 dark:text-zinc-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <UserAvatar src={member.avatar_url} name={member.name} size="xs" square />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold truncate">{member.name}</p>
+                        <p
+                          className={`text-[9px] truncate ${
+                            isSelected ? 'text-purple-100' : 'text-zinc-400'
+                          }`}
+                        >
+                          {member.email}
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0 ${
+                        isSelected ? 'bg-white/20 text-white' : 'bg-purple-500/10 text-purple-600'
+                      }`}
+                    >
+                      {member.role_name || 'MEMBER'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── UNIFIED EMOJI & COMMUNITY STICKER PICKER MODAL POPOVER ── */}
         {showPickerModal && (
           <div className="absolute bottom-20 left-2 right-2 sm:left-6 sm:right-auto sm:w-[350px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-3 shadow-2xl z-30 animate-in fade-in duration-150">
@@ -858,23 +1009,18 @@ export default function CommunityChatView({
               <span className="sm:hidden text-xs">✨</span>
             </button>
 
-            {/* Input Text Box */}
+            {/* Input Text Box with @mention listener */}
             <div className="flex-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus-within:border-purple-500 rounded-2xl px-3.5 py-2 flex items-center gap-2 transition-all shadow-xs">
               <textarea
                 ref={textareaRef}
                 rows={1}
                 value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(e);
-                  }
-                }}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
                 placeholder={
                   replyingTo
                     ? `Balas @${replyingTo.user_name}...`
-                    : `Tulis pesan di #${activeChannel.name}... (Gunakan @nama untuk mention)`
+                    : `Tulis pesan di #${activeChannel.name}... (Ketik @ untuk mention anggota)`
                 }
                 className="w-full bg-transparent text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 outline-none resize-none max-h-24"
               />
