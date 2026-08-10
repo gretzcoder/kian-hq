@@ -64,6 +64,7 @@ export default async function ReviewPage() {
     LEFT JOIN users u  ON ta.user_id = u.id
     WHERE ta.status = 'WAITING_REVIEW'
       AND ta.result_url IS NOT NULL
+      AND TRIM(ta.result_url) != ''
       AND t.status = 'APPROVED'
     ORDER BY ta.submitted_at ASC
   `).bind(session.userId, session.userId).all();

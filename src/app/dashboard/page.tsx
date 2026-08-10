@@ -41,11 +41,20 @@ export default async function DashboardPage() {
 
   const db = await getDB();
 
+  // Auto-cleanup corrupted task_assignments where status = 'WAITING_REVIEW' but result_url IS NULL or empty
+  try {
+    await db
+      .prepare("UPDATE task_assignments SET status = 'ASSIGNED' WHERE status = 'WAITING_REVIEW' AND (result_url IS NULL OR TRIM(result_url) = '')")
+      .run();
+  } catch (e) {
+    console.error('Auto-cleanup task_assignments failed:', e);
+  }
+
   // Batch-fetch permissions + roles in ONE call
   const ctx = await getSessionContext(session.userId);
 
   const [pendingQCCount, inProgressTasksCount, totalOjtCount, announcementsRaw, leaderboardResult] = await Promise.all([
-    db.prepare("SELECT COUNT(*) as count FROM task_assignments WHERE status = 'WAITING_REVIEW'").first() as Promise<{ count: number }>,
+    db.prepare("SELECT COUNT(ta.id) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE ta.status = 'WAITING_REVIEW' AND ta.result_url IS NOT NULL AND TRIM(ta.result_url) != '' AND t.status = 'APPROVED'").first() as Promise<{ count: number }>,
     db.prepare("SELECT COUNT(*) as count FROM tasks WHERE status IN ('TODO', 'IN_PROGRESS', 'REVISION')").first() as Promise<{ count: number }>,
     db.prepare("SELECT COUNT(*) as count FROM users WHERE user_type = 'OJT'").first() as Promise<{ count: number }>,
     db.prepare(`
@@ -95,6 +104,9 @@ export default async function DashboardPage() {
       JOIN projects p      ON t.project_id = p.id
       LEFT JOIN users u    ON ta.user_id = u.id
       WHERE ta.status = 'WAITING_REVIEW'
+        AND ta.result_url IS NOT NULL
+        AND TRIM(ta.result_url) != ''
+        AND t.status = 'APPROVED'
       ORDER BY ta.submitted_at ASC
       LIMIT 10
     `
@@ -158,6 +170,9 @@ export default async function DashboardPage() {
     LEFT JOIN workspaces ws ON t.workspace_id = ws.id
     LEFT JOIN users u  ON ta.user_id = u.id
     WHERE ta.status = 'WAITING_REVIEW'
+      AND ta.result_url IS NOT NULL
+      AND TRIM(ta.result_url) != ''
+      AND t.status = 'APPROVED'
       AND (ws.deleted_at IS NULL OR ws.id IS NULL)
       AND (
         (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ? AND team_role = 'LEADER') AND ta.lead_approved = 0)

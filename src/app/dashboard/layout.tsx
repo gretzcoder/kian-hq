@@ -100,6 +100,9 @@ export default async function DashboardLayout({
              FROM task_assignments ta
              JOIN tasks t ON ta.task_id = t.id
              WHERE ta.status = 'WAITING_REVIEW'
+               AND ta.result_url IS NOT NULL
+               AND TRIM(ta.result_url) != ''
+               AND t.status = 'APPROVED'
                AND (
                  (
                    EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER')
