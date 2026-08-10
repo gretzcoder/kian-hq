@@ -23,7 +23,7 @@ export default async function CommunityPage({ searchParams }: PageProps) {
   const { onlineRoleGroups, offlineMembers, totalOnline, totalOffline } = await getCommunityMembers();
 
   return (
-    <div className="space-y-4 max-w-7xl mx-auto pb-6 w-full min-w-0">
+    <div className="sm:space-y-4 max-w-7xl mx-auto pb-0 sm:pb-6 w-full min-w-0">
       <CommunityChatView
         initialWorkChannels={workChannels}
         initialGeneralChannels={generalChannels}

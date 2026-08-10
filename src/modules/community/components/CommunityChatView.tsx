@@ -130,10 +130,32 @@ export default function CommunityChatView({
   const [sending, setSending] = useState(false);
   const [mobileChannelOpen, setMobileChannelOpen] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [longPressMessageId, setLongPressMessageId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Long-press handlers for mobile (touch and hold to show toolbar)
+  const handleTouchStart = (msgId: string) => {
+    longPressTimerRef.current = setTimeout(() => {
+      setLongPressMessageId(msgId);
+      // Haptic feedback if supported
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const dismissLongPress = () => {
+    setLongPressMessageId(null);
+  };
 
   // Unified members array for mentions
   const allMembersList: CommunityMember[] = React.useMemo(() => {
@@ -204,11 +226,7 @@ export default function CommunityChatView({
                 }
               }
             }}
-            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-lg text-xs font-black transition-all active:scale-95 cursor-pointer shadow-2xs ${
-              isSelf
-                ? 'bg-white/25 text-white hover:bg-white/40 ring-1 ring-white/30'
-                : 'bg-purple-500/20 text-purple-600 dark:text-purple-300 hover:bg-purple-500/30 ring-1 ring-purple-500/30'
-            }`}
+            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-md text-xs font-black transition-all active:scale-95 cursor-pointer bg-purple-500/15 text-purple-500 dark:text-purple-300 hover:bg-purple-500/25 hover:underline"
             title={`Klik untuk lihat profil ${matchingMember ? matchingMember.name : part}`}
           >
             <span>@</span>
@@ -226,9 +244,7 @@ export default function CommunityChatView({
               href={part}
               target="_blank"
               rel="noreferrer"
-              className={`underline font-bold text-xs hover:opacity-80 transition-opacity ${
-                isSelf ? 'text-white' : 'text-purple-600 dark:text-purple-400'
-              }`}
+              className="underline font-bold text-xs hover:opacity-80 transition-opacity text-blue-500 dark:text-blue-400"
             >
               {part} ➔
             </a>
@@ -545,7 +561,7 @@ export default function CommunityChatView({
   );
 
   return (
-    <div className="flex-1 w-full flex flex-col lg:flex-row bg-white dark:bg-[#09090b] rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 shadow-sm overflow-hidden h-[calc(100vh-140px)] min-h-[580px] relative">
+    <div className="flex-1 w-full flex flex-col lg:flex-row bg-white dark:bg-[#09090b] rounded-none sm:rounded-3xl border-0 sm:border border-zinc-200/80 dark:border-zinc-800/80 shadow-sm overflow-hidden h-[calc(100dvh-100px)] sm:h-[calc(100dvh-120px)] lg:h-[calc(100vh-140px)] min-h-0 sm:min-h-[580px] relative">
       {/* ── MOBILE TOP CHANNEL & MEMBER CONTROLLER BAR ── */}
       <div className="lg:hidden p-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between gap-2 shrink-0 z-20">
         <button
@@ -682,9 +698,9 @@ export default function CommunityChatView({
       </aside>
 
       {/* ── MAIN CHAT CANVAS ── */}
-      <main className="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#09090b] relative">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-white dark:bg-[#09090b] relative">
         {/* Active Channel Header */}
-        <header className="px-4 py-3 sm:px-6 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-3 shrink-0 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-md z-10">
+        <header className="hidden lg:flex px-4 py-3 sm:px-6 border-b border-zinc-200/80 dark:border-zinc-800/80 items-center justify-between gap-3 shrink-0 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-lg font-bold shrink-0 shadow-xs">
               {activeChannel.icon}
@@ -719,7 +735,7 @@ export default function CommunityChatView({
         </header>
 
         {/* Message Stream Scroll Area */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-2.5 sm:p-6">
           {loadingMessages ? (
             <div className="flex items-center justify-center h-full text-xs text-zinc-400 gap-2">
               <span className="animate-spin text-purple-500">⏳</span>
@@ -749,9 +765,12 @@ export default function CommunityChatView({
                 <div
                   key={msg.id}
                   ref={(el) => { messageRefs.current[msg.id] = el; }}
-                  className={`flex gap-3 group transition-all duration-300 rounded-2xl p-1.5 ${
-                    isHighlighted ? 'bg-purple-500/15 ring-2 ring-purple-500/40' : ''
-                  } ${isPrevSameUser ? 'mt-0.5' : 'mt-4'}`}
+                  onTouchStart={() => handleTouchStart(msg.id)}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchMove={handleTouchEnd}
+                  className={`flex gap-2 sm:gap-3 group transition-colors duration-150 -mx-2 sm:-mx-3 px-2 sm:px-3 py-0.5 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/40 ${
+                    isHighlighted ? 'bg-purple-500/10 border-l-2 border-purple-500' : ''
+                  } ${longPressMessageId === msg.id ? 'bg-zinc-100/80 dark:bg-zinc-800/60' : ''} ${isPrevSameUser ? '' : 'mt-3 pt-1'}`}
                 >
                   {!isPrevSameUser ? (
                     <button
@@ -767,16 +786,21 @@ export default function CommunityChatView({
                       />
                     </button>
                   ) : (
-                    <div className="w-9 shrink-0" />
+                    <div className="w-9 shrink-0 flex items-center justify-center">
+                      <span className="text-[9px] text-zinc-400 font-mono opacity-0 group-hover:opacity-100 transition-opacity select-none">
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
                   )}
 
-                  <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex-1 min-w-0 space-y-0.5 relative">
                     {!isPrevSameUser && (
                       <div className="flex items-baseline gap-2 flex-wrap">
                         <button
                           type="button"
                           onClick={() => openMemberCardFromMessage(msg)}
-                          className="font-black text-xs text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400 transition-colors text-left"
+                          className="font-bold text-sm hover:underline transition-colors text-left"
+                          style={{ color: msg.user_role_color || '#a78bfa' }}
                         >
                           {msg.user_name}
                         </button>
@@ -803,7 +827,7 @@ export default function CommunityChatView({
                     {msg.reply_to && (
                       <button
                         onClick={() => scrollToMessage(msg.reply_to!.id)}
-                        className="w-full max-w-xl text-left p-2.5 rounded-xl border-l-4 border-purple-500 bg-purple-500/10 hover:bg-purple-500/15 transition-all text-xs mb-1.5 group/quote block"
+                        className="w-full max-w-[85%] sm:max-w-xl text-left p-1.5 sm:p-2 rounded-lg border-l-3 border-purple-500 bg-purple-500/10 hover:bg-purple-500/15 transition-all text-xs mb-0.5 group/quote block"
                       >
                         <p className="font-bold text-[10px] text-purple-600 dark:text-purple-300 flex items-center gap-1">
                           <span>↩️ Membalas @{msg.reply_to.user_name}</span>
@@ -814,81 +838,68 @@ export default function CommunityChatView({
                       </button>
                     )}
 
-                    {/* Message Body or Cute Sticker Card */}
-                    <div className="space-y-2 relative">
-                      {sticker ? (
-                        /* Cute & Fresh Sticker Card */
-                        <div className="inline-flex items-center gap-3 p-3 sm:p-4 rounded-3xl bg-gradient-to-tr from-purple-500/10 via-indigo-500/10 to-pink-500/10 border-2 border-purple-500/20 shadow-md backdrop-blur-md hover:scale-[1.03] transition-all">
-                          <span className="text-3xl sm:text-4xl animate-bounce drop-shadow-md">{sticker.icon}</span>
-                          <div>
-                            <span className="text-xs font-black tracking-tight text-zinc-900 dark:text-zinc-100 block">
-                              {sticker.label}
-                            </span>
-                            <span className="inline-block text-[9px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-500/15 px-2 py-0.5 rounded-full mt-1">
-                              Stiker Komunitas
-                            </span>
+                    {/* Message Body or Sticker */}
+                    {sticker ? (
+                      <div className="inline-flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl bg-zinc-100/80 dark:bg-zinc-800/50 border border-zinc-200/60 dark:border-zinc-700/40 hover:scale-[1.02] transition-all">
+                        <span className="text-3xl sm:text-4xl drop-shadow-md">{sticker.icon}</span>
+                        <div>
+                          <span className="text-xs font-bold tracking-tight text-zinc-900 dark:text-zinc-100 block">
+                            {sticker.label}
+                          </span>
+                          <span className="inline-block text-[9px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full mt-0.5">
+                            Stiker Komunitas
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-[13px] sm:text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap break-words overflow-hidden max-w-full">
+                        {renderMessageContent(msg.message, isSelf)}
+                      </div>
+                    )}
+
+                    {/* Attachment */}
+                    {msg.attachment_url && (
+                      <div className="mt-1">
+                        {isImageUrl(msg.attachment_url) ? (
+                          <div className="overflow-hidden rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 max-w-sm shadow-sm bg-zinc-950/40 group/img relative">
+                            <a href={msg.attachment_url} target="_blank" rel="noreferrer" className="block relative group/zoom">
+                              <img
+                                src={msg.attachment_url}
+                                alt="Lampiran Gambar"
+                                className="w-full max-h-72 object-cover rounded-xl group-hover/zoom:scale-[1.01] transition-transform duration-200"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/zoom:opacity-100 transition-opacity p-3 flex items-end justify-between">
+                                <span className="text-white text-[11px] font-bold truncate">Klik untuk gambar penuh ↗</span>
+                                <span className="text-white text-xs">🔍</span>
+                              </div>
+                            </a>
                           </div>
-                        </div>
-                      ) : (
-                        /* Text Bubble with Interactive Mentions & Image Previews */
-                        <div
-                          className={`text-xs sm:text-sm leading-relaxed p-3 sm:p-3.5 rounded-2xl max-w-[90%] sm:max-w-2xl whitespace-pre-wrap break-words ${
-                            isSelf
-                              ? 'bg-purple-600 text-white rounded-tl-xs shadow-xs'
-                              : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-800 dark:text-zinc-200 border border-zinc-200/80 dark:border-zinc-800/80 rounded-tl-xs'
-                          }`}
-                        >
-                          {renderMessageContent(msg.message, isSelf)}
+                        ) : (
+                          <a
+                            href={msg.attachment_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border bg-zinc-100/80 dark:bg-zinc-800/50 hover:bg-zinc-200/80 dark:hover:bg-zinc-700/50 text-blue-500 dark:text-blue-400 border-zinc-200/80 dark:border-zinc-700/40"
+                          >
+                            <span>📎</span>
+                            <span className="truncate max-w-xs">{msg.attachment_url}</span>
+                            <span>➔</span>
+                          </a>
+                        )}
+                      </div>
+                    )}
 
-                          {/* Attachment Image Preview Card or Link Pill */}
-                          {msg.attachment_url && (
-                            <div className="mt-2.5 pt-2 border-t border-white/20 dark:border-zinc-800">
-                              {isImageUrl(msg.attachment_url) ? (
-                                <div className="overflow-hidden rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 max-w-md shadow-md bg-zinc-950/40 group/img relative mt-1">
-                                  <a href={msg.attachment_url} target="_blank" rel="noreferrer" className="block relative group/zoom">
-                                    <img
-                                      src={msg.attachment_url}
-                                      alt="Lampiran Gambar"
-                                      className="w-full max-h-72 object-cover rounded-2xl group-hover/zoom:scale-[1.02] transition-transform duration-200"
-                                      onError={(e) => {
-                                        // Fallback if image fails to render
-                                        (e.target as HTMLElement).style.display = 'none';
-                                      }}
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/zoom:opacity-100 transition-opacity p-3 flex items-end justify-between">
-                                      <span className="text-white text-[11px] font-bold truncate">Klik untuk gambar penuh ↗</span>
-                                      <span className="text-white text-xs">🔍</span>
-                                    </div>
-                                  </a>
-                                </div>
-                              ) : (
-                                <a
-                                  href={msg.attachment_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className={`inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
-                                    isSelf
-                                      ? 'bg-white/20 hover:bg-white/30 text-white border-white/30'
-                                      : 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/20'
-                                  }`}
-                                >
-                                  <span>📎 Lampiran / Reference Link</span>
-                                  <span className="truncate max-w-xs">{msg.attachment_url}</span>
-                                  <span>➔</span>
-                                </a>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Emoji Reactions & Reply Action Bar */}
-                      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {/* Inline Reaction Counts (always visible when reactions exist) */}
+                    {msg.reactions.length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 pt-0.5">
                         {msg.reactions.map((r) => (
                           <button
                             key={r.emoji}
                             onClick={() => handleReaction(msg.id, r.emoji)}
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border transition-all active:scale-95 ${
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold border transition-all active:scale-95 ${
                               r.userReacted
                                 ? 'bg-purple-500/15 border-purple-500/40 text-purple-600 dark:text-purple-300'
                                 : 'bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-purple-300'
@@ -898,42 +909,53 @@ export default function CommunityChatView({
                             <span className="text-[10px] font-mono">{r.count}</span>
                           </button>
                         ))}
+                      </div>
+                    )}
 
-                        {/* Reply Button Trigger */}
-                        <button
-                          onClick={() => setReplyingTo(msg)}
-                          className="opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 hover:bg-purple-500/20 px-2 py-0.5 rounded-full border border-purple-500/20 flex items-center gap-1 active:scale-95"
-                          title="Balas Pesan Ini"
-                        >
-                          <span>↩️</span>
-                          <span>Balas</span>
-                        </button>
-
-                        {/* Quick Reaction Emoji Picker */}
-                        <div className="opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
-                          {QUICK_EMOJIS.slice(0, 3).map((emoji) => (
-                            <button
-                              key={emoji}
-                              onClick={() => handleReaction(msg.id, emoji)}
-                              className="p-1 text-xs hover:scale-125 transition-transform"
-                              title={`React ${emoji}`}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                          {/* Flexible Reaction Trigger Button ➕ */}
+                    {/* ── FLOATING ACTION TOOLBAR ── */}
+                    {/* Desktop: hover | Mobile: long-press */}
+                    <div className={`absolute -top-3 right-0 transition-all duration-150 z-10 ${
+                      longPressMessageId === msg.id
+                        ? 'opacity-100 pointer-events-auto'
+                        : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
+                    }`}>
+                      <div className="flex items-center gap-0.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-0.5">
+                        {QUICK_EMOJIS.slice(0, 4).map((emoji) => (
                           <button
+                            key={emoji}
                             onClick={() => {
-                              setReactingToMessageId(msg.id);
-                              setPickerTab('emoji');
-                              setShowPickerModal(true);
+                              handleReaction(msg.id, emoji);
+                              dismissLongPress();
                             }}
-                            className="p-1 text-xs hover:scale-125 transition-transform font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 rounded-full w-5 h-5 flex items-center justify-center border border-purple-500/20"
-                            title="Beri Reaksi dengan Emoji Bebas (Flexible)..."
+                            className="p-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 active:bg-zinc-200 dark:active:bg-zinc-600 rounded-md transition-colors"
+                            title={`React ${emoji}`}
                           >
-                            ➕
+                            {emoji}
                           </button>
-                        </div>
+                        ))}
+                        <div className="w-px h-5 bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
+                        <button
+                          onClick={() => {
+                            setReactingToMessageId(msg.id);
+                            setPickerTab('emoji');
+                            setShowPickerModal(true);
+                            dismissLongPress();
+                          }}
+                          className="p-1.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 active:bg-zinc-200 dark:active:bg-zinc-600 rounded-md transition-colors text-zinc-500 dark:text-zinc-400"
+                          title="Emoji lainnya..."
+                        >
+                          😊
+                        </button>
+                        <button
+                          onClick={() => {
+                            setReplyingTo(msg);
+                            dismissLongPress();
+                          }}
+                          className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 active:bg-zinc-200 dark:active:bg-zinc-600 rounded-md transition-colors text-zinc-500 dark:text-zinc-400"
+                          title="Balas"
+                        >
+                          <span className="text-sm">↩️</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1081,7 +1103,7 @@ export default function CommunityChatView({
         )}
 
         {/* ── MESSAGE INPUT & REPLY FOOTER ── */}
-        <footer className="p-3 sm:p-4 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b] shrink-0">
+        <footer className="p-2.5 sm:p-4 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b] shrink-0">
           {/* Quote Reply Banner Active Bar */}
           {replyingTo && (
             <div className="mb-3 p-2.5 sm:p-3 bg-purple-500/10 border-l-4 border-purple-500 rounded-r-2xl flex items-center justify-between gap-2 animate-in fade-in">
@@ -1160,7 +1182,7 @@ export default function CommunityChatView({
             </button>
 
             {/* Input Text Box with @mention listener */}
-            <div className="flex-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus-within:border-purple-500 rounded-2xl px-3.5 py-2 flex items-center gap-2 transition-all shadow-xs">
+            <div className="flex-1 min-w-0 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus-within:border-purple-500 rounded-2xl px-3 sm:px-3.5 py-2 flex items-center gap-2 transition-all shadow-xs">
               <textarea
                 ref={textareaRef}
                 rows={1}
@@ -1170,7 +1192,7 @@ export default function CommunityChatView({
                 placeholder={
                   replyingTo
                     ? `Balas @${replyingTo.user_name}...`
-                    : `Tulis pesan di #${activeChannel.name}... (Ketik @ untuk mention anggota)`
+                    : `Tulis pesan di #${activeChannel.name}`
                 }
                 className="w-full bg-transparent text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 outline-none resize-none max-h-24"
               />
