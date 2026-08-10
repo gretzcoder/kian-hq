@@ -719,3 +719,105 @@ export async function toggleAssessmentReaction(
     return { success: false, error: err.message };
   }
 }
+
+// ---------------------------------------------------------------------------
+// MANUAL PARTICIPANT MANAGEMENT (Add / Remove OJT Assignment)
+// ---------------------------------------------------------------------------
+
+/**
+ * Manually removes an OJT participant assignment from an assessment task.
+ */
+export async function removeAssessmentAssignment(assignmentId: string, workspaceId: string) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+
+  const isLeaderRow = await db
+    .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+    .bind(workspaceId, session.userId)
+    .first();
+
+  const isMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isLeader = !!isLeaderRow || isMentorRole;
+  const isCoordinator =
+    (ctx.userType === 'STAFF' &&
+      (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'))) ||
+    isMentorRole;
+
+  if (!isLeader && !isCoordinator) {
+    return { success: false, error: 'Hanya Mentor, Koordinator, atau Admin yang dapat mengubah kepesertaan.' };
+  }
+
+  try {
+    await db
+      .prepare('DELETE FROM task_assignments WHERE id = ?')
+      .bind(assignmentId)
+      .run();
+
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error('removeAssessmentAssignment failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Manually adds an OJT participant assignment to an assessment task.
+ */
+export async function addAssessmentAssignment(
+  taskId: string,
+  userId: string,
+  workspaceId: string,
+  execType: string = 'DESIGNER'
+) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+
+  const isLeaderRow = await db
+    .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+    .bind(workspaceId, session.userId)
+    .first();
+
+  const isMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isLeader = !!isLeaderRow || isMentorRole;
+  const isCoordinator =
+    (ctx.userType === 'STAFF' &&
+      (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'))) ||
+    isMentorRole;
+
+  if (!isLeader && !isCoordinator) {
+    return { success: false, error: 'Hanya Mentor, Koordinator, atau Admin yang dapat menambah kepesertaan.' };
+  }
+
+  const task = await db
+    .prepare('SELECT deadline, start_at FROM tasks WHERE id = ? AND workspace_id = ?')
+    .bind(taskId, workspaceId)
+    .first() as { deadline: number | null; start_at: number | null } | null;
+
+  if (!task) return { success: false, error: 'Task assessment tidak ditemukan.' };
+
+  const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+
+  try {
+    await db
+      .prepare(`
+        INSERT INTO task_assignments
+          (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+        VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+      `)
+      .bind(assignId, taskId, userId, execType, session.userId, task.deadline, task.start_at)
+      .run();
+
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error('addAssessmentAssignment failed:', err);
+    return { success: false, error: err.message };
+  }
+}

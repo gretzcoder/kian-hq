@@ -11,6 +11,8 @@ import {
   requestAssessmentBriefRevision,
   deleteAssessmentTask,
   toggleAssessmentReaction,
+  removeAssessmentAssignment,
+  addAssessmentAssignment,
 } from '@/modules/workspaces/assessmentActions';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
@@ -54,6 +56,13 @@ interface AssignmentRow {
   sparks: number | null;
 }
 
+export interface WorkspaceMemberSimple {
+  id?: string;
+  userId?: string;
+  name: string;
+  email: string;
+}
+
 interface AssessmentPanelProps {
   workspaceId:        string;
   tasks:              TaskRow[];
@@ -63,6 +72,7 @@ interface AssessmentPanelProps {
   isLeader:           boolean;   // mentor in assessment context
   isCoordinator:      boolean;
   isOJT:              boolean;
+  allWorkspaceMembers?: WorkspaceMemberSimple[];
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -368,19 +378,22 @@ function MentorSubmissionCard({
   workspaceId,
   isCoordinator,
   reactions = [],
+  canManage = true,
 }: {
   assignment: AssignmentRow;
   workspaceId: string;
   isCoordinator: boolean;
   reactions?: ReactionItem[];
+  canManage?: boolean;
 }) {
-  const [expanded,    setExpanded]    = useState(false);
-  const [showSparkModal, setShowSparkModal] = useState(false);
-  const [sparks,      setSparks]      = useState<number>(8);
-  const [revNote,     setRevNote]     = useState('');
-  const [showRevForm, setShowRevForm] = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
-  const [pending,     startTransition] = useTransition();
+  const [expanded,          setExpanded]          = useState(false);
+  const [showSparkModal,    setShowSparkModal]    = useState(false);
+  const [showConfirmRemove, setShowConfirmRemove] = useState(false);
+  const [sparks,            setSparks]            = useState<number>(8);
+  const [revNote,           setRevNote]           = useState('');
+  const [showRevForm,       setShowRevForm]       = useState(false);
+  const [error,             setError]             = useState<string | null>(null);
+  const [pending,           startTransition]      = useTransition();
 
   const isSubmitted   = ['WAITING_REVIEW', 'RESUBMITTED'].includes(assignment.status);
   const isApproved    = assignment.status === 'APPROVED';
@@ -388,6 +401,18 @@ function MentorSubmissionCard({
   const statusBadge   = STATUS_BADGE[assignment.status] ?? STATUS_BADGE.ASSIGNED;
   const statusLabel   = STATUS_LABEL[assignment.status] ?? assignment.status;
   const currentSparkMeta = getSparkMeta(sparks);
+
+  const handleRemoveParticipant = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await removeAssessmentAssignment(assignment.id, workspaceId);
+      if (res.success) {
+        setShowConfirmRemove(false);
+      } else {
+        setError(res.error ?? 'Gagal menghapus kepesertaan.');
+      }
+    });
+  };
 
   const handleApprove = () => {
     setError(null);
@@ -449,11 +474,60 @@ function MentorSubmissionCard({
           <span className={`text-[9px] font-black border px-2 py-0.5 rounded-full ${statusBadge}`}>
             {statusLabel}
           </span>
+          {canManage && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowConfirmRemove(true);
+              }}
+              disabled={pending}
+              title="Hapus Kepesertaan Peserta Ini"
+              className="w-6 h-6 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 flex items-center justify-center text-xs transition-colors ml-1"
+            >
+              🗑️
+            </button>
+          )}
           {hasSubmission && (
             <span className="text-zinc-400 text-xs">{expanded ? '▲' : '▼'}</span>
           )}
         </div>
       </div>
+
+      {/* Modal Confirm Remove Participant */}
+      {showConfirmRemove && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-10 h-10 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-xl mx-auto">
+              🗑️
+            </div>
+            <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+              Hapus Kepesertaan?
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Peserta <span className="font-bold text-zinc-900 dark:text-zinc-100">&ldquo;{assignment.user_name ?? 'OJT User'}&rdquo;</span> akan dikeluarkan dari daftar kepesertaan assessment ini.
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmRemove(false)}
+                disabled={pending}
+                className="flex-1 py-2 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-600 dark:text-zinc-400"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveParticipant}
+                disabled={pending}
+                className="flex-1 py-2 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-xl shadow-md disabled:opacity-50"
+              >
+                {pending ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Expanded: submission detail + review actions */}
       {hasSubmission && expanded && (
@@ -784,6 +858,111 @@ function EditAssessmentTaskModal({
   );
 }
 
+// ── Sub-component: Add Participant Modal ──────────────────────────────────────
+
+function AddParticipantModal({
+  taskId,
+  execType,
+  workspaceId,
+  existingAssignmentUserIds,
+  allMembers,
+  onClose,
+}: {
+  taskId: string;
+  execType: string;
+  workspaceId: string;
+  existingAssignmentUserIds: string[];
+  allMembers: WorkspaceMemberSimple[];
+  onClose: () => void;
+}) {
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const availableMembers = allMembers.filter((m) => {
+    const uId = m.userId || m.id;
+    return uId && !existingAssignmentUserIds.includes(uId);
+  });
+
+  const handleAdd = () => {
+    if (!selectedUserId) {
+      setError('Pilih peserta terlebih dahulu.');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const res = await addAssessmentAssignment(taskId, selectedUserId, workspaceId, execType);
+      if (res.success) {
+        onClose();
+      } else {
+        setError(res.error ?? 'Gagal menambahkan peserta.');
+      }
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 text-left" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+          <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <span>➕</span>
+            <span>Tambah Peserta Assessment</span>
+          </h3>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 text-sm">✕</button>
+        </div>
+
+        {error && <p className="text-xs text-red-500 font-medium">⚠️ {error}</p>}
+
+        {availableMembers.length === 0 ? (
+          <p className="text-xs text-zinc-400 py-4 text-center">Seluruh anggota workspace sudah terdaftar pada assessment ini.</p>
+        ) : (
+          <div className="space-y-3">
+            <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+              Pilih Peserta OJT / Anggota Workspace:
+            </label>
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
+            >
+              <option value="">-- Pilih Peserta --</option>
+              {availableMembers.map((m) => {
+                const uId = m.userId || m.id || '';
+                return (
+                  <option key={uId} value={uId}>
+                    {m.name} ({m.email})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+        )}
+
+        <div className="flex gap-2 justify-end pt-3 border-t border-zinc-100 dark:border-zinc-800">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={pending}
+            className="px-4 py-2 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500"
+          >
+            Batal
+          </button>
+          {availableMembers.length > 0 && (
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={pending || !selectedUserId}
+              className="px-4 py-2 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl shadow-md disabled:opacity-50"
+            >
+              {pending ? 'Menambahkan...' : 'Tambah Peserta'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Sub-component: Assessment Task Card (Mentor) ──────────────────────────────
 
 function MentorTaskCard({
@@ -794,6 +973,7 @@ function MentorTaskCard({
   isCoordinator,
   canManage = true,
   currentUserId,
+  allWorkspaceMembers = [],
 }: {
   task: TaskRow;
   assignments: AssignmentRow[];
@@ -802,13 +982,15 @@ function MentorTaskCard({
   isCoordinator: boolean;
   canManage?: boolean;
   currentUserId: string;
+  allWorkspaceMembers?: WorkspaceMemberSimple[];
 }) {
-  const [isCardExpanded, setIsCardExpanded] = useState(false);
-  const [showSubmissions, setShowSubmissions] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-  const [pendingApprove, startApproveTransition] = useTransition();
-  const [pendingDelete, startDeleteTransition] = useTransition();
+  const [isCardExpanded,           setIsCardExpanded]           = useState(false);
+  const [showSubmissions,          setShowSubmissions]          = useState(false);
+  const [showEditModal,            setShowEditModal]            = useState(false);
+  const [showConfirmDelete,        setShowConfirmDelete]        = useState(false);
+  const [showAddParticipantModal,  setShowAddParticipantModal]  = useState(false);
+  const [pendingApprove,           startApproveTransition]      = useTransition();
+  const [pendingDelete,            startDeleteTransition]       = useTransition();
 
   const [sparksToGrant, setSparksToGrant] = useState<number>(5);
   const [showBriefRevisionForm, setShowBriefRevisionForm] = useState(false);
@@ -902,6 +1084,18 @@ function MentorTaskCard({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Add Participant */}
+      {showAddParticipantModal && (
+        <AddParticipantModal
+          taskId={task.id}
+          execType={execType}
+          workspaceId={workspaceId}
+          existingAssignmentUserIds={assignments.map((a) => a.user_id)}
+          allMembers={allWorkspaceMembers}
+          onClose={() => setShowAddParticipantModal(false)}
+        />
       )}
 
       {/* Accordion Task Header */}
@@ -1179,6 +1373,21 @@ function MentorTaskCard({
       {/* Submissions list */}
       {showSubmissions && (
         <div className="px-5 pb-5 space-y-2 border-t border-zinc-100 dark:border-zinc-800 pt-4">
+          {canManage && (
+            <div className="flex items-center justify-between pb-2">
+              <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">
+                Daftar Kepesertaan ({assignments.length})
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAddParticipantModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 rounded-xl transition-all active:scale-95 shadow-2xs"
+              >
+                <span>➕</span>
+                <span>Tambah Peserta</span>
+              </button>
+            </div>
+          )}
           {assignments.length === 0 ? (
             <p className="text-xs text-zinc-400 text-center py-4">Belum ada peserta yang di-assign.</p>
           ) : (
@@ -1189,6 +1398,7 @@ function MentorTaskCard({
                 reactions={reactionsMap?.[a.id] ?? []}
                 workspaceId={workspaceId}
                 isCoordinator={isCoordinator}
+                canManage={canManage}
               />
             ))
           )}
@@ -1349,6 +1559,7 @@ export function AssessmentPanel({
   isLeader,
   isCoordinator,
   isOJT,
+  allWorkspaceMembers = [],
 }: AssessmentPanelProps) {
   // Determine viewing role
   const canManage = isLeader || isCoordinator;
@@ -1418,6 +1629,7 @@ export function AssessmentPanel({
                 isCoordinator={isCoordinator}
                 canManage={canManage}
                 currentUserId={currentUserId}
+                allWorkspaceMembers={allWorkspaceMembers}
               />
             );
           }

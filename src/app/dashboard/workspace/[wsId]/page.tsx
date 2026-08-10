@@ -399,6 +399,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
               isLeader={isLeader}
               isCoordinator={isCoordinator}
               isOJT={isOJT}
+              allWorkspaceMembers={activeUsers as any}
             />
           ) : (
             <LiveTaskAccordion
