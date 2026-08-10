@@ -809,7 +809,9 @@ function MentorTaskCard({
 
   const isPendingCoordinatorApproval = task.status === 'WAITING_REVIEW';
   const total     = assignments.length;
-  const submitted = assignments.filter((a) => ['WAITING_REVIEW', 'RESUBMITTED', 'APPROVED'].includes(a.status)).length;
+  const submitted = task.status === 'APPROVED'
+    ? assignments.filter((a) => a.status === 'APPROVED' || a.status === 'RESUBMITTED' || (a.status === 'WAITING_REVIEW' && a.result_url != null)).length
+    : 0;
   const approved  = assignments.filter((a) => a.status === 'APPROVED').length;
 
   const execType = assignments[0]?.assignment_role ?? 'DESIGNER';

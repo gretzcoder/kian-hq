@@ -699,6 +699,14 @@ export default function CommunityChatView({
 
       {/* ── MAIN CHAT CANVAS ── */}
       <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden bg-white dark:bg-[#09090b] relative">
+        {/* Backdrop for long-press menu on mobile */}
+        {longPressMessageId && (
+          <div
+            className="fixed inset-0 z-20 bg-black/10 backdrop-blur-[1px]"
+            onClick={dismissLongPress}
+            onTouchStart={dismissLongPress}
+          />
+        )}
         {/* Active Channel Header */}
         <header className="hidden lg:flex px-4 py-3 sm:px-6 border-b border-zinc-200/80 dark:border-zinc-800/80 items-center justify-between gap-3 shrink-0 bg-white/80 dark:bg-[#09090b]/80 backdrop-blur-md z-10">
           <div className="flex items-center gap-3 min-w-0">
@@ -914,10 +922,10 @@ export default function CommunityChatView({
 
                     {/* ── FLOATING ACTION TOOLBAR ── */}
                     {/* Desktop: hover | Mobile: long-press */}
-                    <div className={`absolute -top-3 right-0 transition-all duration-150 z-10 ${
+                    <div className={`absolute -top-3 right-0 transition-all duration-150 ${
                       longPressMessageId === msg.id
-                        ? 'opacity-100 pointer-events-auto'
-                        : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto'
+                        ? 'opacity-100 pointer-events-auto z-30'
+                        : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto z-10'
                     }`}>
                       <div className="flex items-center gap-0.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-0.5">
                         {QUICK_EMOJIS.slice(0, 4).map((emoji) => (

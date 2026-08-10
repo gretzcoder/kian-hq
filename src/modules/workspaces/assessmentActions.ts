@@ -138,7 +138,9 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
       .bind(workspaceId, workspaceId)
       .all();
 
-    const assignmentInitialStatus = isCoordinator ? 'ASSIGNED' : 'WAITING_REVIEW';
+    // OJT member task assignments are always initialized to 'ASSIGNED' (Belum Submit).
+    // The parent task itself has status 'WAITING_REVIEW' if created by Mentor, or 'APPROVED' if created by Coordinator.
+    const assignmentInitialStatus = 'ASSIGNED';
 
     for (const m of ojtMembers as { user_id: string }[]) {
       const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
@@ -260,7 +262,7 @@ export async function approveAssessmentTask(
 
     if (existingAssignments && existingAssignments.length > 0) {
       await db
-        .prepare("UPDATE task_assignments SET status = 'ASSIGNED', start_at = ? WHERE task_id = ? AND status = 'WAITING_REVIEW'")
+        .prepare("UPDATE task_assignments SET status = 'ASSIGNED', start_at = ? WHERE task_id = ? AND result_url IS NULL")
         .bind(updatedStartAt, taskId)
         .run();
     } else {
@@ -352,10 +354,7 @@ export async function requestAssessmentBriefRevision(
       .bind(revisionNote.trim(), taskId, workspaceId)
       .run();
 
-    await db
-      .prepare("UPDATE task_assignments SET status = 'REVISION_REQUESTED', revision_note = ? WHERE task_id = ? AND status = 'WAITING_REVIEW'")
-      .bind(revisionNote.trim(), taskId)
-      .run();
+    // Brief revision request applies to the parent task (Mentor's brief), not OJT member work submissions.
 
     await logWorkflowEvent({
       entityType: 'task',
