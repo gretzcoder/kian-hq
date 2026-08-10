@@ -88,6 +88,17 @@ const EXEC_TYPE_LABEL: Record<string, string> = {
   VIDEO_EDITOR: '🎬 Video',
 };
 
+/**
+ * Formats a Unix timestamp into a `YYYY-MM-DDTHH:mm` string in Indonesia WIB (UTC+7)
+ * suitable for HTML <input type="datetime-local"> defaultValue.
+ */
+function formatIndonesiaDatetimeInput(ts: number | null | undefined): string {
+  if (!ts) return '';
+  const wibMs = ts + 7 * 60 * 60 * 1000;
+  const wibDate = new Date(wibMs);
+  return wibDate.toISOString().slice(0, 16);
+}
+
 // ── Sub-component: Create Assessment Task Form ────────────────────────────────
 
 function CreateAssessmentTaskForm({
@@ -635,13 +646,8 @@ function EditAssessmentTaskModal({
     });
   };
 
-  const defaultStartAt = task.start_at
-    ? new Date(task.start_at - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-    : '';
-
-  const defaultDeadline = task.deadline
-    ? new Date(task.deadline - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-    : '';
+  const defaultStartAt = formatIndonesiaDatetimeInput(task.start_at);
+  const defaultDeadline = formatIndonesiaDatetimeInput(task.deadline);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
@@ -787,6 +793,7 @@ function MentorTaskCard({
   workspaceId,
   isCoordinator,
   canManage = true,
+  currentUserId,
 }: {
   task: TaskRow;
   assignments: AssignmentRow[];
@@ -794,8 +801,9 @@ function MentorTaskCard({
   workspaceId: string;
   isCoordinator: boolean;
   canManage?: boolean;
+  currentUserId: string;
 }) {
-  const [isCardExpanded, setIsCardExpanded] = useState(true);
+  const [isCardExpanded, setIsCardExpanded] = useState(false);
   const [showSubmissions, setShowSubmissions] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -816,6 +824,9 @@ function MentorTaskCard({
 
   const execType = assignments[0]?.assignment_role ?? 'DESIGNER';
   const execLabel = EXEC_TYPE_LABEL[execType] ?? execType;
+
+  // Authorization: Only the creator of the assessment task or Coordinator/Admin can Edit/Delete
+  const canEditOrDelete = isCoordinator || (task.created_by != null && task.created_by === currentUserId);
 
   const handlePublishAssessment = () => {
     startApproveTransition(async () => {
@@ -848,6 +859,51 @@ function MentorTaskCard({
 
   return (
     <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+      {/* Modal Edit Assessment (rendered at root level so it works even when collapsed) */}
+      {showEditModal && (
+        <EditAssessmentTaskModal
+          task={task}
+          execType={execType}
+          workspaceId={workspaceId}
+          onClose={() => setShowEditModal(false)}
+        />
+      )}
+
+      {/* Modal Confirm Delete (rendered at root level) */}
+      {showConfirmDelete && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-2xl mx-auto">
+              ⚠️
+            </div>
+            <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
+              Hapus Assessment Ini?
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+              Tugas assessment <span className="font-bold text-zinc-900 dark:text-zinc-100">&ldquo;{task.title}&rdquo;</span> beserta seluruh submission peserta OJT akan dihapus dari sistem.
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmDelete(false)}
+                disabled={pendingDelete}
+                className="flex-1 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAssessment}
+                disabled={pendingDelete}
+                className="flex-1 py-2.5 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-md shadow-red-500/20 disabled:opacity-60"
+              >
+                {pendingDelete ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Accordion Task Header */}
       <div
         onClick={() => setIsCardExpanded((prev) => !prev)}
@@ -889,14 +945,14 @@ function MentorTaskCard({
                     : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
                 }`}>
                   <span>📅</span>
-                  <span>{isScheduled ? 'Mulai: ' : 'Mulai: '}{new Date(task.start_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                  <span>{isScheduled ? 'Mulai: ' : 'Mulai: '}{new Date(task.start_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'short', timeStyle: 'short' })}</span>
                   {isScheduled && <span className="text-[8px] bg-indigo-500 text-white px-1.5 py-0.2 rounded-full">Dijadwalkan</span>}
                 </span>
               )}
               {task.deadline && (
                 <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <span>⏰</span>
-                  <span>{new Date(task.deadline).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  <span>{new Date(task.deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
                 </span>
               )}
             </div>
@@ -915,7 +971,7 @@ function MentorTaskCard({
                 </p>
               )}
             </div>
-            {(canManage || isCoordinator) && (
+            {canEditOrDelete && (
               <>
                 <button
                   type="button"
@@ -951,50 +1007,6 @@ function MentorTaskCard({
       {/* Accordion Content Body */}
       {isCardExpanded && (
         <div className="px-5 pb-5 pt-0 space-y-4 border-t border-zinc-100 dark:border-zinc-800/60 pt-4">
-          {/* Modal Edit Assessment */}
-          {showEditModal && (
-            <EditAssessmentTaskModal
-              task={task}
-              execType={execType}
-              workspaceId={workspaceId}
-              onClose={() => setShowEditModal(false)}
-            />
-          )}
-
-          {/* Modal Confirm Delete */}
-          {showConfirmDelete && (
-            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-              <div className="w-full max-w-md bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-red-500/10 text-red-500 flex items-center justify-center text-2xl mx-auto">
-                  ⚠️
-                </div>
-                <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
-                  Hapus Assessment Ini?
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  Tugas assessment <span className="font-bold text-zinc-900 dark:text-zinc-100">&ldquo;{task.title}&rdquo;</span> beserta seluruh submission peserta OJT akan dihapus dari sistem.
-                </p>
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmDelete(false)}
-                    disabled={pendingDelete}
-                    className="flex-1 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteAssessment}
-                    disabled={pendingDelete}
-                    className="flex-1 py-2.5 text-xs font-bold bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-md shadow-red-500/20 disabled:opacity-60"
-                  >
-                    {pendingDelete ? 'Menghapus...' : 'Ya, Hapus'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {task.description && (
             <DocxDocumentViewer
@@ -1226,7 +1238,7 @@ function OJTTaskCard({
             {task.deadline && (
               <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2 py-0.5 rounded-full flex items-center gap-1">
                 <span>⏰ Deadline:</span>
-                <span>{new Date(task.deadline).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                <span>{new Date(task.deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
               </span>
             )}
           </div>
@@ -1405,6 +1417,7 @@ export function AssessmentPanel({
                 workspaceId={workspaceId}
                 isCoordinator={isCoordinator}
                 canManage={canManage}
+                currentUserId={currentUserId}
               />
             );
           }

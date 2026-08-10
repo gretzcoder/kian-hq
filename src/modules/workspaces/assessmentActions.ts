@@ -7,10 +7,6 @@ import { revalidatePath } from 'next/cache';
 import { logWorkflowEvent } from '@/modules/workflow/events';
 import { sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface AssessmentTaskRow {
   id: string;
   title: string;
@@ -38,6 +34,20 @@ export interface AssessmentSubmissionRow {
   mentor_approved: number;
   coordinator_approved: number;
   sparks: number | null;
+}
+
+/**
+ * Helper to parse HTML datetime-local input string into Unix timestamp (ms).
+ * If dateStr has no explicit timezone offset, it is parsed as Indonesia WIB (Asia/Jakarta, UTC+7).
+ */
+function parseIndonesiaDate(dateStr: string | null | undefined): number | null {
+  if (!dateStr || !dateStr.trim()) return null;
+  const trimmed = dateStr.trim();
+  const timePart = trimmed.includes('T') ? trimmed.split('T')[1] : trimmed;
+  const hasTimezone = timePart.includes('Z') || timePart.includes('+') || (timePart.includes('-') && timePart.indexOf('-') > 0);
+  const isoStr = hasTimezone ? trimmed : `${trimmed}:00+07:00`;
+  const ts = new Date(isoStr).getTime();
+  return isNaN(ts) ? null : ts;
 }
 
 // ---------------------------------------------------------------------------
@@ -78,17 +88,8 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
 
   if (!title) return { success: false, error: 'Judul assessment wajib diisi.' };
 
-  let deadline: number | null = null;
-  if (deadlineStr) {
-    deadline = new Date(deadlineStr).getTime();
-    if (isNaN(deadline)) return { success: false, error: 'Format tanggal tenggat waktu tidak valid.' };
-  }
-
-  let startAt: number | null = null;
-  if (startAtStr?.trim()) {
-    startAt = new Date(startAtStr).getTime();
-    if (isNaN(startAt)) startAt = null;
-  }
+  const deadline = parseIndonesiaDate(deadlineStr);
+  const startAt  = parseIndonesiaDate(startAtStr);
 
   const ws = await db
     .prepare('SELECT project_id FROM workspaces WHERE id = ?')
@@ -569,22 +570,23 @@ export async function updateAssessmentTask(taskId: string, workspaceId: string, 
 
   if (!title) return { success: false, error: 'Judul assessment wajib diisi.' };
 
-  let deadline: number | null = null;
-  if (deadlineStr) {
-    deadline = new Date(deadlineStr).getTime();
-  }
-
-  let startAt: number | null = null;
-  if (startAtStr?.trim()) {
-    startAt = new Date(startAtStr).getTime();
-    if (isNaN(startAt)) startAt = null;
-  }
+  const deadline = parseIndonesiaDate(deadlineStr);
+  const startAt  = parseIndonesiaDate(startAtStr);
 
   try {
     const currentTask = await db
-      .prepare('SELECT status FROM tasks WHERE id = ?')
-      .bind(taskId)
-      .first() as { status: string } | null;
+      .prepare('SELECT status, created_by FROM tasks WHERE id = ? AND workspace_id = ?')
+      .bind(taskId, workspaceId)
+      .first() as { status: string; created_by: string | null } | null;
+
+    if (!currentTask) return { success: false, error: 'Assessment tidak ditemukan.' };
+
+    const isPureCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
+    const isTaskCreator = currentTask.created_by != null && currentTask.created_by === session.userId;
+
+    if (!isTaskCreator && !isPureCoordinator) {
+      return { success: false, error: 'Hanya pembuat assessment atau Koordinator/Admin yang dapat mengedit assessment ini.' };
+    }
 
     const newStatus = currentTask?.status === 'REVISION_REQUESTED' ? 'WAITING_REVIEW' : (currentTask?.status || 'WAITING_REVIEW');
 
@@ -636,11 +638,20 @@ export async function deleteAssessmentTask(taskId: string, workspaceId: string) 
       (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'))) ||
     isMentorRole;
 
-  if (!isLeader && !isCoordinator) {
-    return { success: false, error: 'Hanya Mentor, Koordinator, atau Admin yang dapat menghapus tugas assessment.' };
-  }
-
   try {
+    const currentTask = await db
+      .prepare('SELECT created_by FROM tasks WHERE id = ? AND workspace_id = ?')
+      .bind(taskId, workspaceId)
+      .first() as { created_by: string | null } | null;
+
+    if (!currentTask) return { success: false, error: 'Assessment tidak ditemukan.' };
+
+    const isPureCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
+    const isTaskCreator = currentTask.created_by != null && currentTask.created_by === session.userId;
+
+    if (!isTaskCreator && !isPureCoordinator) {
+      return { success: false, error: 'Hanya pembuat assessment atau Koordinator/Admin yang dapat menghapus assessment ini.' };
+    }
     await db
       .prepare("UPDATE tasks SET status = 'DELETED', sparks = NULL WHERE id = ? AND workspace_id = ?")
       .bind(taskId, workspaceId)
