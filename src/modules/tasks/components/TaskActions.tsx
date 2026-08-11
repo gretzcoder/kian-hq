@@ -418,8 +418,8 @@ export default function TaskActions({
 
           const statusBadge = primaryAssign ? statusColors[primaryAssign.status] ?? 'bg-zinc-100 text-zinc-500' : '';
 
-          // Auto-expand step if it's the active/in-progress step, unless explicitly collapsed by user
-          const defaultOpen = step.role === activeRole;
+          // Auto-expand step if it's the active step OR has submissions / assignments for current user
+          const defaultOpen = step.role === activeRole || visibleAssignments.some(a => a.result_url !== null || a.status === 'WAITING_REVIEW' || a.user_id === currentUserId);
           const isCollapsed = collapsedStepsMap[step.role] !== undefined
             ? collapsedStepsMap[step.role]
             : !defaultOpen;
@@ -622,69 +622,93 @@ export default function TaskActions({
                                     </div>
                                   ) : (
                                     <>
-                                  {['ASSIGNED', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED', 'IN_PROGRESS'].includes(assign.status) && (
-                                    <div className="space-y-2">
-                                      {showSubmitMap[assign.id] ? (
-                                        <form onSubmit={(e) => handleSubmitResult(e, assign.id)} className="space-y-2">
-                                          {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role) ? (
-                                            <div className="flex gap-2">
-                                              <input
-                                                type="url"
-                                                value={urlInputs[assign.id] ?? ''}
-                                                onChange={(e) => setUrlInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
-                                                placeholder="Paste Link Google Drive / Canva / Figma hasil karya..."
-                                                required
-                                                className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-500 transition-all text-zinc-900 dark:text-zinc-100"
-                                              />
-                                              <button
-                                                type="submit"
-                                                disabled={loading === assign.id}
-                                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50"
-                                              >
-                                                {loading === assign.id ? '...' : 'Submit'}
-                                              </button>
-                                            </div>
-                                          ) : (
-                                            <div className="space-y-2">
-                                              <div className="flex items-center justify-between text-[11px] font-bold text-zinc-600 dark:text-zinc-300 pb-0.5">
-                                                <span>📝 Text Editor — {step.role === 'RESEARCHER' ? 'Step 1: Researcher' : 'Step 2: Planner'}</span>
-                                              </div>
-                                              <TiptapEditor
-                                                value={urlInputs[assign.id] ?? ''}
-                                                onChange={(val) => setUrlInputs((prev) => ({ ...prev, [assign.id]: val }))}
-                                                placeholder={`Tulis laporan ${step.label} dengan format kaya (Bold, Italic, Heading H1-H3, List, Link, dll)...`}
-                                              />
-                                              <div className="flex justify-end gap-2 pt-1">
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: false }))}
-                                                  className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 font-bold text-[10px] px-3 py-1.5 rounded-lg"
-                                                >
-                                                  Batal
-                                                </button>
-                                                <button
-                                                  type="submit"
-                                                  disabled={loading === assign.id || !urlInputs[assign.id]?.replace(/<[^>]*>/g, '').trim()}
-                                                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-4 py-2 rounded-xl shadow-xs transition-all disabled:opacity-50"
-                                                >
-                                                  {loading === assign.id ? 'Submitting...' : 'Kirim Laporan'}
-                                                </button>
-                                              </div>
-                                            </div>
-                                          )}
-                                        </form>
-                                      ) : (
-                                        <div className="flex items-center gap-2">
-                                          {assign.status === 'ASSIGNED' && (
+                                  <div className="space-y-2">
+                                    {showSubmitMap[assign.id] ? (
+                                      <form onSubmit={(e) => handleSubmitResult(e, assign.id)} className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 mt-2">
+                                        <div className="flex items-center justify-between text-[11px] font-bold text-zinc-700 dark:text-zinc-200 pb-1">
+                                          <span>{assign.result_url ? '✏️ Edit / Perbaiki Hasil Submit' : '📤 Kirim Hasil Submit'}</span>
+                                        </div>
+                                        {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role) ? (
+                                          <div className="flex gap-2">
+                                            <input
+                                              type="url"
+                                              value={urlInputs[assign.id] ?? assign.result_url ?? ''}
+                                              onChange={(e) => setUrlInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
+                                              placeholder="Paste Link Google Drive / Canva / Figma hasil karya..."
+                                              required
+                                              className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-500 transition-all text-zinc-900 dark:text-zinc-100"
+                                            />
+                                            <button
+                                              type="submit"
+                                              disabled={loading === assign.id}
+                                              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                                            >
+                                              {loading === assign.id ? '...' : 'Simpan / Submit'}
+                                            </button>
                                             <button
                                               type="button"
-                                              onClick={() => handleStartWork(assign.id)}
-                                              disabled={loading === assign.id}
-                                              className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all active:scale-[0.98]"
+                                              onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: false }))}
+                                              className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 font-bold text-[10px] px-2.5 py-1.5 rounded-lg"
                                             >
-                                              {loading === assign.id ? 'Starting...' : '🚀 Mulai Pengerjaan'}
+                                              Batal
                                             </button>
-                                          )}
+                                          </div>
+                                        ) : (
+                                          <div className="space-y-2">
+                                            <div className="flex items-center justify-between text-[11px] font-bold text-zinc-600 dark:text-zinc-300 pb-0.5">
+                                              <span>📝 Text Editor — {step.role === 'RESEARCHER' ? 'Step 1: Researcher' : 'Step 2: Planner'}</span>
+                                            </div>
+                                            <TiptapEditor
+                                              value={urlInputs[assign.id] ?? assign.result_url ?? ''}
+                                              onChange={(val) => setUrlInputs((prev) => ({ ...prev, [assign.id]: val }))}
+                                              placeholder={`Tulis laporan ${step.label} dengan format kaya (Bold, Italic, Heading H1-H3, List, Link, dll)...`}
+                                            />
+                                            <div className="flex justify-end gap-2 pt-1">
+                                              <button
+                                                type="button"
+                                                onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: false }))}
+                                                className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 font-bold text-[10px] px-3 py-1.5 rounded-lg"
+                                              >
+                                                Batal
+                                              </button>
+                                              <button
+                                                type="submit"
+                                                disabled={loading === assign.id || !(urlInputs[assign.id] ?? assign.result_url ?? '')?.replace(/<[^>]*>/g, '').trim()}
+                                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-4 py-2 rounded-xl shadow-xs transition-all disabled:opacity-50"
+                                              >
+                                                {loading === assign.id ? 'Submitting...' : 'Simpan Perubahan Laporan'}
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </form>
+                                    ) : (
+                                      <div className="flex items-center gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 mt-2">
+                                        {assign.status === 'ASSIGNED' && !assign.result_url && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleStartWork(assign.id)}
+                                            disabled={loading === assign.id}
+                                            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all active:scale-[0.98]"
+                                          >
+                                            {loading === assign.id ? 'Starting...' : '🚀 Mulai Pengerjaan'}
+                                          </button>
+                                        )}
+
+                                        {assign.result_url ? (
+                                          !isApproved && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setUrlInputs((prev) => ({ ...prev, [assign.id]: assign.result_url ?? '' }));
+                                                setShowSubmitMap((prev) => ({ ...prev, [assign.id]: true }));
+                                              }}
+                                              className="bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all active:scale-[0.98] flex items-center gap-1.5"
+                                            >
+                                              <span>✏️</span> Edit / Perbaiki Hasil Submit
+                                            </button>
+                                          )
+                                        ) : (
                                           <button
                                             type="button"
                                             onClick={async () => {
@@ -700,10 +724,10 @@ export default function TaskActions({
                                               ? '📤 Kirim Hasil Karya (Google Drive / Canva URL)'
                                               : '📝 Kirim Laporan Teks Hasil Pengerjaan'}
                                           </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                     </>
                                   )}
                                 </>
