@@ -1421,7 +1421,7 @@ function OJTTaskCard({
   reactions?: ReactionItem[];
   workspaceId: string;
 }) {
-  const [isCardExpanded, setIsCardExpanded] = useState(true);
+  const [isCardExpanded, setIsCardExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
   const execLabel = EXEC_TYPE_LABEL[assignment.assignment_role] ?? assignment.assignment_role;
   const statusBadge = STATUS_BADGE[assignment.status] ?? STATUS_BADGE.ASSIGNED;
