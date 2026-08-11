@@ -408,7 +408,7 @@ export async function getLeaderboardData(
       LEFT JOIN workspace_sparks ws_sparks ON ws.id = ws_sparks.workspace_id
       LEFT JOIN workspace_members_count wmc ON ws.id = wmc.workspace_id
       LEFT JOIN workspace_members wm_me ON ws.id = wm_me.workspace_id AND wm_me.user_id = ?
-      WHERE ws.deleted_at IS NULL
+      WHERE ws.deleted_at IS NULL AND (ws.workspace_type IS NULL OR ws.workspace_type = 'TROOPERS')
     `;
 
     const { results } = await db.prepare(query).bind(currentUserId).all();
