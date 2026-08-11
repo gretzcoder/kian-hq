@@ -3,11 +3,11 @@ import webpush from 'web-push';
 // Default VAPID key pair for development fallback
 const DEFAULT_VAPID_PUBLIC_KEY =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
-  'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-Skv6b2A-nK2v12V0q_0v14YwR_J5aJ6V3s_J7b5v6c7d8e9f0g1h2i3';
+  'BM3jcRVZP67OhZEmQj6RkbxTw4zKdH8trmmoeLBqKBBt0mkJftSEOpdtEMiTkBlwunaidCIvPLNhlC9HIDhKAoc';
 
 const DEFAULT_VAPID_PRIVATE_KEY =
   process.env.VAPID_PRIVATE_KEY ||
-  'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U1v';
+  'qGRY_EEClGxYLlFnpheM9GL4PDAZ2lPj52X865xa0LQ';
 
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@kianhq.com';
 

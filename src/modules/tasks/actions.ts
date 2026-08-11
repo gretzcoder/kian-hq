@@ -6,7 +6,7 @@ import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
 import { validateTransition } from '@/modules/workflow/engine';
 import { logWorkflowEvent } from '@/modules/workflow/events';
-import { sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
+import { sendPushNotificationToUser, sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -628,10 +628,11 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
   const db = await getDB();
 
   const assignment = await db
-    .prepare('SELECT id, task_id, status, assignment_role, lead_approved, mentor_approved, coordinator_approved FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, user_id, task_id, status, assignment_role, lead_approved, mentor_approved, coordinator_approved FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
     .first() as {
       id: string;
+      user_id: string;
       task_id: string;
       status: string;
       assignment_role: string;
@@ -643,9 +644,9 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
   const task = await db
-    .prepare('SELECT id, project_id, workspace_id, status, task_type FROM tasks WHERE id = ?')
+    .prepare('SELECT id, title, project_id, workspace_id, status, task_type FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string } | null;
+    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string } | null;
 
   if (!task) return { success: false, error: 'Task not found.' };
 
@@ -739,6 +740,15 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
       triggeredBy: session.userId,
       note: `Approved by: ${isLeader ? 'Leader ' : ''}${isMentor ? 'Mentor ' : ''}${isCoordinator ? 'Coordinator ' : ''}(Status: ${nextStatus})${appreciationBadge ? ` [Sparks: ${appreciationBadge}]` : ''}${appreciationNote ? ` Note: ${appreciationNote}` : ''}`,
     });
+
+    if (assignment.user_id) {
+      sendPushNotificationToUser(assignment.user_id, 'TASK', {
+        title: `🎉 Tugas Disetujui!`,
+        body: `Tugas ${task?.title || ''} telah disetujui.${sparksValue ? ` (+${sparksValue} Sparks ✨)` : ''}`,
+        url: `/dashboard/workspace/${task?.workspace_id || ''}`,
+        category: 'TASK',
+      }).catch(() => {});
+    }
 
     if (nextStatus === 'APPROVED') {
       const { results: pending } = await db
@@ -853,9 +863,9 @@ export async function requestRevision(assignmentId: string, note: string) {
   const db = await getDB();
 
   const assignment = await db
-    .prepare('SELECT id, task_id, status, assignment_role FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, user_id, task_id, status, assignment_role FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as { id: string; task_id: string; status: string; assignment_role: string } | null;
+    .first() as { id: string; user_id: string; task_id: string; status: string; assignment_role: string } | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
@@ -864,9 +874,9 @@ export async function requestRevision(assignmentId: string, note: string) {
   }
 
   const task = await db
-    .prepare('SELECT id, project_id, workspace_id, status, task_type FROM tasks WHERE id = ?')
+    .prepare('SELECT id, title, project_id, workspace_id, status, task_type FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string } | null;
+    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string } | null;
 
   if (!task) return { success: false, error: 'Task not found.' };
 
@@ -930,6 +940,15 @@ export async function requestRevision(assignmentId: string, note: string) {
       triggeredBy: session.userId,
       note: note.trim(),
     });
+
+    if (assignment.user_id) {
+      sendPushNotificationToUser(assignment.user_id, 'TASK', {
+        title: `⚠️ Revisi Tugas Required`,
+        body: `Catatan Revisi: ${note.trim().slice(0, 90)}`,
+        url: `/dashboard/workspace/${task?.workspace_id || ''}`,
+        category: 'TASK',
+      }).catch(() => {});
+    }
 
     if (task?.workspace_id) {
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);

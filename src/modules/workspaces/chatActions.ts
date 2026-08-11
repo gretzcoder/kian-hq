@@ -102,17 +102,41 @@ export async function sendWorkspaceMessage(
     try {
       const { results: memberRows } = await db
         .prepare(`
-          SELECT wm.user_id, u.name
-          FROM workspace_members wm
-          JOIN users u ON wm.user_id = u.id
-          WHERE wm.workspace_id = ? AND wm.user_id != ?
+          SELECT DISTINCT target_users.id AS user_id, target_users.name
+          FROM (
+            SELECT wm.user_id AS id, u.name
+            FROM workspace_members wm
+            JOIN users u ON wm.user_id = u.id
+            WHERE wm.workspace_id = ? AND wm.user_id != ?
+
+            UNION
+
+            SELECT ws.ojt_coordinator_id AS id, u.name
+            FROM workspaces ws
+            JOIN users u ON ws.ojt_coordinator_id = u.id
+            WHERE ws.id = ? AND ws.ojt_coordinator_id != ?
+
+            UNION
+
+            SELECT ta.user_id AS id, u.name
+            FROM task_assignments ta
+            JOIN tasks t ON ta.task_id = t.id
+            JOIN users u ON ta.user_id = u.id
+            WHERE t.workspace_id = ? AND ta.user_id != ?
+          ) target_users
         `)
-        .bind(workspaceId, session.userId)
+        .bind(
+          workspaceId, session.userId,
+          workspaceId, session.userId,
+          workspaceId, session.userId
+        )
         .all();
 
       const members = (memberRows as any[]) || [];
       if (members.length > 0) {
+        const isMentionAll = trimmed.toLowerCase().includes('@all') || trimmed.toLowerCase().includes('@semua');
         const mentions = members.filter((m) =>
+          isMentionAll ||
           trimmed.toLowerCase().includes(`@${(m.name || '').toLowerCase()}`) ||
           trimmed.toLowerCase().includes(`@${(m.name || '').split(' ')[0].toLowerCase()}`)
         );

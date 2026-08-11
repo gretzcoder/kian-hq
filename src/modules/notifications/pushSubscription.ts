@@ -3,7 +3,7 @@
 // Default VAPID Public Key for Web Push (Valid base64url encoded VAPID public key)
 export const DEFAULT_VAPID_PUBLIC_KEY =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
-  'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-Skv6b2A-nK2v12V0q_0v14YwR_J5aJ6V3s_J7b5v6c7d8e9f0g1h2i3';
+  'BM3jcRVZP67OhZEmQj6RkbxTw4zKdH8trmmoeLBqKBBt0mkJftSEOpdtEMiTkBlwunaidCIvPLNhlC9HIDhKAoc';
 
 /**
  * Utility to convert base64 String to Uint8Array for PushManager subscribe
