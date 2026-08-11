@@ -60,10 +60,10 @@ export default async function OJTDirectoryPage() {
         u.tools, 
         u.portfolio_url,
         r.name as role_name,
-        (SELECT COUNT(*) FROM task_assignments ta WHERE ta.user_id = u.id AND ta.status = 'APPROVED') as completed_tasks,
-        (SELECT COUNT(*) FROM task_assignments ta WHERE ta.user_id = u.id AND ta.status IN ('ASSIGNED', 'IN_PROGRESS', 'SUBMITTED', 'REVISION')) as in_progress_tasks,
-        (SELECT COALESCE(SUM(COALESCE(ta.sparks, 8)), 0) FROM task_assignments ta WHERE ta.user_id = u.id AND ta.status = 'APPROVED') as total_sparks,
-        (SELECT COALESCE(SUM(COALESCE(ta.sparks, 8)), 0) FROM task_assignments ta WHERE ta.user_id = u.id AND ta.status = 'APPROVED') as sparks_score
+        (SELECT COUNT(*) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = u.id AND ta.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)) as completed_tasks,
+        (SELECT COUNT(*) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = u.id AND ta.status IN ('ASSIGNED', 'IN_PROGRESS', 'SUBMITTED', 'REVISION') AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)) as in_progress_tasks,
+        (SELECT COALESCE(SUM(COALESCE(ta.sparks, 8)), 0) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = u.id AND ta.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)) as total_sparks,
+        (SELECT COALESCE(SUM(COALESCE(ta.sparks, 8)), 0) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = u.id AND ta.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)) as sparks_score
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id

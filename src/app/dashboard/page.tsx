@@ -46,6 +46,17 @@ export default async function DashboardPage() {
     await db
       .prepare("UPDATE task_assignments SET status = 'ASSIGNED' WHERE status = 'WAITING_REVIEW' AND (result_url IS NULL OR TRIM(result_url) = '')")
       .run();
+    await db
+      .prepare(`
+        DELETE FROM task_assignments
+        WHERE task_id NOT IN (SELECT id FROM tasks)
+           OR task_id IN (
+             SELECT t.id FROM tasks t
+             LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+             WHERE t.status = 'DELETED' OR ws.deleted_at IS NOT NULL
+           )
+      `)
+      .run();
   } catch (e) {
     console.error('Auto-cleanup task_assignments failed:', e);
   }
@@ -54,20 +65,20 @@ export default async function DashboardPage() {
   const ctx = await getSessionContext(session.userId);
 
   const [pendingQCCount, inProgressTasksCount, totalOjtCount, announcementsRaw, leaderboardResult] = await Promise.all([
-    db.prepare("SELECT COUNT(ta.id) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE ta.status = 'WAITING_REVIEW' AND ta.result_url IS NOT NULL AND TRIM(ta.result_url) != '' AND t.status = 'APPROVED'").first() as Promise<{ count: number }>,
-    db.prepare("SELECT COUNT(*) as count FROM tasks WHERE status IN ('TODO', 'IN_PROGRESS', 'REVISION')").first() as Promise<{ count: number }>,
+    db.prepare("SELECT COUNT(ta.id) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.status = 'WAITING_REVIEW' AND ta.result_url IS NOT NULL AND TRIM(ta.result_url) != '' AND t.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)").first() as Promise<{ count: number }>,
+    db.prepare("SELECT COUNT(*) as count FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status IN ('TODO', 'IN_PROGRESS', 'REVISION') AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)").first() as Promise<{ count: number }>,
     db.prepare("SELECT COUNT(*) as count FROM users WHERE user_type = 'OJT'").first() as Promise<{ count: number }>,
     db.prepare(`
-      SELECT a.*, u.name as author_name
-      FROM announcements a
-      LEFT JOIN users u ON a.created_by = u.id
-      ORDER BY a.created_at DESC
-      LIMIT 4
+      SELECT id, title, content, is_pinned, created_at, updated_at, category, priority
+      FROM announcements
+      ORDER BY is_pinned DESC, created_at DESC
+      LIMIT 3
     `).all(),
     getLeaderboardData('overall', 'month'),
   ]);
 
-  const announcements = announcementsRaw.results as unknown as AnnouncementRow[];
+  const rawAnnouncements = announcementsRaw.results as unknown as AnnouncementRow[];
+  const announcements = rawAnnouncements;
   const miniLeaderboardUsers = (leaderboardResult.data as LeaderboardUser[]) || [];
 
   // Permission-based widget logic
@@ -83,7 +94,8 @@ export default async function DashboardPage() {
   let widgetTitle = 'My Workspace';
   let widgetDesc = 'Active tasks assigned to you across all projects.';
 
-  if (canReview) {
+  if (ctx.userType === 'STAFF') {
+    // STAFF: show tasks submitted for review (QC)
     widgetTitle = 'Pending Reviews';
     widgetDesc = 'Submitted assignments awaiting your review and approval.';
     const { results } = await db
@@ -102,11 +114,13 @@ export default async function DashboardPage() {
       FROM task_assignments ta
       JOIN tasks t         ON ta.task_id = t.id
       JOIN projects p      ON t.project_id = p.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
       LEFT JOIN users u    ON ta.user_id = u.id
       WHERE ta.status = 'WAITING_REVIEW'
         AND ta.result_url IS NOT NULL
         AND TRIM(ta.result_url) != ''
         AND t.status = 'APPROVED'
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC
       LIMIT 10
     `
@@ -130,7 +144,9 @@ export default async function DashboardPage() {
       FROM task_assignments ta
       JOIN tasks t      ON ta.task_id = t.id
       JOIN projects p   ON t.project_id = p.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
       WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY t.deadline ASC
       LIMIT 10
     `

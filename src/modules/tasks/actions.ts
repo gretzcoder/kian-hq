@@ -1043,6 +1043,7 @@ export async function deleteTask(taskId: string) {
   }
 
   try {
+    await db.prepare('DELETE FROM workflow_events WHERE entity_id = ? OR entity_id IN (SELECT id FROM task_assignments WHERE task_id = ?)').bind(taskId, taskId).run();
     await db.prepare('DELETE FROM task_assignments WHERE task_id = ?').bind(taskId).run();
     await db.prepare('DELETE FROM tasks WHERE id = ?').bind(taskId).run();
 
@@ -1050,6 +1051,8 @@ export async function deleteTask(taskId: string) {
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
+    revalidatePath('/dashboard/profile');
+    revalidatePath('/dashboard');
     return { success: true };
   } catch (err: any) {
     console.error('deleteTask failed:', err);

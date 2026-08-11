@@ -84,17 +84,21 @@ export default async function ProfilePage({
     `).bind(targetUserId).first(),
 
     db.prepare(`
-      SELECT status, COUNT(*) as count
-      FROM task_assignments
-      WHERE user_id = ?
-      GROUP BY status
+      SELECT ta.status, COUNT(*) as count
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+      GROUP BY ta.status
     `).bind(targetUserId).all(),
 
     db.prepare(`
-      SELECT assignment_role, COUNT(*) as count
-      FROM task_assignments
-      WHERE user_id = ?
-      GROUP BY assignment_role
+      SELECT ta.assignment_role, COUNT(*) as count
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+      GROUP BY ta.assignment_role
       ORDER BY count DESC
     `).bind(targetUserId).all(),
 
@@ -112,7 +116,7 @@ export default async function ProfilePage({
       JOIN tasks t ON ta.task_id = t.id
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
       LEFT JOIN projects p ON t.project_id = p.id
-      WHERE ta.user_id = ?
+      WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.created_at DESC
       LIMIT 8
     `).bind(targetUserId).all(),
@@ -121,33 +125,40 @@ export default async function ProfilePage({
       SELECT COUNT(DISTINCT t.workspace_id) as count
       FROM task_assignments ta
       JOIN tasks t ON ta.task_id = t.id
-      WHERE ta.user_id = ?
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
     `).bind(targetUserId).first(),
 
     db.prepare(`
       SELECT COUNT(DISTINCT t.project_id) as count
       FROM task_assignments ta
       JOIN tasks t ON ta.task_id = t.id
-      WHERE ta.user_id = ?
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
     `).bind(targetUserId).first(),
 
     db.prepare(`
       SELECT we.note, ta.assignment_role, ta.id as entity_id
       FROM workflow_events we
       JOIN task_assignments ta ON we.entity_id = ta.id
-      WHERE ta.user_id = ? AND (we.note LIKE '%[Sparks:%' OR we.note LIKE '%[Badge:%')
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) AND (we.note LIKE '%[Sparks:%' OR we.note LIKE '%[Badge:%')
     `).bind(targetUserId).all(),
 
     db.prepare(`
-      SELECT id, sparks, assignment_role
-      FROM task_assignments
-      WHERE user_id = ? AND status = 'APPROVED' AND sparks IS NOT NULL
+      SELECT ta.id, ta.sparks, ta.assignment_role
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.user_id = ? AND ta.status = 'APPROVED' AND ta.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
     `).bind(targetUserId).all(),
 
     db.prepare(`
-      SELECT id, sparks
-      FROM tasks
-      WHERE created_by = ? AND task_type = 'ASSESSMENT' AND status = 'APPROVED' AND sparks IS NOT NULL
+      SELECT t.id, t.sparks
+      FROM tasks t
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE t.created_by = ? AND t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
     `).bind(targetUserId).all(),
 
     db.prepare(`

@@ -70,6 +70,8 @@ export default async function ReviewPage() {
       AND ta.result_url IS NOT NULL
       AND TRIM(ta.result_url) != ''
       AND t.status = 'APPROVED'
+      AND t.status != 'DELETED'
+      AND (ws.id IS NULL OR ws.deleted_at IS NULL)
     ORDER BY ta.submitted_at ASC
   `).bind(session.userId, session.userId).all();
 

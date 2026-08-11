@@ -618,6 +618,8 @@ export async function deleteWorkspace(workspaceId: string) {
 
     revalidatePath(`/dashboard/projects/${ws.project_id}`);
     revalidatePath('/dashboard/workspace');
+    revalidatePath('/dashboard/profile');
+    revalidatePath('/dashboard');
     return { success: true, projectId: ws.project_id };
   } catch (err: any) {
     console.error('deleteWorkspace failed:', err);

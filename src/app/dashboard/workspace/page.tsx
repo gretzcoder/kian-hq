@@ -123,6 +123,7 @@ export default async function WorkspacePage() {
       JOIN projects p   ON t.project_id = p.id
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
       WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY
         CASE ta.status
           WHEN 'REVISION_REQUESTED' THEN 1
