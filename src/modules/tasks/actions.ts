@@ -76,11 +76,11 @@ export async function createTask(workspaceId: string, formData: FormData) {
 
   const db = await getDB();
 
-  // Fetch workspace to get project_id
+  // Fetch workspace to get project_id and workspace_type
   const ws = await db
-    .prepare('SELECT id, project_id, ojt_coordinator_id FROM workspaces WHERE id = ?')
+    .prepare('SELECT id, project_id, ojt_coordinator_id, workspace_type FROM workspaces WHERE id = ?')
     .bind(workspaceId)
-    .first() as { id: string; project_id: string; ojt_coordinator_id: string | null } | null;
+    .first() as { id: string; project_id: string; ojt_coordinator_id: string | null; workspace_type: string } | null;
 
   if (!ws) return { success: false, error: 'Workspace not found.' };
 
@@ -147,13 +147,45 @@ export async function createTask(workspaceId: string, formData: FormData) {
       )
       .run();
 
+    // If this is a MENTOR workspace, auto-assign all mentor members to EVERY step of the task
+    if (ws.workspace_type === 'MENTOR') {
+      const { results: mentorMembers } = await db
+        .prepare(`
+          SELECT DISTINCT u.id AS user_id
+          FROM users u
+          JOIN workspace_members wm ON u.id = wm.user_id
+          WHERE wm.workspace_id = ?
+            AND u.status = 'ACTIVE'
+        `)
+        .bind(workspaceId)
+        .all();
+
+      const stepRoles = outputType === 'VIDEO'
+        ? ['RESEARCHER', 'PLANNER', 'VIDEO_EDITOR']
+        : ['RESEARCHER', 'PLANNER', 'DESIGNER'];
+
+      for (const m of (mentorMembers as { user_id: string }[])) {
+        for (const role of stepRoles) {
+          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+          await db
+            .prepare(`
+              INSERT OR IGNORE INTO task_assignments
+                (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+              VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+            `)
+            .bind(assignId, taskId, m.user_id, role, session.userId, deadline, startAt)
+            .run();
+        }
+      }
+    }
+
     await logWorkflowEvent({
       entityType: 'task',
       entityId: taskId,
       fromStatus: null,
       toStatus: initialStatus,
       triggeredBy: session.userId,
-      note: `Task "${title}" created (Output: ${outputType})`,
+      note: `Task "${title}" created (Output: ${outputType}${ws.workspace_type === 'MENTOR' ? ', Workspace: MENTOR' : ''})`,
     });
 
     // Async Web Push to workspace members

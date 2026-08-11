@@ -14,6 +14,7 @@ interface UserRow {
 
 interface LiveTaskAccordionProps {
   workspaceId: string;
+  workspaceType?: string;
   initialTasks: PollTaskRow[];
   initialAssignmentsByTask: Record<string, PollAssignmentRow[]>;
   currentUserId: string;
@@ -30,6 +31,7 @@ interface LiveTaskAccordionProps {
 
 export function LiveTaskAccordion({
   workspaceId,
+  workspaceType,
   initialTasks,
   initialAssignmentsByTask,
   currentUserId,
@@ -132,6 +134,7 @@ export function LiveTaskAccordion({
 
       <TaskAccordion
         tasks={tasks as any}
+        workspaceType={workspaceType}
         assignmentsByTask={assignmentsByTask as any}
         currentUserId={currentUserId}
         canDeleteTask={canDeleteTask}

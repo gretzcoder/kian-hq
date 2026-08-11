@@ -9,7 +9,7 @@ interface Mentor {
   email: string;
 }
 
-type WorkspaceType = 'TROOPERS' | 'ASSESSMENT';
+type WorkspaceType = 'TROOPERS' | 'ASSESSMENT' | 'MENTOR';
 
 export default function CreateWorkspaceForm({
   projectId,
@@ -67,8 +67,8 @@ export default function CreateWorkspaceForm({
         <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2.5">
           Tipe Workspace <span className="text-red-500">*</span>
         </label>
-        <div className="grid grid-cols-2 gap-2">
-          {(['TROOPERS', 'ASSESSMENT'] as WorkspaceType[]).map((type) => {
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {(['TROOPERS', 'ASSESSMENT', 'MENTOR'] as WorkspaceType[]).map((type) => {
             const isSelected = wsType === type;
             const info = {
               TROOPERS: {
@@ -80,6 +80,11 @@ export default function CreateWorkspaceForm({
                 icon: '📝',
                 label: 'Assessment',
                 desc: 'Semua OJT & mentor masuk otomatis',
+              },
+              MENTOR: {
+                icon: '🎓',
+                label: 'Mentor',
+                desc: 'Workspace khusus mentor dalam kendali koordinator',
               },
             }[type];
 
@@ -107,13 +112,21 @@ export default function CreateWorkspaceForm({
         </div>
       </div>
 
-      {/* Assessment info banner */}
+      {/* Info banner */}
       {wsType === 'ASSESSMENT' && (
         <div className="flex items-start gap-2.5 bg-blue-500/5 border border-blue-500/15 rounded-xl px-3.5 py-3">
           <span className="text-blue-500 text-sm shrink-0">ℹ️</span>
           <p className="text-[11px] text-blue-700 dark:text-blue-400 leading-relaxed">
             Semua OJT (role <strong>On The Job Training</strong>) dan semua mentor (role <strong>Mentor Troopers</strong>)
             akan otomatis masuk workspace ini. Tidak perlu pilih mentor.
+          </p>
+        </div>
+      )}
+      {wsType === 'MENTOR' && (
+        <div className="flex items-start gap-2.5 bg-purple-500/5 border border-purple-500/15 rounded-xl px-3.5 py-3">
+          <span className="text-purple-500 text-sm shrink-0">🎓</span>
+          <p className="text-[11px] text-purple-700 dark:text-purple-400 leading-relaxed">
+            Workspace langsung dalam kendali Koordinator. Seluruh mentor aktif akan otomatis menjadi anggota dan peserta penugasan tiap step.
           </p>
         </div>
       )}

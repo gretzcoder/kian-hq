@@ -48,8 +48,7 @@ export async function createWorkspace(projectId: string, formData: FormData) {
   try {
     if (workspaceType === 'ASSESSMENT') {
       // ── Assessment Workspace ─────────────────────────────────────────────
-      // Automatically enroll ONLY Troopers (OJT users / role_troopers) as MEMBER in workspace_members (Daftar Anggota Aktif).
-      // Mentors and all main staff roles retain full access to view, create tasks, and manage Assessment Workspaces.
+      // Automatically enroll ONLY Troopers (OJT users / role_troopers) as MEMBER in workspace_members.
       await db
         .prepare(`
           INSERT INTO workspaces (id, project_id, name, description, status, created_by, workspace_type, created_at)
@@ -76,6 +75,36 @@ export async function createWorkspace(projectId: string, formData: FormData) {
 
       // Enroll all Troopers as MEMBER
       for (const u of trooperUsers as { id: string }[]) {
+        await db
+          .prepare(`INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at)
+                    VALUES (?, ?, 'MEMBER', strftime('%s', 'now'))`)
+          .bind(workspaceId, u.id)
+          .run();
+      }
+    } else if (workspaceType === 'MENTOR') {
+      // ── Mentor Workspace ────────────────────────────────────────────────
+      // Directly under Coordinator control (ojt_coordinator_id = session.userId / mentorId).
+      // Automatically enroll ALL active mentors as MEMBER in workspace_members.
+      const ojtCoordinatorId = mentorId || session.userId;
+      await db
+        .prepare(`
+          INSERT INTO workspaces (id, project_id, name, description, status, created_by, ojt_coordinator_id, workspace_type, created_at)
+          VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, 'MENTOR', strftime('%s', 'now'))
+        `)
+        .bind(workspaceId, projectId, name.trim(), description || null, session.userId, ojtCoordinatorId)
+        .run();
+
+      const { results: mentorUsers } = await db
+        .prepare(`
+          SELECT DISTINCT u.id FROM users u
+          JOIN user_roles ur ON u.id = ur.user_id
+          JOIN roles r ON ur.role_id = r.id
+          WHERE u.status = 'ACTIVE'
+            AND (r.id IN ('role_mentor_troopers', 'role_mentor') OR UPPER(r.name) LIKE '%MENTOR%')
+        `)
+        .all();
+
+      for (const u of mentorUsers as { id: string }[]) {
         await db
           .prepare(`INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at)
                     VALUES (?, ?, 'MEMBER', strftime('%s', 'now'))`)
@@ -145,7 +174,7 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
 
     const ojtCoordinatorId = formData.get('ojt_coordinator_id') as string;
     const workspaceType = formData.get('workspace_type') as string;
-    const newWsType = (workspaceType === 'ASSESSMENT' || workspaceType === 'TROOPERS') ? workspaceType : ws.workspace_type;
+    const newWsType = (['ASSESSMENT', 'TROOPERS', 'MENTOR'].includes(workspaceType)) ? workspaceType : ws.workspace_type;
 
     await db
       .prepare(`
@@ -172,6 +201,25 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
         .all();
 
       for (const u of trooperUsers as { id: string }[]) {
+        await db
+          .prepare(`INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at)
+                    VALUES (?, ?, 'MEMBER', strftime('%s', 'now'))`)
+          .bind(workspaceId, u.id)
+          .run();
+      }
+    } else if (newWsType === 'MENTOR' && ws.workspace_type !== 'MENTOR') {
+      // Auto-enroll active mentors if converting to MENTOR workspace
+      const { results: mentorUsers } = await db
+        .prepare(`
+          SELECT DISTINCT u.id FROM users u
+          JOIN user_roles ur ON u.id = ur.user_id
+          JOIN roles r ON ur.role_id = r.id
+          WHERE u.status = 'ACTIVE'
+            AND (r.id IN ('role_mentor_troopers', 'role_mentor') OR UPPER(r.name) LIKE '%MENTOR%')
+        `)
+        .all();
+
+      for (const u of mentorUsers as { id: string }[]) {
         await db
           .prepare(`INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at)
                     VALUES (?, ?, 'MEMBER', strftime('%s', 'now'))`)

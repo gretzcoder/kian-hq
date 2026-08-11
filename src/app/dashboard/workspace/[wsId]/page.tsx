@@ -405,6 +405,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
           ) : (
             <LiveTaskAccordion
               workspaceId={wsId}
+              workspaceType={workspace.workspace_type}
               initialTasks={tasks as any}
               initialAssignmentsByTask={assignmentsByTask as any}
               currentUserId={session.userId}

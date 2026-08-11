@@ -50,6 +50,7 @@ interface UserRow {
 
 interface TaskAccordionProps {
   tasks: TaskRow[];
+  workspaceType?: string;
   assignmentsByTask: Record<string, TaskAssignment[]>;
   currentUserId: string;
   canDeleteTask: boolean;
@@ -139,6 +140,7 @@ function getTaskDeadlineBadge(deadline: number | null, status: string) {
 
 export default function TaskAccordion({
   tasks,
+  workspaceType,
   assignmentsByTask,
   currentUserId,
   canDeleteTask,
@@ -305,6 +307,7 @@ export default function TaskAccordion({
                 <TaskActions
                   taskId={task.id}
                   taskType={task.task_type}
+                  workspaceType={workspaceType}
                   assignments={taskAssignments}
                   currentUserId={currentUserId}
                   canDelete={canDeleteTask}

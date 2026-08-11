@@ -15,7 +15,7 @@ interface EditWorkspaceModalProps {
   initialName: string;
   initialDescription: string | null;
   initialMentorId: string | null;
-  initialType?: 'TROOPERS' | 'ASSESSMENT';
+  initialType?: 'TROOPERS' | 'ASSESSMENT' | 'MENTOR';
   mentors: Mentor[];
   isAssessment: boolean;
 }
@@ -38,7 +38,7 @@ export default function EditWorkspaceModal({
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription ?? '');
   const [mentorId, setMentorId] = useState(initialMentorId ?? '');
-  const [wsType, setWsType] = useState<'TROOPERS' | 'ASSESSMENT'>(defaultType);
+  const [wsType, setWsType] = useState<'TROOPERS' | 'ASSESSMENT' | 'MENTOR'>(defaultType);
 
   const handleOpen = () => {
     // Reset form to current values on every open
@@ -150,10 +150,11 @@ export default function EditWorkspaceModal({
               {/* Tipe / Jenis Workspace */}
               <div>
                 <label className={labelCls}>Tipe / Jenis Workspace *</label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
                     { type: 'TROOPERS', icon: '⚡', label: 'Troopers', desc: 'Workspace tim standar (alur OJT)' },
                     { type: 'ASSESSMENT', icon: '📝', label: 'Assessment', desc: 'Semua OJT & mentor masuk otomatis' },
+                    { type: 'MENTOR', icon: '🎓', label: 'Mentor', desc: 'Workspace khusus mentor dalam kendali koordinator' },
                   ].map((opt) => {
                     const isSelected = wsType === opt.type;
                     return (
