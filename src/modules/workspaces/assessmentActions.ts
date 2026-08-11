@@ -634,33 +634,59 @@ export async function requestAssessmentRevision(
   const session = await getSession();
   if (!session) return { success: false, error: 'Unauthorized' };
 
+  if (!revisionNote?.trim()) return { success: false, error: 'Catatan revisi wajib diisi.' };
+
   const db = await getDB();
   const ctx = await getSessionContext(session.userId);
 
-  const isLeaderRow = await db
-    .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
-    .bind(workspaceId, session.userId)
-    .first();
+  const assignment = await db
+    .prepare('SELECT id, task_id, status FROM task_assignments WHERE id = ?')
+    .bind(assignmentId)
+    .first() as { id: string; task_id: string; status: string } | null;
 
+  if (!assignment) return { success: false, error: 'Penugasan tidak ditemukan.' };
+
+  const task = await db
+    .prepare('SELECT id, workspace_id, created_by FROM tasks WHERE id = ?')
+    .bind(assignment.task_id)
+    .first() as { id: string; workspace_id: string | null; created_by: string | null } | null;
+
+  const targetWsId = workspaceId || task?.workspace_id || '';
+
+  const isTaskCreator = task?.created_by != null && task.created_by === session.userId;
   const isMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
-  const isLeader = !!isLeaderRow || isMentorRole;
   const isCoordinator =
-    (ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'))) || isMentorRole;
+    ctx.userType === 'STAFF' &&
+    (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
 
-  if (!isLeader && !isCoordinator) return { success: false, error: 'Forbidden.' };
-  if (!revisionNote?.trim()) return { success: false, error: 'Catatan revisi wajib diisi.' };
+  if (!isTaskCreator && !isMentorRole && !isCoordinator && !ctx.can('REQUEST_REVISION')) {
+    return { success: false, error: 'Forbidden: Anda tidak berhak meminta revisi tugas ini.' };
+  }
 
   try {
+    const nextStatus = 'REVISION_REQUESTED';
+
     await db
       .prepare(`
         UPDATE task_assignments
-        SET status = 'REVISION_REQUESTED', revision_note = ?, reviewed_at = strftime('%s', 'now')
+        SET status = ?, revision_note = ?, reviewed_at = strftime('%s', 'now'), mentor_approved = 0, coordinator_approved = 0
         WHERE id = ?
       `)
-      .bind(revisionNote.trim(), assignmentId)
+      .bind(nextStatus, revisionNote.trim(), assignmentId)
       .run();
 
-    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    if (task) {
+      await db
+        .prepare('UPDATE tasks SET status = ? WHERE id = ?')
+        .bind(nextStatus, task.id)
+        .run();
+    }
+
+    if (targetWsId) {
+      revalidatePath(`/dashboard/workspace/${targetWsId}`);
+    }
+    revalidatePath('/dashboard/review');
+    revalidatePath('/dashboard');
     return { success: true };
   } catch (err: any) {
     console.error('requestAssessmentRevision failed:', err);

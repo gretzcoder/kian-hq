@@ -218,7 +218,7 @@ export default async function ReviewPage() {
               {/* Action buttons — client component */}
               <ReviewActions
                 assignmentId={r.assignment_id}
-                canRequestRevision={canRequestRevision}
+                canRequestRevision={true}
                 taskType={r.task_type}
                 isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.task_created_by === session.userId && (r as any).mentor_approved === 0}
               />

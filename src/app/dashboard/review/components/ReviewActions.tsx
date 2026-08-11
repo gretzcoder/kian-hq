@@ -95,7 +95,9 @@ export default function ReviewActions({
     try {
       const res =
         mode === 'REVISION'
-          ? await requestRevision(assignmentId, noteText.trim())
+          ? (taskType === 'ASSESSMENT'
+              ? await requestAssessmentRevisionAction(assignmentId, '', noteText.trim())
+              : await requestRevision(assignmentId, noteText.trim()))
           : await declineAssignment(assignmentId, noteText.trim());
 
       if (res.success) {
@@ -169,15 +171,13 @@ export default function ReviewActions({
             >
               <span>✓ ACC Mentor</span>
             </button>
-            {canRequestRevision && (
-              <button
-                onClick={() => setMode('REVISION')}
-                disabled={loading}
-                className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
-              >
-                ↩ Request Revisi
-              </button>
-            )}
+            <button
+              onClick={() => setMode('REVISION')}
+              disabled={loading}
+              className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
+            >
+              ↩ Request Revisi
+            </button>
           </div>
         ) : (
         <div className="flex gap-2 flex-wrap">

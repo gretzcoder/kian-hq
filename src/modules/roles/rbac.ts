@@ -328,7 +328,7 @@ export async function hasWorkspacePermission(
   }
 
   // 3. Tasks in other workspaces: ONLY designated mentor or Coordinator / Admin
-  if (['TASK_CREATE', 'TASK_ASSIGN', 'CREATE_TASK', 'ASSIGN_TASK', 'DELETE', 'UPDATE'].includes(permissionName)) {
+  if (['TASK_CREATE', 'TASK_ASSIGN', 'CREATE_TASK', 'ASSIGN_TASK', 'DELETE', 'UPDATE', 'REQUEST_REVISION', 'TASK_REVIEW'].includes(permissionName)) {
     return isDesignatedMentor || isCoordinator;
   }
 
