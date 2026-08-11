@@ -153,7 +153,18 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'UPDATE_WORKSPACE');
+  const ctx = await getSessionContext(session.userId);
+  const isCoordinator =
+    ctx.userType === 'STAFF' &&
+    (ctx.roles.includes('COORDINATOR') ||
+      ctx.roles.includes('EXECUTIVE') ||
+      ctx.can('MANAGE') ||
+      ctx.can('WORKSPACE_MANAGE') ||
+      ctx.permissions.has('ADMIN_SYSTEM'));
+
+  if (!isCoordinator) {
+    return { success: false, error: 'Forbidden: Workspace hanya dapat di-edit oleh Coordinator / Admin.' };
+  }
 
   const name = formData.get('name') as string;
   const description = formData.get('description') as string;
@@ -252,7 +263,18 @@ export async function updateWorkspaceStatus(
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'UPDATE_WORKSPACE');
+  const ctx = await getSessionContext(session.userId);
+  const isCoordinator =
+    ctx.userType === 'STAFF' &&
+    (ctx.roles.includes('COORDINATOR') ||
+      ctx.roles.includes('EXECUTIVE') ||
+      ctx.can('MANAGE') ||
+      ctx.can('WORKSPACE_MANAGE') ||
+      ctx.permissions.has('ADMIN_SYSTEM'));
+
+  if (!isCoordinator) {
+    return { success: false, error: 'Forbidden: Status workspace hanya dapat diubah oleh Coordinator / Admin.' };
+  }
 
   const db = await getDB();
 

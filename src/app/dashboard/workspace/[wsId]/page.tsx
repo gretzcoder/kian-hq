@@ -168,20 +168,24 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const members = (membersRaw as any[]);
   const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
 
-  // SECURITY GATE & SCHEDULE FILTER:
-  const isMentorUser = workspace.ojt_coordinator_id === session.userId || ojtCheck !== null || ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
-  const isManagerUser = ctx.userType === 'STAFF' || isMentorUser || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE');
+  // SECURITY GATE & ACCESS CONTROL:
+  // Workspace and its contents can ONLY be accessed by workspace members, designated workspace mentor, or Coordinator/Admin
+  const isCoordinatorUser =
+    ctx.userType === 'STAFF' &&
+    (ctx.roles.includes('COORDINATOR') ||
+      ctx.roles.includes('EXECUTIVE') ||
+      ctx.can('MANAGE') ||
+      ctx.can('WORKSPACE_MANAGE') ||
+      ctx.permissions.has('ADMIN_SYSTEM'));
 
-  if (ctx.userType === 'OJT') {
-    const isMember = members.some((m) => m.userId === session.userId);
-    if (!isMember && !isMentorUser) {
-      redirect('/dashboard');
-    }
+  const isWorkspaceMember = members.some((m) => m.userId === session.userId);
+  const isDesignatedMentor = workspace.ojt_coordinator_id === session.userId;
+
+  if (!isWorkspaceMember && !isDesignatedMentor && !isCoordinatorUser) {
+    redirect('/dashboard/workspace');
   }
 
-  // Filter tasks for Troopers so:
-  // 1. Scheduled tasks (start_at > now) are hidden until start date
-  // 2. Assessment tasks must be APPROVED by Coordinator (status === 'APPROVED') before Troopers can see them
+  const isManagerUser = isCoordinatorUser || isDesignatedMentor;
   const now = Date.now();
   const allTasks = (tasksRaw as unknown as TaskRow[]).filter((t) => t.status !== 'DELETED');
   const tasks = isManagerUser
@@ -293,15 +297,13 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   // Compute roles for the current user
   const currentUserRoles: string[] = membersList.find((m) => m.userId === session.userId)?.teamRoles ?? [];
-  const isAssessmentWs = workspace.workspace_type === 'ASSESSMENT';
-  const hasMentorRole = isAssessmentWs && ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
-  const isLeader = currentUserRoles.includes('LEADER') || hasMentorRole;
-  const isMentor = workspace.ojt_coordinator_id === session.userId || hasMentorRole;
-  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
+  const isLeader = currentUserRoles.includes('LEADER');
+  const isMentor = isDesignatedMentor;
+  const isCoordinator = isCoordinatorUser;
 
   // Batch-resolve all permissions in ONE synchronous call (no extra DB/KV round-trips)
   const { canCreateTask, canAssignTask, canDeleteTask, canUpdateWs, canManageMembers } =
-    resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId);
+    resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId, workspace.workspace_type);
 
   const isOJT = ctx.userType === 'OJT';
 
