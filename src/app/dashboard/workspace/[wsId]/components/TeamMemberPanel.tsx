@@ -97,31 +97,34 @@ export default function TeamMemberPanel({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Filter displayMembers for Assessment mode so staff/mentors are excluded from active list & count
-  const displayMembers = isAssessment
-    ? members.filter((m) => {
-        const isStaffOrMentor =
-          m.userType === 'STAFF' ||
-          (m.accountRoles || []).some(
-            (r) =>
-              r.toUpperCase().includes('MENTOR') ||
-              r.toUpperCase().includes('COORDINATOR') ||
-              r.toUpperCase().includes('EXECUTIVE') ||
-              r === 'role_mentor_troopers' ||
-              r === 'role_coordinator' ||
-              r === 'role_executive'
-          ) ||
-          m.userId === mentorId;
-        return !isStaffOrMentor;
-      })
-    : members;
+  // Helper: detect if a member is a mentor/staff/coordinator
+  const isMentorOrStaff = (m: Member) =>
+    m.userType === 'STAFF' ||
+    (m.accountRoles || []).some(
+      (r) =>
+        r.toUpperCase().includes('MENTOR') ||
+        r.toUpperCase().includes('COORDINATOR') ||
+        r.toUpperCase().includes('EXECUTIVE') ||
+        r === 'role_mentor_troopers' ||
+        r === 'role_coordinator' ||
+        r === 'role_executive'
+    ) ||
+    m.userId === mentorId;
+
+  // For Assessment: split members into Troopers and Mentors
+  const trooperMembers = isAssessment ? members.filter((m) => !isMentorOrStaff(m)) : members;
+  const mentorMembers = isAssessment ? members.filter((m) => isMentorOrStaff(m)) : [];
+
+  // displayMembers is used for backward compatibility in the add-member logic
+  const displayMembers = trooperMembers;
 
   const [selectedRoleCategory, setSelectedRoleCategory] = useState<string>('ALL');
 
-  // Existing member emails set for filtering out already added users
-  const existingEmails = new Set(displayMembers.map((m) => m.userEmail.toLowerCase()));
+  // BUG FIX: Use ALL members (not filtered displayMembers) so mentors already in workspace
+  // don't show up as "available" in the add dropdown
+  const existingEmails = new Set(members.map((m) => m.userEmail.toLowerCase()));
 
-  // Filter available OJT users not yet in the workspace
+  // Filter available users not yet in the workspace
   const availableOjt = ojtUsers.filter((u) => !existingEmails.has(u.email.toLowerCase()));
 
   const availableOjtForCategory = availableOjt.filter((u) => userMatchesRoleCategory(u, selectedRoleCategory));
@@ -518,110 +521,176 @@ export default function TeamMemberPanel({
         )}
 
         {/* Right Column: Member List Cards (2/3 Width) */}
-        <div className={`space-y-4 ${canManageMembers ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Daftar Anggota Aktif ({displayMembers.length})
-            </h3>
-          </div>
+        <div className={`space-y-6 ${canManageMembers ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
 
-          {displayMembers.length === 0 ? (
-            <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center bg-white dark:bg-transparent">
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">
-                Belum ada anggota tim yang ditambahkan ke workspace ini.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {displayMembers.map((m) => {
+          {/* ─── MENTOR SECTION (Assessment only) ─── */}
+          {isAssessment && mentorMembers.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">🎓</span>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                  Mentor ({mentorMembers.length})
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {mentorMembers.map((m) => {
                   const isSelfUpdating = updating === m.userId;
-
                   return (
                     <div
                       key={m.userId}
-                      className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between"
+                      className="border border-purple-200/60 dark:border-purple-800/40 bg-purple-50/30 dark:bg-purple-900/10 rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between"
                     >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <Link
-                          href={`/dashboard/profile?userId=${m.userId}`}
-                          className="shrink-0"
-                          title={`Lihat profil ${m.userName}`}
-                        >
-                          <UserAvatar src={m.avatarUrl} name={m.userName} size="sm" square />
-                        </Link>
-                        <div className="min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
                           <Link
                             href={`/dashboard/profile?userId=${m.userId}`}
-                            className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate hover:text-purple-600 dark:hover:text-purple-400 hover:underline block"
+                            className="shrink-0"
                             title={`Lihat profil ${m.userName}`}
                           >
-                            {m.userName || 'Unknown User'}
+                            <UserAvatar src={m.avatarUrl} name={m.userName} size="sm" square />
                           </Link>
-                          <p className="text-[10px] text-zinc-400 font-mono truncate">
-                            {m.userEmail}
-                          </p>
+                          <div className="min-w-0">
+                            <Link
+                              href={`/dashboard/profile?userId=${m.userId}`}
+                              className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate hover:text-purple-600 dark:hover:text-purple-400 hover:underline block"
+                              title={`Lihat profil ${m.userName}`}
+                            >
+                              {m.userName || 'Unknown User'}
+                            </Link>
+                            <p className="text-[10px] text-zinc-400 font-mono truncate">
+                              {m.userEmail}
+                            </p>
+                          </div>
                         </div>
+                        {canManageMembers && (
+                          <button
+                            onClick={() => handleRemove(m.userId, m.userName)}
+                            disabled={isSelfUpdating}
+                            className="text-[10px] text-red-500 hover:text-red-600 font-bold px-2 py-1 rounded-lg hover:bg-red-500/5 transition-all shrink-0"
+                            title="Hapus anggota"
+                          >
+                            ✕ Hapus
+                          </button>
+                        )}
                       </div>
-
-                      {canManageMembers && (
-                        <button
-                          onClick={() => handleRemove(m.userId, m.userName)}
-                          disabled={isSelfUpdating}
-                          className="text-[10px] text-red-500 hover:text-red-600 font-bold px-2 py-1 rounded-lg hover:bg-red-500/5 transition-all shrink-0"
-                          title="Hapus anggota"
-                        >
-                          ✕ Hapus
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Roles Selector / Display */}
-                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-zinc-100 dark:border-zinc-800/60">
-                      {isAssessment ? (
-                        /* Assessment mode: show real account role badges */
+                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-purple-100 dark:border-purple-800/30">
                         <AccountRoleBadges member={m} mentorId={mentorId} />
-                      ) : (
-                        /* Regular workspace mode: role toggles */
-                        <>
-                          {(['LEADER', 'RESEARCHER', 'PLANNER', 'CREATOR'] as const).map((r) => {
-                            const hasRole = m.teamRoles.includes(r);
-                            const cfg = roleConfig[r];
-                            const clickable = canToggleRole(r);
-                            const classes = `text-[9px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${
-                              hasRole ? cfg.activeColor : cfg.inactiveColor
-                            } ${
-                              clickable && !isSelfUpdating
-                                ? 'cursor-pointer active:scale-95'
-                                : 'pointer-events-none opacity-50'
-                            }`;
-
-                            return (
-                              <button
-                                key={r}
-                                type="button"
-                                disabled={isSelfUpdating || !clickable}
-                                onClick={() => handleToggleRole(m.userId, m.teamRoles, r)}
-                                className={classes}
-                              >
-                                {hasRole ? '✓ ' : ''}
-                                {cfg.label}
-                              </button>
-                            );
-                          })}
-                          {isSelfUpdating && (
-                            <span className="text-[9px] text-zinc-400 animate-pulse font-bold self-center">
-                              Menyimpan...
-                            </span>
-                          )}
-                        </>
-                      )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           )}
+
+          {/* ─── TROOPERS / MEMBER SECTION ─── */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              {isAssessment && <span className="text-sm">👤</span>}
+              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                {isAssessment ? `Daftar Troopers (${trooperMembers.length})` : `Daftar Anggota Aktif (${displayMembers.length})`}
+              </h3>
+            </div>
+
+            {(isAssessment ? trooperMembers : displayMembers).length === 0 ? (
+              <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center bg-white dark:bg-transparent">
+                <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">
+                  Belum ada anggota tim yang ditambahkan ke workspace ini.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(isAssessment ? trooperMembers : displayMembers).map((m) => {
+                    const isSelfUpdating = updating === m.userId;
+
+                    return (
+                      <div
+                        key={m.userId}
+                        className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between"
+                      >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Link
+                            href={`/dashboard/profile?userId=${m.userId}`}
+                            className="shrink-0"
+                            title={`Lihat profil ${m.userName}`}
+                          >
+                            <UserAvatar src={m.avatarUrl} name={m.userName} size="sm" square />
+                          </Link>
+                          <div className="min-w-0">
+                            <Link
+                              href={`/dashboard/profile?userId=${m.userId}`}
+                              className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate hover:text-purple-600 dark:hover:text-purple-400 hover:underline block"
+                              title={`Lihat profil ${m.userName}`}
+                            >
+                              {m.userName || 'Unknown User'}
+                            </Link>
+                            <p className="text-[10px] text-zinc-400 font-mono truncate">
+                              {m.userEmail}
+                            </p>
+                          </div>
+                        </div>
+
+                        {canManageMembers && (
+                          <button
+                            onClick={() => handleRemove(m.userId, m.userName)}
+                            disabled={isSelfUpdating}
+                            className="text-[10px] text-red-500 hover:text-red-600 font-bold px-2 py-1 rounded-lg hover:bg-red-500/5 transition-all shrink-0"
+                            title="Hapus anggota"
+                          >
+                            ✕ Hapus
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Roles Selector / Display */}
+                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-zinc-100 dark:border-zinc-800/60">
+                        {isAssessment ? (
+                          /* Assessment mode: show real account role badges */
+                          <AccountRoleBadges member={m} mentorId={mentorId} />
+                        ) : (
+                          /* Regular workspace mode: role toggles */
+                          <>
+                            {(['LEADER', 'RESEARCHER', 'PLANNER', 'CREATOR'] as const).map((r) => {
+                              const hasRole = m.teamRoles.includes(r);
+                              const cfg = roleConfig[r];
+                              const clickable = canToggleRole(r);
+                              const classes = `text-[9px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${
+                                hasRole ? cfg.activeColor : cfg.inactiveColor
+                              } ${
+                                clickable && !isSelfUpdating
+                                  ? 'cursor-pointer active:scale-95'
+                                  : 'pointer-events-none opacity-50'
+                              }`;
+
+                              return (
+                                <button
+                                  key={r}
+                                  type="button"
+                                  disabled={isSelfUpdating || !clickable}
+                                  onClick={() => handleToggleRole(m.userId, m.teamRoles, r)}
+                                  className={classes}
+                                >
+                                  {hasRole ? '✓ ' : ''}
+                                  {cfg.label}
+                                </button>
+                              );
+                            })}
+                            {isSelfUpdating && (
+                              <span className="text-[9px] text-zinc-400 animate-pulse font-bold self-center">
+                                Menyimpan...
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </div>
