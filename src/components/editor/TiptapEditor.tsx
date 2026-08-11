@@ -160,9 +160,9 @@ export default function TiptapEditor({
   const charCount = textOnly.length;
 
   return (
-    <div className="border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden bg-zinc-200/60 dark:bg-zinc-950 shadow-lg transition-all">
+    <div className="border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden bg-zinc-200/60 dark:bg-zinc-950 shadow-lg transition-all flex flex-col relative">
       {/* 📄 DOCX Title Bar */}
-      <div className="bg-zinc-900 text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs border-b border-zinc-800">
+      <div className="bg-zinc-900 text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs border-b border-zinc-800 sticky top-0 z-30 shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
             W
@@ -207,8 +207,8 @@ export default function TiptapEditor({
 
       {mode === 'edit' ? (
         <>
-          {/* 🎛️ Word DOCX Ribbon Toolbar */}
-          <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-2 flex flex-wrap items-center gap-1.5 text-xs select-none shadow-xs overflow-x-auto max-w-full min-w-0">
+          {/* 🎛️ Word DOCX Ribbon Toolbar - Sticky Toolbar Google Docs style */}
+          <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-2 flex flex-wrap items-center gap-1.5 text-xs select-none shadow-xs overflow-x-auto max-w-full min-w-0 sticky top-[45px] z-20 shrink-0">
             {/* Formatting Group */}
             <div className="flex items-center gap-0.5 bg-zinc-100 dark:bg-zinc-800/60 p-0.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800">
               <button
@@ -378,23 +378,22 @@ export default function TiptapEditor({
                     ? 'bg-blue-600 text-white font-bold'
                     : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'
                 }`}
-                title="Rata Kiri-Kanan (Justify)"
+                title="Rata Kanan Kiri (Justify)"
               >
                 ≡ Justify
               </button>
             </div>
 
-            {/* Table & Image Group (Custom Table & Image URL) */}
+            {/* Insert Elements Group */}
             <div className="flex items-center gap-0.5 bg-zinc-100 dark:bg-zinc-800/60 p-0.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800">
               <button
                 type="button"
                 onClick={insertCustomTable}
                 className="px-2 py-1 rounded-md text-xs font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 flex items-center gap-1 transition-colors"
-                title="Sisipkan Tabel Custom (Tentukan Jumlah Baris & Kolom)"
+                title="Sisipkan Tabel Baru (Bisa tentukan jumlah baris & kolom)"
               >
                 📊 + Tabel
               </button>
-
               <button
                 type="button"
                 onClick={insertImage}
@@ -541,17 +540,17 @@ export default function TiptapEditor({
             </div>
           </div>
 
-          {/* 📄 DOCX Paper Canvas Page Container */}
-          <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-8 overflow-x-auto">
-            <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[500px] p-6 sm:p-12 transition-all">
+          {/* 📄 DOCX Paper Canvas Page Container - Scrollable area */}
+          <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[520px] sm:max-h-[620px] flex-1 scroll-smooth">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[420px] p-6 sm:p-12 transition-all">
               <EditorContent editor={editor} />
             </div>
           </div>
         </>
       ) : (
         /* 👁️ DOCX Document Preview Mode */
-        <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-8 overflow-x-auto">
-          <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[500px] p-6 sm:p-12 transition-all">
+        <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[520px] sm:max-h-[620px] flex-1 scroll-smooth">
+          <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[420px] p-6 sm:p-12 transition-all">
             <div className="flex items-center justify-between mb-6 pb-3 border-b border-zinc-200 dark:border-zinc-800">
               <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-2">
                 <span>📄 Pratinjau Dokumen Laporan (.docx)</span>
@@ -576,7 +575,7 @@ export default function TiptapEditor({
       )}
 
       {/* 📊 DOCX Status Footer Bar */}
-      <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-4 py-2 flex flex-wrap items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
+      <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-4 py-2 flex flex-wrap items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0">
         <div className="flex items-center gap-4">
           <span>Halaman 1 dari 1</span>
           <span>•</span>
@@ -631,7 +630,7 @@ export function DocxDocumentViewer({
       </div>
 
       {/* 📄 DOCX Paper Canvas Page */}
-      <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-x-auto">
+      <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[520px] scroll-smooth">
         <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[260px] p-6 sm:p-10 transition-all">
           {isHtml ? (
             <div
