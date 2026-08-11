@@ -137,20 +137,48 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
 
   try {
     const ws = await db
-      .prepare('SELECT project_id FROM workspaces WHERE id = ?')
+      .prepare('SELECT project_id, workspace_type FROM workspaces WHERE id = ?')
       .bind(workspaceId)
-      .first() as { project_id: string } | null;
+      .first() as { project_id: string; workspace_type: string } | null;
 
     if (!ws) return { success: false, error: 'Workspace not found.' };
 
     const ojtCoordinatorId = formData.get('ojt_coordinator_id') as string;
+    const workspaceType = formData.get('workspace_type') as string;
+    const newWsType = (workspaceType === 'ASSESSMENT' || workspaceType === 'TROOPERS') ? workspaceType : ws.workspace_type;
 
     await db
       .prepare(`
-        UPDATE workspaces SET name = ?, description = ?, ojt_coordinator_id = ? WHERE id = ?
+        UPDATE workspaces SET name = ?, description = ?, ojt_coordinator_id = ?, workspace_type = ? WHERE id = ?
       `)
-      .bind(name.trim(), description || null, ojtCoordinatorId || null, workspaceId)
+      .bind(name.trim(), description || null, ojtCoordinatorId || null, newWsType, workspaceId)
       .run();
+
+    if (newWsType === 'ASSESSMENT' && ws.workspace_type !== 'ASSESSMENT') {
+      // Auto-enroll active OJT troopers if converting to ASSESSMENT workspace
+      const { results: trooperUsers } = await db
+        .prepare(`
+          SELECT DISTINCT u.id FROM users u
+          LEFT JOIN user_roles ur ON u.id = ur.user_id
+          LEFT JOIN roles r ON ur.role_id = r.id
+          WHERE (
+            LOWER(r.name) LIKE '%trooper%' 
+            OR LOWER(r.name) LIKE '%ojt%' 
+            OR r.id = 'role_troopers'
+            OR u.user_type = 'OJT'
+          )
+          AND u.status = 'ACTIVE'
+        `)
+        .all();
+
+      for (const u of trooperUsers as { id: string }[]) {
+        await db
+          .prepare(`INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at)
+                    VALUES (?, ?, 'MEMBER', strftime('%s', 'now'))`)
+          .bind(workspaceId, u.id)
+          .run();
+      }
+    }
 
     revalidatePath(`/dashboard/projects/${ws.project_id}`);
     revalidatePath(`/dashboard/workspace/${workspaceId}`);

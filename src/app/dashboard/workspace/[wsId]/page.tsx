@@ -371,6 +371,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
                 initialName={workspace.name}
                 initialDescription={workspace.description}
                 initialMentorId={workspace.ojt_coordinator_id}
+                initialType={workspace.workspace_type as any}
                 mentors={mentors}
                 isAssessment={workspace.workspace_type === 'ASSESSMENT'}
               />

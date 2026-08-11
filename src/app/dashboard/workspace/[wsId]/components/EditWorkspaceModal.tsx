@@ -15,6 +15,7 @@ interface EditWorkspaceModalProps {
   initialName: string;
   initialDescription: string | null;
   initialMentorId: string | null;
+  initialType?: 'TROOPERS' | 'ASSESSMENT';
   mentors: Mentor[];
   isAssessment: boolean;
 }
@@ -24,6 +25,7 @@ export default function EditWorkspaceModal({
   initialName,
   initialDescription,
   initialMentorId,
+  initialType,
   mentors,
   isAssessment,
 }: EditWorkspaceModalProps) {
@@ -32,15 +34,18 @@ export default function EditWorkspaceModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const defaultType = initialType ?? (isAssessment ? 'ASSESSMENT' : 'TROOPERS');
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription ?? '');
   const [mentorId, setMentorId] = useState(initialMentorId ?? '');
+  const [wsType, setWsType] = useState<'TROOPERS' | 'ASSESSMENT'>(defaultType);
 
   const handleOpen = () => {
     // Reset form to current values on every open
     setName(initialName);
     setDescription(initialDescription ?? '');
     setMentorId(initialMentorId ?? '');
+    setWsType(initialType ?? (isAssessment ? 'ASSESSMENT' : 'TROOPERS'));
     setError(null);
     setIsOpen(true);
   };
@@ -60,6 +65,7 @@ export default function EditWorkspaceModal({
       formData.append('name', name.trim());
       formData.append('description', description.trim());
       formData.append('ojt_coordinator_id', mentorId);
+      formData.append('workspace_type', wsType);
 
       const res = await updateWorkspace(workspaceId, formData);
       if (res.success) {
@@ -103,7 +109,7 @@ export default function EditWorkspaceModal({
                   Edit Detail Workspace
                 </h3>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Ubah nama, deskripsi, atau mentor workspace ini.
+                  Ubah nama, deskripsi, jenis workspace, atau mentor.
                 </p>
               </div>
               <button
@@ -141,8 +147,41 @@ export default function EditWorkspaceModal({
                 />
               </div>
 
+              {/* Tipe / Jenis Workspace */}
+              <div>
+                <label className={labelCls}>Tipe / Jenis Workspace *</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { type: 'TROOPERS', icon: '⚡', label: 'Troopers', desc: 'Workspace tim standar (alur OJT)' },
+                    { type: 'ASSESSMENT', icon: '📝', label: 'Assessment', desc: 'Semua OJT & mentor masuk otomatis' },
+                  ].map((opt) => {
+                    const isSelected = wsType === opt.type;
+                    return (
+                      <button
+                        key={opt.type}
+                        type="button"
+                        onClick={() => setWsType(opt.type as any)}
+                        className={`flex flex-col items-start gap-1 p-3 rounded-2xl border text-left transition-all ${
+                          isSelected
+                            ? 'border-purple-500 bg-purple-500/8 dark:bg-purple-500/10 ring-2 ring-purple-500/20'
+                            : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30'
+                        }`}
+                      >
+                        <span className="text-base">{opt.icon}</span>
+                        <span className={`text-xs font-black ${isSelected ? 'text-purple-700 dark:text-purple-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                          {opt.label}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 dark:text-zinc-400 leading-tight">
+                          {opt.desc}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Mentor — hanya untuk TROOPERS workspace */}
-              {!isAssessment && mentors.length > 0 && (
+              {wsType === 'TROOPERS' && mentors.length > 0 && (
                 <div>
                   <label className={labelCls}>Mentor Workspace</label>
                   <select
@@ -157,6 +196,16 @@ export default function EditWorkspaceModal({
                       </option>
                     ))}
                   </select>
+                </div>
+              )}
+
+              {/* Info banner jika tipe diset ke ASSESSMENT */}
+              {wsType === 'ASSESSMENT' && (
+                <div className="flex items-start gap-2.5 bg-purple-500/5 border border-purple-500/15 rounded-xl px-3.5 py-3">
+                  <span className="text-purple-500 text-sm shrink-0">ℹ️</span>
+                  <p className="text-[11px] text-purple-700 dark:text-purple-300 leading-relaxed">
+                    Semua OJT dan Mentor Troopers akan otomatis disinkronkan ke workspace assessment ini.
+                  </p>
                 </div>
               )}
 
