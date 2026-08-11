@@ -159,6 +159,8 @@ export default async function DashboardPage() {
       t.id             AS task_id,
       t.title          AS task_title,
       t.priority       AS task_priority,
+      t.task_type      AS task_type,
+      t.created_by     AS task_created_by,
       t.workspace_id,
       ws.name          AS workspace_name,
       t.project_id,
@@ -178,14 +180,31 @@ export default async function DashboardPage() {
         (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ? AND team_role = 'LEADER') AND ta.lead_approved = 0)
         OR (EXISTS (SELECT 1 FROM project_coordinators WHERE project_id = p.id AND user_id = ?) AND ta.mentor_approved = 0)
         OR (? = 1 AND ta.coordinator_approved = 0)
+        OR (t.task_type = 'ASSESSMENT' AND t.created_by = ?)
       )
     ORDER BY ta.submitted_at ASC
   `
     )
-    .bind(session.userId, session.userId, isStaffCoordinator ? 1 : 0)
+    .bind(session.userId, session.userId, isStaffCoordinator ? 1 : 0, session.userId)
     .all();
 
-  const pendingQCReviews = rawPendingQCReviews as unknown as QCReviewItem[];
+  const allQCReviews = rawPendingQCReviews as unknown as (QCReviewItem & {
+    task_created_by?: string | null;
+    task_type?: string | null;
+  })[];
+
+  const pendingQCReviews = allQCReviews.filter((r) => {
+    if (r.task_type === 'ASSESSMENT') {
+      const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
+      if (isTaskCreator && r.mentor_approved === 0) return true;
+      if (isStaffCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
+      return false;
+    }
+    if (r.lead_approved === 1) return false;
+    if (r.mentor_approved === 1) return false;
+    if (isStaffCoordinator && r.coordinator_approved === 1) return false;
+    return true;
+  });
 
   async function handlePostAnnouncement(formData: FormData) {
     'use server';
@@ -227,7 +246,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         <div className="lg:col-span-2 space-y-10">
           {/* Pending QC Reviews Section */}
-          <DashboardQCReviews pendingQCReviews={pendingQCReviews} />
+          <DashboardQCReviews pendingQCReviews={pendingQCReviews} currentUserId={session.userId} />
 
           {/* Personal Tasks / Review Workspace Widget */}
           <DashboardPersonalWorkspace

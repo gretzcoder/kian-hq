@@ -460,36 +460,168 @@ export async function approveAssessmentSubmission(
     ctx.userType === 'STAFF' &&
     (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
 
-  if (!isCoordinator) {
-    return { success: false, error: 'Hanya Koordinator yang berwenang menyetujui submission dan memberikan Sparks.' };
+  // Fetch the assignment and its parent task
+  const assignment = await db
+    .prepare('SELECT id, task_id, mentor_approved FROM task_assignments WHERE id = ?')
+    .bind(assignmentId)
+    .first() as { id: string; task_id: string; mentor_approved: number } | null;
+
+  if (!assignment) return { success: false, error: 'Assignment tidak ditemukan.' };
+
+  const task = await db
+    .prepare('SELECT created_by FROM tasks WHERE id = ?')
+    .bind(assignment.task_id)
+    .first() as { created_by: string | null } | null;
+
+  const isTaskCreator = task?.created_by != null && task.created_by === session.userId;
+
+  // Step 2: Coordinator approval (mentor must have already approved)
+  if (isCoordinator) {
+    if (assignment.mentor_approved !== 1) {
+      return { success: false, error: 'Menunggu ACC Mentor pembuat tugas terlebih dahulu.' };
+    }
+
+    try {
+      await db
+        .prepare(`
+          UPDATE task_assignments
+          SET coordinator_approved = 1,
+              sparks = ?,
+              status = 'APPROVED',
+              reviewed_at = strftime('%s', 'now')
+          WHERE id = ?
+        `)
+        .bind(sparksAmount, assignmentId)
+        .run();
+
+      await logWorkflowEvent({
+        entityType: 'task_assignment',
+        entityId: assignmentId,
+        fromStatus: 'WAITING_REVIEW',
+        toStatus: 'APPROVED',
+        triggeredBy: session.userId,
+        note: `Koordinator menyetujui assessment dan memberikan ${sparksAmount} Sparks`,
+      });
+
+      // Resolve workspaceId for revalidation
+      const wsRow = await db
+        .prepare('SELECT workspace_id FROM tasks WHERE id = ?')
+        .bind(assignment.task_id)
+        .first() as { workspace_id: string | null } | null;
+      const resolvedWsId = workspaceId || wsRow?.workspace_id || '';
+
+      revalidatePath(`/dashboard/workspace/${resolvedWsId}`);
+      revalidatePath('/dashboard/review');
+      revalidatePath('/dashboard');
+      return { success: true };
+    } catch (err: any) {
+      console.error('approveAssessmentSubmission (coordinator) failed:', err);
+      return { success: false, error: err.message };
+    }
+  }
+
+  // Step 1: Creator mentor approval (no sparks, sets mentor_approved + lead_approved)
+  if (isTaskCreator) {
+    try {
+      await db
+        .prepare(`
+          UPDATE task_assignments
+          SET mentor_approved = 1,
+              lead_approved = 1,
+              reviewed_at = strftime('%s', 'now')
+          WHERE id = ?
+        `)
+        .bind(assignmentId)
+        .run();
+
+      await logWorkflowEvent({
+        entityType: 'task_assignment',
+        entityId: assignmentId,
+        fromStatus: 'WAITING_REVIEW',
+        toStatus: 'WAITING_REVIEW',
+        triggeredBy: session.userId,
+        note: 'Mentor pembuat tugas ACC submission, diteruskan ke Koordinator untuk approval & Sparks',
+      });
+
+      const wsRow = await db
+        .prepare('SELECT workspace_id FROM tasks WHERE id = ?')
+        .bind(assignment.task_id)
+        .first() as { workspace_id: string | null } | null;
+      const resolvedWsId = workspaceId || wsRow?.workspace_id || '';
+
+      revalidatePath(`/dashboard/workspace/${resolvedWsId}`);
+      revalidatePath('/dashboard/review');
+      revalidatePath('/dashboard');
+      return { success: true };
+    } catch (err: any) {
+      console.error('approveAssessmentSubmission (mentor) failed:', err);
+      return { success: false, error: err.message };
+    }
+  }
+
+  return { success: false, error: 'Anda tidak memiliki wewenang untuk menyetujui submission ini.' };
+}
+
+/**
+ * Step 1: Mentor (task creator) approves an assessment submission.
+ * Sets mentor_approved=1 and lead_approved=1, keeps status=WAITING_REVIEW.
+ * The submission then appears in the Coordinator queue for Step 2 (Sparks).
+ */
+export async function approveAssessmentMentorStep(
+  assignmentId: string,
+  workspaceId: string
+) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+
+  const assignment = await db
+    .prepare('SELECT id, task_id FROM task_assignments WHERE id = ?')
+    .bind(assignmentId)
+    .first() as { id: string; task_id: string } | null;
+
+  if (!assignment) return { success: false, error: 'Assignment tidak ditemukan.' };
+
+  const task = await db
+    .prepare('SELECT created_by, workspace_id FROM tasks WHERE id = ?')
+    .bind(assignment.task_id)
+    .first() as { created_by: string | null; workspace_id: string | null } | null;
+
+  if (!task) return { success: false, error: 'Task tidak ditemukan.' };
+
+  if (task.created_by !== session.userId) {
+    return { success: false, error: 'Hanya mentor pembuat tugas assessment yang berhak melakukan ACC Mentor.' };
   }
 
   try {
     await db
       .prepare(`
         UPDATE task_assignments
-        SET coordinator_approved = 1,
-            sparks = ?,
-            status = 'APPROVED',
+        SET mentor_approved = 1,
+            lead_approved = 1,
             reviewed_at = strftime('%s', 'now')
         WHERE id = ?
       `)
-      .bind(sparksAmount, assignmentId)
+      .bind(assignmentId)
       .run();
 
     await logWorkflowEvent({
       entityType: 'task_assignment',
       entityId: assignmentId,
       fromStatus: 'WAITING_REVIEW',
-      toStatus: 'APPROVED',
+      toStatus: 'WAITING_REVIEW',
       triggeredBy: session.userId,
-      note: `Koordinator menyetujui assessment dan memberikan ${sparksAmount} Sparks`,
+      note: 'Mentor pembuat tugas ACC submission — menunggu approval & Sparks dari Koordinator',
     });
 
-    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    const resolvedWsId = workspaceId || task.workspace_id || '';
+    revalidatePath(`/dashboard/workspace/${resolvedWsId}`);
+    revalidatePath('/dashboard/review');
+    revalidatePath('/dashboard');
     return { success: true };
   } catch (err: any) {
-    console.error('approveAssessmentSubmission failed:', err);
+    console.error('approveAssessmentMentorStep failed:', err);
     return { success: false, error: err.message };
   }
 }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { approveAssignment, requestRevision, declineAssignment } from '@/modules/tasks/actions';
+import { approveAssessmentMentorStep, requestAssessmentRevision as requestAssessmentRevisionAction, approveAssessmentSubmission } from '@/modules/workspaces/assessmentActions';
 import { useUI } from '@/components/ui/UIProvider';
 
 export function getSparkMeta(spark: number): { label: string; emoji: string; color: string } {
@@ -16,10 +17,14 @@ export default function ReviewActions({
   assignmentId,
   canRequestRevision,
   canAwardBadge = true,
+  taskType,
+  isAssessmentMentorStep = false,
 }: {
   assignmentId: string;
   canRequestRevision: boolean;
   canAwardBadge?: boolean;
+  taskType?: string | null;
+  isAssessmentMentorStep?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'NONE' | 'SPARK_MODAL' | 'REVISION' | 'DECLINE'>('NONE');
@@ -56,7 +61,11 @@ export default function ReviewActions({
     setLoading(true);
     setError(null);
     try {
-      const res = await approveAssignment(assignmentId, sparks, noteText.trim());
+      // For assessment coordinator step, use the assessment-specific action
+      const isAssessmentCoordStep = taskType === 'ASSESSMENT' && !isAssessmentMentorStep;
+      const res = isAssessmentCoordStep
+        ? await approveAssessmentSubmission(assignmentId, '', sparks)
+        : await approveAssignment(assignmentId, sparks, noteText.trim());
       if (res.success) {
         setDone(true);
         toast(`Persetujuan disimpan dengan ${sparks} ✨ Creative Sparks!`, 'success');
@@ -130,6 +139,47 @@ export default function ReviewActions({
       )}
 
       {mode === 'NONE' ? (
+        isAssessmentMentorStep ? (
+          /* Assessment Step 1: Mentor creator — ACC Mentor (no sparks) + Request Revisi */
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={async () => {
+                setLoading(true);
+                setError(null);
+                try {
+                  const res = await approveAssessmentMentorStep(assignmentId, '');
+                  if (res.success) {
+                    setDone(true);
+                    toast('ACC Mentor berhasil! Submission diteruskan ke Koordinator.', 'success');
+                  } else {
+                    const msg = res.error ?? 'Gagal ACC Mentor';
+                    setError(msg);
+                    toast(msg, 'error');
+                  }
+                } catch (e: any) {
+                  const msg = e.message ?? 'An error occurred';
+                  setError(msg);
+                  toast(msg, 'error');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5"
+            >
+              <span>✓ ACC Mentor</span>
+            </button>
+            {canRequestRevision && (
+              <button
+                onClick={() => setMode('REVISION')}
+                disabled={loading}
+                className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
+              >
+                ↩ Request Revisi
+              </button>
+            )}
+          </div>
+        ) : (
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => {
@@ -163,6 +213,7 @@ export default function ReviewActions({
             </>
           )}
         </div>
+        )
       ) : mode === 'SPARK_MODAL' ? (
         <div className="space-y-3.5 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center justify-between">

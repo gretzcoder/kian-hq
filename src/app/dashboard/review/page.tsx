@@ -16,6 +16,8 @@ interface ReviewRow {
   task_id:         string;
   task_title:      string;
   task_priority:   string;
+  task_type:       string | null;
+  task_created_by: string | null;
   workspace_id:    string | null;
   workspace_name:  string | null;
   project_id:      string;
@@ -51,6 +53,8 @@ export default async function ReviewPage() {
       t.id             AS task_id,
       t.title          AS task_title,
       t.priority       AS task_priority,
+      t.task_type       AS task_type,
+      t.created_by      AS task_created_by,
       t.workspace_id,
       ws.name          AS workspace_name,
       p.name           AS project_name,
@@ -77,8 +81,20 @@ export default async function ReviewPage() {
     is_mentor: number;
   })[];
 
-  // Filter out reviews that the current logged in user has ALREADY approved
+  // Filter reviews based on role-specific visibility rules
   const reviews = allReviews.filter((r) => {
+    // ── Assessment 2-step flow ──
+    if (r.task_type === 'ASSESSMENT') {
+      const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
+      // Step 1: Only the mentor who created the assessment task sees it when mentor_approved=0
+      if (isTaskCreator && r.mentor_approved === 0) return true;
+      // Step 2: Only coordinators see it when mentor_approved=1 and coordinator_approved=0
+      if (isCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
+      // All other cases: hide from queue
+      return false;
+    }
+
+    // ── Regular tasks: filter out already-approved steps ──
     if (r.is_leader && r.lead_approved === 1) return false;
     if (r.is_mentor && r.mentor_approved === 1) return false;
     if (isCoordinator && r.coordinator_approved === 1) return false;
@@ -203,6 +219,8 @@ export default async function ReviewPage() {
               <ReviewActions
                 assignmentId={r.assignment_id}
                 canRequestRevision={canRequestRevision}
+                taskType={r.task_type}
+                isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.task_created_by === session.userId && (r as any).mentor_approved === 0}
               />
             </div>
           ))}

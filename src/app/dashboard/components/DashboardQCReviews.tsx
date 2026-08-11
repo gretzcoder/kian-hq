@@ -12,6 +12,8 @@ export interface QCReviewItem {
   task_id: string;
   task_title: string;
   task_priority: string;
+  task_type?: string | null;
+  task_created_by?: string | null;
   workspace_id: string | null;
   workspace_name: string | null;
   project_id: string;
@@ -21,9 +23,10 @@ export interface QCReviewItem {
 
 interface DashboardQCReviewsProps {
   pendingQCReviews: QCReviewItem[];
+  currentUserId?: string;
 }
 
-export default function DashboardQCReviews({ pendingQCReviews }: DashboardQCReviewsProps) {
+export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: DashboardQCReviewsProps) {
   if (pendingQCReviews.length === 0) return null;
 
   return (
@@ -82,7 +85,12 @@ export default function DashboardQCReviews({ pendingQCReviews }: DashboardQCRevi
               <SubmittedLinkPreviewer url={r.result_url} autoExpand={false} />
             )}
 
-            <ReviewActions assignmentId={r.assignment_id} canRequestRevision={true} />
+            <ReviewActions
+              assignmentId={r.assignment_id}
+              canRequestRevision={true}
+              taskType={r.task_type}
+              isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.task_created_by === currentUserId && r.mentor_approved === 0}
+            />
           </div>
         ))}
       </div>

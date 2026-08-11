@@ -6,6 +6,7 @@ import {
   updateAssessmentTask,
   submitAssessmentWork,
   approveAssessmentSubmission,
+  approveAssessmentMentorStep,
   requestAssessmentRevision,
   approveAssessmentTask,
   requestAssessmentBriefRevision,
@@ -379,12 +380,16 @@ function MentorSubmissionCard({
   isCoordinator,
   reactions = [],
   canManage = true,
+  currentUserId,
+  taskCreatedBy,
 }: {
   assignment: AssignmentRow;
   workspaceId: string;
   isCoordinator: boolean;
   reactions?: ReactionItem[];
   canManage?: boolean;
+  currentUserId: string;
+  taskCreatedBy?: string | null;
 }) {
   const [expanded,          setExpanded]          = useState(false);
   const [showSparkModal,    setShowSparkModal]    = useState(false);
@@ -417,11 +422,23 @@ function MentorSubmissionCard({
   const handleApprove = () => {
     setError(null);
     startTransition(async () => {
+      // Coordinator Step 2: Approve with Sparks
       const res = await approveAssessmentSubmission(assignment.id, workspaceId, sparks);
       if (res.success) {
         setShowSparkModal(false);
       } else {
         setError(res.error ?? 'Gagal approve');
+      }
+    });
+  };
+
+  const handleMentorAcc = () => {
+    setError(null);
+    startTransition(async () => {
+      // Step 1: Mentor creator ACC (no sparks)
+      const res = await approveAssessmentMentorStep(assignment.id, workspaceId);
+      if (!res.success) {
+        setError(res.error ?? 'Gagal ACC Mentor');
       }
     });
   };
@@ -578,110 +595,181 @@ function MentorSubmissionCard({
 
           {error && <p className="text-xs text-red-500">{error}</p>}
 
-          {!isApproved && (!showRevForm && !showSparkModal ? (
-            <div className="flex gap-2 items-center justify-between">
-              {isCoordinator ? (
-                <button
-                  onClick={() => setShowSparkModal(true)}
-                  disabled={pending}
-                  className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1.5"
-                >
-                  <span>✓ Approve & Award Sparks ✨</span>
-                </button>
-              ) : (
-                <div className="flex-1 text-[11px] text-zinc-500 dark:text-zinc-400 italic">
-                  Menunggu peninjauan & pemberian Sparks oleh Koordinator.
-                </div>
-              )}
+          {!isApproved && (() => {
+            const isTaskCreator = taskCreatedBy != null && taskCreatedBy === currentUserId;
+            const isMentorApproved = assignment.mentor_approved === 1;
+            const isCoordinatorApproved = assignment.coordinator_approved === 1;
 
-              <button
-                onClick={() => setShowRevForm(true)}
-                disabled={pending}
-                className="px-3.5 py-2 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all disabled:opacity-50"
-              >
-                ↩ Request Revisi
-              </button>
-            </div>
-          ) : showSparkModal ? (
-            /* 1 to 10 Sparks Selector UI matching Troopers workspace */
-            <div className="space-y-3 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between">
-                <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
-                  ✨ Berikan Creative Sparks (1 - 10)
-                </label>
-                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${currentSparkMeta.color}`}>
-                  {currentSparkMeta.emoji} {currentSparkMeta.label} ({sparks}/10)
+            // Show approval progress badges
+            const badges = (
+              <div className="flex items-center gap-2 flex-wrap mb-2">
+                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                  isMentorApproved
+                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                    : 'text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
+                }`}>
+                  {isMentorApproved ? '✓ ACC Mentor' : '⌛ Menunggu ACC Mentor'}
+                </span>
+                <span className="text-zinc-300 dark:text-zinc-600">›</span>
+                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                  isCoordinatorApproved
+                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                    : isMentorApproved
+                      ? 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 border-yellow-500/20'
+                      : 'text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
+                }`}>
+                  {isCoordinatorApproved ? '✓ ACC Koordinator' : isMentorApproved ? '⌛ Menunggu ACC Koordinator' : 'ACC Koordinator'}
                 </span>
               </div>
+            );
 
-              {/* 1 to 10 Sparks Selector Buttons */}
-              <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-                  const isSelected = sparks === num;
-                  return (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => setSparks(num)}
-                      className={`py-2 rounded-xl text-xs font-black transition-all ${
-                        isSelected
-                          ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/20 scale-105 ring-2 ring-purple-500/30'
-                          : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
-                      }`}
-                    >
-                      {num}
-                    </button>
-                  );
-                })}
-              </div>
+            // Step 1: Creator mentor sees ACC Mentor + Request Revisi
+            if (isTaskCreator && !isMentorApproved) {
+              return (
+                <div className="space-y-2">
+                  {badges}
+                  {!showRevForm && !showSparkModal ? (
+                    <div className="flex gap-2 items-center">
+                      <button
+                        onClick={handleMentorAcc}
+                        disabled={pending}
+                        className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1.5"
+                      >
+                        <span>✓ ACC Mentor</span>
+                      </button>
+                      <button
+                        onClick={() => setShowRevForm(true)}
+                        disabled={pending}
+                        className="px-3.5 py-2 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all disabled:opacity-50"
+                      >
+                        ↩ Request Revisi
+                      </button>
+                    </div>
+                  ) : showRevForm ? (
+                    <form onSubmit={handleRevise} className="space-y-2">
+                      <textarea
+                        value={revNote}
+                        onChange={(e) => setRevNote(e.target.value)}
+                        required
+                        rows={2}
+                        placeholder="Tulis catatan revisi..."
+                        className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:border-red-400 text-zinc-900 dark:text-zinc-100"
+                      />
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setShowRevForm(false)} className="flex-1 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-500">
+                          Batal
+                        </button>
+                        <button type="submit" disabled={pending} className="flex-1 py-1.5 text-xs font-bold bg-red-500 hover:bg-red-400 text-white rounded-lg disabled:opacity-50">
+                          {pending ? '...' : 'Kirim Revisi'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : null}
+                </div>
+              );
+            }
 
-              <div className="flex gap-2 justify-end pt-1">
-                <button
-                  type="button"
-                  onClick={() => { setShowSparkModal(false); setError(null); }}
-                  disabled={pending}
-                  className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApprove}
-                  disabled={pending}
-                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-1.5 rounded-xl transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {pending ? 'Menyimpan...' : `Kirim ${sparks} ✨ & Setujui`}
-                </button>
+            // Step 2: Coordinator sees Approve & Award Sparks (only after mentor ACC)
+            if (isCoordinator && isMentorApproved && !isCoordinatorApproved) {
+              return (
+                <div className="space-y-2">
+                  {badges}
+                  {!showRevForm && !showSparkModal ? (
+                    <div className="flex gap-2 items-center">
+                      <button
+                        onClick={() => setShowSparkModal(true)}
+                        disabled={pending}
+                        className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1.5"
+                      >
+                        <span>✓ Approve & Award Sparks ✨</span>
+                      </button>
+                      <button
+                        onClick={() => setShowRevForm(true)}
+                        disabled={pending}
+                        className="px-3.5 py-2 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all disabled:opacity-50"
+                      >
+                        ↩ Request Revisi
+                      </button>
+                    </div>
+                  ) : showSparkModal ? (
+                    <div className="space-y-3 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 animate-in fade-in duration-150">
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+                          ✨ Berikan Creative Sparks (1 - 10)
+                        </label>
+                        <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${currentSparkMeta.color}`}>
+                          {currentSparkMeta.emoji} {currentSparkMeta.label} ({sparks}/10)
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                          const isSelected = sparks === num;
+                          return (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => setSparks(num)}
+                              className={`py-2 rounded-xl text-xs font-black transition-all ${
+                                isSelected
+                                  ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/20 scale-105 ring-2 ring-purple-500/30'
+                                  : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
+                              }`}
+                            >
+                              {num}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex gap-2 justify-end pt-1">
+                        <button type="button" onClick={() => { setShowSparkModal(false); setError(null); }} disabled={pending} className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all">
+                          Batal
+                        </button>
+                        <button type="button" onClick={handleApprove} disabled={pending} className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-1.5 rounded-xl transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5">
+                          {pending ? 'Menyimpan...' : `Kirim ${sparks} ✨ & Setujui`}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleRevise} className="space-y-2">
+                      <textarea
+                        value={revNote}
+                        onChange={(e) => setRevNote(e.target.value)}
+                        required
+                        rows={2}
+                        placeholder="Tulis catatan revisi..."
+                        className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:border-red-400 text-zinc-900 dark:text-zinc-100"
+                      />
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setShowRevForm(false)} className="flex-1 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-500">
+                          Batal
+                        </button>
+                        <button type="submit" disabled={pending} className="flex-1 py-1.5 text-xs font-bold bg-red-500 hover:bg-red-400 text-white rounded-lg disabled:opacity-50">
+                          {pending ? '...' : 'Kirim Revisi'}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              );
+            }
+
+            // Non-creator mentors or already approved: show status only
+            return (
+              <div className="space-y-2">
+                {badges}
+                {!isMentorApproved && (
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 italic">
+                    Menunggu ACC Mentor pembuat tugas.
+                  </p>
+                )}
+                {isMentorApproved && !isCoordinatorApproved && (
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 italic">
+                    Menunggu peninjauan & pemberian Sparks oleh Koordinator.
+                  </p>
+                )}
               </div>
-            </div>
-          ) : (
-            <form onSubmit={handleRevise} className="space-y-2">
-              <textarea
-                value={revNote}
-                onChange={(e) => setRevNote(e.target.value)}
-                required
-                rows={2}
-                placeholder="Tulis catatan revisi..."
-                className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:border-red-400 text-zinc-900 dark:text-zinc-100"
-              />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowRevForm(false)}
-                  className="flex-1 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-500"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  disabled={pending}
-                  className="flex-1 py-1.5 text-xs font-bold bg-red-500 hover:bg-red-400 text-white rounded-lg disabled:opacity-50"
-                >
-                  {pending ? '...' : 'Kirim Revisi'}
-                </button>
-              </div>
-            </form>
-          ))}
+            );
+          })()}
         </div>
       )}
     </div>
@@ -1399,6 +1487,8 @@ function MentorTaskCard({
                 workspaceId={workspaceId}
                 isCoordinator={isCoordinator}
                 canManage={canManage}
+                currentUserId={currentUserId}
+                taskCreatedBy={task.created_by}
               />
             ))
           )}
