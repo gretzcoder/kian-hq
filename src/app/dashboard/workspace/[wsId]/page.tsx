@@ -297,15 +297,15 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   // Compute roles for the current user
   const currentUserRoles: string[] = membersList.find((m) => m.userId === session.userId)?.teamRoles ?? [];
-  const isLeader = currentUserRoles.includes('LEADER');
-  const isMentor = isDesignatedMentor;
+  const hasMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isMentor = isDesignatedMentor || hasMentorRole;
+  const isLeader = currentUserRoles.includes('LEADER') || isMentor;
   const isCoordinator = isCoordinatorUser;
+  const isOJT = ctx.userType === 'OJT' && !hasMentorRole;
 
   // Batch-resolve all permissions in ONE synchronous call (no extra DB/KV round-trips)
   const { canCreateTask, canAssignTask, canDeleteTask, canUpdateWs, canManageMembers } =
     resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId, workspace.workspace_type);
-
-  const isOJT = ctx.userType === 'OJT';
 
   const wsCfg = wsStatusConfig[workspace.status] ?? wsStatusConfig.ACTIVE;
 
