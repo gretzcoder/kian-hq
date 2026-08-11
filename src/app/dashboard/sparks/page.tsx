@@ -32,3 +32,4 @@ export default async function SparksManagementPage({ searchParams }: PageProps) 
 }
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;

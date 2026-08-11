@@ -42,8 +42,8 @@ export default async function AnalyticsPage() {
     // 1. Projects by status (active projects)
     db.prepare('SELECT status, COUNT(*) as count FROM projects GROUP BY status').all(),
 
-    // 2. Tasks by status (EXCLUDING DELETED TASKS)
-    db.prepare("SELECT status, COUNT(*) as count FROM tasks WHERE status != 'DELETED' GROUP BY status").all(),
+    // 2. Tasks by status (EXCLUDING DELETED TASKS & DELETED WORKSPACES)
+    db.prepare("SELECT t.status, COUNT(*) as count FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) GROUP BY t.status").all(),
 
     // 3. Total active workspaces
     db.prepare('SELECT COUNT(*) as count FROM workspaces WHERE deleted_at IS NULL').first() as Promise<{ count: number }>,
@@ -51,21 +51,23 @@ export default async function AnalyticsPage() {
     // 4. Total registered active users
     db.prepare("SELECT COUNT(*) as count FROM users WHERE status = 'ACTIVE'").first() as Promise<{ count: number }>,
 
-    // 5. Overdue tasks (EXCLUDING DELETED TASKS)
+    // 5. Overdue tasks (EXCLUDING DELETED TASKS & DELETED WORKSPACES)
     db.prepare(`
       SELECT t.title, p.name as project_name, t.deadline, u.name as assigned_name
       FROM tasks t
       JOIN projects p ON t.project_id = p.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
       LEFT JOIN task_assignments ta ON t.id = ta.task_id AND ta.assignment_role = 'PIC'
       LEFT JOIN users u ON ta.user_id = u.id
       WHERE t.deadline IS NOT NULL
         AND t.deadline < ?
         AND t.status NOT IN ('COMPLETED', 'APPROVED', 'DELETED')
+        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY t.deadline ASC
       LIMIT 10
     `).bind(nowMs).all(),
 
-    // 6. User performance stats (EXCLUDING DELETED TASKS)
+    // 6. User performance stats (EXCLUDING DELETED TASKS & DELETED WORKSPACES)
     db.prepare(`
       SELECT u.name,
         SUM(CASE WHEN ta.status = 'APPROVED' OR t.status IN ('COMPLETED', 'APPROVED') THEN 1 ELSE 0 END) as completed,
@@ -74,7 +76,8 @@ export default async function AnalyticsPage() {
       FROM users u
       JOIN task_assignments ta ON ta.user_id = u.id
       JOIN tasks t ON ta.task_id = t.id AND t.status != 'DELETED'
-      WHERE u.status = 'ACTIVE'
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE u.status = 'ACTIVE' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       GROUP BY u.id, u.name
       HAVING COUNT(ta.id) > 0
       ORDER BY completed DESC, sparks DESC
@@ -92,25 +95,28 @@ export default async function AnalyticsPage() {
 
     // 8. Non-deleted tasks created weekly (last 4 weeks)
     db.prepare(`
-      SELECT CAST((? - created_at) / 604800000 AS INTEGER) as week, COUNT(*) as count
-      FROM tasks
-      WHERE created_at > ? AND status != 'DELETED'
+      SELECT CAST((? - t.created_at) / 604800000 AS INTEGER) as week, COUNT(*) as count
+      FROM tasks t
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE t.created_at > ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       GROUP BY week
       ORDER BY week ASC
     `).bind(nowMs, nowMs - 4 * 604800000).all(),
 
-    // 9. Tasks completed this month (non-deleted)
+    // 9. Tasks completed this month (non-deleted & active workspace)
     db.prepare(`
-      SELECT COUNT(*) as count FROM tasks
-      WHERE status IN ('COMPLETED', 'APPROVED') AND status != 'DELETED' AND created_at > ?
+      SELECT COUNT(*) as count FROM tasks t
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE t.status IN ('COMPLETED', 'APPROVED') AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) AND t.created_at > ?
     `).bind(thirtyDaysAgoMs).first() as Promise<{ count: number }>,
 
-    // 10. Total Creative Sparks awarded across approved assessment submissions
+    // 10. Total Creative Sparks awarded across approved assessment submissions (non-deleted & active workspace)
     db.prepare(`
       SELECT COALESCE(SUM(ta.sparks), 0) as total_sparks
       FROM task_assignments ta
       JOIN tasks t ON ta.task_id = t.id
-      WHERE t.status != 'DELETED' AND ta.status = 'APPROVED'
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) AND ta.status = 'APPROVED'
     `).first() as Promise<{ total_sparks: number }>,
 
     // 11. Content briefs by status
@@ -503,3 +509,4 @@ export default async function AnalyticsPage() {
 }
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
