@@ -155,7 +155,7 @@ export function IndividualLeaderboardView({
                         <span>✨</span>
                       </div>
                       <div className="text-[10px] text-zinc-400 font-mono group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                        {user.zeroRevisionCount} Direct Pass 🔍
+                        {user.tasksCompleted} Tasks Completed
                       </div>
                     </button>
                   </div>

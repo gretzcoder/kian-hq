@@ -162,6 +162,13 @@ export async function getLeaderboardData(
           JOIN roles r ON ur.role_id = r.id
           WHERE r.id IN ('role_coordinator', 'role_executive') OR r.name IN ('COORDINATOR', 'EXECUTIVE', 'KOORDINATOR')
         )
+        AND u.id NOT IN (
+          SELECT ur2.user_id
+          FROM user_roles ur2
+          JOIN roles r2 ON ur2.role_id = r2.id
+          WHERE r2.id = 'role_mentor_troopers' OR r2.id = 'role_mentor' OR r2.name LIKE '%MENTOR%'
+        )
+        AND u.user_type != 'MENTOR'
       `;
     }
 
