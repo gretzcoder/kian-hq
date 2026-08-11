@@ -522,7 +522,7 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
       return { success: false, error: ojtCheck.error };
     }
 
-    const auditStatus = assignment.status === 'REVISION_REQUESTED' ? 'RESUBMITTED' : 'SUBMITTED';
+    const auditStatus = (assignment.status === 'REVISION_REQUESTED' || assignment.status === 'WAITING_REVIEW' || assignment.status === 'RESUBMITTED') ? 'RESUBMITTED' : 'SUBMITTED';
 
     validateTransition('task_assignment', assignment.status, auditStatus);
     validateTransition('task_assignment', auditStatus, 'WAITING_REVIEW');

@@ -155,33 +155,8 @@ export default function TaskAccordion({
   const searchParams = useSearchParams();
   const targetTaskId = searchParams ? searchParams.get('taskId') : null;
 
-  const sortedTasks = [...tasks].sort((a, b) => {
-    if (!a.deadline && !b.deadline) return a.created_at - b.created_at;
-    if (!a.deadline) return 1;
-    if (!b.deadline) return -1;
-    return a.deadline - b.deadline;
-  });
-
-  // Target task open if in URL searchParams, otherwise auto-expand task with user submission or first task in MENTOR workspace
-  const initialOpenTaskId = (() => {
-    if (targetTaskId) return targetTaskId;
-
-    // 1. Task where current user has a submission or assignment
-    for (const task of sortedTasks) {
-      const assigns = assignmentsByTask[task.id] || [];
-      const hasMyAssign = assigns.some((a) => a.user_id === currentUserId || a.result_url !== null);
-      if (hasMyAssign) return task.id;
-    }
-
-    // 2. If MENTOR workspace, auto-expand the first task
-    if (workspaceType === 'MENTOR' && sortedTasks.length > 0) {
-      return sortedTasks[0].id;
-    }
-
-    return null;
-  })();
-
-  const [openTaskId, setOpenTaskId] = useState<string | null>(initialOpenTaskId);
+  // Target task open if in URL searchParams, otherwise ALL tasks start collapsed
+  const [openTaskId, setOpenTaskId] = useState<string | null>(targetTaskId || null);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
 
@@ -201,6 +176,13 @@ export default function TaskAccordion({
   const toggle = (id: string) => {
     setOpenTaskId((prev) => (prev === id ? null : id));
   };
+
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (!a.deadline && !b.deadline) return a.created_at - b.created_at;
+    if (!a.deadline) return 1;
+    if (!b.deadline) return -1;
+    return a.deadline - b.deadline;
+  });
 
   return (
     <div className="space-y-3">
