@@ -322,8 +322,22 @@ export async function hasWorkspacePermission(
     return isCoordinator;
   }
 
-  // 2. MENTOR workspace tasks: ONLY Coordinator / Admin
+  // 2. MENTOR workspace permissions:
+  // - Creation and deletion: ONLY Coordinator / Admin
+  // - Editing task details: Mentors (members / designated / mentor role) and Coordinators
   if (ws?.workspace_type === 'MENTOR') {
+    if (['TASK_CREATE', 'CREATE_TASK', 'DELETE'].includes(permissionName)) {
+      return isCoordinator;
+    }
+    if (['UPDATE', 'TASK_ASSIGN', 'ASSIGN_TASK', 'REQUEST_REVISION', 'TASK_REVIEW'].includes(permissionName)) {
+      const { results: localRoles } = await db
+        .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
+        .bind(workspaceId, userId)
+        .all();
+      const isMember = localRoles && localRoles.length > 0;
+      const isMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+      return isMember || isDesignatedMentor || isMentorRole || isCoordinator;
+    }
     return isCoordinator;
   }
 
@@ -371,11 +385,13 @@ export function resolveWorkspacePermissions(
   // RULE 1: Workspace details can ONLY be edited by Coordinator / Admin
   const canUpdateWs = isCoordinator;
 
-  // RULE 2: Tasks in MENTOR workspace can ONLY be created/edited by Coordinator / Admin
+  // RULE 2: Tasks in MENTOR workspace
   if (workspaceType === 'MENTOR') {
+    const hasMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+    const isMentorMember = isDesignatedMentor || hasMentorRole || memberRoles.length > 0;
     return {
       canCreateTask: isCoordinator,
-      canAssignTask: isCoordinator,
+      canAssignTask: isCoordinator || isMentorMember,
       canDeleteTask: isCoordinator,
       canUpdateWs: isCoordinator,
       canManageMembers: isCoordinator,

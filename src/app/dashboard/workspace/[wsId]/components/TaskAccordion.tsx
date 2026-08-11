@@ -268,14 +268,16 @@ export default function TaskAccordion({
                     >
                       ✏️
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeletingTaskId(task.id)}
-                      title="Hapus Tugas"
-                      className="w-7 h-7 rounded-xl bg-zinc-100/80 hover:bg-red-500/10 dark:bg-zinc-800/80 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center text-xs"
-                    >
-                      🗑️
-                    </button>
+                    {(canDeleteTask || isCoordinator) && (
+                      <button
+                        type="button"
+                        onClick={() => setDeletingTaskId(task.id)}
+                        title="Hapus Tugas"
+                        className="w-7 h-7 rounded-xl bg-zinc-100/80 hover:bg-red-500/10 dark:bg-zinc-800/80 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center text-xs"
+                      >
+                        🗑️
+                      </button>
+                    )}
                   </div>
                 )}
 
