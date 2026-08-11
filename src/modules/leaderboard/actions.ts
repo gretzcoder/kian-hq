@@ -173,6 +173,7 @@ export async function getLeaderboardData(
     }
 
     const includeMentorBriefs = !['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
+    const isRoleCategory = ['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
 
     const query = `
       WITH user_task_sparks AS (
@@ -230,7 +231,7 @@ export async function getLeaderboardData(
         ) AS accountRoles,
         COUNT(uts.assignmentId) AS tasksCompleted,
         AVG(uts.rawSparks) AS avgSparksGiven,
-        COALESCE(SUM(uts.weightedSparks), 0) + COALESCE(ua.adjustmentSparks, 0) AS totalSparksVal,
+        ${isRoleCategory ? 'COALESCE(SUM(uts.weightedSparks), 0)' : 'COALESCE(SUM(uts.weightedSparks), 0) + COALESCE(ua.adjustmentSparks, 0)'} AS totalSparksVal,
         COALESCE(SUM(uts.isZeroRev), 0) AS zeroRevisionCount,
         COALESCE(SUM(uts.isOnTime), 0) AS onTimeCount,
         GROUP_CONCAT(DISTINCT uts.role) AS roles
@@ -239,7 +240,11 @@ export async function getLeaderboardData(
       LEFT JOIN user_adjustments ua ON ua.userId = u.id
       ${userWhereClause}
       GROUP BY u.id
-      HAVING (COALESCE(SUM(uts.weightedSparks), 0) + COALESCE(ua.adjustmentSparks, 0)) > 0
+      HAVING ${
+        isRoleCategory || category === 'productive' || category === 'quality'
+          ? 'COUNT(uts.assignmentId) > 0 AND COALESCE(SUM(uts.weightedSparks), 0) > 0'
+          : '(COALESCE(SUM(uts.weightedSparks), 0) + COALESCE(ua.adjustmentSparks, 0)) > 0'
+      }
     `;
 
     const { results } = await db.prepare(query).all();
@@ -255,7 +260,17 @@ export async function getLeaderboardData(
       const aRoles = (r.accountRoles || '').toUpperCase();
       const taskRoles = (r.roles || '').toUpperCase();
 
-      if (uType === 'MENTOR' || aRoles.includes('MENTOR')) {
+      if (category === 'role_mentor_troopers') {
+        primaryRole = 'MENTOR';
+      } else if (category === 'role_designer') {
+        primaryRole = 'DESIGNER';
+      } else if (category === 'role_editor') {
+        primaryRole = 'VIDEO_EDITOR';
+      } else if (category === 'role_planner') {
+        primaryRole = 'PLANNER';
+      } else if (category === 'role_researcher') {
+        primaryRole = 'RESEARCHER';
+      } else if (uType === 'MENTOR' || aRoles.includes('MENTOR')) {
         primaryRole = 'MENTOR';
       } else if (uType === 'STAFF' || aRoles.includes('COORDINATOR') || aRoles.includes('EXECUTIVE')) {
         primaryRole = aRoles.includes('COORDINATOR') ? 'COORDINATOR' : 'STAFF';
@@ -263,10 +278,6 @@ export async function getLeaderboardData(
         primaryRole = r.accountRoles.split(',')[0].trim().toUpperCase();
       } else if (taskRoles && taskRoles.trim()) {
         primaryRole = taskRoles.split(',')[0].trim();
-      }
-
-      if (category === 'role_mentor_troopers') {
-        primaryRole = 'MENTOR';
       }
 
       return {
@@ -280,7 +291,7 @@ export async function getLeaderboardData(
         qualityScore: Number(qualityScore.toFixed(2)),
         primaryRole,
       };
-    }).filter((i) => i.totalSparks > 0);
+    }).filter((i) => i.totalSparks > 0 && (!isRoleCategory || i.tasksCompleted > 0));
 
     if (category === 'productive') {
       items.sort((a, b) => b.tasksCompleted - a.tasksCompleted || b.totalSparks - a.totalSparks);
