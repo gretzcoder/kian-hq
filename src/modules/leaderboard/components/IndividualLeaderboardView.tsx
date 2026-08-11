@@ -138,7 +138,7 @@ export function IndividualLeaderboardView({
                         )}
                       </div>
                       <div className="text-xs text-zinc-500 dark:text-zinc-400 font-mono mt-0.5">
-                        {user.primaryRole} • {user.tasksCompleted} Tasks Completed
+                        {user.primaryRole}
                       </div>
                     </div>
                   </div>

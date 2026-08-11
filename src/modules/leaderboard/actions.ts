@@ -221,6 +221,13 @@ export async function getLeaderboardData(
         u.id    AS userId,
         u.name  AS userName,
         u.email AS userEmail,
+        u.user_type AS userType,
+        (
+          SELECT GROUP_CONCAT(r.name)
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE ur.user_id = u.id
+        ) AS accountRoles,
         COUNT(uts.assignmentId) AS tasksCompleted,
         AVG(uts.rawSparks) AS avgSparksGiven,
         COALESCE(SUM(uts.weightedSparks), 0) + COALESCE(ua.adjustmentSparks, 0) AS totalSparksVal,
@@ -243,6 +250,25 @@ export async function getLeaderboardData(
       const avgSparks = Number(r.avgSparksGiven) || 8;
       const qualityScore = completed >= 3 ? avgSparks * (zeroRev / completed) : 0;
 
+      let primaryRole = 'CREATOR';
+      const uType = (r.userType || '').toUpperCase();
+      const aRoles = (r.accountRoles || '').toUpperCase();
+      const taskRoles = (r.roles || '').toUpperCase();
+
+      if (uType === 'MENTOR' || aRoles.includes('MENTOR')) {
+        primaryRole = 'MENTOR';
+      } else if (uType === 'STAFF' || aRoles.includes('COORDINATOR') || aRoles.includes('EXECUTIVE')) {
+        primaryRole = aRoles.includes('COORDINATOR') ? 'COORDINATOR' : 'STAFF';
+      } else if (r.accountRoles && r.accountRoles.trim()) {
+        primaryRole = r.accountRoles.split(',')[0].trim().toUpperCase();
+      } else if (taskRoles && taskRoles.trim()) {
+        primaryRole = taskRoles.split(',')[0].trim();
+      }
+
+      if (category === 'role_mentor_troopers') {
+        primaryRole = 'MENTOR';
+      }
+
       return {
         userId: r.userId,
         userName: r.userName || 'Anonymous',
@@ -252,7 +278,7 @@ export async function getLeaderboardData(
         zeroRevisionCount: zeroRev,
         onTimeCount: Number(r.onTimeCount) || 0,
         qualityScore: Number(qualityScore.toFixed(2)),
-        primaryRole: category === 'role_mentor_troopers' ? 'MENTOR' : ((r.roles || '').split(',')[0] || 'CREATOR'),
+        primaryRole,
       };
     }).filter((i) => i.totalSparks > 0);
 
