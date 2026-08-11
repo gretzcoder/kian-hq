@@ -37,28 +37,34 @@ const WORKSPACE_TRANSITIONS: Record<string, string[]> = {
 
 // Unified task and assignment state machine
 const TASK_TRANSITIONS: Record<string, string[]> = {
-  DRAFT:              ['SUBMITTED', 'WAITING_REVIEW'],
+  DRAFT:              ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED', 'WAITING_REVIEW'],
+  ASSIGNED:           ['IN_PROGRESS', 'SUBMITTED', 'WAITING_REVIEW'],
+  IN_PROGRESS:        ['SUBMITTED', 'WAITING_REVIEW'],
   SUBMITTED:          ['WAITING_REVIEW'],
   WAITING_REVIEW:     ['APPROVED', 'REVISION_REQUESTED', 'DECLINED'],
-  REVISION_REQUESTED: ['RESUBMITTED', 'WAITING_REVIEW'],
+  REVISION_REQUESTED: ['RESUBMITTED', 'WAITING_REVIEW', 'IN_PROGRESS', 'SUBMITTED'],
   RESUBMITTED:        ['WAITING_REVIEW'],
-  APPROVED:           ['LOCKED'],
+  APPROVED:           ['LOCKED', 'PUBLISHED', 'DONE'],
+  DONE:               ['APPROVED', 'PUBLISHED', 'LOCKED'],
   LOCKED:             ['PUBLISHED'],
   PUBLISHED:          ['ARCHIVED'],
-  DECLINED:           ['DRAFT'], // "Create Again" / reset to Draft
+  DECLINED:           ['DRAFT', 'ASSIGNED', 'IN_PROGRESS'],
   ARCHIVED:           [],
 };
 
 const TASK_ASSIGNMENT_TRANSITIONS: Record<string, string[]> = {
-  DRAFT:              ['SUBMITTED', 'WAITING_REVIEW'],
+  DRAFT:              ['ASSIGNED', 'IN_PROGRESS', 'SUBMITTED', 'WAITING_REVIEW'],
+  ASSIGNED:           ['IN_PROGRESS', 'SUBMITTED', 'WAITING_REVIEW'],
+  IN_PROGRESS:        ['SUBMITTED', 'WAITING_REVIEW'],
   SUBMITTED:          ['WAITING_REVIEW'],
   WAITING_REVIEW:     ['APPROVED', 'REVISION_REQUESTED', 'DECLINED'],
-  REVISION_REQUESTED: ['RESUBMITTED', 'WAITING_REVIEW'],
+  REVISION_REQUESTED: ['RESUBMITTED', 'WAITING_REVIEW', 'IN_PROGRESS', 'SUBMITTED'],
   RESUBMITTED:        ['WAITING_REVIEW'],
-  APPROVED:           ['LOCKED'],
+  APPROVED:           ['LOCKED', 'PUBLISHED', 'DONE'],
+  DONE:               ['APPROVED', 'PUBLISHED', 'LOCKED'],
   LOCKED:             ['PUBLISHED'],
   PUBLISHED:          ['ARCHIVED'],
-  DECLINED:           ['DRAFT'],
+  DECLINED:           ['DRAFT', 'ASSIGNED', 'IN_PROGRESS'],
   ARCHIVED:           [],
 };
 
