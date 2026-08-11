@@ -557,6 +557,30 @@ export default function TaskActions({
 
                             {/* Clean Consolidated QC Approval Indicator */}
                             {['WAITING_REVIEW', 'APPROVED'].includes(assign.status) && (() => {
+                              const isMentorWs = workspaceType === 'MENTOR';
+
+                              if (isMentorWs) {
+                                const isFullyApproved = assign.status === 'APPROVED' || assign.coordinator_approved === 1;
+                                return (
+                                  <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-2 mt-2">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400">
+                                        Status QC:
+                                      </span>
+                                      <span
+                                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${isFullyApproved
+                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                                          }`}
+                                        title={`Detail: Persetujuan Koordinator (${assign.coordinator_approved ? '✓' : '⏳'})`}
+                                      >
+                                        <span>{isFullyApproved ? '✓ Selesai' : '⏳ Persetujuan Koordinator'}</span>
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
                               const approvedCount = (assign.lead_approved || 0) + (assign.mentor_approved || 0) + (assign.coordinator_approved || 0);
                               const isFullyApproved = approvedCount === 3;
 
@@ -568,7 +592,7 @@ export default function TaskActions({
                                     </span>
                                     <span
                                       className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${isFullyApproved
-                                          ? 'bg-emerald-500/10 text-emerald-600 dark:emerald-400 border-emerald-500/20'
+                                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                                           : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
                                         }`}
                                       title={`Detail: Ketua Tim (${assign.lead_approved ? '✓' : '⏳'}), Mentor (${assign.mentor_approved ? '✓' : '⏳'}), Koordinator (${assign.coordinator_approved ? '✓' : '⏳'})`}
@@ -687,6 +711,34 @@ export default function TaskActions({
 
                               {/* QC Approver Actions */}
                               {assign.status === 'WAITING_REVIEW' && (() => {
+                                const isMentorWs = workspaceType === 'MENTOR';
+
+                                if (isMentorWs) {
+                                  if (!isCoordinator) return null;
+
+                                  if (assign.coordinator_approved === 1) {
+                                    return (
+                                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-2">
+                                        <span>✓ Persetujuan Koordinator telah diberikan.</span>
+                                      </div>
+                                    );
+                                  }
+
+                                  return (
+                                    <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
+                                      <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400">
+                                        Persetujuan QC (Koordinator)
+                                      </p>
+
+                                      <ReviewActions
+                                        assignmentId={assign.id}
+                                        canRequestRevision={true}
+                                        canAwardBadge={true}
+                                      />
+                                    </div>
+                                  );
+                                }
+
                                 const alreadyApproved =
                                   (isLeader && assign.lead_approved === 1) ||
                                   (isMentor && assign.mentor_approved === 1) ||
@@ -726,18 +778,20 @@ export default function TaskActions({
                               })()}
 
                               {/* Edit Sparks Control */}
-                              {(isLeader || isMentor || isCoordinator) && ['WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED'].includes(assign.status) && (
+                              {(workspaceType === 'MENTOR' ? isCoordinator : (isLeader || isMentor || isCoordinator)) && ['WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED'].includes(assign.status) && (
                                 <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between gap-2">
                                   <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
                                     ✨ Sparks: <strong>{assign.sparks || 0} Poin</strong>
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setEditingSparksAssignId(assign.id)}
-                                    className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 active:scale-95 transition-all shadow-sm flex items-center gap-1"
-                                  >
-                                    <span>✏️</span> Ubah Sparks
-                                  </button>
+                                  {isCoordinator && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingSparksAssignId(assign.id)}
+                                      className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 active:scale-95 transition-all shadow-sm flex items-center gap-1"
+                                    >
+                                      <span>✏️</span> Ubah Sparks
+                                    </button>
+                                  )}
 
                                   {editingSparksAssignId === assign.id && (
                                     <EditSparksModal

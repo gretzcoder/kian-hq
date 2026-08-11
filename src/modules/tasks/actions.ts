@@ -665,8 +665,13 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
   const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assignment.assignment_role);
+  const isMentorWs = task.task_type === 'MENTOR' || (await db.prepare('SELECT workspace_type FROM workspaces WHERE id = ?').bind(workspaceId).first() as any)?.workspace_type === 'MENTOR';
 
-  if (isOjtRole) {
+  if (isMentorWs) {
+    if (!isCoordinator) {
+      return { success: false, error: 'Forbidden: Hanya Koordinator atau Admin yang dapat memberikan penilaian/QC pada workspace Mentor.' };
+    }
+  } else if (isOjtRole) {
     if (!isLeader && !isMentor && !isCoordinator) {
       throw new Error('Forbidden: You do not have permission to approve this step.');
     }
@@ -683,7 +688,10 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     let newMentorApproved = assignment.mentor_approved;
     let newCoordinatorApproved = assignment.coordinator_approved;
 
-    if (isOjtRole) {
+    if (isMentorWs) {
+      newCoordinatorApproved = 1;
+      nextStatus = 'APPROVED';
+    } else if (isOjtRole) {
       if (isLeader) newLeadApproved = 1;
       if (isMentor) newMentorApproved = 1;
       if (isCoordinator) newCoordinatorApproved = 1;
