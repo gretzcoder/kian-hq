@@ -1705,7 +1705,12 @@ export function AssessmentPanel({
 
       {/* Task list */}
       <div className="space-y-4">
-        {assessmentTasks.map((task) => {
+        {[...assessmentTasks].sort((a, b) => {
+          if (!a.deadline && !b.deadline) return a.created_at - b.created_at;
+          if (!a.deadline) return 1;
+          if (!b.deadline) return -1;
+          return a.deadline - b.deadline;
+        }).map((task) => {
           const allAssignments = assignmentsByTask[task.id] ?? [];
 
           if (canManage) {

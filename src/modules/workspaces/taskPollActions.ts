@@ -58,7 +58,8 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
        FROM tasks
        WHERE workspace_id = ? AND status != 'DELETED'
        ORDER BY
-         CASE priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
+         CASE WHEN deadline IS NULL THEN 1 ELSE 0 END ASC,
+         deadline ASC,
          created_at ASC`
     )
     .bind(wsId)

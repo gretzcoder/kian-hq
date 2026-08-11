@@ -155,8 +155,8 @@ export default function TaskAccordion({
   const searchParams = useSearchParams();
   const targetTaskId = searchParams ? searchParams.get('taskId') : null;
 
-  // Target task or first task open by default
-  const [openTaskId, setOpenTaskId] = useState<string | null>(targetTaskId || (tasks[0]?.id ?? null));
+  // Target task open if in URL searchParams, otherwise ALL tasks start collapsed
+  const [openTaskId, setOpenTaskId] = useState<string | null>(targetTaskId || null);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
 
@@ -177,9 +177,16 @@ export default function TaskAccordion({
     setOpenTaskId((prev) => (prev === id ? null : id));
   };
 
+  const sortedTasks = [...tasks].sort((a, b) => {
+    if (!a.deadline && !b.deadline) return a.created_at - b.created_at;
+    if (!a.deadline) return 1;
+    if (!b.deadline) return -1;
+    return a.deadline - b.deadline;
+  });
+
   return (
     <div className="space-y-3">
-      {tasks.map((task) => {
+      {sortedTasks.map((task) => {
         const isOpen = openTaskId === task.id;
         const isTarget = targetTaskId === task.id;
         const taskAssignments = assignmentsByTask[task.id] ?? [];

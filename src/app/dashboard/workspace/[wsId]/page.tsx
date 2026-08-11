@@ -70,9 +70,9 @@ interface PageProps {
 
 
 const wsStatusConfig: Record<string, { label: string; color: string }> = {
-  ACTIVE:    { label: 'Active',     color: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15' },
-  COMPLETED: { label: 'Completed',  color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15' },
-  ARCHIVED:  { label: 'Archived',   color: 'text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800' },
+  ACTIVE: { label: 'Active', color: 'text-blue-600 dark:text-blue-400 bg-blue-500/5 border-blue-500/15' },
+  COMPLETED: { label: 'Completed', color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15' },
+  ARCHIVED: { label: 'Archived', color: 'text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800' },
 };
 
 export default async function WorkspaceDetailPage({ params }: PageProps) {
@@ -118,7 +118,8 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       LEFT JOIN users u ON t.created_by = u.id
       WHERE t.workspace_id = ? AND t.status != 'DELETED'
       ORDER BY
-        CASE t.priority WHEN 'URGENT' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'NORMAL' THEN 3 ELSE 4 END,
+        CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END ASC,
+        t.deadline ASC,
         t.created_at ASC
     `).bind(wsId).all(),
     db.prepare(`
@@ -186,18 +187,18 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const tasks = isManagerUser
     ? allTasks
     : allTasks.filter((t) => {
-        if (t.start_at && t.start_at > now) return false;
-        if (t.task_type === 'ASSESSMENT' || workspace.workspace_type === 'ASSESSMENT') {
-          return t.status === 'APPROVED';
-        }
-        return true;
-      });
+      if (t.start_at && t.start_at > now) return false;
+      if (t.task_type === 'ASSESSMENT' || workspace.workspace_type === 'ASSESSMENT') {
+        return t.status === 'APPROVED';
+      }
+      return true;
+    });
 
   // Fetch assignments & reactions when there are tasks
   const [{ results: assignmentsRaw }, { results: reactionsRaw }] = tasks.length > 0
     ? await Promise.all([
-        db
-          .prepare(`
+      db
+        .prepare(`
             SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
                    ta.status, ta.result_url, ta.revision_note, ta.submitted_at,
                    ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
@@ -207,11 +208,11 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
             ORDER BY ta.created_at ASC
           `)
-          .bind(...tasks.map((t) => t.id))
-          .all(),
+        .bind(...tasks.map((t) => t.id))
+        .all(),
 
-        db
-          .prepare(`
+      db
+        .prepare(`
             SELECT r.assignment_id, r.emoji, COUNT(*) as count,
                    MAX(CASE WHEN r.user_id = ? THEN 1 ELSE 0 END) as user_reacted
             FROM assessment_submission_reactions r
@@ -219,9 +220,9 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
             GROUP BY r.assignment_id, r.emoji
           `)
-          .bind(session.userId, ...tasks.map((t) => t.id))
-          .all(),
-      ])
+        .bind(session.userId, ...tasks.map((t) => t.id))
+        .all(),
+    ])
     : [{ results: [] }, { results: [] }];
 
   // Build account roles map: userId → role names[]
@@ -300,7 +301,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   // Batch-resolve all permissions in ONE synchronous call (no extra DB/KV round-trips)
   const { canCreateTask, canAssignTask, canDeleteTask, canUpdateWs, canManageMembers } =
-    resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId, workspace.workspace_type);
+    resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId);
 
   const isOJT = ctx.userType === 'OJT';
 
