@@ -300,7 +300,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   // Batch-resolve all permissions in ONE synchronous call (no extra DB/KV round-trips)
   const { canCreateTask, canAssignTask, canDeleteTask, canUpdateWs, canManageMembers } =
-    resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId);
+    resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId, workspace.workspace_type);
 
   const isOJT = ctx.userType === 'OJT';
 

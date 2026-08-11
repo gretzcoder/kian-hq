@@ -302,11 +302,21 @@ export async function hasWorkspacePermission(
   const db = await getDB();
   const ctx = await getSessionContext(userId);
 
-  // 1. Fetch Local OJT roles & Coordinator ID
+  // 1. Fetch Local OJT roles & Coordinator ID & Workspace Type
   const ws = await db
-    .prepare('SELECT ojt_coordinator_id FROM workspaces WHERE id = ?')
+    .prepare('SELECT ojt_coordinator_id, workspace_type FROM workspaces WHERE id = ?')
     .bind(workspaceId)
-    .first() as { ojt_coordinator_id: string | null } | null;
+    .first() as { ojt_coordinator_id: string | null; workspace_type: string } | null;
+
+  if (ws?.workspace_type === 'MENTOR') {
+    const isCoordinator = ctx.userType === 'STAFF' && (
+      ctx.roles.includes('COORDINATOR') ||
+      ctx.roles.includes('EXECUTIVE') ||
+      ctx.can('MANAGE') ||
+      ctx.can('WORKSPACE_MANAGE')
+    );
+    return isCoordinator;
+  }
 
   const isMentor = ws?.ojt_coordinator_id === userId;
 
@@ -352,6 +362,7 @@ export function resolveWorkspacePermissions(
   ojtCoordinatorId: string | null,
   memberRoles: string[],
   userId: string,
+  workspaceType?: string,
 ): {
   canCreateTask: boolean;
   canAssignTask: boolean;
@@ -359,6 +370,23 @@ export function resolveWorkspacePermissions(
   canUpdateWs: boolean;
   canManageMembers: boolean;
 } {
+  const isCoordinator = ctx.userType === 'STAFF' && (
+    ctx.roles.includes('COORDINATOR') ||
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.can('MANAGE') ||
+    ctx.can('WORKSPACE_MANAGE')
+  );
+
+  if (workspaceType === 'MENTOR') {
+    return {
+      canCreateTask:    isCoordinator,
+      canAssignTask:    isCoordinator,
+      canDeleteTask:    isCoordinator,
+      canUpdateWs:      isCoordinator,
+      canManageMembers: isCoordinator,
+    };
+  }
+
   const hasMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
   const isMentor = ojtCoordinatorId === userId || hasMentorRole;
   const isLeader = memberRoles.includes('LEADER') || hasMentorRole;
