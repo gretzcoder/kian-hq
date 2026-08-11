@@ -258,7 +258,7 @@ export default function TaskAccordion({
               <div className="flex items-center gap-2 shrink-0 self-center">
                 {getTaskDeadlineBadge(task.deadline, task.status)}
 
-                {(canDeleteTask || isLeader || isMentor || isCoordinator) && (
+                {(workspaceType === 'MENTOR' ? isCoordinator : (canDeleteTask || isLeader || isMentor || isCoordinator)) && (
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
@@ -268,16 +268,14 @@ export default function TaskAccordion({
                     >
                       ✏️
                     </button>
-                    {(canDeleteTask || isCoordinator) && (
-                      <button
-                        type="button"
-                        onClick={() => setDeletingTaskId(task.id)}
-                        title="Hapus Tugas"
-                        className="w-7 h-7 rounded-xl bg-zinc-100/80 hover:bg-red-500/10 dark:bg-zinc-800/80 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center text-xs"
-                      >
-                        🗑️
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setDeletingTaskId(task.id)}
+                      title="Hapus Tugas"
+                      className="w-7 h-7 rounded-xl bg-zinc-100/80 hover:bg-red-500/10 dark:bg-zinc-800/80 dark:hover:bg-red-500/20 text-zinc-400 hover:text-red-500 transition-all flex items-center justify-center text-xs"
+                    >
+                      🗑️
+                    </button>
                   </div>
                 )}
 
