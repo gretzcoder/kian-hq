@@ -69,9 +69,9 @@ export default async function DashboardPage() {
     db.prepare("SELECT COUNT(*) as count FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status IN ('TODO', 'IN_PROGRESS', 'REVISION') AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)").first() as Promise<{ count: number }>,
     db.prepare("SELECT COUNT(*) as count FROM users WHERE user_type = 'OJT'").first() as Promise<{ count: number }>,
     db.prepare(`
-      SELECT id, title, content, is_pinned, created_at, updated_at, category, priority
+      SELECT id, title, content, created_at, created_by
       FROM announcements
-      ORDER BY is_pinned DESC, created_at DESC
+      ORDER BY created_at DESC
       LIMIT 3
     `).all(),
     getLeaderboardData('overall', 'month'),
