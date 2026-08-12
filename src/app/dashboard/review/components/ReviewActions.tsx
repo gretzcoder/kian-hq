@@ -195,12 +195,39 @@ export default function ReviewActions({
         <div className="flex gap-2 flex-wrap items-center">
           {mentorApproved === 0 ? (
             isStaffOrCoord && !isTaskMentor ? (
-              <SendReminderButton
-                assignmentId={assignmentId}
-                targetRole="MENTOR"
-                mentorName={creatorName}
-                className="py-2.5 w-full justify-center"
-              />
+              <div className="w-full p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                    <span>⏳ Menunggu Review Tahap 1 oleh Mentor</span>
+                    {creatorName && <strong className="text-zinc-900 dark:text-zinc-100">({creatorName})</strong>}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30">
+                    Belum ACC Mentor
+                  </span>
+                </div>
+                <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 leading-relaxed">
+                  Koordinator belum dapat memberikan penilaian final & sparks sebelum mentor pembuat task menyetujui hasil submit ini.
+                </p>
+
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <SendReminderButton
+                    assignmentId={assignmentId}
+                    targetRole="MENTOR"
+                    mentorName={creatorName}
+                    className="py-2 px-3 text-xs"
+                  />
+                  {canRequestRevision && (
+                    <button
+                      type="button"
+                      onClick={() => setMode('REVISION')}
+                      disabled={loading}
+                      className="px-3.5 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20 rounded-xl font-black text-xs transition-all active:scale-95 cursor-pointer"
+                    >
+                      ↩ Request Revisi
+                    </button>
+                  )}
+                </div>
+              </div>
             ) : (
               <>
                 <button

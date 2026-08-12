@@ -44,6 +44,7 @@ export interface GroupedTask {
   workspace_id: string | null;
   deadline: number | null;
   creator_name?: string | null;
+  task_created_by?: string | null;
   assignments: PersonalTaskRow[];
 }
 
@@ -136,6 +137,7 @@ function groupTasksByParent(rows: PersonalTaskRow[]): GroupedTask[] {
         workspace_id: row.workspace_id,
         deadline: row.deadline,
         creator_name: row.creator_name,
+        task_created_by: row.task_created_by,
         assignments: [],
       });
     }
@@ -279,16 +281,21 @@ function TaskCardItem({
   isCoordinator,
   canReview = false,
   activeTab,
+  currentUserId,
 }: {
   parentTask: GroupedTask;
   isCoordinator: boolean;
   canReview?: boolean;
   activeTab: string;
+  currentUserId?: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(
     ['REVIEW', 'MY_REVISION', 'TROOPER_REVISION'].includes(activeTab)
   );
-  const isTaskMentor = !isCoordinator || canReview || activeTab === 'MENTOR';
+  const isTaskMentor =
+    currentUserId != null &&
+    (parentTask.task_created_by === currentUserId ||
+      parentTask.assignments.some((a) => a.task_created_by === currentUserId));
 
   const sortedAssignments = sortAssignments(parentTask.assignments);
   const totalSteps = parentTask.assignments.length;
@@ -801,6 +808,7 @@ export default function DashboardPersonalWorkspace({
               isCoordinator={isCoordinator}
               canReview={canReview}
               activeTab={activeTab}
+              currentUserId={currentUserId}
             />
           ))}
         </div>
