@@ -165,6 +165,7 @@ export default async function DashboardPage() {
       SELECT
         ta.task_id AS id,
         ta.id AS assignment_id,
+        ta.user_id AS user_id,
         t.project_id,
         t.workspace_id,
         t.title,
@@ -178,7 +179,9 @@ export default async function DashboardPage() {
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
-        ta.revision_note
+        COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE (entity_id = ta.id OR entity_id = t.id) AND (to_status = 'REVISION_REQUESTED' OR to_status = 'REVISION') AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
+        (SELECT u_rev.name FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_name,
+        (SELECT COALESCE(r_rev.name, CASE WHEN u_rev.user_type = 'STAFF' THEN 'Koordinator' ELSE 'Mentor' END) FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id LEFT JOIN user_roles ur_rev ON u_rev.id = ur_rev.user_id LEFT JOIN roles r_rev ON ur_rev.role_id = r_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_role
       FROM task_assignments ta
       JOIN tasks t         ON ta.task_id = t.id
       JOIN projects p      ON t.project_id = p.id
@@ -186,12 +189,10 @@ export default async function DashboardPage() {
       LEFT JOIN users u    ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
-        AND (ws.workspace_type IS NULL OR ws.workspace_type = 'TROOPERS')
-        AND UPPER(p.name) NOT LIKE '%MENTOR%'
-        AND (u.user_type = 'OJT' OR ta.assignment_role IN ('RESEARCHER', 'PLANNER', 'DESIGNER', 'CREATOR', 'VIDEO_EDITOR'))
+        AND (t.task_type IS NULL OR t.task_type != 'MENTOR')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
-      LIMIT 50
+      LIMIT 100
     `
       )
       .all();
@@ -391,16 +392,14 @@ export default async function DashboardPage() {
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
       LEFT JOIN users u ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE t.created_by = ? AND ta.user_id != ?
-        AND (ws.workspace_type IS NULL OR ws.workspace_type = 'TROOPERS')
-        AND UPPER(p.name) NOT LIKE '%MENTOR%'
+      WHERE (t.created_by = ? OR ws.created_by = ?) AND ta.user_id != ?
         AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY t.deadline ASC
-      LIMIT 30
+      LIMIT 50
     `
       )
-      .bind(session.userId, session.userId)
+      .bind(session.userId, session.userId, session.userId)
       .all();
     trooperTasks = tActive as unknown as PersonalTaskRow[];
 
@@ -452,6 +451,7 @@ export default async function DashboardPage() {
       SELECT
         ta.task_id AS id,
         ta.id AS assignment_id,
+        ta.user_id AS user_id,
         t.project_id,
         t.workspace_id,
         t.title,
@@ -465,9 +465,9 @@ export default async function DashboardPage() {
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
-        COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status = 'REVISION_REQUESTED' AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
-        (SELECT u_rev.name FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id WHERE we_rev.entity_id = ta.id AND we_rev.to_status = 'REVISION_REQUESTED' ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_name,
-        (SELECT COALESCE(r_rev.name, CASE WHEN u_rev.user_type = 'STAFF' THEN 'Koordinator' ELSE 'Mentor' END) FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id LEFT JOIN user_roles ur_rev ON u_rev.id = ur_rev.user_id LEFT JOIN roles r_rev ON ur_rev.role_id = r_rev.id WHERE we_rev.entity_id = ta.id AND we_rev.to_status = 'REVISION_REQUESTED' ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_role
+        COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE (entity_id = ta.id OR entity_id = t.id) AND (to_status = 'REVISION_REQUESTED' OR to_status = 'REVISION') AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
+        (SELECT u_rev.name FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_name,
+        (SELECT COALESCE(r_rev.name, CASE WHEN u_rev.user_type = 'STAFF' THEN 'Koordinator' ELSE 'Mentor' END) FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id LEFT JOIN user_roles ur_rev ON u_rev.id = ur_rev.user_id LEFT JOIN roles r_rev ON ur_rev.role_id = r_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_role
       FROM task_assignments ta
       JOIN tasks t      ON ta.task_id = t.id
       JOIN projects p   ON t.project_id = p.id
