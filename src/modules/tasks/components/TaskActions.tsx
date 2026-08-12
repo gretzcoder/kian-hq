@@ -782,6 +782,7 @@ export default function TaskActions({
                                         isStaffOrCoord={isCoordinator}
                                         mentorApproved={assign.mentor_approved ?? 0}
                                         coordinatorApproved={assign.coordinator_approved ?? 0}
+                                        isMentorWs={isMentorWs}
                                       />
                                     </div>
                                   );
@@ -823,6 +824,7 @@ export default function TaskActions({
                                       isStaffOrCoord={isCoordinator}
                                       mentorApproved={assign.mentor_approved ?? 0}
                                       coordinatorApproved={assign.coordinator_approved ?? 0}
+                                      isMentorWs={isMentorWs}
                                     />
                                   </div>
                                 );

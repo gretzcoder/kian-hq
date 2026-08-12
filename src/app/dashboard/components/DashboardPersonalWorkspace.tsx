@@ -34,6 +34,7 @@ export interface PersonalTaskRow {
   revision_note?: string | null;
   revision_requested_by_name?: string | null;
   revision_requested_by_role?: string | null;
+  workspace_type?: string | null;
 }
 
 export interface GroupedTask {
@@ -548,6 +549,7 @@ function TaskCardItem({
                         mentorApproved={sub.mentor_approved ?? 0}
                         coordinatorApproved={sub.coordinator_approved ?? 0}
                         isTaskMentor={isTaskMentor}
+                        isMentorWs={sub.workspace_type === 'MENTOR'}
                       />
                     </div>
                   )}

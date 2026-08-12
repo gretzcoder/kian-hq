@@ -26,6 +26,7 @@ export default function ReviewActions({
   mentorApproved = 0,
   coordinatorApproved = 0,
   isTaskMentor = false,
+  isMentorWs = false,
 }: {
   assignmentId: string;
   canRequestRevision: boolean;
@@ -37,7 +38,9 @@ export default function ReviewActions({
   mentorApproved?: number;
   coordinatorApproved?: number;
   isTaskMentor?: boolean;
+  isMentorWs?: boolean;
 }) {
+  const isMentorWorkspace = isMentorWs || taskType === 'MENTOR';
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'NONE' | 'SPARK_MODAL' | 'REVISION' | 'DECLINE'>('NONE');
   const [sparks, setSparks] = useState<number>(8);
@@ -193,7 +196,7 @@ export default function ReviewActions({
           </div>
         ) : (
         <div className="flex gap-2 flex-wrap items-center">
-          {mentorApproved === 0 ? (
+          {mentorApproved === 0 && !isMentorWorkspace ? (
             isStaffOrCoord && !isTaskMentor ? (
               <div className="w-full p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-2.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">

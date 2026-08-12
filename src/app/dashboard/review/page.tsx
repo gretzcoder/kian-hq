@@ -20,6 +20,7 @@ interface ReviewRow {
   task_created_by: string | null;
   workspace_id:    string | null;
   workspace_name:  string | null;
+  workspace_type:  string | null;
   project_id:      string;
   project_name:    string;
   creator_id:      string;
@@ -57,6 +58,7 @@ export default async function ReviewPage() {
       t.created_by      AS task_created_by,
       t.workspace_id,
       ws.name          AS workspace_name,
+      ws.workspace_type AS workspace_type,
       p.name           AS project_name,
       u.name           AS creator_name,
       ${isLeaderQuery} AS is_leader,
@@ -227,6 +229,7 @@ export default async function ReviewPage() {
                 isStaffOrCoord={isCoordinator}
                 mentorApproved={(r as any).mentor_approved ?? 0}
                 coordinatorApproved={(r as any).coordinator_approved ?? 0}
+                isMentorWs={(r as any).workspace_type === 'MENTOR'}
               />
             </div>
           ))}
