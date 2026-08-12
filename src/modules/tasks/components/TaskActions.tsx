@@ -779,6 +779,9 @@ export default function TaskActions({
                                         assignmentId={assign.id}
                                         canRequestRevision={true}
                                         canAwardBadge={true}
+                                        isStaffOrCoord={isCoordinator}
+                                        mentorApproved={assign.mentor_approved ?? 0}
+                                        coordinatorApproved={assign.coordinator_approved ?? 0}
                                       />
                                     </div>
                                   );
@@ -817,6 +820,9 @@ export default function TaskActions({
                                       assignmentId={assign.id}
                                       canRequestRevision={isLeader || isMentor || isCoordinator}
                                       canAwardBadge={isMentor || isCoordinator}
+                                      isStaffOrCoord={isCoordinator}
+                                      mentorApproved={assign.mentor_approved ?? 0}
+                                      coordinatorApproved={assign.coordinator_approved ?? 0}
                                     />
                                   </div>
                                 );
