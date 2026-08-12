@@ -12,6 +12,28 @@ export default function AuthForm() {
   const [loading, setLoading] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  const isServerActionMismatch = (msg: string) => {
+    if (!msg) return false;
+    return (
+      msg.includes('was not found on the server') ||
+      msg.includes('failed-to-find-server-action') ||
+      msg.includes('Server Action')
+    );
+  };
+
+  const handleFallbackApi = async (formData: FormData, signup: boolean): Promise<{ success: boolean; error?: string; pendingApproval?: boolean }> => {
+    try {
+      const url = signup ? '/api/auth/signup' : '/api/auth/login';
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      });
+      return (await response.json()) as { success: boolean; error?: string; pendingApproval?: boolean };
+    } catch (err: any) {
+      return { success: false, error: err?.message || 'Network error' };
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -20,40 +42,58 @@ export default function AuthForm() {
 
     const formElement = e.currentTarget;
     const formData = new FormData(formElement);
+
     try {
-      if (isSignUp) {
-        const res = await signupAction(formData);
-        if (res.success) {
-          if (res.pendingApproval) {
-            setSuccessMessage(
-              'Welcome aboard! Your registration is complete. We are currently setting up your workspace and will activate it shortly.'
-            );
-            formElement.reset();
-            setIsSignUp(false); // Switch to sign-in tab so they can login after approval
-            setLoading(false);
-          } else {
-            setIsLoggingIn(true);
-            router.push('/dashboard');
-            router.refresh();
-          }
+      let res: { success: boolean; error?: string; pendingApproval?: boolean };
+
+      try {
+        if (isSignUp) {
+          res = await signupAction(formData);
         } else {
-          setError(res.error || 'Authentication failed');
-          setLoading(false);
+          res = await loginAction(formData);
         }
-      } else {
-        const res = await loginAction(formData);
-        if (res.success) {
+      } catch (err: any) {
+        const errMsg = err?.message || String(err);
+        if (isServerActionMismatch(errMsg)) {
+          console.warn('[AuthForm] Server Action mismatch detected. Using REST API fallback...');
+          res = await handleFallbackApi(formData, isSignUp);
+        } else {
+          throw err;
+        }
+      }
+
+      // If action returned a response object containing a server action error string
+      if (!res.success && res.error && isServerActionMismatch(res.error)) {
+        console.warn('[AuthForm] Server Action mismatch in response error. Using REST API fallback...');
+        res = await handleFallbackApi(formData, isSignUp);
+      }
+
+      if (res.success) {
+        if (isSignUp && res.pendingApproval) {
+          setSuccessMessage(
+            'Welcome aboard! Your registration is complete. We are currently setting up your workspace and will activate it shortly.'
+          );
+          formElement.reset();
+          setIsSignUp(false);
+          setLoading(false);
+        } else {
           setIsLoggingIn(true);
           router.push('/dashboard');
           router.refresh();
-        } else {
-          setError(res.error || 'Authentication failed');
-          setLoading(false);
         }
+      } else {
+        setError(res.error || 'Authentication failed');
+        setLoading(false);
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.');
-      setLoading(false);
+      const errMsg = err?.message || String(err);
+      if (isServerActionMismatch(errMsg)) {
+        setError('Aplikasi telah diperbarui. Memuat ulang...');
+        setTimeout(() => window.location.reload(), 300);
+      } else {
+        setError(errMsg || 'An unexpected error occurred.');
+        setLoading(false);
+      }
     }
   };
 
