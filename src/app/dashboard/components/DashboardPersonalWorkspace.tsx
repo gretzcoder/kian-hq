@@ -28,6 +28,7 @@ export interface PersonalTaskRow {
   coordinator_approved?: number | null;
   task_type?: string | null;
   task_created_by?: string | null;
+  revision_note?: string | null;
 }
 
 export interface GroupedTask {
@@ -361,6 +362,18 @@ function TaskCardItem({
                         mentorApproved={sub.mentor_approved ?? 0}
                         coordinatorApproved={sub.coordinator_approved ?? 0}
                       />
+                    </div>
+                  )}
+
+                  {/* Participant Revision Note */}
+                  {sub.revision_note && ['REVISION_REQUESTED', 'RESUBMITTED'].includes(sub.status) && (
+                    <div className="p-3 rounded-xl bg-red-500/8 border border-red-500/20 space-y-1">
+                      <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
+                        <span>↩ Catatan Revisi Hasil Submit Peserta ({sub.assigned_name || 'Trooper'}):</span>
+                      </div>
+                      <p className="text-xs text-red-700 dark:text-red-300 font-medium leading-relaxed">
+                        "{sub.revision_note}"
+                      </p>
                     </div>
                   )}
 

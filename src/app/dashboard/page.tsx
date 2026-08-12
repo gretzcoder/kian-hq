@@ -57,6 +57,16 @@ export default async function DashboardPage() {
            )
       `)
       .run();
+    await db
+      .prepare(`
+        UPDATE tasks 
+        SET status = 'APPROVED', revision_note = NULL 
+        WHERE status = 'REVISION_REQUESTED' 
+          AND id IN (
+            SELECT task_id FROM task_assignments WHERE status != 'DRAFT'
+          )
+      `)
+      .run();
   } catch (e) {
     console.error('Auto-cleanup task_assignments failed:', e);
   }
@@ -128,7 +138,8 @@ export default async function DashboardPage() {
         ta.sparks,
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
-        ta.submitted_at
+        ta.submitted_at,
+        ta.revision_note
       FROM task_assignments ta
       JOIN tasks t         ON ta.task_id = t.id
       JOIN projects p      ON t.project_id = p.id
@@ -163,7 +174,8 @@ export default async function DashboardPage() {
         ta.sparks,
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
-        ta.submitted_at
+        ta.submitted_at,
+        ta.revision_note
       FROM task_assignments ta
       JOIN tasks t         ON ta.task_id = t.id
       JOIN projects p      ON t.project_id = p.id
@@ -201,7 +213,8 @@ export default async function DashboardPage() {
         ta.sparks,
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
-        ta.submitted_at
+        ta.submitted_at,
+        ta.revision_note
       FROM task_assignments ta
       JOIN tasks t         ON ta.task_id = t.id
       JOIN projects p      ON t.project_id = p.id
@@ -244,6 +257,7 @@ export default async function DashboardPage() {
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
+        ta.revision_note,
         ta.mentor_approved,
         ta.coordinator_approved,
         t.task_type      AS task_type,

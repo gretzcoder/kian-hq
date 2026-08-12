@@ -688,12 +688,7 @@ export async function requestAssessmentRevision(
       .bind(nextStatus, revisionNote.trim(), assignmentId)
       .run();
 
-    if (task) {
-      await db
-        .prepare('UPDATE tasks SET status = ?, revision_note = ? WHERE id = ?')
-        .bind(nextStatus, revisionNote.trim(), task.id)
-        .run();
-    }
+
 
     if (targetWsId) {
       revalidatePath(`/dashboard/workspace/${targetWsId}`);

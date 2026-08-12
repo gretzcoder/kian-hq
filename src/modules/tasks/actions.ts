@@ -560,13 +560,7 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
       `)
       .bind(nextStatus, resultUrl.trim(), now, isLeader ? 1 : 0, isMentor ? 1 : 0, isCoordinator ? 1 : 0, assignmentId)
       .run();
-
     if (task) {
-      await db
-        .prepare('UPDATE tasks SET status = ?, revision_note = NULL WHERE id = ?')
-        .bind(nextStatus, task.id)
-        .run();
-
       await logWorkflowEvent({
         entityType: 'task',
         entityId: task.id,
@@ -917,20 +911,7 @@ export async function requestRevision(assignmentId: string, note: string) {
       .bind(nextStatus, note.trim(), Math.floor(Date.now() / 1000), assignmentId)
       .run();
 
-    if (task) {
-      await db
-        .prepare('UPDATE tasks SET status = ?, revision_note = ? WHERE id = ?')
-        .bind(nextStatus, note.trim(), task.id)
-        .run();
-      await logWorkflowEvent({
-        entityType: 'task',
-        entityId: task.id,
-        fromStatus: task.status,
-        toStatus: nextStatus,
-        triggeredBy: session.userId,
-        note,
-      });
-    }
+
 
     await logWorkflowEvent({
       entityType: 'task_assignment',
