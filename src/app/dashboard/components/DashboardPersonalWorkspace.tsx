@@ -243,9 +243,16 @@ function InlineResubmitBox({
           </div>
 
           <div className="p-3.5 rounded-xl bg-white/90 dark:bg-zinc-950/90 border border-red-100 dark:border-red-900/40 shadow-2xs">
-            <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic whitespace-pre-wrap">
-              "{revisionNote}"
-            </p>
+            {revisionNote.includes('<') ? (
+              <div
+                className="prose dark:prose-invert prose-xs max-w-none text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 font-medium leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: revisionNote }}
+              />
+            ) : (
+              <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic whitespace-pre-wrap">
+                "{revisionNote}"
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -527,9 +534,16 @@ function TaskCardItem({
                       </div>
 
                       <div className="p-3.5 rounded-xl bg-white/90 dark:bg-zinc-950/90 border border-red-100 dark:border-red-900/40 shadow-2xs">
-                        <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic whitespace-pre-wrap">
-                          "{sub.revision_note}"
-                        </p>
+                        {sub.revision_note.includes('<') ? (
+                          <div
+                            className="prose dark:prose-invert prose-xs max-w-none text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 font-medium leading-relaxed"
+                            dangerouslySetInnerHTML={{ __html: sub.revision_note }}
+                          />
+                        ) : (
+                          <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic whitespace-pre-wrap">
+                            "{sub.revision_note}"
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
