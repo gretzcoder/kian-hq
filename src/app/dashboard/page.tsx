@@ -206,10 +206,14 @@ export default async function DashboardPage() {
       LEFT JOIN users u    ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
-        AND (u.user_type = 'CREATOR' OR ta.assignment_role IN ('PIC', 'REVIEWER', 'APPROVER', 'HELPER'))
+        AND (
+          t.created_by IS NOT NULL
+          OR ta.assignment_role IN ('PIC', 'REVIEWER', 'APPROVER', 'HELPER', 'MENTOR')
+          OR ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
+        )
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
-      LIMIT 50
+      LIMIT 100
     `
       )
       .all();
