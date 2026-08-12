@@ -94,6 +94,7 @@ export default async function DashboardPage() {
   let personalTasks: PersonalTaskRow[] = [];
   let trooperTasks: PersonalTaskRow[] = [];
   let mentorTasks: PersonalTaskRow[] = [];
+  let reviewTasks: PersonalTaskRow[] = [];
   let completedTasks: PersonalTaskRow[] = [];
   let widgetTitle = 'My Workspace';
   let widgetDesc = 'Active tasks assigned to you across all projects.';
@@ -179,7 +180,7 @@ export default async function DashboardPage() {
       .all();
     trooperTasks = tActive as unknown as PersonalTaskRow[];
 
-    // 3. Mentor Task (Category 3: Active Mentor Tasks for Coordinator)
+    // 3. Mentor Task (Category 3: Active Mentor Tasks strictly assigned to Mentors)
     const { results: mActive } = await db
       .prepare(
         `
@@ -207,9 +208,8 @@ export default async function DashboardPage() {
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
         AND (
-          t.created_by IS NOT NULL
+          u.user_type = 'EXTERNAL'
           OR ta.assignment_role IN ('PIC', 'REVIEWER', 'APPROVER', 'HELPER', 'MENTOR')
-          OR ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
         )
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
@@ -219,7 +219,42 @@ export default async function DashboardPage() {
       .all();
     mentorTasks = mActive as unknown as PersonalTaskRow[];
 
-    // 4. Completed Tasks
+    // 4. Perlu Di-Review (Category 4: Tasks Waiting Review by Mentor / Coordinator)
+    const { results: rActive } = await db
+      .prepare(
+        `
+      SELECT
+        ta.task_id AS id,
+        ta.id AS assignment_id,
+        t.project_id,
+        t.workspace_id,
+        t.title,
+        ta.status,
+        t.deadline,
+        p.name AS project_name,
+        u.name AS assigned_name,
+        u_creator.name AS creator_name,
+        ta.assignment_role,
+        ta.sparks,
+        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
+        ta.result_url,
+        ta.submitted_at
+      FROM task_assignments ta
+      JOIN tasks t         ON ta.task_id = t.id
+      JOIN projects p      ON t.project_id = p.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      LEFT JOIN users u    ON ta.user_id = u.id
+      LEFT JOIN users u_creator ON t.created_by = u_creator.id
+      WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+      ORDER BY ta.submitted_at ASC, t.deadline ASC
+      LIMIT 100
+    `
+      )
+      .all();
+    reviewTasks = rActive as unknown as PersonalTaskRow[];
+
+    // 5. Completed Tasks
     const { results: cResults } = await db
       .prepare(
         `
@@ -560,6 +595,7 @@ export default async function DashboardPage() {
             personalTasks={personalTasks}
             trooperTasks={trooperTasks}
             mentorTasks={mentorTasks}
+            reviewTasks={reviewTasks}
             completedTasks={completedTasks}
             userType={ctx.userType}
             canReview={canReview}

@@ -39,6 +39,7 @@ interface DashboardPersonalWorkspaceProps {
   personalTasks: PersonalTaskRow[];
   trooperTasks?: PersonalTaskRow[];
   mentorTasks?: PersonalTaskRow[];
+  reviewTasks?: PersonalTaskRow[];
   completedTasks?: PersonalTaskRow[];
   userType: string;
   canReview: boolean;
@@ -85,6 +86,28 @@ const roleBadgeStyles: Record<string, string> = {
   HELPER: 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20',
 };
 
+function sortAssignments(list: PersonalTaskRow[]): PersonalTaskRow[] {
+  const priority: Record<string, number> = {
+    WAITING_REVIEW: 1,
+    SUBMITTED: 1,
+    RESUBMITTED: 1,
+    APPROVED: 2,
+    DONE: 2,
+    PUBLISHED: 2,
+    IN_PROGRESS: 3,
+    ASSIGNED: 4,
+    DRAFT: 5,
+    REVISION_REQUESTED: 6,
+  };
+
+  return [...list].sort((a, b) => {
+    const pA = priority[a.status] ?? 99;
+    const pB = priority[b.status] ?? 99;
+    if (pA !== pB) return pA - pB;
+    return (b.submitted_at || 0) - (a.submitted_at || 0);
+  });
+}
+
 function groupTasksByParent(rows: PersonalTaskRow[]): GroupedTask[] {
   const map = new Map<string, GroupedTask>();
 
@@ -118,17 +141,221 @@ function groupTasksByParent(rows: PersonalTaskRow[]): GroupedTask[] {
   return Array.from(map.values());
 }
 
+function TaskCardItem({
+  parentTask,
+  isCoordinator,
+  activeTab,
+}: {
+  parentTask: GroupedTask;
+  isCoordinator: boolean;
+  activeTab: string;
+}) {
+  // Collapsed by default unless in REVIEW tab where items are waiting review
+  const [isExpanded, setIsExpanded] = useState(activeTab === 'REVIEW');
+
+  const sortedAssignments = sortAssignments(parentTask.assignments);
+  const totalRoles = parentTask.assignments.length;
+  const submittedRoles = parentTask.assignments.filter((a) =>
+    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE'].includes(a.status)
+  ).length;
+  const approvedRoles = parentTask.assignments.filter((a) =>
+    ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)
+  ).length;
+  const waitingReviewRoles = parentTask.assignments.filter((a) =>
+    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status)
+  ).length;
+
+  return (
+    <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 p-4 sm:p-5 rounded-2xl space-y-3 transition-all duration-300 shadow-xs">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+              {parentTask.project_name}
+            </span>
+            {parentTask.creator_name && (
+              <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
+                • 🎓 Mentor: <strong className="text-zinc-800 dark:text-zinc-200">{parentTask.creator_name}</strong>
+              </span>
+            )}
+            {waitingReviewRoles > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                ⏳ {waitingReviewRoles} Perlu Review
+              </span>
+            )}
+          </div>
+          <h3 className="text-base font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight">
+            {parentTask.title}
+          </h3>
+        </div>
+
+        {/* Progress Summary & Deadline */}
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+            📊 {approvedRoles}/{totalRoles} ACC ({submittedRoles} Submit)
+          </span>
+          {parentTask.deadline && (
+            <span className="text-[10px] text-zinc-400 font-mono">
+              Deadline: {new Date(parentTask.deadline).toLocaleDateString()}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Expand / Collapse Control Bar */}
+      <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1.5 cursor-pointer py-1.5 px-3 rounded-xl hover:bg-purple-500/10 bg-purple-500/5 transition-all border border-purple-500/10"
+        >
+          <span>{isExpanded ? '▲ Sembunyikan Sub-Task' : `▼ Tampilkan ${totalRoles} Sub-Task & Detail Submission`}</span>
+          {!isExpanded && waitingReviewRoles > 0 && (
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+          )}
+        </button>
+
+        <Link
+          href={
+            parentTask.workspace_id
+              ? `/dashboard/workspace/${parentTask.workspace_id}`
+              : `/dashboard/projects/${parentTask.project_id}`
+          }
+          className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 bg-white dark:bg-zinc-900 px-3.5 py-1.5 rounded-xl transition-all font-bold tracking-wide active:scale-[0.98] shadow-2xs flex items-center gap-1.5 text-zinc-800 dark:text-zinc-200"
+        >
+          <span>Open Task Workspace</span>
+          <span>&rarr;</span>
+        </Link>
+      </div>
+
+      {/* Collapsible Sub-Tasks Body */}
+      {isExpanded && (
+        <div className="space-y-2.5 pt-3 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+          <p className="text-[11px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            Daftar Sub-Task ({totalRoles} Role - Submitted Teratas):
+          </p>
+
+          <div className="grid grid-cols-1 gap-2.5">
+            {sortedAssignments.map((sub, sIdx) => {
+              const cleanedNote = cleanAppreciationNote(sub.appreciation_note);
+              const assignId = sub.assignment_id || sub.id;
+              const roleLabel = roleIcons[sub.assignment_role || ''] || sub.assignment_role || 'SUB-TASK';
+              const roleStyle = roleBadgeStyles[sub.assignment_role || ''] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
+
+              const isSubmittedForReview = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(sub.status);
+              const isNotSubmittedYet = ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED'].includes(sub.status);
+
+              return (
+                <div
+                  key={`${sub.id}-${sub.assignment_role}-${sIdx}`}
+                  className={`p-3.5 rounded-xl border flex flex-col gap-2.5 transition-all ${
+                    isSubmittedForReview
+                      ? 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/30'
+                      : 'bg-zinc-50/70 dark:bg-zinc-900/60 border-zinc-200/70 dark:border-zinc-800/80'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 flex-wrap min-w-0">
+                      {/* Role Badge */}
+                      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${roleStyle}`}>
+                        {roleLabel}
+                      </span>
+
+                      {/* Assignee Name */}
+                      {sub.assigned_name && (
+                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
+                          👤 {sub.assigned_name}
+                        </span>
+                      )}
+
+                      {/* Status Badge */}
+                      <span className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full border ${statusColors[sub.status] ?? statusColors.DRAFT}`}>
+                        {sub.status === 'APPROVED' ? '✅ ACC / Approved' : sub.status.replace('_', ' ')}
+                      </span>
+
+                      {/* Sparks Badge */}
+                      {sub.sparks != null && sub.sparks > 0 && (
+                        <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
+                          💎 +{sub.sparks} Sparks
+                        </span>
+                      )}
+                    </div>
+
+                    {/* EXACTLY 1 SMART REMINDER BUTTON PER SUB-TASK */}
+                    <div className="shrink-0">
+                      {isCoordinator && activeTab !== 'COMPLETED' && assignId && (
+                        <>
+                          {isNotSubmittedYet && (
+                            <SendReminderButton
+                              assignmentId={assignId}
+                              targetRole="TROOPER"
+                              assigneeName={sub.assigned_name}
+                            />
+                          )}
+                          {isSubmittedForReview && (
+                            <SendReminderButton
+                              assignmentId={assignId}
+                              targetRole="MENTOR"
+                              mentorName={parentTask.creator_name}
+                            />
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Submitted Content Box (If submitted) */}
+                  {sub.result_url && (
+                    <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-950 border border-purple-500/20 text-xs flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-bold text-purple-600 dark:text-purple-400 shrink-0">📄 Hasil Submit:</span>
+                        <span className="truncate text-zinc-600 dark:text-zinc-400 font-mono text-[11px] max-w-[280px] sm:max-w-[400px]">
+                          {sub.result_url}
+                        </span>
+                      </div>
+                      <a
+                        href={sub.result_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] transition-all shrink-0 flex items-center gap-1"
+                      >
+                        <span>Buka Link Hasil</span>
+                        <span>&nearr;</span>
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Appreciation Note (If approved) */}
+                  {['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status) && cleanedNote && (
+                    <div className="p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/15">
+                      <p className="text-[11px] text-zinc-700 dark:text-zinc-300 italic">
+                        "💬 Feedback Evaluator: {cleanedNote}"
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardPersonalWorkspace({
   personalTasks = [],
   trooperTasks = [],
   mentorTasks = [],
+  reviewTasks = [],
   completedTasks = [],
   userType,
   canReview,
   widgetTitle,
   widgetDesc,
 }: DashboardPersonalWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'TROOPER' | 'MENTOR' | 'COMPLETED'>('ACTIVE');
+  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'TROOPER' | 'MENTOR' | 'REVIEW' | 'COMPLETED'>('ACTIVE');
 
   const isCoordinator = userType === 'STAFF' || canReview;
   const isMentorUser = userType === 'EXTERNAL' || userType === 'CREATOR';
@@ -137,11 +364,13 @@ export default function DashboardPersonalWorkspace({
   const activeGrouped = groupTasksByParent(personalTasks);
   const trooperGrouped = groupTasksByParent(trooperTasks);
   const mentorGrouped = groupTasksByParent(mentorTasks);
+  const reviewGrouped = groupTasksByParent(reviewTasks);
   const completedGrouped = groupTasksByParent(completedTasks);
 
   let displayedGroupedTasks = activeGrouped;
   if (activeTab === 'TROOPER') displayedGroupedTasks = trooperGrouped;
   if (activeTab === 'MENTOR') displayedGroupedTasks = mentorGrouped;
+  if (activeTab === 'REVIEW') displayedGroupedTasks = reviewGrouped;
   if (activeTab === 'COMPLETED') displayedGroupedTasks = completedGrouped;
 
   return (
@@ -172,7 +401,7 @@ export default function DashboardPersonalWorkspace({
             </span>
           </button>
 
-          {/* Tab 2: Troopers Task (Visible for Coordinator & Mentor) */}
+          {/* Tab 2: Troopers Task */}
           {(isCoordinator || isMentorUser) && (
             <button
               type="button"
@@ -190,7 +419,7 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 3: Mentor Task (Visible ONLY for Coordinator/Admin) */}
+          {/* Tab 3: Mentor Task (Mentor Execution Only) */}
           {isCoordinator && (
             <button
               type="button"
@@ -208,7 +437,25 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 4: Selesai & ACC */}
+          {/* Tab 4: Perlu Di-Review */}
+          {(isCoordinator || isMentorUser) && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('REVIEW')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'REVIEW'
+                  ? 'bg-white dark:bg-zinc-800 text-orange-600 dark:text-orange-400 shadow-sm border border-zinc-200/60 dark:border-zinc-700/60'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span>⏳ Perlu Di-Review</span>
+              <span className="px-2 py-0.5 rounded-md bg-orange-500/10 text-[10px] font-mono font-bold">
+                {reviewGrouped.length} Task
+              </span>
+            </button>
+          )}
+
+          {/* Tab 5: Selesai & ACC */}
           <button
             type="button"
             onClick={() => setActiveTab('COMPLETED')}
@@ -234,173 +481,20 @@ export default function DashboardPersonalWorkspace({
             ? '👥 Tidak ada tugas Troopers yang sedang berjalan.'
             : activeTab === 'MENTOR'
             ? '🎓 Tidak ada tugas Mentor yang menggantung.'
+            : activeTab === 'REVIEW'
+            ? '✨ Semua tugas telah ditinjau! Tidak ada tugas yang menunggu review.'
             : '📂 Belum ada penugasan yang selesai / di-ACC.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
-          {displayedGroupedTasks.map((parentTask, pIdx) => {
-            const totalRoles = parentTask.assignments.length;
-            const submittedRoles = parentTask.assignments.filter((a) =>
-              ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE'].includes(a.status)
-            ).length;
-            const approvedRoles = parentTask.assignments.filter((a) =>
-              ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)
-            ).length;
-
-            return (
-              <div
-                key={`${activeTab}-${parentTask.id}-${pIdx}`}
-                className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 p-5 rounded-2xl space-y-4 transition-all duration-300 shadow-xs"
-              >
-                {/* Task Header */}
-                <div className="flex items-start justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800/60 pb-3 flex-wrap">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
-                        {parentTask.project_name}
-                      </span>
-                      {parentTask.creator_name && (
-                        <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
-                          • 🎓 Mentor: <strong className="text-zinc-800 dark:text-zinc-200">{parentTask.creator_name}</strong>
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="text-base font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight">
-                      {parentTask.title}
-                    </h3>
-                  </div>
-
-                  {/* Task Progress Summary & Deadline */}
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
-                      📊 Progress: {approvedRoles}/{totalRoles} ACC ({submittedRoles} Submitted)
-                    </span>
-                    {parentTask.deadline && (
-                      <span className="text-[10px] text-zinc-400 font-mono">
-                        Deadline: {new Date(parentTask.deadline).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Sub-Tasks / Roles List Inside This Task */}
-                <div className="space-y-2.5">
-                  <p className="text-[11px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                    Kategori Sub-Task & Troopers ({totalRoles} Role):
-                  </p>
-
-                  <div className="grid grid-cols-1 gap-2">
-                    {parentTask.assignments.map((sub, sIdx) => {
-                      const cleanedNote = cleanAppreciationNote(sub.appreciation_note);
-                      const assignId = sub.assignment_id || sub.id;
-                      const roleLabel = roleIcons[sub.assignment_role || ''] || sub.assignment_role || 'SUB-TASK';
-                      const roleStyle = roleBadgeStyles[sub.assignment_role || ''] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
-
-                      const isSubmittedForReview = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(sub.status);
-                      const isNotSubmittedYet = ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED'].includes(sub.status);
-
-                      return (
-                        <div
-                          key={`${sub.id}-${sub.assignment_role}-${sIdx}`}
-                          className="p-3.5 rounded-xl bg-zinc-50/70 dark:bg-zinc-900/60 border border-zinc-200/70 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                        >
-                          <div className="flex items-center gap-3 flex-wrap min-w-0">
-                            {/* Role Badge */}
-                            <span
-                              className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${roleStyle}`}
-                            >
-                              {roleLabel}
-                            </span>
-
-                            {/* Assignee Trooper Name */}
-                            {sub.assigned_name && (
-                              <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                                👤 {sub.assigned_name}
-                              </span>
-                            )}
-
-                            {/* Status Badge */}
-                            <span
-                              className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full border ${
-                                statusColors[sub.status] ?? statusColors.DRAFT
-                              }`}
-                            >
-                              {sub.status === 'APPROVED' ? '✅ ACC / Approved' : sub.status.replace('_', ' ')}
-                            </span>
-
-                            {/* Sparks Badge */}
-                            {sub.sparks != null && sub.sparks > 0 && (
-                              <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
-                                💎 +{sub.sparks} Sparks
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Right Action Items for Sub-Task */}
-                          <div className="flex items-center gap-2 flex-wrap shrink-0">
-                            {sub.result_url && (
-                              <a
-                                href={sub.result_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
-                              >
-                                <span>🔗 Link Hasil Karya</span>
-                              </a>
-                            )}
-
-                            {/* Smart Reminder Buttons */}
-                            {isCoordinator && activeTab !== 'COMPLETED' && assignId && (
-                              <>
-                                {isNotSubmittedYet && (
-                                  <SendReminderButton
-                                    assignmentId={assignId}
-                                    targetRole="TROOPER"
-                                    assigneeName={sub.assigned_name}
-                                  />
-                                )}
-                                {(isNotSubmittedYet || isSubmittedForReview) && (
-                                  <SendReminderButton
-                                    assignmentId={assignId}
-                                    targetRole="MENTOR"
-                                    mentorName={parentTask.creator_name}
-                                  />
-                                )}
-                              </>
-                            )}
-                          </div>
-
-                          {/* Appreciation Note if approved */}
-                          {['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status) && cleanedNote && (
-                            <div className="w-full mt-1 p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/15">
-                              <p className="text-[11px] text-zinc-700 dark:text-zinc-300 italic">
-                                "💬 Feedback Evaluator: {cleanedNote}"
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Task Footer Link */}
-                <div className="flex justify-end pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-                  <Link
-                    href={
-                      parentTask.workspace_id
-                        ? `/dashboard/workspace/${parentTask.workspace_id}`
-                        : `/dashboard/projects/${parentTask.project_id}`
-                    }
-                    className="text-xs border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 bg-white dark:bg-zinc-900 px-4 py-1.5 rounded-xl transition-all font-bold tracking-wide active:scale-[0.98] shadow-2xs flex items-center gap-1.5 text-zinc-800 dark:text-zinc-200"
-                  >
-                    <span>Open Task Workspace</span>
-                    <span>&rarr;</span>
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
+          {displayedGroupedTasks.map((parentTask, pIdx) => (
+            <TaskCardItem
+              key={`${activeTab}-${parentTask.id}-${pIdx}`}
+              parentTask={parentTask}
+              isCoordinator={isCoordinator}
+              activeTab={activeTab}
+            />
+          ))}
         </div>
       )}
     </div>
