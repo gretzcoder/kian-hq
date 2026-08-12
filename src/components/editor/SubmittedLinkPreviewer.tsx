@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { DocxDocumentViewer } from './TiptapEditor';
 
 export type ParsedLinkInfo =
-  | { type: 'CANVA'; embedUrl: string; originalUrl: string; label: string; icon: string }
+  | { type: 'CANVA'; embedUrl?: string; originalUrl: string; label: string; icon: string; isShortlink?: boolean }
   | { type: 'GDRIVE_FILE'; embedUrl: string; originalUrl: string; label: string; icon: string }
   | { type: 'GDRIVE_FOLDER'; embedUrl: string; originalUrl: string; label: string; icon: string }
   | { type: 'FIGMA'; embedUrl: string; originalUrl: string; label: string; icon: string }
@@ -59,18 +59,20 @@ export function parseSubmittedLink(rawUrl: string): ParsedLinkInfo {
     url.includes('canva.site')
   ) {
     const match = url.match(/canva\.com\/design\/([a-zA-Z0-9_-]+)(?:\/([a-zA-Z0-9_-]+))?/);
-    let embedUrl = url;
+    let embedUrl: string | undefined = undefined;
     if (match && match[1]) {
       const designId = match[1];
       const hash = match[2] ? `/${match[2]}` : '';
       embedUrl = `https://www.canva.com/design/${designId}${hash}/view?embed`;
     }
+    const isShortlink = !match;
     return {
       type: 'CANVA',
       embedUrl,
       originalUrl: url,
-      label: 'Canva Design & Asset',
+      label: isShortlink ? 'Canva Design & Asset (Shortlink)' : 'Canva Design & Asset',
       icon: '🎨',
+      isShortlink,
     };
   }
 
@@ -253,8 +255,9 @@ export function SubmittedLinkPreviewer({
     );
   }
 
-  const embedUrl = 'embedUrl' in info ? info.embedUrl : null;
+  const embedUrl = 'embedUrl' in info ? info.embedUrl : undefined;
   const hasEmbed = Boolean(embedUrl);
+  const isCanvaShortlink = info.type === 'CANVA' && info.isShortlink;
 
   return (
     <div className="border border-purple-500/20 dark:border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/10 rounded-2xl p-4 space-y-3 shadow-sm">
@@ -303,6 +306,14 @@ export function SubmittedLinkPreviewer({
           </a>
         </div>
       </div>
+
+      {/* Helpful banner for Canva shortlinks */}
+      {isCanvaShortlink && (
+        <div className="text-xs text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3.5 py-2 flex items-center gap-2 font-medium">
+          <span>💡</span>
+          <span>Tautan Canva ini berupa <strong>shortlink (canva.link)</strong>. Karena batasan keamanan dari Canva, shortlink tidak dapat dipratinjau dalam frame. Silakan klik tombol <strong>Buka Link ↗</strong> untuk melihat karya di Canva.</span>
+        </div>
+      )}
 
       {/* Embedded Live Preview iFrame */}
       {hasEmbed && showPreview && embedUrl && (
