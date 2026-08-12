@@ -246,7 +246,7 @@ export default async function DashboardPage() {
         ta.submitted_at,
         ta.mentor_approved,
         ta.coordinator_approved,
-        t.type AS task_type,
+        t.task_type      AS task_type,
         t.created_by AS task_created_by
       FROM task_assignments ta
       JOIN tasks t         ON ta.task_id = t.id
