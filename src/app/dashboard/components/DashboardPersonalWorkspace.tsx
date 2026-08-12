@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import SendReminderButton from '@/components/SendReminderButton';
+import SendReminderButton, { TaskSmartReminderButton } from '@/components/SendReminderButton';
 import { cleanAppreciationNote } from '@/lib/noteUtils';
 
 export interface PersonalTaskRow {
@@ -86,28 +86,6 @@ const roleBadgeStyles: Record<string, string> = {
   HELPER: 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20',
 };
 
-function sortAssignments(list: PersonalTaskRow[]): PersonalTaskRow[] {
-  const priority: Record<string, number> = {
-    WAITING_REVIEW: 1,
-    SUBMITTED: 1,
-    RESUBMITTED: 1,
-    APPROVED: 2,
-    DONE: 2,
-    PUBLISHED: 2,
-    IN_PROGRESS: 3,
-    ASSIGNED: 4,
-    DRAFT: 5,
-    REVISION_REQUESTED: 6,
-  };
-
-  return [...list].sort((a, b) => {
-    const pA = priority[a.status] ?? 99;
-    const pB = priority[b.status] ?? 99;
-    if (pA !== pB) return pA - pB;
-    return (b.submitted_at || 0) - (a.submitted_at || 0);
-  });
-}
-
 function groupTasksByParent(rows: PersonalTaskRow[]): GroupedTask[] {
   const map = new Map<string, GroupedTask>();
 
@@ -150,14 +128,24 @@ function TaskCardItem({
   isCoordinator: boolean;
   activeTab: string;
 }) {
-  // Collapsed by default unless in REVIEW tab where items are waiting review
   const [isExpanded, setIsExpanded] = useState(activeTab === 'REVIEW');
+  const [showUnsubmitted, setShowUnsubmitted] = useState(false);
 
-  const sortedAssignments = sortAssignments(parentTask.assignments);
+  // Separate submitted assignments from unsubmitted ones
+  const submittedAssignments = parentTask.assignments.filter(
+    (a) =>
+      ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE', 'PUBLISHED'].includes(a.status) ||
+      (a.result_url && a.result_url.trim() !== '')
+  );
+
+  const unsubmittedAssignments = parentTask.assignments.filter(
+    (a) =>
+      !['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE', 'PUBLISHED'].includes(a.status) &&
+      (!a.result_url || a.result_url.trim() === '')
+  );
+
   const totalRoles = parentTask.assignments.length;
-  const submittedRoles = parentTask.assignments.filter((a) =>
-    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE'].includes(a.status)
-  ).length;
+  const submittedCount = submittedAssignments.length;
   const approvedRoles = parentTask.assignments.filter((a) =>
     ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)
   ).length;
@@ -193,7 +181,7 @@ function TaskCardItem({
         {/* Progress Summary & Deadline */}
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
-            📊 {approvedRoles}/{totalRoles} ACC ({submittedRoles} Submit)
+            📊 {approvedRoles}/{totalRoles} ACC ({submittedCount} Submitted)
           </span>
           {parentTask.deadline && (
             <span className="text-[10px] text-zinc-400 font-mono">
@@ -203,18 +191,34 @@ function TaskCardItem({
         </div>
       </div>
 
-      {/* Expand / Collapse Control Bar */}
+      {/* Control Bar: Expand Sub-Task, Task Smart Batch Reminder Button, Open Task */}
       <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex-wrap">
-        <button
-          type="button"
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1.5 cursor-pointer py-1.5 px-3 rounded-xl hover:bg-purple-500/10 bg-purple-500/5 transition-all border border-purple-500/10"
-        >
-          <span>{isExpanded ? '▲ Sembunyikan Sub-Task' : `▼ Tampilkan ${totalRoles} Sub-Task & Detail Submission`}</span>
-          {!isExpanded && waitingReviewRoles > 0 && (
-            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1.5 cursor-pointer py-1.5 px-3 rounded-xl hover:bg-purple-500/10 bg-purple-500/5 transition-all border border-purple-500/10"
+          >
+            <span>
+              {isExpanded
+                ? '▲ Sembunyikan Detail'
+                : `▼ Tampilkan Hasil Submit (${submittedCount}/${totalRoles})`}
+            </span>
+            {!isExpanded && waitingReviewRoles > 0 && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+            )}
+          </button>
+
+          {/* SINGLE BATCH SMART REMINDER BUTTON AT TASK LEVEL */}
+          {isCoordinator && activeTab !== 'COMPLETED' && (
+            <TaskSmartReminderButton
+              taskId={parentTask.id}
+              unsubmittedCount={unsubmittedAssignments.length}
+              waitingReviewCount={waitingReviewRoles}
+              mentorName={parentTask.creator_name}
+            />
           )}
-        </button>
+        </div>
 
         <Link
           href={
@@ -229,115 +233,129 @@ function TaskCardItem({
         </Link>
       </div>
 
-      {/* Collapsible Sub-Tasks Body */}
+      {/* Collapsible Sub-Tasks Body (Only shows Submitted Items by Default!) */}
       {isExpanded && (
-        <div className="space-y-2.5 pt-3 border-t border-dashed border-zinc-200 dark:border-zinc-800">
-          <p className="text-[11px] font-black uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Daftar Sub-Task ({totalRoles} Role - Submitted Teratas):
-          </p>
+        <div className="space-y-3 pt-3 border-t border-dashed border-zinc-200 dark:border-zinc-800">
+          {/* Section 1: SUBMITTED ITEMS (Primary Focus) */}
+          {submittedAssignments.length > 0 ? (
+            <div className="space-y-2.5">
+              <p className="text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                <span>✅ Hasil Karya Di-Submit ({submittedAssignments.length} Sub-Task):</span>
+              </p>
 
-          <div className="grid grid-cols-1 gap-2.5">
-            {sortedAssignments.map((sub, sIdx) => {
-              const cleanedNote = cleanAppreciationNote(sub.appreciation_note);
-              const assignId = sub.assignment_id || sub.id;
-              const roleLabel = roleIcons[sub.assignment_role || ''] || sub.assignment_role || 'SUB-TASK';
-              const roleStyle = roleBadgeStyles[sub.assignment_role || ''] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
+              <div className="grid grid-cols-1 gap-2.5">
+                {submittedAssignments.map((sub, sIdx) => {
+                  const cleanedNote = cleanAppreciationNote(sub.appreciation_note);
+                  const roleLabel = roleIcons[sub.assignment_role || ''] || sub.assignment_role || 'SUB-TASK';
+                  const roleStyle = roleBadgeStyles[sub.assignment_role || ''] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
 
-              const isSubmittedForReview = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(sub.status);
-              const isNotSubmittedYet = ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED'].includes(sub.status);
+                  return (
+                    <div
+                      key={`${sub.id}-${sub.assignment_role}-${sIdx}`}
+                      className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 flex flex-col gap-2.5 transition-all shadow-2xs"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 flex-wrap min-w-0">
+                          {/* Role Badge */}
+                          <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${roleStyle}`}>
+                            {roleLabel}
+                          </span>
 
-              return (
-                <div
-                  key={`${sub.id}-${sub.assignment_role}-${sIdx}`}
-                  className={`p-3.5 rounded-xl border flex flex-col gap-2.5 transition-all ${
-                    isSubmittedForReview
-                      ? 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/30'
-                      : 'bg-zinc-50/70 dark:bg-zinc-900/60 border-zinc-200/70 dark:border-zinc-800/80'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 flex-wrap min-w-0">
-                      {/* Role Badge */}
-                      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${roleStyle}`}>
-                        {roleLabel}
-                      </span>
-
-                      {/* Assignee Name */}
-                      {sub.assigned_name && (
-                        <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1">
-                          👤 {sub.assigned_name}
-                        </span>
-                      )}
-
-                      {/* Status Badge */}
-                      <span className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full border ${statusColors[sub.status] ?? statusColors.DRAFT}`}>
-                        {sub.status === 'APPROVED' ? '✅ ACC / Approved' : sub.status.replace('_', ' ')}
-                      </span>
-
-                      {/* Sparks Badge */}
-                      {sub.sparks != null && sub.sparks > 0 && (
-                        <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
-                          💎 +{sub.sparks} Sparks
-                        </span>
-                      )}
-                    </div>
-
-                    {/* EXACTLY 1 SMART REMINDER BUTTON PER SUB-TASK */}
-                    <div className="shrink-0">
-                      {isCoordinator && activeTab !== 'COMPLETED' && assignId && (
-                        <>
-                          {isNotSubmittedYet && (
-                            <SendReminderButton
-                              assignmentId={assignId}
-                              targetRole="TROOPER"
-                              assigneeName={sub.assigned_name}
-                            />
+                          {/* Assignee Name */}
+                          {sub.assigned_name && (
+                            <span className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
+                              👤 {sub.assigned_name}
+                            </span>
                           )}
-                          {isSubmittedForReview && (
-                            <SendReminderButton
-                              assignmentId={assignId}
-                              targetRole="MENTOR"
-                              mentorName={parentTask.creator_name}
-                            />
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
 
-                  {/* Submitted Content Box (If submitted) */}
-                  {sub.result_url && (
-                    <div className="p-2.5 rounded-lg bg-white dark:bg-zinc-950 border border-purple-500/20 text-xs flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-bold text-purple-600 dark:text-purple-400 shrink-0">📄 Hasil Submit:</span>
-                        <span className="truncate text-zinc-600 dark:text-zinc-400 font-mono text-[11px] max-w-[280px] sm:max-w-[400px]">
-                          {sub.result_url}
-                        </span>
+                          {/* Status Badge */}
+                          <span className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full border ${statusColors[sub.status] ?? statusColors.DRAFT}`}>
+                            {sub.status === 'APPROVED' ? '✅ ACC / Approved' : sub.status.replace('_', ' ')}
+                          </span>
+
+                          {/* Sparks Badge */}
+                          {sub.sparks != null && sub.sparks > 0 && (
+                            <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
+                              💎 +{sub.sparks} Sparks
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <a
-                        href={sub.result_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] transition-all shrink-0 flex items-center gap-1"
-                      >
-                        <span>Buka Link Hasil</span>
-                        <span>&nearr;</span>
-                      </a>
-                    </div>
-                  )}
 
-                  {/* Appreciation Note (If approved) */}
-                  {['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status) && cleanedNote && (
-                    <div className="p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/15">
-                      <p className="text-[11px] text-zinc-700 dark:text-zinc-300 italic">
-                        "💬 Feedback Evaluator: {cleanedNote}"
-                      </p>
+                      {/* Submitted Content Link & Preview Box */}
+                      {sub.result_url && (
+                        <div className="p-3 rounded-xl bg-white dark:bg-zinc-950 border border-purple-500/30 text-xs flex items-center justify-between gap-3 flex-wrap shadow-2xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-extrabold text-purple-600 dark:text-purple-400 shrink-0">📄 Hasil Submit:</span>
+                            <span className="truncate text-zinc-700 dark:text-zinc-300 font-mono text-[11px] max-w-[280px] sm:max-w-[420px]">
+                              {sub.result_url}
+                            </span>
+                          </div>
+                          <a
+                            href={sub.result_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[11px] transition-all shrink-0 flex items-center gap-1 shadow-xs active:scale-95"
+                          >
+                            <span>Buka Hasil Submission</span>
+                            <span>&nearr;</span>
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Appreciation Note (If approved) */}
+                      {['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status) && cleanedNote && (
+                        <div className="p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/15">
+                          <p className="text-[11px] text-zinc-700 dark:text-zinc-300 italic">
+                            "💬 Feedback Evaluator: {cleanedNote}"
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 text-center text-xs text-zinc-500 font-medium">
+              ⏳ Belum ada peserta yang mengunggah hasil submission pada task ini.
+            </div>
+          )}
+
+          {/* Section 2: UNSUBMITTED PARTICIPANTS (Collapsible Summary to Avoid Spam) */}
+          {unsubmittedAssignments.length > 0 && (
+            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+              <button
+                type="button"
+                onClick={() => setShowUnsubmitted(!showUnsubmitted)}
+                className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 flex items-center gap-1.5 cursor-pointer py-1 px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
+              >
+                <span>
+                  {showUnsubmitted
+                    ? '▲ Sembunyikan Peserta Belum Submit'
+                    : `▶ Lihat ${unsubmittedAssignments.length} Peserta Belum Submit (${unsubmittedAssignments.map(u => u.assigned_name).filter(Boolean).slice(0, 3).join(', ')}${unsubmittedAssignments.length > 3 ? '...' : ''})`}
+                </span>
+              </button>
+
+              {showUnsubmitted && (
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl bg-zinc-100/60 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-zinc-800/60">
+                  {unsubmittedAssignments.map((unsub, uIdx) => (
+                    <div
+                      key={`unsub-${unsub.id}-${uIdx}`}
+                      className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between text-xs"
+                    >
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200 truncate">
+                        👤 {unsub.assigned_name || 'Trooper'}
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20">
+                        {unsub.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

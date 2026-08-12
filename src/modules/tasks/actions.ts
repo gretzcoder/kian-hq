@@ -1399,3 +1399,112 @@ export async function sendSubmissionReminderToTrooper(
     message: `Reminder pengerjaan berhasil dikirim ke Peserta ${assign.assignee_name ? `(${assign.assignee_name})` : ''}!`,
   };
 }
+
+/**
+ * Sends a smart batch reminder for an entire Task card:
+ * 1. Notifies ALL assigned Troopers who haven't submitted yet (ASSIGNED, IN_PROGRESS).
+ * 2. Notifies the Mentor if there are submissions waiting review (WAITING_REVIEW, SUBMITTED).
+ */
+export async function sendTaskSmartReminder(taskId: string) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrCoordOrMentor =
+    ctx.userType === 'STAFF' ||
+    ctx.userType === 'EXTERNAL' ||
+    (ctx.userType as string) === 'CREATOR' ||
+    ctx.can('MANAGE') ||
+    ctx.roles.includes('COORDINATOR') ||
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.roles.includes('MENTOR');
+
+  if (!isStaffOrCoordOrMentor) {
+    return { success: false, error: 'Hanya Koordinator/Admin atau Mentor yang dapat mengirim reminder.' };
+  }
+
+  // Get task info & creator mentor
+  const task = (await db
+    .prepare(
+      `SELECT t.id, t.title, t.workspace_id, t.created_by, u_creator.name AS creator_name
+       FROM tasks t
+       LEFT JOIN users u_creator ON t.created_by = u_creator.id
+       WHERE t.id = ? AND t.status != 'DELETED'`
+    )
+    .bind(taskId)
+    .first()) as any;
+
+  if (!task) return { success: false, error: 'Tugas tidak ditemukan.' };
+
+  // Fetch all assignments for this task
+  const { results: assignments } = await db
+    .prepare(
+      `SELECT ta.id, ta.user_id, ta.status, u.name AS user_name
+       FROM task_assignments ta
+       LEFT JOIN users u ON ta.user_id = u.id
+       WHERE ta.task_id = ?`
+    )
+    .bind(taskId)
+    .all();
+
+  const assignList = (assignments as any[]) || [];
+
+  const unsubmitted = assignList.filter((a) =>
+    ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED'].includes(a.status) && a.user_id
+  );
+  const waitingReview = assignList.filter((a) =>
+    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status)
+  );
+
+  const sender = (await db
+    .prepare('SELECT name FROM users WHERE id = ?')
+    .bind(session.userId)
+    .first()) as { name: string } | null;
+
+  const senderName = sender?.name || 'Tim Evaluator';
+  let notifiedCount = 0;
+  let messagesSent: string[] = [];
+
+  // 1. Notify all unsubmitted troopers
+  if (unsubmitted.length > 0) {
+    for (const sub of unsubmitted) {
+      await sendPushNotificationToUser(sub.user_id, 'TASK', {
+        title: `⏰ Reminder Pengerjaan Tugas: ${task.title}`,
+        body: `${senderName} mengingatkan Anda untuk segera menyelesaikan & mengunggah hasil karya.`,
+        url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard',
+      });
+      notifiedCount++;
+    }
+    messagesSent.push(`Reminder dikirim ke ${unsubmitted.length} Peserta`);
+  }
+
+  // 2. Notify mentor if there are submissions waiting review
+  if (waitingReview.length > 0 && task.created_by) {
+    await sendPushNotificationToUser(task.created_by, 'TASK', {
+      title: `🔔 Reminder Review Tugas: ${task.title}`,
+      body: `${senderName} mengingatkan Anda untuk segera meninjau ${waitingReview.length} karya peserta yang telah diunggah.`,
+      url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard',
+    });
+    notifiedCount++;
+    messagesSent.push(`Notifikasi review dikirim ke Mentor (${task.creator_name || 'Mentor'})`);
+  }
+
+  if (notifiedCount === 0) {
+    return { success: false, error: 'Tidak ada peserta atau mentor yang perlu diingatkan saat ini.' };
+  }
+
+  await logWorkflowEvent({
+    entityType: 'task',
+    entityId: taskId,
+    fromStatus: 'REMINDER_SENT',
+    toStatus: 'REMINDER_SENT',
+    triggeredBy: session.userId,
+    note: `${senderName} mengirimkan Smart Batch Reminder: ${messagesSent.join(', ')}`,
+  });
+
+  return {
+    success: true,
+    message: `✅ Smart Reminder berhasil dikirim! (${messagesSent.join(' & ')})`,
+  };
+}
