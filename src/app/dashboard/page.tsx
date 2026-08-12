@@ -208,7 +208,10 @@ export default async function DashboardPage() {
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
         AND (
-          u.user_type = 'EXTERNAL'
+          ws.workspace_type = 'MENTOR'
+          OR UPPER(p.name) LIKE '%MENTOR%'
+          OR t.task_type = 'MENTOR'
+          OR u.user_type = 'EXTERNAL'
           OR ta.assignment_role IN ('PIC', 'REVIEWER', 'APPROVER', 'HELPER', 'MENTOR')
         )
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)

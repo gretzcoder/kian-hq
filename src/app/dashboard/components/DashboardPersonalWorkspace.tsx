@@ -86,6 +86,28 @@ const roleBadgeStyles: Record<string, string> = {
   HELPER: 'bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-500/20',
 };
 
+function sortAssignments(list: PersonalTaskRow[]): PersonalTaskRow[] {
+  const priority: Record<string, number> = {
+    WAITING_REVIEW: 1,
+    SUBMITTED: 1,
+    RESUBMITTED: 1,
+    APPROVED: 2,
+    DONE: 2,
+    PUBLISHED: 2,
+    IN_PROGRESS: 3,
+    ASSIGNED: 4,
+    DRAFT: 5,
+    REVISION_REQUESTED: 6,
+  };
+
+  return [...list].sort((a, b) => {
+    const pA = priority[a.status] ?? 99;
+    const pB = priority[b.status] ?? 99;
+    if (pA !== pB) return pA - pB;
+    return (b.submitted_at || 0) - (a.submitted_at || 0);
+  });
+}
+
 function groupTasksByParent(rows: PersonalTaskRow[]): GroupedTask[] {
   const map = new Map<string, GroupedTask>();
 
@@ -129,13 +151,26 @@ function TaskCardItem({
   activeTab: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(activeTab === 'REVIEW');
-  const [showUnsubmitted, setShowUnsubmitted] = useState(false);
 
-  // Separate submitted assignments from unsubmitted ones
-  const submittedAssignments = parentTask.assignments.filter(
+  const sortedAssignments = sortAssignments(parentTask.assignments);
+  const totalSteps = parentTask.assignments.length;
+
+  const uniqueAssignees = Array.from(
+    new Set(parentTask.assignments.map((a) => a.assigned_name).filter(Boolean))
+  );
+
+  const submittedSteps = parentTask.assignments.filter(
     (a) =>
       ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE', 'PUBLISHED'].includes(a.status) ||
       (a.result_url && a.result_url.trim() !== '')
+  );
+
+  const waitingReviewSteps = parentTask.assignments.filter((a) =>
+    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status)
+  );
+
+  const approvedSteps = parentTask.assignments.filter((a) =>
+    ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)
   );
 
   const unsubmittedAssignments = parentTask.assignments.filter(
@@ -144,17 +179,8 @@ function TaskCardItem({
       (!a.result_url || a.result_url.trim() === '')
   );
 
-  const totalRoles = parentTask.assignments.length;
-  const submittedCount = submittedAssignments.length;
-  const approvedRoles = parentTask.assignments.filter((a) =>
-    ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)
-  ).length;
-  const waitingReviewRoles = parentTask.assignments.filter((a) =>
-    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status)
-  ).length;
-
   return (
-    <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 p-4 sm:p-5 rounded-2xl space-y-3 transition-all duration-300 shadow-xs">
+    <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 p-4 sm:p-5 rounded-2xl space-y-3.5 transition-all duration-300 shadow-xs">
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
@@ -167,9 +193,9 @@ function TaskCardItem({
                 • 🎓 Mentor: <strong className="text-zinc-800 dark:text-zinc-200">{parentTask.creator_name}</strong>
               </span>
             )}
-            {waitingReviewRoles > 0 && (
+            {waitingReviewSteps.length > 0 && (
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
-                ⏳ {waitingReviewRoles} Perlu Review
+                ⏳ {waitingReviewSteps.length} Step Perlu Review
               </span>
             )}
           </div>
@@ -178,11 +204,16 @@ function TaskCardItem({
           </h3>
         </div>
 
-        {/* Progress Summary & Deadline */}
+        {/* Real-Time Statistics Badges */}
         <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
-            📊 {approvedRoles}/{totalRoles} ACC ({submittedCount} Submitted)
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+              📊 {approvedSteps.length}/{totalSteps} ACC
+            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+              👥 {uniqueAssignees.length} Trooper ({totalSteps} Step)
+            </span>
+          </div>
           {parentTask.deadline && (
             <span className="text-[10px] text-zinc-400 font-mono">
               Deadline: {new Date(parentTask.deadline).toLocaleDateString()}
@@ -191,7 +222,33 @@ function TaskCardItem({
         </div>
       </div>
 
-      {/* Control Bar: Expand Sub-Task, Task Smart Batch Reminder Button, Open Task */}
+      {/* Step Quick Breakdown Bar (Shows status per step at a glance) */}
+      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+        {parentTask.assignments.map((st, idx) => {
+          const roleLabel = roleIcons[st.assignment_role || ''] || st.assignment_role || `Step ${idx+1}`;
+          const isDone = ['APPROVED', 'DONE', 'PUBLISHED'].includes(st.status);
+          const isWaiting = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(st.status);
+
+          return (
+            <span
+              key={`quick-${st.id}-${idx}`}
+              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border flex items-center gap-1.5 ${
+                isDone
+                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
+                  : isWaiting
+                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 font-black'
+                  : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800'
+              }`}
+            >
+              <span>{roleLabel}</span>
+              {st.assigned_name && <span className="opacity-80">({st.assigned_name.split(' ')[0]})</span>}:
+              <strong className="uppercase font-mono">{st.status === 'APPROVED' ? 'ACC' : st.status.replace('_', ' ')}</strong>
+            </span>
+          );
+        })}
+      </div>
+
+      {/* Control Bar: Expand Detail, Smart Batch Reminder, Open Workspace */}
       <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <button
@@ -201,20 +258,16 @@ function TaskCardItem({
           >
             <span>
               {isExpanded
-                ? '▲ Sembunyikan Detail'
-                : `▼ Tampilkan Hasil Submit (${submittedCount}/${totalRoles})`}
+                ? '▲ Sembunyikan Rincian Step'
+                : `▼ Lihat Rincian ${totalSteps} Step Workflow (${submittedSteps.length} Submit)`}
             </span>
-            {!isExpanded && waitingReviewRoles > 0 && (
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-            )}
           </button>
 
-          {/* SINGLE BATCH SMART REMINDER BUTTON AT TASK LEVEL */}
           {isCoordinator && activeTab !== 'COMPLETED' && (
             <TaskSmartReminderButton
               taskId={parentTask.id}
               unsubmittedCount={unsubmittedAssignments.length}
-              waitingReviewCount={waitingReviewRoles}
+              waitingReviewCount={waitingReviewSteps.length}
               mentorName={parentTask.creator_name}
             />
           )}
@@ -233,129 +286,88 @@ function TaskCardItem({
         </Link>
       </div>
 
-      {/* Collapsible Sub-Tasks Body (Only shows Submitted Items by Default!) */}
+      {/* Detail Workflow Steps View */}
       {isExpanded && (
         <div className="space-y-3 pt-3 border-t border-dashed border-zinc-200 dark:border-zinc-800">
-          {/* Section 1: SUBMITTED ITEMS (Primary Focus) */}
-          {submittedAssignments.length > 0 ? (
-            <div className="space-y-2.5">
-              <p className="text-[11px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                <span>✅ Hasil Karya Di-Submit ({submittedAssignments.length} Sub-Task):</span>
-              </p>
+          <p className="text-[11px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Detail Rincian Step & Status Pengerjaan ({totalSteps} Step Workflow):
+          </p>
 
-              <div className="grid grid-cols-1 gap-2.5">
-                {submittedAssignments.map((sub, sIdx) => {
-                  const cleanedNote = cleanAppreciationNote(sub.appreciation_note);
-                  const roleLabel = roleIcons[sub.assignment_role || ''] || sub.assignment_role || 'SUB-TASK';
-                  const roleStyle = roleBadgeStyles[sub.assignment_role || ''] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
+          <div className="grid grid-cols-1 gap-2.5">
+            {sortedAssignments.map((sub, sIdx) => {
+              const cleanedNote = cleanAppreciationNote(sub.appreciation_note);
+              const roleLabel = roleIcons[sub.assignment_role || ''] || sub.assignment_role || 'SUB-TASK';
+              const roleStyle = roleBadgeStyles[sub.assignment_role || ''] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
 
-                  return (
-                    <div
-                      key={`${sub.id}-${sub.assignment_role}-${sIdx}`}
-                      className="p-3.5 rounded-xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 flex flex-col gap-2.5 transition-all shadow-2xs"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 flex-wrap min-w-0">
-                          {/* Role Badge */}
-                          <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${roleStyle}`}>
-                            {roleLabel}
-                          </span>
+              const isSubmittedForReview = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(sub.status);
+              const hasResultLink = sub.result_url && sub.result_url.trim() !== '';
 
-                          {/* Assignee Name */}
-                          {sub.assigned_name && (
-                            <span className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
-                              👤 {sub.assigned_name}
-                            </span>
-                          )}
+              return (
+                <div
+                  key={`${sub.id}-${sub.assignment_role}-${sIdx}`}
+                  className={`p-3.5 rounded-xl border flex flex-col gap-2.5 transition-all ${
+                    isSubmittedForReview || hasResultLink
+                      ? 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/30'
+                      : 'bg-zinc-50/70 dark:bg-zinc-900/60 border-zinc-200/70 dark:border-zinc-800/80'
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 flex-wrap min-w-0">
+                      <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-lg border ${roleStyle}`}>
+                        {roleLabel}
+                      </span>
 
-                          {/* Status Badge */}
-                          <span className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full border ${statusColors[sub.status] ?? statusColors.DRAFT}`}>
-                            {sub.status === 'APPROVED' ? '✅ ACC / Approved' : sub.status.replace('_', ' ')}
-                          </span>
+                      {sub.assigned_name && (
+                        <span className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
+                          👤 {sub.assigned_name}
+                        </span>
+                      )}
 
-                          {/* Sparks Badge */}
-                          {sub.sparks != null && sub.sparks > 0 && (
-                            <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
-                              💎 +{sub.sparks} Sparks
-                            </span>
-                          )}
-                        </div>
+                      <span className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full border ${statusColors[sub.status] ?? statusColors.DRAFT}`}>
+                        {sub.status === 'APPROVED' ? '✅ ACC / Approved' : sub.status.replace('_', ' ')}
+                      </span>
+
+                      {sub.sparks != null && sub.sparks > 0 && (
+                        <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 flex items-center gap-0.5">
+                          💎 +{sub.sparks} Sparks
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Submitted Content Link & Preview Box */}
+                  {sub.result_url && (
+                    <div className="p-3 rounded-xl bg-white dark:bg-zinc-950 border border-purple-500/30 text-xs flex items-center justify-between gap-3 flex-wrap shadow-2xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-extrabold text-purple-600 dark:text-purple-400 shrink-0">📄 Hasil Submit:</span>
+                        <span className="truncate text-zinc-700 dark:text-zinc-300 font-mono text-[11px] max-w-[280px] sm:max-w-[420px]">
+                          {sub.result_url}
+                        </span>
                       </div>
-
-                      {/* Submitted Content Link & Preview Box */}
-                      {sub.result_url && (
-                        <div className="p-3 rounded-xl bg-white dark:bg-zinc-950 border border-purple-500/30 text-xs flex items-center justify-between gap-3 flex-wrap shadow-2xs">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-extrabold text-purple-600 dark:text-purple-400 shrink-0">📄 Hasil Submit:</span>
-                            <span className="truncate text-zinc-700 dark:text-zinc-300 font-mono text-[11px] max-w-[280px] sm:max-w-[420px]">
-                              {sub.result_url}
-                            </span>
-                          </div>
-                          <a
-                            href={sub.result_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[11px] transition-all shrink-0 flex items-center gap-1 shadow-xs active:scale-95"
-                          >
-                            <span>Buka Hasil Submission</span>
-                            <span>&nearr;</span>
-                          </a>
-                        </div>
-                      )}
-
-                      {/* Appreciation Note (If approved) */}
-                      {['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status) && cleanedNote && (
-                        <div className="p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/15">
-                          <p className="text-[11px] text-zinc-700 dark:text-zinc-300 italic">
-                            "💬 Feedback Evaluator: {cleanedNote}"
-                          </p>
-                        </div>
-                      )}
+                      <a
+                        href={sub.result_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[11px] transition-all shrink-0 flex items-center gap-1 shadow-xs active:scale-95"
+                      >
+                        <span>Buka Hasil Submission</span>
+                        <span>&nearr;</span>
+                      </a>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3.5 rounded-xl border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 text-center text-xs text-zinc-500 font-medium">
-              ⏳ Belum ada peserta yang mengunggah hasil submission pada task ini.
-            </div>
-          )}
+                  )}
 
-          {/* Section 2: UNSUBMITTED PARTICIPANTS (Collapsible Summary to Avoid Spam) */}
-          {unsubmittedAssignments.length > 0 && (
-            <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-              <button
-                type="button"
-                onClick={() => setShowUnsubmitted(!showUnsubmitted)}
-                className="text-xs font-semibold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 flex items-center gap-1.5 cursor-pointer py-1 px-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all"
-              >
-                <span>
-                  {showUnsubmitted
-                    ? '▲ Sembunyikan Peserta Belum Submit'
-                    : `▶ Lihat ${unsubmittedAssignments.length} Peserta Belum Submit (${unsubmittedAssignments.map(u => u.assigned_name).filter(Boolean).slice(0, 3).join(', ')}${unsubmittedAssignments.length > 3 ? '...' : ''})`}
-                </span>
-              </button>
-
-              {showUnsubmitted && (
-                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 p-3 rounded-xl bg-zinc-100/60 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-zinc-800/60">
-                  {unsubmittedAssignments.map((unsub, uIdx) => (
-                    <div
-                      key={`unsub-${unsub.id}-${uIdx}`}
-                      className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 flex items-center justify-between text-xs"
-                    >
-                      <span className="font-bold text-zinc-800 dark:text-zinc-200 truncate">
-                        👤 {unsub.assigned_name || 'Trooper'}
-                      </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-bold border border-blue-500/20">
-                        {unsub.status.replace('_', ' ')}
-                      </span>
+                  {/* Appreciation Note */}
+                  {['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status) && cleanedNote && (
+                    <div className="p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/15">
+                      <p className="text-[11px] text-zinc-700 dark:text-zinc-300 italic">
+                        "💬 Feedback Evaluator: {cleanedNote}"
+                      </p>
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -437,7 +449,7 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 3: Mentor Task (Mentor Execution Only) */}
+          {/* Tab 3: Mentor Task (Mentor Execution & Mentor Workspace Tasks) */}
           {isCoordinator && (
             <button
               type="button"
