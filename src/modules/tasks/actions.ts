@@ -717,18 +717,18 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     }
 
     const now = Math.floor(Date.now() / 1000);
-
     const sparksValue = typeof appreciationBadge === 'number' ? appreciationBadge : null;
+    const noteValue = appreciationNote?.trim() || null;
 
     if (sparksValue !== null) {
       await db
-        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, sparks = ?, revision_note = NULL WHERE id = ?')
-        .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, sparksValue, assignmentId)
+        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, sparks = ?, appreciation_note = COALESCE(?, appreciation_note), revision_note = NULL WHERE id = ?')
+        .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, sparksValue, noteValue, assignmentId)
         .run();
     } else {
       await db
-        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, revision_note = NULL WHERE id = ?')
-        .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, assignmentId)
+        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, appreciation_note = COALESCE(?, appreciation_note), revision_note = NULL WHERE id = ?')
+        .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, noteValue, assignmentId)
         .run();
     }
 

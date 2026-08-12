@@ -27,6 +27,7 @@ export interface PollAssignmentRow {
   status: string;
   result_url: string | null;
   revision_note: string | null;
+  appreciation_note?: string | null;
   submitted_at: number | null;
   user_name: string | null;
   lead_approved: number;
@@ -85,7 +86,7 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
   const { results: assignmentsRaw } = await db
     .prepare(
       `SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
-              ta.status, ta.result_url, ta.revision_note, ta.submitted_at,
+              ta.status, ta.result_url, ta.revision_note, ta.appreciation_note, ta.submitted_at,
               ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
               ta.sparks, ta.deadline, u.name as user_name
        FROM task_assignments ta

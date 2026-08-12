@@ -1568,16 +1568,29 @@ function OJTTaskCard({
 
           {/* Approved result display */}
           {assignment.status === 'APPROVED' && (
-            <div className="flex items-center justify-between bg-emerald-500/5 border border-emerald-500/15 rounded-xl px-4 py-3">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">✅ Sudah Disetujui Koordinator</span>
-              {assignment.sparks != null && (() => {
-                const meta = getSparkMeta(assignment.sparks);
-                return (
-                  <span className={`text-xs font-black uppercase px-3 py-1 rounded-full border ${meta.color}`}>
-                    {meta.emoji} {meta.label} ({assignment.sparks}/10)
-                  </span>
-                );
-              })()}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between bg-emerald-500/5 border border-emerald-500/15 rounded-xl px-4 py-3">
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">✅ Sudah Disetujui Koordinator</span>
+                {assignment.sparks != null && (() => {
+                  const meta = getSparkMeta(assignment.sparks);
+                  return (
+                    <span className={`text-xs font-black uppercase px-3 py-1 rounded-full border ${meta.color}`}>
+                      {meta.emoji} {meta.label} ({assignment.sparks}/10)
+                    </span>
+                  );
+                })()}
+              </div>
+
+              {(assignment as any).appreciation_note && (
+                <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 space-y-1">
+                  <p className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <span>💬 Catatan Apresiasi & Feedback Evaluator</span>
+                  </p>
+                  <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
+                    "{(assignment as any).appreciation_note}"
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

@@ -64,7 +64,7 @@ export default function ReviewActions({
       // For assessment coordinator step, use the assessment-specific action
       const isAssessmentCoordStep = taskType === 'ASSESSMENT' && !isAssessmentMentorStep;
       const res = isAssessmentCoordStep
-        ? await approveAssessmentSubmission(assignmentId, '', sparks)
+        ? await approveAssessmentSubmission(assignmentId, '', sparks, noteText.trim())
         : await approveAssignment(assignmentId, sparks, noteText.trim());
       if (res.success) {
         setDone(true);

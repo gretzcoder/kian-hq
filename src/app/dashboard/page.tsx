@@ -91,6 +91,7 @@ export default async function DashboardPage() {
 
   // Widget: COORDINATOR/EXECUTIVE sees pending reviews; others see their own assignments
   let personalTasks: PersonalTaskRow[] = [];
+  let completedTasks: PersonalTaskRow[] = [];
   let widgetTitle = 'My Workspace';
   let widgetDesc = 'Active tasks assigned to you across all projects.';
 
@@ -110,7 +111,11 @@ export default async function DashboardPage() {
         t.deadline,
         p.name AS project_name,
         u.name AS assigned_name,
-        ta.assignment_role
+        ta.assignment_role,
+        ta.sparks,
+        ta.appreciation_note,
+        ta.result_url,
+        ta.submitted_at
       FROM task_assignments ta
       JOIN tasks t         ON ta.task_id = t.id
       JOIN projects p      ON t.project_id = p.id
@@ -122,11 +127,43 @@ export default async function DashboardPage() {
         AND t.status = 'APPROVED'
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC
-      LIMIT 10
+      LIMIT 15
     `
       )
       .all();
     personalTasks = results as unknown as PersonalTaskRow[];
+
+    const { results: cResults } = await db
+      .prepare(
+        `
+      SELECT
+        ta.task_id AS id,
+        t.project_id,
+        t.workspace_id,
+        t.title,
+        ta.status,
+        t.deadline,
+        p.name AS project_name,
+        u.name AS assigned_name,
+        ta.assignment_role,
+        ta.sparks,
+        ta.appreciation_note,
+        ta.result_url,
+        ta.submitted_at,
+        ta.reviewed_at
+      FROM task_assignments ta
+      JOIN tasks t         ON ta.task_id = t.id
+      JOIN projects p      ON t.project_id = p.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      LEFT JOIN users u    ON ta.user_id = u.id
+      WHERE ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+      ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
+      LIMIT 20
+    `
+      )
+      .all();
+    completedTasks = cResults as unknown as PersonalTaskRow[];
   } else {
     // CREATOR / OJT: show their own active assignments
     const { results } = await db
@@ -140,20 +177,55 @@ export default async function DashboardPage() {
         ta.status,
         t.deadline,
         p.name AS project_name,
-        ta.assignment_role
+        ta.assignment_role,
+        ta.sparks,
+        ta.appreciation_note,
+        ta.result_url,
+        ta.submitted_at
       FROM task_assignments ta
       JOIN tasks t      ON ta.task_id = t.id
       JOIN projects p   ON t.project_id = p.id
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
+      WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY t.deadline ASC
-      LIMIT 10
+      LIMIT 15
     `
       )
       .bind(session.userId)
       .all();
     personalTasks = results as unknown as PersonalTaskRow[];
+
+    const { results: cResults } = await db
+      .prepare(
+        `
+      SELECT
+        ta.task_id AS id,
+        t.project_id,
+        t.workspace_id,
+        t.title,
+        ta.status,
+        t.deadline,
+        p.name AS project_name,
+        ta.assignment_role,
+        ta.sparks,
+        ta.appreciation_note,
+        ta.result_url,
+        ta.submitted_at,
+        ta.reviewed_at
+      FROM task_assignments ta
+      JOIN tasks t      ON ta.task_id = t.id
+      JOIN projects p   ON t.project_id = p.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.user_id = ? AND ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+      ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
+      LIMIT 25
+    `
+      )
+      .bind(session.userId)
+      .all();
+    completedTasks = cResults as unknown as PersonalTaskRow[];
   }
 
   // Fetch pending QC reviews waiting for current user's approval
@@ -267,6 +339,7 @@ export default async function DashboardPage() {
           {/* Personal Tasks / Review Workspace Widget */}
           <DashboardPersonalWorkspace
             personalTasks={personalTasks}
+            completedTasks={completedTasks}
             canReview={canReview}
             widgetTitle={widgetTitle}
             widgetDesc={widgetDesc}

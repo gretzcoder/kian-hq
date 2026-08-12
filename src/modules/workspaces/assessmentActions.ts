@@ -456,7 +456,8 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
 export async function approveAssessmentSubmission(
   assignmentId: string,
   workspaceId: string,
-  sparksAmount: number
+  sparksAmount: number = 8,
+  appreciationNote?: string
 ) {
   const session = await getSession();
   if (!session) return { success: false, error: 'Unauthorized' };
@@ -482,6 +483,7 @@ export async function approveAssessmentSubmission(
     .first() as { created_by: string | null } | null;
 
   const isTaskCreator = task?.created_by != null && task.created_by === session.userId;
+  const noteValue = appreciationNote?.trim() || null;
 
   // Step 2: Coordinator approval (mentor must have already approved)
   if (isCoordinator) {
@@ -496,10 +498,12 @@ export async function approveAssessmentSubmission(
           SET coordinator_approved = 1,
               sparks = ?,
               status = 'APPROVED',
+              appreciation_note = COALESCE(?, appreciation_note),
+              revision_note = NULL,
               reviewed_at = strftime('%s', 'now')
           WHERE id = ?
         `)
-        .bind(sparksAmount, assignmentId)
+        .bind(sparksAmount, noteValue, assignmentId)
         .run();
 
       await logWorkflowEvent({
@@ -508,7 +512,7 @@ export async function approveAssessmentSubmission(
         fromStatus: 'WAITING_REVIEW',
         toStatus: 'APPROVED',
         triggeredBy: session.userId,
-        note: `Koordinator menyetujui assessment dan memberikan ${sparksAmount} Sparks`,
+        note: `Koordinator menyetujui assessment dan memberikan ${sparksAmount} Sparks${noteValue ? ` (Note: ${noteValue})` : ''}`,
       });
 
       // Resolve workspaceId for revalidation
@@ -536,10 +540,11 @@ export async function approveAssessmentSubmission(
           UPDATE task_assignments
           SET mentor_approved = 1,
               lead_approved = 1,
+              appreciation_note = COALESCE(?, appreciation_note),
               reviewed_at = strftime('%s', 'now')
           WHERE id = ?
         `)
-        .bind(assignmentId)
+        .bind(noteValue, assignmentId)
         .run();
 
       await logWorkflowEvent({
