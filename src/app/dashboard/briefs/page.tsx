@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { getSessionContext } from '@/modules/roles/rbac';
 import Link from 'next/link';
 import BriefActions from './components/BriefActions';
+import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 
 interface BriefRow {
   brief_id:     string;
@@ -188,12 +189,13 @@ export default async function BriefsPage() {
                   )}
                 </div>
 
-                {/* Revision Note */}
+                {/* Collapsible Revision Note */}
                 {b.revision_note && b.brief_status === 'DRAFT' && (
-                  <div className="bg-yellow-500/5 border border-yellow-500/15 rounded-xl p-3">
-                    <p className="text-[10px] font-bold text-yellow-600 dark:text-yellow-400 uppercase tracking-wide mb-1">Changes Requested</p>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400">{b.revision_note}</p>
-                  </div>
+                  <CollapsibleNoteViewer
+                    content={b.revision_note}
+                    badgeLabel="Revisi Brief"
+                    type="REVISION"
+                  />
                 )}
 
                 {/* Brief summary */}

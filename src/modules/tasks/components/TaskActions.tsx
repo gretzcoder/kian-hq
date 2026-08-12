@@ -925,9 +925,11 @@ export default function TaskActions({
 
 
               {a.revision_note && ['REVISION_REQUESTED', 'DECLINED'].includes(a.status) && (
-                <div className="bg-red-500/5 border border-red-500/10 rounded-lg p-2 text-[10px] text-red-700 dark:text-red-400">
-                  📝 {a.revision_note}
-                </div>
+                <CollapsibleNoteViewer
+                  content={a.revision_note}
+                  badgeLabel="⚠️ Catatan Revisi"
+                  type="REVISION"
+                />
               )}
 
               {a.result_url && (
