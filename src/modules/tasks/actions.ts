@@ -1502,11 +1502,15 @@ export async function sendTaskSmartReminder(taskId: string) {
 
   const assignList = (assignments as any[]) || [];
 
-  const unsubmitted = assignList.filter((a) =>
-    ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED'].includes(a.status) && a.user_id
+  // Exclude approved/done participants
+  const needRevision = assignList.filter(
+    (a) => a.status === 'REVISION_REQUESTED' && a.user_id
   );
-  const waitingReview = assignList.filter((a) =>
-    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status)
+  const unsubmitted = assignList.filter(
+    (a) => ['ASSIGNED', 'IN_PROGRESS', 'DRAFT'].includes(a.status) && a.user_id
+  );
+  const waitingReview = assignList.filter(
+    (a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status)
   );
 
   const sender = (await db
@@ -1518,7 +1522,20 @@ export async function sendTaskSmartReminder(taskId: string) {
   let notifiedCount = 0;
   let messagesSent: string[] = [];
 
-  // 1. Notify all unsubmitted troopers
+  // 1. Notify troopers who need revision
+  if (needRevision.length > 0) {
+    for (const sub of needRevision) {
+      await sendPushNotificationToUser(sub.user_id, 'TASK', {
+        title: `🔄 Reminder Revisi Tugas: ${task.title}`,
+        body: `${senderName} mengingatkan: Ada catatan revisi pada tugas Anda. Mohon perbaiki & unggah hasil revisi terbaru.`,
+        url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard',
+      });
+      notifiedCount++;
+    }
+    messagesSent.push(`Reminder Revisi dikirim ke ${needRevision.length} Peserta`);
+  }
+
+  // 2. Notify troopers who haven't submitted
   if (unsubmitted.length > 0) {
     for (const sub of unsubmitted) {
       await sendPushNotificationToUser(sub.user_id, 'TASK', {
@@ -1528,10 +1545,10 @@ export async function sendTaskSmartReminder(taskId: string) {
       });
       notifiedCount++;
     }
-    messagesSent.push(`Reminder dikirim ke ${unsubmitted.length} Peserta`);
+    messagesSent.push(`Reminder Pengerjaan dikirim ke ${unsubmitted.length} Peserta`);
   }
 
-  // 2. Notify mentor if there are submissions waiting review
+  // 3. Notify mentor if there are submissions waiting review
   if (waitingReview.length > 0 && task.created_by) {
     await sendPushNotificationToUser(task.created_by, 'TASK', {
       title: `🔔 Reminder Review Tugas: ${task.title}`,

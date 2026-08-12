@@ -271,9 +271,8 @@ function TaskCardItem({
   activeTab: string;
   currentUserId?: string;
 }) {
-  const [isExpanded, setIsExpanded] = useState(
-    ['REVIEW', 'MY_REVISION', 'TROOPER_REVISION'].includes(activeTab)
-  );
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [stepFilter, setStepFilter] = useState<'ALL' | 'SUBMITTED' | 'REVISION' | 'APPROVED' | 'UNSUBMITTED'>('ALL');
   const isTaskMentor =
     currentUserId != null &&
     (parentTask.task_created_by === currentUserId ||
@@ -300,11 +299,27 @@ function TaskCardItem({
     ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)
   );
 
+  const revisionSteps = parentTask.assignments.filter(
+    (a) => a.status === 'REVISION_REQUESTED'
+  );
+
   const unsubmittedAssignments = parentTask.assignments.filter(
     (a) =>
       !['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE', 'PUBLISHED'].includes(a.status) &&
       (!a.result_url || a.result_url.trim() === '')
   );
+
+  const activeSteps = parentTask.assignments.filter(
+    (a) => a.status !== 'ASSIGNED' && a.status !== 'IN_PROGRESS' && a.status !== 'DRAFT'
+  );
+
+  const displayAssignments = sortedAssignments.filter((sub) => {
+    if (stepFilter === 'SUBMITTED') return ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(sub.status);
+    if (stepFilter === 'REVISION') return sub.status === 'REVISION_REQUESTED';
+    if (stepFilter === 'APPROVED') return ['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status);
+    if (stepFilter === 'UNSUBMITTED') return ['ASSIGNED', 'IN_PROGRESS', 'DRAFT'].includes(sub.status);
+    return true;
+  });
 
   return (
     <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 p-4 sm:p-5 rounded-2xl space-y-3.5 transition-all duration-300 shadow-xs">
@@ -349,12 +364,31 @@ function TaskCardItem({
         </div>
       </div>
 
-      {/* Step Quick Breakdown Bar */}
+      {/* Step Quick Breakdown Summary Bar */}
       <div className="flex items-center gap-1.5 flex-wrap pt-1">
-        {parentTask.assignments.map((st, idx) => {
+        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">
+          ✓ {approvedSteps.length}/{totalSteps} ACC
+        </span>
+        {waitingReviewSteps.length > 0 && (
+          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 animate-pulse">
+            📥 {waitingReviewSteps.length} Submit (Wait QC)
+          </span>
+        )}
+        {revisionSteps.length > 0 && (
+          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">
+            🔄 {revisionSteps.length} Perlu Revisi
+          </span>
+        )}
+        {unsubmittedAssignments.length > 0 && (
+          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800">
+            ⚡ {unsubmittedAssignments.length} Belum Submit
+          </span>
+        )}
+
+        {/* Active chips ONLY for items that are submitted, revision, or approved */}
+        {activeSteps.slice(0, 5).map((st, idx) => {
           const roleLabel = roleIcons[st.assignment_role || ''] || st.assignment_role || `Step ${idx+1}`;
           const isDone = ['APPROVED', 'DONE', 'PUBLISHED'].includes(st.status);
-          const isWaiting = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(st.status);
           const isRevision = st.status === 'REVISION_REQUESTED';
 
           return (
@@ -365,9 +399,7 @@ function TaskCardItem({
                   ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
                   : isRevision
                   ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 font-black'
-                  : isWaiting
-                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 font-black'
-                  : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800'
+                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 font-black'
               }`}
             >
               <span>{roleLabel}</span>
@@ -419,12 +451,36 @@ function TaskCardItem({
       {/* Detail Workflow Steps View */}
       {isExpanded && (
         <div className="space-y-3 pt-3 border-t border-dashed border-zinc-200 dark:border-zinc-800">
-          <p className="text-[11px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Detail Rincian Step & Status Pengerjaan ({totalSteps} Step Workflow):
-          </p>
+          <div className="flex items-center justify-between gap-2 flex-wrap pb-1">
+            <p className="text-[11px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Detail Rincian Step & Status Pengerjaan ({totalSteps} Step Workflow):
+            </p>
+            <div className="flex items-center gap-1 overflow-x-auto pb-1">
+              {[
+                { id: 'ALL', label: `Semua (${totalSteps})` },
+                ...(waitingReviewSteps.length > 0 ? [{ id: 'SUBMITTED', label: `📥 Review (${waitingReviewSteps.length})` }] : []),
+                ...(revisionSteps.length > 0 ? [{ id: 'REVISION', label: `🔄 Revisi (${revisionSteps.length})` }] : []),
+                ...(approvedSteps.length > 0 ? [{ id: 'APPROVED', label: `✅ ACC (${approvedSteps.length})` }] : []),
+                ...(unsubmittedAssignments.length > 0 ? [{ id: 'UNSUBMITTED', label: `⚡ Belum (${unsubmittedAssignments.length})` }] : []),
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setStepFilter(f.id as any)}
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-xl border transition-all shrink-0 cursor-pointer ${
+                    stepFilter === f.id
+                      ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                      : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-purple-300'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="grid grid-cols-1 gap-2.5">
-            {sortedAssignments.map((sub, sIdx) => {
+            {displayAssignments.map((sub, sIdx) => {
               const cleanedNote = cleanAppreciationNote(sub.appreciation_note);
               const roleLabel = roleIcons[sub.assignment_role || ''] || sub.assignment_role || 'SUB-TASK';
               const roleStyle = roleBadgeStyles[sub.assignment_role || ''] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
