@@ -96,14 +96,15 @@ export default async function DashboardPage() {
   let widgetDesc = 'Active tasks assigned to you across all projects.';
 
   if (ctx.userType === 'STAFF') {
-    // STAFF: show tasks submitted for review (QC)
-    widgetTitle = 'Pending Reviews';
-    widgetDesc = 'Submitted assignments awaiting your review and approval.';
+    // STAFF: show tasks submitted for review (QC) and active monitoring
+    widgetTitle = 'QC & Live Task Control Center';
+    widgetDesc = 'Pantau tugas aktif, masukan mentor, dan tinjau persetujuan QC secara real-time.';
     const { results } = await db
       .prepare(
         `
       SELECT
         ta.task_id AS id,
+        ta.id AS assignment_id,
         t.project_id,
         t.workspace_id,
         t.title,
@@ -111,9 +112,10 @@ export default async function DashboardPage() {
         t.deadline,
         p.name AS project_name,
         u.name AS assigned_name,
+        u_creator.name AS creator_name,
         ta.assignment_role,
         ta.sparks,
-        ta.appreciation_note,
+        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at
       FROM task_assignments ta
@@ -121,6 +123,7 @@ export default async function DashboardPage() {
       JOIN projects p      ON t.project_id = p.id
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
       LEFT JOIN users u    ON ta.user_id = u.id
+      LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status = 'WAITING_REVIEW'
         AND ta.result_url IS NOT NULL
         AND TRIM(ta.result_url) != ''
@@ -138,6 +141,7 @@ export default async function DashboardPage() {
         `
       SELECT
         ta.task_id AS id,
+        ta.id AS assignment_id,
         t.project_id,
         t.workspace_id,
         t.title,
@@ -145,9 +149,10 @@ export default async function DashboardPage() {
         t.deadline,
         p.name AS project_name,
         u.name AS assigned_name,
+        u_creator.name AS creator_name,
         ta.assignment_role,
         ta.sparks,
-        ta.appreciation_note,
+        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
         ta.reviewed_at
@@ -156,6 +161,7 @@ export default async function DashboardPage() {
       JOIN projects p      ON t.project_id = p.id
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
       LEFT JOIN users u    ON ta.user_id = u.id
+      LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
@@ -165,27 +171,32 @@ export default async function DashboardPage() {
       .all();
     completedTasks = cResults as unknown as PersonalTaskRow[];
   } else {
-    // CREATOR / OJT: show their own active assignments
+    // CREATOR / OJT: show their own active assignments & completed work
+    widgetTitle = 'My Workspace & Tasks';
+    widgetDesc = 'Daftar penugasan aktif dan riwayat tugas yang disetujui beserta masukan evaluasi.';
     const { results } = await db
       .prepare(
         `
       SELECT
         ta.task_id AS id,
+        ta.id AS assignment_id,
         t.project_id,
         t.workspace_id,
         t.title,
         ta.status,
         t.deadline,
         p.name AS project_name,
+        u_creator.name AS creator_name,
         ta.assignment_role,
         ta.sparks,
-        ta.appreciation_note,
+        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at
       FROM task_assignments ta
       JOIN tasks t      ON ta.task_id = t.id
       JOIN projects p   ON t.project_id = p.id
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY t.deadline ASC
@@ -201,15 +212,17 @@ export default async function DashboardPage() {
         `
       SELECT
         ta.task_id AS id,
+        ta.id AS assignment_id,
         t.project_id,
         t.workspace_id,
         t.title,
         ta.status,
         t.deadline,
         p.name AS project_name,
+        u_creator.name AS creator_name,
         ta.assignment_role,
         ta.sparks,
-        ta.appreciation_note,
+        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
         ta.reviewed_at
@@ -217,6 +230,7 @@ export default async function DashboardPage() {
       JOIN tasks t      ON ta.task_id = t.id
       JOIN projects p   ON t.project_id = p.id
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.user_id = ? AND ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC

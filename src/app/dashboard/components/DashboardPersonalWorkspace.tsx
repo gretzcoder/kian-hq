@@ -2,9 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import SendReminderButton from '@/components/SendReminderButton';
+import { cleanAppreciationNote } from '@/lib/noteUtils';
 
 export interface PersonalTaskRow {
   id: string;
+  assignment_id?: string;
   project_id: string;
   workspace_id: string | null;
   title: string;
@@ -12,6 +15,7 @@ export interface PersonalTaskRow {
   deadline: number | null;
   project_name: string;
   assigned_name?: string | null;
+  creator_name?: string | null;
   assignment_role?: string | null;
   sparks?: number | null;
   appreciation_note?: string | null;
@@ -111,104 +115,118 @@ export default function DashboardPersonalWorkspace({
         <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-2xl p-10 text-center text-zinc-500 text-sm">
           {activeTab === 'ACTIVE'
             ? canReview
-              ? '✅ Tidak ada review penugasan yang menggantung saat ini.'
+              ? '✅ Tidak ada penugasan aktif yang menggantung saat ini.'
               : '🎉 Tidak ada penugasan aktif. Kerja bagus!'
             : '📂 Belum ada penugasan yang selesai / di-ACC.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3">
-          {displayedTasks.map((task) => (
-            <div
-              key={`${task.id}-${task.assignment_role}-${task.status}`}
-              className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 p-4 sm:p-5 rounded-2xl flex flex-col justify-between gap-3 transition-all duration-300 hover:shadow-md"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest truncate max-w-[140px]">
-                      {task.project_name}
-                    </span>
-                    {task.assignment_role && (
+          {displayedTasks.map((task) => {
+            const cleanedNote = cleanAppreciationNote(task.appreciation_note);
+
+            return (
+              <div
+                key={`${task.id}-${task.assignment_role}-${task.status}`}
+                className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 p-4 sm:p-5 rounded-2xl flex flex-col justify-between gap-3 transition-all duration-300 hover:shadow-md"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest truncate max-w-[140px]">
+                        {task.project_name}
+                      </span>
+                      {task.assignment_role && (
+                        <span
+                          className={`text-[9px] font-black uppercase tracking-widest ${
+                            roleColors[task.assignment_role] ?? 'text-zinc-400'
+                          }`}
+                        >
+                          {task.assignment_role}
+                        </span>
+                      )}
                       <span
-                        className={`text-[9px] font-black uppercase tracking-widest ${
-                          roleColors[task.assignment_role] ?? 'text-zinc-400'
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                          statusColors[task.status] ?? statusColors.DRAFT
                         }`}
                       >
-                        {task.assignment_role}
+                        {task.status === 'APPROVED' ? '✅ ACC / Approved' : task.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      {task.title}
+                    </h4>
+
+                    <div className="flex items-center gap-3 text-[10px] text-zinc-500 mt-1 flex-wrap font-medium">
+                      {task.assigned_name && <span>👤 Assignee: <strong>{task.assigned_name}</strong></span>}
+                      {task.creator_name && <span>🎓 Mentor: <strong>{task.creator_name}</strong></span>}
+                    </div>
+                  </div>
+
+                  {/* Right Spark / Status Badge */}
+                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    {task.sparks != null && (
+                      <span className="inline-flex items-center gap-1 text-xs font-black px-3 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shadow-2xs">
+                        💎 +{task.sparks} Sparks ✨
                       </span>
                     )}
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                        statusColors[task.status] ?? statusColors.DRAFT
-                      }`}
-                    >
-                      {task.status === 'APPROVED' ? '✅ ACC / Approved' : task.status.replace('_', ' ')}
-                    </span>
+                    {task.deadline && (
+                      <span className="text-[10px] text-zinc-400 font-mono hidden sm:block">
+                        Due: {new Date(task.deadline).toLocaleDateString()}
+                      </span>
+                    )}
                   </div>
-                  <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                    {task.title}
-                  </h4>
-                  {task.assigned_name && (
-                    <p className="text-[10px] text-zinc-500 mt-1">Assignee: {task.assigned_name}</p>
-                  )}
                 </div>
 
-                {/* Right Spark / Status Badge */}
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  {task.sparks != null && (
-                    <span className="inline-flex items-center gap-1 text-xs font-black px-3 py-1 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shadow-2xs">
-                      💎 +{task.sparks} Sparks ✨
-                    </span>
-                  )}
-                  {task.deadline && (
-                    <span className="text-[10px] text-zinc-400 font-mono hidden sm:block">
-                      Due: {new Date(task.deadline).toLocaleDateString()}
-                    </span>
-                  )}
+                {/* Appreciation Note Box (if completed or approved task has feedback note) */}
+                {cleanedNote && (
+                  <div className="mt-1 p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/15 space-y-1">
+                    <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <span>💬 Catatan Apresiasi & Feedback Evaluator</span>
+                    </div>
+                    <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
+                      "{cleanedNote}"
+                    </p>
+                  </div>
+                )}
+
+                {/* Bottom Actions Bar */}
+                <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 mt-1 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {task.result_url && (
+                      <a
+                        href={task.result_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+                      >
+                        <span>🔗 Link Hasil Kerja</span>
+                      </a>
+                    )}
+
+                    {/* Send Reminder button for Coordinators/Admins on Active tasks */}
+                    {canReview && activeTab === 'ACTIVE' && (task.assignment_id || task.id) && (
+                      <SendReminderButton
+                        assignmentId={task.assignment_id || task.id}
+                        mentorName={task.creator_name}
+                      />
+                    )}
+                  </div>
+
+                  <Link
+                    href={
+                      task.workspace_id
+                        ? `/dashboard/workspace/${task.workspace_id}`
+                        : `/dashboard/projects/${task.project_id}`
+                    }
+                    className="text-[11px] border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 bg-white dark:bg-zinc-900/60 px-3.5 py-1.5 rounded-xl transition-all font-bold tracking-wide active:scale-[0.98] shadow-xs flex items-center gap-1"
+                  >
+                    <span>Open Task</span>
+                    <span>&rarr;</span>
+                  </Link>
                 </div>
               </div>
-
-              {/* Appreciation Note Box (if completed task has feedback note) */}
-              {task.appreciation_note && (
-                <div className="mt-1 p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/15 space-y-1">
-                  <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>💬 Catatan Apresiasi & Feedback Evaluator</span>
-                  </div>
-                  <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
-                    "{task.appreciation_note}"
-                  </p>
-                </div>
-              )}
-
-              {/* Bottom Actions Bar */}
-              <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 mt-1">
-                <div className="flex items-center gap-2">
-                  {task.result_url && (
-                    <a
-                      href={task.result_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
-                    >
-                      <span>🔗 Link Hasil Kerja</span>
-                    </a>
-                  )}
-                </div>
-
-                <Link
-                  href={
-                    task.workspace_id
-                      ? `/dashboard/workspace/${task.workspace_id}`
-                      : `/dashboard/projects/${task.project_id}`
-                  }
-                  className="text-[11px] border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 bg-white dark:bg-zinc-900/60 px-3.5 py-1.5 rounded-xl transition-all font-bold tracking-wide active:scale-[0.98] shadow-xs flex items-center gap-1"
-                >
-                  <span>Open Task</span>
-                  <span>&rarr;</span>
-                </Link>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

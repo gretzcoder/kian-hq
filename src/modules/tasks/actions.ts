@@ -1247,3 +1247,77 @@ export async function resetDeclinedAssignment(assignmentId: string) {
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Server action allowing Coordinators/Admins to send a review reminder notification
+ * to the mentor/creator of a task.
+ */
+export async function sendReviewReminderToMentor(assignmentId: string, customMessage?: string) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrCoord =
+    ctx.userType === 'STAFF' ||
+    ctx.can('MANAGE') ||
+    ctx.roles.includes('COORDINATOR') ||
+    ctx.roles.includes('EXECUTIVE');
+
+  if (!isStaffOrCoord) {
+    return { success: false, error: 'Hanya Koordinator atau Admin yang dapat mengirim notifikasi reminder.' };
+  }
+
+  const assign = (await db
+    .prepare(
+      `
+      SELECT ta.id, ta.task_id, ta.user_id, ta.status, t.title AS task_title, t.created_by,
+             t.workspace_id, u_assignee.name AS assignee_name, u_creator.name AS creator_name,
+             ws.name AS workspace_name
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      LEFT JOIN users u_assignee ON ta.user_id = u_assignee.id
+      LEFT JOIN users u_creator ON t.created_by = u_creator.id
+      WHERE ta.id = ?
+    `
+    )
+    .bind(assignmentId)
+    .first()) as any;
+
+  if (!assign) return { success: false, error: 'Penugasan tidak ditemukan.' };
+
+  const targetMentorId = assign.created_by;
+  if (!targetMentorId) {
+    return { success: false, error: 'Pembuat/Mentor tugas tidak terdefinisi.' };
+  }
+
+  const sender = (await db
+    .prepare('SELECT name FROM users WHERE id = ?')
+    .bind(session.userId)
+    .first()) as { name: string } | null;
+
+  const senderName = sender?.name || 'Koordinator QC';
+
+  await sendPushNotificationToUser(targetMentorId, 'TASK', {
+    title: `🔔 Reminder Review Tugas: ${assign.task_title}`,
+    body: `${senderName} mengingatkan Anda untuk segera meninjau submission dari ${assign.assignee_name || 'Trooper'}.${
+      customMessage ? ` Catatan: ${customMessage}` : ''
+    }`,
+    url: assign.workspace_id ? `/dashboard/workspace/${assign.workspace_id}` : '/dashboard/review',
+  });
+
+  await logWorkflowEvent({
+    entityType: 'task_assignment',
+    entityId: assignmentId,
+    fromStatus: assign.status,
+    toStatus: assign.status,
+    triggeredBy: session.userId,
+    note: `Koordinator (${senderName}) mengirimkan reminder review ke Mentor (${assign.creator_name || 'Mentor'})`,
+  });
+
+  return {
+    success: true,
+    message: `Reminder berhasil dikirim ke Mentor ${assign.creator_name ? `(${assign.creator_name})` : ''}!`,
+  };
+}

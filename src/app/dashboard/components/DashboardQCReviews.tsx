@@ -90,6 +90,8 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
               canRequestRevision={true}
               taskType={r.task_type}
               isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.task_created_by === currentUserId && r.mentor_approved === 0}
+              creatorName={r.creator_name}
+              isStaffOrCoord={true}
             />
           </div>
         ))}

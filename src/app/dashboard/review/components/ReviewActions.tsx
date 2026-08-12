@@ -5,6 +5,8 @@ import { approveAssignment, requestRevision, declineAssignment } from '@/modules
 import { approveAssessmentMentorStep, requestAssessmentRevision as requestAssessmentRevisionAction, approveAssessmentSubmission } from '@/modules/workspaces/assessmentActions';
 import { useUI } from '@/components/ui/UIProvider';
 
+import SendReminderButton from '@/components/SendReminderButton';
+
 export function getSparkMeta(spark: number): { label: string; emoji: string; color: string } {
   if (spark >= 9) return { label: 'LEGENDARY SPARK', emoji: '👑', color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' };
   if (spark >= 7) return { label: 'GREAT SPARK', emoji: '💎', color: 'text-purple-500 bg-purple-500/10 border-purple-500/30' };
@@ -19,12 +21,16 @@ export default function ReviewActions({
   canAwardBadge = true,
   taskType,
   isAssessmentMentorStep = false,
+  creatorName,
+  isStaffOrCoord = false,
 }: {
   assignmentId: string;
   canRequestRevision: boolean;
   canAwardBadge?: boolean;
   taskType?: string | null;
   isAssessmentMentorStep?: boolean;
+  creatorName?: string | null;
+  isStaffOrCoord?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'NONE' | 'SPARK_MODAL' | 'REVISION' | 'DECLINE'>('NONE');
@@ -180,7 +186,7 @@ export default function ReviewActions({
             </button>
           </div>
         ) : (
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           <button
             onClick={() => {
               if (canAwardBadge) {
@@ -190,7 +196,7 @@ export default function ReviewActions({
               }
             }}
             disabled={loading}
-            className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5"
+            className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px]"
           >
             <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ Approve QC'}</span>
           </button>
@@ -199,18 +205,26 @@ export default function ReviewActions({
               <button
                 onClick={() => setMode('REVISION')}
                 disabled={loading}
-                className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
+                className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[120px]"
               >
                 Request Revision
               </button>
               <button
                 onClick={() => setMode('DECLINE')}
                 disabled={loading}
-                className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
+                className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[80px]"
               >
                 Decline
               </button>
             </>
+          )}
+
+          {isStaffOrCoord && (
+            <SendReminderButton
+              assignmentId={assignmentId}
+              mentorName={creatorName}
+              className="py-2.5"
+            />
           )}
         </div>
         )

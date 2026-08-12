@@ -8,6 +8,8 @@ import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEdit
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
 import { useUI } from '@/components/ui/UIProvider';
 import ReviewActions from '@/app/dashboard/review/components/ReviewActions';
+import { cleanAppreciationNote } from '@/lib/noteUtils';
+import SendReminderButton from '@/components/SendReminderButton';
 
 // ─── CreatorDrivePreview ────────────────────────────────────────────────────
 // Aspect-ratio aware, user-friendly Google Drive preview widget for Creator step
@@ -813,6 +815,22 @@ export default function TaskActions({
                                       canRequestRevision={isLeader || isMentor || isCoordinator}
                                       canAwardBadge={isMentor || isCoordinator}
                                     />
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Appreciation Note */}
+                              {['APPROVED', 'DONE', 'PUBLISHED'].includes(assign.status) && (() => {
+                                const note = cleanAppreciationNote((assign as any).appreciation_note);
+                                if (!note) return null;
+                                return (
+                                  <div className="mt-2.5 p-3 rounded-xl bg-purple-500/5 border border-purple-500/15 space-y-1">
+                                    <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1">
+                                      <span>💬 Catatan Apresiasi & Feedback Evaluator</span>
+                                    </div>
+                                    <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
+                                      "{note}"
+                                    </p>
                                   </div>
                                 );
                               })()}
