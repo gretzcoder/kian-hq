@@ -13,6 +13,7 @@ import { getWorkspaceChats, WorkspaceChatMessage } from '@/modules/workspaces/ch
 import WorkspaceReadTracker from '../components/WorkspaceReadTracker';
 import { AssessmentPanel } from './components/AssessmentPanel';
 import EditWorkspaceModal from './components/EditWorkspaceModal';
+import { repairAssessmentTaskStatuses } from '@/modules/workspaces/assessmentActions';
 
 
 interface WorkspaceRow {
@@ -97,6 +98,9 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   if (!workspace) notFound();
 
   const projectId = workspace.project_id;
+
+  // Auto-repair any assessment tasks whose status was corrupted to WAITING_REVIEW by submissions
+  await repairAssessmentTaskStatuses(db, wsId);
 
   // Fetch everything else IN PARALLEL — no sequential waterfall
   const [

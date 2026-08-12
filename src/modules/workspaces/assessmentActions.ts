@@ -425,13 +425,6 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
       .bind(resultUrl.trim(), assignmentId)
       .run();
 
-    if (assignment.task_id) {
-      await db
-        .prepare("UPDATE tasks SET status = 'WAITING_REVIEW', revision_note = NULL WHERE id = ?")
-        .bind(assignment.task_id)
-        .run();
-    }
-
     await logWorkflowEvent({
       entityType: 'task_assignment',
       entityId: assignmentId,
@@ -996,3 +989,32 @@ export async function addAssessmentAssignment(
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Auto-repairs assessment tasks that were corrupted to 'WAITING_REVIEW'
+ * even though their assignments have been submitted or approved.
+ */
+export async function repairAssessmentTaskStatuses(db: any, workspaceId?: string) {
+  try {
+    const wsClause = workspaceId ? ' AND workspace_id = ?' : '';
+    const params = workspaceId ? [workspaceId] : [];
+    await db.prepare(`
+      UPDATE tasks
+      SET status = 'APPROVED', revision_note = NULL
+      WHERE task_type = 'ASSESSMENT'
+        AND status = 'WAITING_REVIEW'
+        ${wsClause}
+        AND id IN (
+          SELECT DISTINCT task_id
+          FROM task_assignments
+          WHERE result_url IS NOT NULL
+             OR status IN ('WAITING_REVIEW', 'APPROVED', 'REVISION_REQUESTED')
+             OR mentor_approved = 1
+             OR coordinator_approved = 1
+        )
+    `).bind(...params).run();
+  } catch (err) {
+    console.error('repairAssessmentTaskStatuses error:', err);
+  }
+}
+
