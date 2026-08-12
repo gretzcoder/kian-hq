@@ -688,6 +688,15 @@ export async function requestAssessmentRevision(
       .bind(nextStatus, revisionNote.trim(), assignmentId)
       .run();
 
+    await logWorkflowEvent({
+      entityType: 'task_assignment',
+      entityId: assignmentId,
+      fromStatus: assignment.status,
+      toStatus: nextStatus,
+      triggeredBy: session.userId,
+      note: revisionNote.trim(),
+    });
+
 
 
     if (targetWsId) {

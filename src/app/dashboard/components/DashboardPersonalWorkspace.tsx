@@ -223,7 +223,7 @@ function InlineResubmitBox({
               </span>
               <div>
                 <p className="text-xs font-black text-red-700 dark:text-red-300">
-                  Catatan Revisi dari {revisionRequestedByName || 'Evaluator'}
+                  Catatan Revisi dari {revisionRequestedByName || 'Evaluator / QC'}
                 </p>
                 <p className="text-[10px] text-red-500 dark:text-red-400 font-semibold">
                   {revisionRequestedByRole || 'Koordinator / Mentor QC'}
@@ -502,7 +502,7 @@ function TaskCardItem({
                           </span>
                           <div>
                             <p className="text-xs font-black text-red-700 dark:text-red-300">
-                              Catatan Revisi dari {sub.revision_requested_by_name || sub.creator_name || 'Evaluator'}
+                              Catatan Revisi dari {sub.revision_requested_by_name || 'Evaluator / QC'}
                             </p>
                             <p className="text-[10px] text-red-500 dark:text-red-400 font-semibold">
                               {sub.revision_requested_by_role || 'Koordinator / Mentor QC'}
@@ -599,7 +599,7 @@ export default function DashboardPersonalWorkspace({
   const myRevisionGrouped = groupTasksByParent(myRevisionTasks);
 
   // Filter 2: Troopers Revisi (Tasks under mentorship or workspace where troopers are requested to revise)
-  const trooperRevisionTasks = [...trooperTasks, ...mentorTasks, ...reviewTasks].filter(
+  const trooperRevisionTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks].filter(
     (t) => t.status === 'REVISION_REQUESTED'
   );
   const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
@@ -659,14 +659,16 @@ export default function DashboardPersonalWorkspace({
           )}
 
           {/* Tab 3: Troopers Revisi (Untuk Mentor & Koordinator memantau status revisi Troopers) */}
-          {(isCoordinator || isMentorUser) && trooperRevisionGrouped.length > 0 && (
+          {(isCoordinator || isMentorUser || userType === 'STAFF') && (
             <button
               type="button"
               onClick={() => setActiveTab('TROOPER_REVISION')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'TROOPER_REVISION'
                   ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/20'
-                  : 'text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20'
+                  : trooperRevisionGrouped.length > 0
+                  ? 'text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
               }`}
             >
               <span>🔄 Troopers Revisi</span>
