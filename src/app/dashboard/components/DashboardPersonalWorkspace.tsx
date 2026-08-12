@@ -26,7 +26,10 @@ export interface PersonalTaskRow {
 
 interface DashboardPersonalWorkspaceProps {
   personalTasks: PersonalTaskRow[];
+  trooperTasks?: PersonalTaskRow[];
+  mentorTasks?: PersonalTaskRow[];
   completedTasks?: PersonalTaskRow[];
+  userType: string;
   canReview: boolean;
   widgetTitle: string;
   widgetDesc: string;
@@ -34,6 +37,8 @@ interface DashboardPersonalWorkspaceProps {
 
 const statusColors: Record<string, string> = {
   DRAFT: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700/80',
+  ASSIGNED: 'bg-blue-500/5 text-blue-600 dark:text-blue-400 border-blue-500/10 dark:border-blue-500/20',
+  IN_PROGRESS: 'bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 border-indigo-500/10 dark:border-indigo-500/20',
   SUBMITTED: 'bg-orange-500/5 text-orange-600 dark:text-orange-400 border-orange-500/10 dark:border-orange-500/20',
   WAITING_REVIEW: 'bg-yellow-500/5 text-yellow-600 dark:text-yellow-400 border-yellow-500/10 dark:border-yellow-500/20',
   REVISION_REQUESTED: 'bg-red-500/5 text-red-600 dark:text-red-400 border-red-500/10 dark:border-red-500/20',
@@ -54,50 +59,57 @@ const roleColors: Record<string, string> = {
   DESIGNER: 'text-purple-600 dark:text-purple-400',
   VIDEO_EDITOR: 'text-pink-600 dark:text-pink-400',
   CREATOR: 'text-indigo-600 dark:text-indigo-400',
+  PLANNER: 'text-sky-600 dark:text-sky-400',
+  RESEARCHER: 'text-teal-600 dark:text-teal-400',
 };
 
 export default function DashboardPersonalWorkspace({
   personalTasks = [],
+  trooperTasks = [],
+  mentorTasks = [],
   completedTasks = [],
+  userType,
   canReview,
   widgetTitle,
   widgetDesc,
 }: DashboardPersonalWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'COMPLETED'>('ACTIVE');
+  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'TROOPER' | 'MENTOR' | 'COMPLETED'>('ACTIVE');
 
-  // Filter tasks strictly by tab status
-  const activeList = (personalTasks || []).filter(
-    (t) => !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED', 'ARCHIVED'].includes(t.status)
-  );
+  const isCoordinator = userType === 'STAFF' || canReview;
+  const isMentorUser = userType === 'CREATOR';
 
-  const completedList = (completedTasks || []).filter((t) =>
-    ['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(t.status)
-  );
+  // Deduplicate and filter active tasks strictly
+  const filterActive = (list: PersonalTaskRow[]) =>
+    Array.from(
+      new Map(
+        (list || [])
+          .filter((t) => !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED', 'ARCHIVED'].includes(t.status))
+          .map((t) => [t.assignment_id || `${t.id}-${t.assignment_role}-${t.assigned_name}`, t])
+      ).values()
+    );
 
-  // Deduplicate items by unique assignment_id / task identifier
-  const cleanActiveTasks = Array.from(
-    new Map(
-      activeList.map((t) => [
-        t.assignment_id || `${t.id}-${t.assignment_role}-${t.assigned_name}`,
-        t,
-      ])
-    ).values()
-  );
+  const filterCompleted = (list: PersonalTaskRow[]) =>
+    Array.from(
+      new Map(
+        (list || [])
+          .filter((t) => ['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(t.status))
+          .map((t) => [t.assignment_id || `${t.id}-${t.assignment_role}-${t.assigned_name}`, t])
+      ).values()
+    );
 
-  const cleanCompletedTasks = Array.from(
-    new Map(
-      completedList.map((t) => [
-        t.assignment_id || `${t.id}-${t.assignment_role}-${t.assigned_name}`,
-        t,
-      ])
-    ).values()
-  );
+  const cleanActiveTasks = filterActive(personalTasks);
+  const cleanTrooperTasks = filterActive(trooperTasks);
+  const cleanMentorTasks = filterActive(mentorTasks);
+  const cleanCompletedTasks = filterCompleted(completedTasks);
 
-  const displayedTasks = activeTab === 'ACTIVE' ? cleanActiveTasks : cleanCompletedTasks;
+  let displayedTasks = cleanActiveTasks;
+  if (activeTab === 'TROOPER') displayedTasks = cleanTrooperTasks;
+  if (activeTab === 'MENTOR') displayedTasks = cleanMentorTasks;
+  if (activeTab === 'COMPLETED') displayedTasks = cleanCompletedTasks;
 
   return (
     <div className="space-y-4">
-      {/* Header & Filter Tabs */}
+      {/* Header & Category Filter Tabs */}
       <div className="flex items-center justify-between gap-3 border-b border-zinc-200/80 dark:border-zinc-800/80 pb-3 flex-wrap">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
@@ -106,7 +118,8 @@ export default function DashboardPersonalWorkspace({
           <p className="text-zinc-500 dark:text-zinc-400 text-xs mt-0.5">{widgetDesc}</p>
         </div>
 
-        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex-wrap">
+          {/* Tab 1: Task Aktif / All Task */}
           <button
             type="button"
             onClick={() => setActiveTab('ACTIVE')}
@@ -116,12 +129,49 @@ export default function DashboardPersonalWorkspace({
                 : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
             }`}
           >
-            <span>📌 Tasks Aktif</span>
+            <span>📌 {isCoordinator ? 'All Active Tasks' : 'Task Aktif'}</span>
             <span className="px-1.5 py-0.2 rounded-md bg-purple-500/10 text-[10px] font-mono">
               {cleanActiveTasks.length}
             </span>
           </button>
 
+          {/* Tab 2: Troopers Task (Visible for Coordinator & Mentor) */}
+          {(isCoordinator || isMentorUser) && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('TROOPER')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'TROOPER'
+                  ? 'bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-zinc-200/60 dark:border-zinc-700/60'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span>👥 Troopers Task</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-indigo-500/10 text-[10px] font-mono">
+                {cleanTrooperTasks.length}
+              </span>
+            </button>
+          )}
+
+          {/* Tab 3: Mentor Task (Visible ONLY for Coordinator/Admin) */}
+          {isCoordinator && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('MENTOR')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'MENTOR'
+                  ? 'bg-white dark:bg-zinc-800 text-amber-600 dark:text-amber-400 shadow-sm border border-zinc-200/60 dark:border-zinc-700/60'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span>🎓 Mentor Task</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-amber-500/10 text-[10px] font-mono">
+                {cleanMentorTasks.length}
+              </span>
+            </button>
+          )}
+
+          {/* Tab 4: Selesai & ACC */}
           <button
             type="button"
             onClick={() => setActiveTab('COMPLETED')}
@@ -142,9 +192,11 @@ export default function DashboardPersonalWorkspace({
       {displayedTasks.length === 0 ? (
         <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-2xl p-10 text-center text-zinc-500 text-sm">
           {activeTab === 'ACTIVE'
-            ? canReview
-              ? '✅ Tidak ada penugasan aktif yang menggantung saat ini.'
-              : '🎉 Tidak ada penugasan aktif. Kerja bagus!'
+            ? '🎉 Tidak ada penugasan aktif menggantung saat ini.'
+            : activeTab === 'TROOPER'
+            ? '👥 Tidak ada tugas Troopers yang sedang berjalan.'
+            : activeTab === 'MENTOR'
+            ? '🎓 Tidak ada tugas Mentor yang menggantung.'
             : '📂 Belum ada penugasan yang selesai / di-ACC.'}
         </div>
       ) : (
@@ -152,6 +204,10 @@ export default function DashboardPersonalWorkspace({
           {displayedTasks.map((task, idx) => {
             const cleanedNote = cleanAppreciationNote(task.appreciation_note);
             const itemKey = `${activeTab}-${task.assignment_id || task.id}-${task.assignment_role || 'role'}-${idx}`;
+            const assignId = task.assignment_id || task.id;
+
+            const isSubmittedForReview = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(task.status);
+            const isNotSubmittedYet = ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED'].includes(task.status);
 
             return (
               <div
@@ -206,7 +262,7 @@ export default function DashboardPersonalWorkspace({
                   </div>
                 </div>
 
-                {/* Appreciation Note Box (if completed or approved task has feedback note) */}
+                {/* Appreciation Note Box (ONLY rendered for approved / completed tasks) */}
                 {['APPROVED', 'DONE', 'PUBLISHED'].includes(task.status) && cleanedNote && (
                   <div className="mt-1 p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/15 space-y-1">
                     <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -232,12 +288,24 @@ export default function DashboardPersonalWorkspace({
                       </a>
                     )}
 
-                    {/* Send Reminder button for Coordinators/Admins on Active tasks */}
-                    {canReview && activeTab === 'ACTIVE' && (task.assignment_id || task.id) && (
-                      <SendReminderButton
-                        assignmentId={task.assignment_id || task.id}
-                        mentorName={task.creator_name}
-                      />
+                    {/* Smart Reminder Buttons for Coordinators & Mentors on Active tasks */}
+                    {isCoordinator && activeTab !== 'COMPLETED' && assignId && (
+                      <>
+                        {isNotSubmittedYet && (
+                          <SendReminderButton
+                            assignmentId={assignId}
+                            targetRole="TROOPER"
+                            assigneeName={task.assigned_name}
+                          />
+                        )}
+                        {(isNotSubmittedYet || isSubmittedForReview) && (
+                          <SendReminderButton
+                            assignmentId={assignId}
+                            targetRole="MENTOR"
+                            mentorName={task.creator_name}
+                          />
+                        )}
+                      </>
                     )}
                   </div>
 

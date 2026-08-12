@@ -1321,3 +1321,81 @@ export async function sendReviewReminderToMentor(assignmentId: string, customMes
     message: `Reminder berhasil dikirim ke Mentor ${assign.creator_name ? `(${assign.creator_name})` : ''}!`,
   };
 }
+
+/**
+ * Sends a push notification and in-app reminder to the assigned Trooper/Participant
+ * reminding them to complete & submit their active task assignment.
+ */
+export async function sendSubmissionReminderToTrooper(
+  assignmentId: string,
+  customMessage?: string
+) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrCoordOrMentor =
+    ctx.userType === 'STAFF' ||
+    ctx.userType === 'EXTERNAL' ||
+    (ctx.userType as string) === 'CREATOR' ||
+    ctx.can('MANAGE') ||
+    ctx.roles.includes('COORDINATOR') ||
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.roles.includes('MENTOR');
+
+  if (!isStaffOrCoordOrMentor) {
+    return { success: false, error: 'Hanya Koordinator/Admin atau Mentor yang dapat mengirim notifikasi reminder.' };
+  }
+
+  const assign = (await db
+    .prepare(
+      `
+      SELECT ta.id, ta.task_id, ta.user_id, ta.status, t.title AS task_title,
+             t.workspace_id, u_assignee.name AS assignee_name, u_creator.name AS creator_name
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN users u_assignee ON ta.user_id = u_assignee.id
+      LEFT JOIN users u_creator ON t.created_by = u_creator.id
+      WHERE ta.id = ?
+    `
+    )
+    .bind(assignmentId)
+    .first()) as any;
+
+  if (!assign) return { success: false, error: 'Penugasan tidak ditemukan.' };
+
+  const targetTrooperId = assign.user_id;
+  if (!targetTrooperId) {
+    return { success: false, error: 'Assignee / Trooper tugas ini belum ditentukan.' };
+  }
+
+  const sender = (await db
+    .prepare('SELECT name FROM users WHERE id = ?')
+    .bind(session.userId)
+    .first()) as { name: string } | null;
+
+  const senderName = sender?.name || 'Tim Evaluator';
+
+  await sendPushNotificationToUser(targetTrooperId, 'TASK', {
+    title: `⏰ Reminder Pengerjaan Tugas: ${assign.task_title}`,
+    body: `${senderName} mengingatkan Anda untuk segera menyelesaikan & mengunggah hasil karya.${
+      customMessage ? ` Catatan: ${customMessage}` : ''
+    }`,
+    url: assign.workspace_id ? `/dashboard/workspace/${assign.workspace_id}` : '/dashboard',
+  });
+
+  await logWorkflowEvent({
+    entityType: 'task_assignment',
+    entityId: assignmentId,
+    fromStatus: assign.status,
+    toStatus: assign.status,
+    triggeredBy: session.userId,
+    note: `${senderName} mengirimkan reminder pengerjaan ke Peserta (${assign.assignee_name || 'Trooper'})`,
+  });
+
+  return {
+    success: true,
+    message: `Reminder pengerjaan berhasil dikirim ke Peserta ${assign.assignee_name ? `(${assign.assignee_name})` : ''}!`,
+  };
+}
