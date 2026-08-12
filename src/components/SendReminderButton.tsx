@@ -1,14 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { sendReviewReminderToMentor, sendSubmissionReminderToTrooper, sendTaskSmartReminder } from '@/modules/tasks/actions';
+import {
+  sendReviewReminderToMentor,
+  sendSubmissionReminderToTrooper,
+  sendReviewReminderToCoordinator,
+  sendTaskSmartReminder,
+} from '@/modules/tasks/actions';
 import { useUI } from '@/components/ui/UIProvider';
 
 interface SendReminderButtonProps {
   assignmentId: string;
-  targetRole?: 'MENTOR' | 'TROOPER';
+  targetRole?: 'MENTOR' | 'TROOPER' | 'COORDINATOR';
   mentorName?: string | null;
   assigneeName?: string | null;
+  coordinatorName?: string | null;
   className?: string;
 }
 
@@ -17,6 +23,7 @@ export default function SendReminderButton({
   targetRole = 'MENTOR',
   mentorName,
   assigneeName,
+  coordinatorName,
   className = '',
 }: SendReminderButtonProps) {
   const [loading, setLoading] = useState(false);
@@ -24,7 +31,13 @@ export default function SendReminderButton({
   const { toast } = useUI();
 
   const isTrooperTarget = targetRole === 'TROOPER';
-  const targetName = isTrooperTarget ? assigneeName || 'Peserta' : mentorName || 'Mentor';
+  const isCoordTarget = targetRole === 'COORDINATOR';
+
+  const targetName = isTrooperTarget
+    ? assigneeName || 'Peserta'
+    : isCoordTarget
+    ? coordinatorName || 'Koordinator'
+    : mentorName || 'Mentor';
 
   const handleSendReminder = async () => {
     if (loading || sent) return;
@@ -32,6 +45,8 @@ export default function SendReminderButton({
     try {
       const res = isTrooperTarget
         ? await sendSubmissionReminderToTrooper(assignmentId)
+        : isCoordTarget
+        ? await sendReviewReminderToCoordinator(assignmentId)
         : await sendReviewReminderToMentor(assignmentId);
 
       if (res.success) {
@@ -57,11 +72,15 @@ export default function SendReminderButton({
           ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
           : isTrooperTarget
           ? 'bg-indigo-500/10 text-indigo-700 hover:bg-indigo-500/20 border-indigo-500/20 dark:text-indigo-300 dark:hover:bg-indigo-500/30'
+          : isCoordTarget
+          ? 'bg-purple-500/10 text-purple-700 hover:bg-purple-500/20 border-purple-500/20 dark:text-purple-300 dark:hover:bg-purple-500/30'
           : 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border-amber-500/20 dark:text-amber-300 dark:hover:bg-amber-500/30'
       } ${className}`}
       title={
         isTrooperTarget
           ? `Kirim reminder pengerjaan ke Peserta: ${targetName}`
+          : isCoordTarget
+          ? `Kirim reminder QC Review ke Koordinator`
           : `Kirim reminder notifikasi review ke Mentor: ${targetName}`
       }
     >
@@ -73,6 +92,8 @@ export default function SendReminderButton({
           ? 'Reminder Terkirim'
           : isTrooperTarget
           ? `Ingatkan Peserta (${targetName})`
+          : isCoordTarget
+          ? `Ingatkan Coordinator QC`
           : `Ingatkan Mentor (${targetName})`}
       </span>
     </button>

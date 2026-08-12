@@ -1323,6 +1323,77 @@ export async function sendReviewReminderToMentor(assignmentId: string, customMes
 }
 
 /**
+ * Sends a push notification and in-app reminder to the Coordinator/QC
+ * reminding them to complete Stage 2 QC review.
+ */
+export async function sendReviewReminderToCoordinator(
+  assignmentId: string,
+  customMessage?: string
+) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+  const assign = (await db
+    .prepare(
+      `
+      SELECT ta.id, ta.status, t.title AS task_title, t.workspace_id,
+             u_assignee.name AS assignee_name, ws.ojt_coordinator_id
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      LEFT JOIN users u_assignee ON ta.user_id = u_assignee.id
+      WHERE ta.id = ?
+    `
+    )
+    .bind(assignmentId)
+    .first()) as any;
+
+  if (!assign) return { success: false, error: 'Penugasan tidak ditemukan.' };
+
+  let targetCoordId = assign.ojt_coordinator_id;
+  if (!targetCoordId) {
+    const staffRow = (await db
+      .prepare("SELECT id FROM users WHERE user_type = 'STAFF' AND status = 'ACTIVE' LIMIT 1")
+      .first()) as { id: string } | null;
+    targetCoordId = staffRow?.id;
+  }
+
+  if (!targetCoordId) {
+    return { success: false, error: 'Koordinator QC tidak ditemukan.' };
+  }
+
+  const sender = (await db
+    .prepare('SELECT name FROM users WHERE id = ?')
+    .bind(session.userId)
+    .first()) as { name: string } | null;
+
+  const senderName = sender?.name || 'Mentor';
+
+  await sendPushNotificationToUser(targetCoordId, 'TASK', {
+    title: `🔔 Reminder QC Review: ${assign.task_title}`,
+    body: `${senderName} mengingatkan Anda untuk melanjut QC Review submission dari ${assign.assignee_name || 'Trooper'}.${
+      customMessage ? ` Catatan: ${customMessage}` : ''
+    }`,
+    url: assign.workspace_id ? `/dashboard/workspace/${assign.workspace_id}` : '/dashboard/review',
+  });
+
+  await logWorkflowEvent({
+    entityType: 'task_assignment',
+    entityId: assignmentId,
+    fromStatus: assign.status,
+    toStatus: assign.status,
+    triggeredBy: session.userId,
+    note: `Mentor (${senderName}) mengirimkan reminder QC Review ke Koordinator`,
+  });
+
+  return {
+    success: true,
+    message: 'Reminder QC Review berhasil dikirim ke Koordinator!',
+  };
+}
+
+/**
  * Sends a push notification and in-app reminder to the assigned Trooper/Participant
  * reminding them to complete & submit their active task assignment.
  */

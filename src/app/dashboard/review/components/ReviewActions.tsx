@@ -23,6 +23,8 @@ export default function ReviewActions({
   isAssessmentMentorStep = false,
   creatorName,
   isStaffOrCoord = false,
+  mentorApproved = 0,
+  coordinatorApproved = 0,
 }: {
   assignmentId: string;
   canRequestRevision: boolean;
@@ -31,6 +33,8 @@ export default function ReviewActions({
   isAssessmentMentorStep?: boolean;
   creatorName?: string | null;
   isStaffOrCoord?: boolean;
+  mentorApproved?: number;
+  coordinatorApproved?: number;
 }) {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'NONE' | 'SPARK_MODAL' | 'REVISION' | 'DECLINE'>('NONE');
@@ -219,10 +223,18 @@ export default function ReviewActions({
             </>
           )}
 
-          {isStaffOrCoord && (
+          {isStaffOrCoord && mentorApproved === 0 && (
             <SendReminderButton
               assignmentId={assignmentId}
+              targetRole="MENTOR"
               mentorName={creatorName}
+              className="py-2.5"
+            />
+          )}
+          {!isStaffOrCoord && mentorApproved === 1 && coordinatorApproved === 0 && (
+            <SendReminderButton
+              assignmentId={assignmentId}
+              targetRole="COORDINATOR"
               className="py-2.5"
             />
           )}

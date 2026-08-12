@@ -225,6 +225,8 @@ export default async function ReviewPage() {
                 isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.task_created_by === session.userId && (r as any).mentor_approved === 0}
                 creatorName={r.creator_name}
                 isStaffOrCoord={isCoordinator}
+                mentorApproved={(r as any).mentor_approved ?? 0}
+                coordinatorApproved={(r as any).coordinator_approved ?? 0}
               />
             </div>
           ))}
