@@ -90,7 +90,7 @@ function formatNaturalTimestamp(timestampSec: number): string {
     return `Kemarin • ${timeStr} WIB`;
   }
 
-  return format(date, 'd MMM yyyy • HH.mm WIB', { locale: localeID });
+  return format(date, "d MMM yyyy • HH.mm 'WIB'", { locale: localeID });
 }
 
 export function WorkspaceChatRoom({

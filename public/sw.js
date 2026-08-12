@@ -8,8 +8,8 @@ self.addEventListener('push', (event) => {
     const title = data.title || 'KIAN HQ Notifikasi';
     const options = {
       body: data.body || '',
-      icon: data.icon || '/favicon.ico',
-      badge: data.badge || '/favicon.ico',
+      icon: data.icon || '/kian.ico',
+      badge: data.badge || '/kian.ico',
       data: {
         url: data.url || '/dashboard',
         category: data.category || 'GENERAL',

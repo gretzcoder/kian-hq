@@ -63,8 +63,8 @@ export async function sendWebPushNotification(
   const payloadString = JSON.stringify({
     title: payload.title,
     body: payload.body,
-    icon: payload.icon || '/favicon.ico',
-    badge: payload.badge || '/favicon.ico',
+    icon: payload.icon || '/kian.ico',
+    badge: payload.badge || '/kian.ico',
     url: payload.url || '/dashboard',
     category: payload.category || 'GENERAL',
     tag: payload.tag || undefined,
