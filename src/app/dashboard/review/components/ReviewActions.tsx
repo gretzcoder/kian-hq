@@ -25,6 +25,7 @@ export default function ReviewActions({
   isStaffOrCoord = false,
   mentorApproved = 0,
   coordinatorApproved = 0,
+  isTaskMentor = false,
 }: {
   assignmentId: string;
   canRequestRevision: boolean;
@@ -35,6 +36,7 @@ export default function ReviewActions({
   isStaffOrCoord?: boolean;
   mentorApproved?: number;
   coordinatorApproved?: number;
+  isTaskMentor?: boolean;
 }) {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'NONE' | 'SPARK_MODAL' | 'REVISION' | 'DECLINE'>('NONE');
@@ -191,19 +193,91 @@ export default function ReviewActions({
           </div>
         ) : (
         <div className="flex gap-2 flex-wrap items-center">
-          {isStaffOrCoord && mentorApproved === 0 ? (
-            <SendReminderButton
-              assignmentId={assignmentId}
-              targetRole="MENTOR"
-              mentorName={creatorName}
-              className="py-2.5 w-full justify-center"
-            />
-          ) : !isStaffOrCoord && mentorApproved === 1 && coordinatorApproved === 0 ? (
-            <SendReminderButton
-              assignmentId={assignmentId}
-              targetRole="COORDINATOR"
-              className="py-2.5 w-full justify-center"
-            />
+          {mentorApproved === 0 ? (
+            isStaffOrCoord && !isTaskMentor ? (
+              <SendReminderButton
+                assignmentId={assignmentId}
+                targetRole="MENTOR"
+                mentorName={creatorName}
+                className="py-2.5 w-full justify-center"
+              />
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    if (canAwardBadge) {
+                      setMode('SPARK_MODAL');
+                    } else {
+                      handleQuickApprove();
+                    }
+                  }}
+                  disabled={loading}
+                  className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px]"
+                >
+                  <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ Approve QC'}</span>
+                </button>
+                {canRequestRevision && (
+                  <>
+                    <button
+                      onClick={() => setMode('REVISION')}
+                      disabled={loading}
+                      className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[120px]"
+                    >
+                      Request Revision
+                    </button>
+                    <button
+                      onClick={() => setMode('DECLINE')}
+                      disabled={loading}
+                      className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[80px]"
+                    >
+                      Decline
+                    </button>
+                  </>
+                )}
+              </>
+            )
+          ) : mentorApproved === 1 && coordinatorApproved === 0 ? (
+            isStaffOrCoord ? (
+              <>
+                <button
+                  onClick={() => {
+                    if (canAwardBadge) {
+                      setMode('SPARK_MODAL');
+                    } else {
+                      handleQuickApprove();
+                    }
+                  }}
+                  disabled={loading}
+                  className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px]"
+                >
+                  <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ Approve QC'}</span>
+                </button>
+                {canRequestRevision && (
+                  <>
+                    <button
+                      onClick={() => setMode('REVISION')}
+                      disabled={loading}
+                      className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[120px]"
+                    >
+                      Request Revision
+                    </button>
+                    <button
+                      onClick={() => setMode('DECLINE')}
+                      disabled={loading}
+                      className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[80px]"
+                    >
+                      Decline
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              <SendReminderButton
+                assignmentId={assignmentId}
+                targetRole="COORDINATOR"
+                className="py-2.5 w-full justify-center"
+              />
+            )
           ) : (
             <>
               <button

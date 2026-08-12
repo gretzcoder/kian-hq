@@ -151,13 +151,16 @@ function groupTasksByParent(rows: PersonalTaskRow[]): GroupedTask[] {
 function TaskCardItem({
   parentTask,
   isCoordinator,
+  canReview = false,
   activeTab,
 }: {
   parentTask: GroupedTask;
   isCoordinator: boolean;
+  canReview?: boolean;
   activeTab: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(activeTab === 'REVIEW');
+  const isTaskMentor = !isCoordinator || canReview || activeTab === 'MENTOR';
 
   const sortedAssignments = sortAssignments(parentTask.assignments);
   const totalSteps = parentTask.assignments.length;
@@ -270,7 +273,7 @@ function TaskCardItem({
             </span>
           </button>
 
-          {isCoordinator && activeTab !== 'COMPLETED' && (
+          {isCoordinator && activeTab !== 'COMPLETED' && (unsubmittedAssignments.length > 0 || (waitingReviewSteps.length > 0 && !isTaskMentor)) && (
             <TaskSmartReminderButton
               taskId={parentTask.id}
               unsubmittedCount={unsubmittedAssignments.length}
@@ -348,7 +351,7 @@ function TaskCardItem({
                   )}
 
                   {/* Inline QC Review Actions for WAITING_REVIEW items */}
-                  {isSubmittedForReview && sub.assignment_id && isCoordinator && (
+                  {isSubmittedForReview && sub.assignment_id && (isCoordinator || canReview) && (
                     <div className="space-y-2 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60">
                       <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
                         ⚡ Quick Review / Persetujuan QC
@@ -358,9 +361,10 @@ function TaskCardItem({
                         canRequestRevision={true}
                         taskType={sub.task_type}
                         creatorName={sub.creator_name}
-                        isStaffOrCoord={true}
+                        isStaffOrCoord={isCoordinator}
                         mentorApproved={sub.mentor_approved ?? 0}
                         coordinatorApproved={sub.coordinator_approved ?? 0}
+                        isTaskMentor={isTaskMentor}
                       />
                     </div>
                   )}
@@ -543,6 +547,7 @@ export default function DashboardPersonalWorkspace({
               key={`${activeTab}-${parentTask.id}-${pIdx}`}
               parentTask={parentTask}
               isCoordinator={isCoordinator}
+              canReview={canReview}
               activeTab={activeTab}
             />
           ))}
