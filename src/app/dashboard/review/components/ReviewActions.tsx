@@ -58,6 +58,7 @@ export default function ReviewActions({
       const res = await approveAssignment(assignmentId);
       if (res.success) {
         setDone(true);
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kian_notif_refresh'));
         toast('Persetujuan QC berhasil disimpan!', 'success');
       } else {
         const msg = res.error ?? 'Failed to approve';
@@ -84,6 +85,7 @@ export default function ReviewActions({
         : await approveAssignment(assignmentId, sparks, noteText.trim());
       if (res.success) {
         setDone(true);
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kian_notif_refresh'));
         toast(`Persetujuan disimpan dengan ${sparks} ✨ Creative Sparks!`, 'success');
       } else {
         const msg = res.error ?? 'Failed to approve';
@@ -119,6 +121,7 @@ export default function ReviewActions({
 
       if (res.success) {
         setDone(true);
+        if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kian_notif_refresh'));
         toast(
           mode === 'REVISION'
             ? 'Permintaan revisi berhasil dikirim!'

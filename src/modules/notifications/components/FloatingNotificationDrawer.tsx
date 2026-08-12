@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { fetchUserNotifications, fetchReadNotificationIds, markNotificationsAsRead, NotificationFeedItem } from '../notificationActions';
 
 const READ_NOTIFS_STORAGE_KEY = 'kian_read_notification_ids';
+const DISMISSED_NOTIFS_STORAGE_KEY = 'kian_dismissed_notification_ids';
 
 function formatRelativeTime(timestampSec: number): string {
   if (!timestampSec || timestampSec <= 0) return 'Baru saja';
@@ -34,6 +35,7 @@ export default function FloatingNotificationDrawer({
   const [mounted, setMounted] = useState(false);
   const [items, setItems] = useState<NotificationFeedItem[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<'ALL' | 'WORKSPACE' | 'REVIEW' | 'SPARKS'>('ALL');
   const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -42,20 +44,22 @@ export default function FloatingNotificationDrawer({
     setMounted(true);
   }, []);
 
-  // Load saved read notification IDs from localStorage & DB
+  // Load saved read & dismissed notification IDs from localStorage & DB
   useEffect(() => {
-    let localSet = new Set<string>();
     try {
-      const saved = localStorage.getItem(READ_NOTIFS_STORAGE_KEY);
-      if (saved) {
-        localSet = new Set(JSON.parse(saved));
-        setReadIds(localSet);
+      const savedRead = localStorage.getItem(READ_NOTIFS_STORAGE_KEY);
+      if (savedRead) {
+        setReadIds(new Set(JSON.parse(savedRead)));
+      }
+      const savedDismissed = localStorage.getItem(DISMISSED_NOTIFS_STORAGE_KEY);
+      if (savedDismissed) {
+        setDismissedIds(new Set(JSON.parse(savedDismissed)));
       }
     } catch {
       // ignore
     }
 
-    // Sync from DB
+    // Sync read IDs from DB
     fetchReadNotificationIds().then((dbIds) => {
       if (dbIds && dbIds.length > 0) {
         setReadIds((prev) => {
@@ -100,6 +104,35 @@ export default function FloatingNotificationDrawer({
     });
     markNotificationsAsRead(allIds).catch(() => {});
   }, [items]);
+
+  const handleDismissItem = useCallback((e: React.MouseEvent, notifId: string) => {
+    e.stopPropagation();
+    setDismissedIds((prev) => {
+      const updated = new Set(prev);
+      updated.add(notifId);
+      try {
+        localStorage.setItem(DISMISSED_NOTIFS_STORAGE_KEY, JSON.stringify(Array.from(updated)));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+    markNotificationsAsRead([notifId]).catch(() => {});
+  }, []);
+
+  const handleClearRead = useCallback(() => {
+    const readItemIds = items.filter((item) => readIds.has(item.id)).map((item) => item.id);
+    setDismissedIds((prev) => {
+      const updated = new Set(prev);
+      readItemIds.forEach((id) => updated.add(id));
+      try {
+        localStorage.setItem(DISMISSED_NOTIFS_STORAGE_KEY, JSON.stringify(Array.from(updated)));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+  }, [items, readIds]);
 
   // Load Notification Feed
   const loadNotifications = useCallback(() => {
@@ -148,12 +181,13 @@ export default function FloatingNotificationDrawer({
     };
   }, [loadNotifications]);
 
-  // Unread Items Calculation
-  const unreadItems = items.filter((item) => !readIds.has(item.id));
+  // Unread Items Calculation (ignoring dismissed)
+  const activeItems = items.filter((item) => !dismissedIds.has(item.id));
+  const unreadItems = activeItems.filter((item) => !readIds.has(item.id));
   const unreadCount = unreadItems.length;
 
   // Filtered Display List
-  const displayItems = items.filter((item) => {
+  const displayItems = activeItems.filter((item) => {
     if (filter === 'ALL') return true;
     if (filter === 'WORKSPACE') return item.category === 'WORKSPACE';
     if (filter === 'REVIEW') return item.category === 'REVIEW';
@@ -238,14 +272,24 @@ export default function FloatingNotificationDrawer({
                 <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">
                   Unread: <span className="text-purple-600 font-mono font-bold">{unreadCount}</span>
                 </span>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllAsReadLocally}
-                    className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline"
-                  >
-                    ✓ Tandai Semua Dibaca
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllAsReadLocally}
+                      className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
+                    >
+                      ✓ Tandai Semua Dibaca
+                    </button>
+                  )}
+                  {items.some((item) => readIds.has(item.id) && !dismissedIds.has(item.id)) && (
+                    <button
+                      onClick={handleClearRead}
+                      className="text-[10px] font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:underline cursor-pointer"
+                    >
+                      🗑️ Bersihkan Dibaca
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -258,7 +302,7 @@ export default function FloatingNotificationDrawer({
                   <button
                     key={f.id}
                     onClick={() => setFilter(f.id as any)}
-                    className={`text-[10px] font-bold px-2.5 py-1 rounded-xl border transition-all shrink-0 ${
+                    className={`text-[10px] font-bold px-2.5 py-1 rounded-xl border transition-all shrink-0 cursor-pointer ${
                       filter === f.id
                         ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
                         : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-purple-300'
@@ -278,17 +322,17 @@ export default function FloatingNotificationDrawer({
                 </div>
               ) : displayItems.length === 0 ? (
                 <div className="text-center py-10 text-xs text-zinc-400 italic">
-                  Tidak ada notifikasi pada kategori ini.
+                  Tidak ada notifikasi aktif pada kategori ini.
                 </div>
               ) : (
                 displayItems.map((item) => {
                   const isUnread = !readIds.has(item.id);
 
                   return (
-                    <button
+                    <div
                       key={item.id}
                       onClick={() => handleItemClick(item)}
-                      className={`w-full text-left p-3 rounded-2xl border transition-all duration-200 flex items-start gap-3 relative group hover:scale-[1.01] ${item.color} ${
+                      className={`w-full text-left p-3 rounded-2xl border transition-all duration-200 flex items-start gap-3 relative group hover:scale-[1.01] cursor-pointer ${item.color} ${
                         isUnread ? 'ring-1 ring-purple-500/40 shadow-sm' : 'opacity-85 hover:opacity-100'
                       }`}
                     >
@@ -303,9 +347,19 @@ export default function FloatingNotificationDrawer({
                           <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400">
                             {item.typeLabel}
                           </span>
-                          <span className="text-[9px] text-zinc-400 font-mono">
-                            {formatRelativeTime(item.createdAt)}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] text-zinc-400 font-mono">
+                              {formatRelativeTime(item.createdAt)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => handleDismissItem(e, item.id)}
+                              className="text-zinc-400 hover:text-red-500 text-[11px] font-bold p-0.5 rounded-full hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition-all opacity-0 group-hover:opacity-100"
+                              title="Hapus / Sembunyikan Notifikasi Ini"
+                            >
+                              ✕
+                            </button>
+                          </div>
                         </div>
 
                         <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-snug group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
@@ -330,7 +384,7 @@ export default function FloatingNotificationDrawer({
                       {isUnread && (
                         <span className="w-2 h-2 rounded-full bg-purple-600 animate-pulse shrink-0 mt-1" />
                       )}
-                    </button>
+                    </div>
                   );
                 })
               )}
