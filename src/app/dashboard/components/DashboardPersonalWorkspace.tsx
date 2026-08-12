@@ -595,22 +595,28 @@ export default function DashboardPersonalWorkspace({
   const reviewGrouped = groupTasksByParent(reviewTasks);
   const completedGrouped = groupTasksByParent(completedTasks);
 
-  // Filter 1: Perlu Revisi (For assigned troopers / users who must perform revision)
+  // Combine all raw assignment rows
   const allRawTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks];
+
+  // Filter 1: Perlu Revisi (STRICTLY for the user assigned to perform/resubmit the revision: row.user_id === currentUserId)
+  // Account classification (Staff/Mentor/OJT) does NOT override step assignee (row.user_id).
   const myRevisionTasks = allRawTasks.filter((t) => {
     if (t.status !== 'REVISION_REQUESTED') return false;
-    if (userType === 'OJT') return true;
-    if (currentUserId && t.user_id) return t.user_id === currentUserId;
-    return false;
+    if (currentUserId && t.user_id) {
+      return t.user_id === currentUserId;
+    }
+    // Fallback if user_id is missing on row: if in personalTasks for OJT trooper
+    return userType === 'OJT' && personalTasks.some((pt) => pt.id === t.id);
   });
   const myRevisionGrouped = groupTasksByParent(myRevisionTasks);
 
-  // Filter 2: Troopers Revisi (For Mentors & Coordinators to track troopers' revisions)
+  // Filter 2: Troopers Revisi (For Mentors & Coordinators to track troopers' requested revisions: row.user_id !== currentUserId)
   const trooperRevisionTasks = allRawTasks.filter((t) => {
     if (t.status !== 'REVISION_REQUESTED') return false;
-    if (userType === 'OJT') return false;
-    if (currentUserId && t.user_id) return t.user_id !== currentUserId;
-    return true;
+    if (currentUserId && t.user_id) {
+      return t.user_id !== currentUserId;
+    }
+    return userType !== 'OJT';
   });
   const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
 
