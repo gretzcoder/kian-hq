@@ -565,38 +565,47 @@ function MentorSubmissionCard({
             )
           )}
 
-              {/* Emoji Reactions Bar */}
-              <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
-                <span className="text-[10px] font-black uppercase text-zinc-400 mr-1">Feedback:</span>
-                {reactions.map((r) => (
-                  <button
-                    key={r.emoji}
-                    type="button"
-                    onClick={() => handleReaction(r.emoji)}
-                    disabled={pending}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
-                      r.user_reacted
-                        ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold'
-                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                    }`}
-                  >
-                    <span>{r.emoji}</span>
-                    <span className="text-[10px] font-bold">{r.count}</span>
-                  </button>
-                ))}
+          {/* Revision Note Viewer for Evaluators / Mentor / Coordinator / Admin */}
+          {assignment.revision_note && (
+            <CollapsibleNoteViewer
+              content={assignment.revision_note}
+              badgeLabel={assignment.status === 'REVISION_REQUESTED' ? "⚠️ Catatan Revisi (Menunggu Intern)" : "💬 Catatan Revisi Evaluator"}
+              type="REVISION"
+            />
+          )}
 
-                {DEFAULT_EMOJIS.filter((e) => !reactions.some((r) => r.emoji === e)).map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => handleReaction(emoji)}
-                    disabled={pending}
-                    className="px-2 py-0.5 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-white dark:hover:bg-zinc-900 transition-all opacity-60 hover:opacity-100"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
+          {/* Emoji Reactions Bar */}
+          <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
+            <span className="text-[10px] font-black uppercase text-zinc-400 mr-1">Feedback:</span>
+            {reactions.map((r) => (
+              <button
+                key={r.emoji}
+                type="button"
+                onClick={() => handleReaction(r.emoji)}
+                disabled={pending}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
+                  r.user_reacted
+                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold'
+                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                <span>{r.emoji}</span>
+                <span className="text-[10px] font-bold">{r.count}</span>
+              </button>
+            ))}
+
+            {DEFAULT_EMOJIS.filter((e) => !reactions.some((r) => r.emoji === e)).map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => handleReaction(emoji)}
+                disabled={pending}
+                className="px-2 py-0.5 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-800 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-white dark:hover:bg-zinc-900 transition-all opacity-60 hover:opacity-100"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
 
           {error && <p className="text-xs text-red-500">{error}</p>}
 
@@ -628,8 +637,20 @@ function MentorSubmissionCard({
               </div>
             );
 
+            // Block actions when revision has been requested and is pending intern follow-up
+            if (assignment.status === 'REVISION_REQUESTED') {
+              return (
+                <div className="space-y-2">
+                  {badges}
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center gap-2">
+                    <span>⌛ Status: Revisi Telah Diminta. Menunggu intern mengirimkan hasil revisi terbaru.</span>
+                  </div>
+                </div>
+              );
+            }
+
             // Step 1: Creator mentor sees ACC Mentor + Request Revisi
-            if (isTaskCreator && !isMentorApproved) {
+            if (isTaskCreator && !isMentorApproved && assignment.status === 'WAITING_REVIEW') {
               return (
                 <div className="space-y-2">
                   {badges}
