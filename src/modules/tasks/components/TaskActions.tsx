@@ -121,6 +121,7 @@ interface TaskAssignment {
   status: string;
   result_url: string | null;
   revision_note: string | null;
+  appreciation_note?: string | null;
   user_id: string;
   user_name: string | null;
   sparks?: number;
@@ -573,9 +574,20 @@ export default function TaskActions({
 
                             {/* Revision Note */}
                             {assign.revision_note && ['REVISION_REQUESTED', 'DECLINED'].includes(assign.status) && (
-                              <div className="bg-red-500/5 border border-red-500/10 rounded-xl p-3 text-[10px] text-red-700 dark:text-red-400 space-y-1">
-                                <span className="font-bold block">📝 Catatan Revisi:</span>
-                                <p>{assign.revision_note}</p>
+                              <div className="bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30 border border-red-200/80 dark:border-red-800/60 rounded-2xl p-3.5 space-y-1.5 shadow-2xs">
+                                <span className="font-black text-[10px] text-red-700 dark:text-red-300 uppercase tracking-widest block flex items-center gap-1">
+                                  <span>💬</span> Catatan Revisi Evaluator
+                                </span>
+                                {assign.revision_note.includes('<') ? (
+                                  <div
+                                    className="prose dark:prose-invert prose-xs max-w-none text-xs text-red-900 dark:text-red-200 font-medium leading-relaxed"
+                                    dangerouslySetInnerHTML={{ __html: assign.revision_note }}
+                                  />
+                                ) : (
+                                  <p className="text-xs text-red-800 dark:text-red-300 font-medium italic leading-relaxed whitespace-pre-wrap">
+                                    "{assign.revision_note}"
+                                  </p>
+                                )}
                               </div>
                             )}
 

@@ -16,9 +16,11 @@ export function cleanAppreciationNote(rawNote?: string | null): string | null {
   }
 
   // Look for "Note: " or "Catatan: " pattern inside workflow notes
-  const match = note.match(/(?:Note|Catatan):\s*([^\]\)\n\r]+)/i);
+  const match = note.match(/(?:Note|Catatan):\s*([\s\S]+)/i);
   if (match && match[1] && match[1].trim()) {
     note = match[1].trim();
+  } else if (note.startsWith('Approved by:') || note.startsWith('Koordinator menyetujui')) {
+    return null;
   }
 
   // Trim quotation marks if present

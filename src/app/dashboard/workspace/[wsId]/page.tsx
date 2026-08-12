@@ -208,7 +208,10 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       db
         .prepare(`
             SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
-                   ta.status, ta.result_url, ta.revision_note, ta.submitted_at,
+                   ta.status, ta.result_url,
+                   COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE (entity_id = ta.id OR entity_id = ta.task_id) AND (to_status = 'REVISION_REQUESTED' OR to_status = 'REVISION') AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
+                   COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
+                   ta.submitted_at,
                    ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
                    ta.sparks, ta.deadline, u.name as user_name
             FROM task_assignments ta
