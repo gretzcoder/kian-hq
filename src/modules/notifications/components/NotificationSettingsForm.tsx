@@ -6,7 +6,11 @@ import {
   subscribeUserToPush,
   unsubscribeUserFromPush,
   PushSubscriptionState,
+  isIOSChrome,
+  isIOS,
+  isStandalone,
 } from '../pushSubscription';
+import IOSGuideModal from './IOSGuideModal';
 import {
   savePushSubscription,
   deletePushSubscription,
@@ -34,17 +38,33 @@ export default function NotificationSettingsForm({ initialSettings }: Notificati
   const [pushLoading, setPushLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [isChromeIOS, setIsChromeIOS] = useState(false);
+
   // Load browser push state on mount
   useEffect(() => {
     async function loadPushState() {
       const state = await getPushSubscriptionState();
       setPushState(state);
+      setIsChromeIOS(isIOSChrome());
     }
     loadPushState();
   }, []);
 
   // Handle Push Notification Subscription Toggle
   const handleTogglePushDevice = async () => {
+    if (isIOSChrome()) {
+      setIsChromeIOS(true);
+      setGuideModalOpen(true);
+      return;
+    }
+
+    if (isIOS() && !isStandalone()) {
+      setIsChromeIOS(false);
+      setGuideModalOpen(true);
+      return;
+    }
+
     setPushLoading(true);
     setMessage(null);
 
@@ -77,7 +97,15 @@ export default function NotificationSettingsForm({ initialSettings }: Notificati
           setPushState(updatedState);
           setMessage({ type: 'success', text: '🔔 Notifikasi Push aktif! Anda akan menerima notifikasi walau website ditutup.' });
         } else {
-          setMessage({ type: 'error', text: res.error || 'Gagal mengaktifkan notifikasi push pada perangkat.' });
+          if (res.error === 'IOS_CHROME_RESTRICTION') {
+            setIsChromeIOS(true);
+            setGuideModalOpen(true);
+          } else if (res.error === 'IOS_SAFARI_PWA_REQUIRED') {
+            setIsChromeIOS(false);
+            setGuideModalOpen(true);
+          } else {
+            setMessage({ type: 'error', text: res.error || 'Gagal mengaktifkan notifikasi push pada perangkat.' });
+          }
         }
       }
     } catch (err: any) {
@@ -331,6 +359,12 @@ export default function NotificationSettingsForm({ initialSettings }: Notificati
           </div>
         </div>
       </div>
+
+      <IOSGuideModal
+        isOpen={guideModalOpen}
+        onClose={() => setGuideModalOpen(false)}
+        isChrome={isChromeIOS}
+      />
     </div>
   );
 }

@@ -37,6 +37,11 @@ export function isStandalone(): boolean {
   );
 }
 
+export function isIOSChrome(): boolean {
+  if (typeof window === 'undefined') return false;
+  return isIOS() && /CriOS/i.test(navigator.userAgent);
+}
+
 /**
  * Cross-browser wrapper for Notification.requestPermission
  * Handles both Promise-based and Callback-based implementations on iOS Safari
@@ -155,6 +160,20 @@ export async function subscribeUserToPush(
 ): Promise<{ success: boolean; subscription?: PushSubscription; error?: string }> {
   if (typeof window === 'undefined') {
     return { success: false, error: 'Web Push tidak didukung oleh peramban ini.' };
+  }
+
+  if (isIOSChrome()) {
+    return {
+      success: false,
+      error: 'IOS_CHROME_RESTRICTION',
+    };
+  }
+
+  if (isIOS() && !isStandalone()) {
+    return {
+      success: false,
+      error: 'IOS_SAFARI_PWA_REQUIRED',
+    };
   }
 
   try {
