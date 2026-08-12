@@ -243,7 +243,11 @@ export default async function DashboardPage() {
         ta.sparks,
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
-        ta.submitted_at
+        ta.submitted_at,
+        ta.mentor_approved,
+        ta.coordinator_approved,
+        t.type AS task_type,
+        t.created_by AS task_created_by
       FROM task_assignments ta
       JOIN tasks t         ON ta.task_id = t.id
       JOIN projects p      ON t.project_id = p.id

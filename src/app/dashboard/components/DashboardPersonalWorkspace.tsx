@@ -5,6 +5,7 @@ import Link from 'next/link';
 import SendReminderButton, { TaskSmartReminderButton } from '@/components/SendReminderButton';
 import { cleanAppreciationNote } from '@/lib/noteUtils';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
+import ReviewActions from '@/app/dashboard/review/components/ReviewActions';
 
 export interface PersonalTaskRow {
   id: string; // task_id
@@ -23,6 +24,10 @@ export interface PersonalTaskRow {
   result_url?: string | null;
   submitted_at?: number | null;
   reviewed_at?: number | null;
+  mentor_approved?: number | null;
+  coordinator_approved?: number | null;
+  task_type?: string | null;
+  task_created_by?: string | null;
 }
 
 export interface GroupedTask {
@@ -339,6 +344,24 @@ function TaskCardItem({
                   {/* Submitted Content Link & Live Preview */}
                   {sub.result_url && (
                     <SubmittedLinkPreviewer url={sub.result_url} autoExpand={false} />
+                  )}
+
+                  {/* Inline QC Review Actions for WAITING_REVIEW items */}
+                  {isSubmittedForReview && sub.assignment_id && isCoordinator && (
+                    <div className="space-y-2 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400">
+                        ⚡ Quick Review / Persetujuan QC
+                      </p>
+                      <ReviewActions
+                        assignmentId={sub.assignment_id}
+                        canRequestRevision={true}
+                        taskType={sub.task_type}
+                        creatorName={sub.creator_name}
+                        isStaffOrCoord={true}
+                        mentorApproved={sub.mentor_approved ?? 0}
+                        coordinatorApproved={sub.coordinator_approved ?? 0}
+                      />
+                    </div>
                   )}
 
                   {/* Appreciation Note */}
