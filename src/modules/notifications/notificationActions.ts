@@ -359,6 +359,54 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     console.error('fetchUserNotifications mention query error:', err);
   }
 
+  // 6. Fetch reminder workflow events for this user (where user is target assignee of task_assignment or creator of task)
+  try {
+    const { results: reminderEvents } = await db
+      .prepare(
+        `SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
+                u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
+                t.workspace_id AS wsId, ws.name AS wsName
+         FROM workflow_events we
+         LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+         LEFT JOIN task_assignments ta ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
+         LEFT JOIN tasks t ON (
+           (we.entity_type = 'task_assignment' AND ta.task_id = t.id)
+           OR (we.entity_type = 'task' AND we.entity_id = t.id)
+         )
+         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+         WHERE (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT' OR LOWER(we.note) LIKE '%reminder%')
+           AND (we.triggered_by IS NULL OR we.triggered_by != ?)
+           AND (
+             (we.entity_type = 'task_assignment' AND ta.user_id = ?)
+             OR (we.entity_type = 'task' AND t.created_by = ?)
+             OR (we.entity_type = 'task' AND EXISTS (SELECT 1 FROM task_assignments WHERE task_id = t.id AND user_id = ?))
+           )
+           AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+         ORDER BY we.created_at DESC
+         LIMIT 15`
+      )
+      .bind(session.userId, session.userId, session.userId, session.userId)
+      .all();
+
+    for (const r of reminderEvents as any[]) {
+      const isReviewReminder = (r.note || '').toLowerCase().includes('review') || (r.note || '').toLowerCase().includes('mentor');
+      feedItems.push({
+        id: `notif_rem_${r.id}`,
+        category: isReviewReminder ? 'REVIEW' : 'WORKSPACE',
+        typeLabel: isReviewReminder ? '🔔 Reminder Review' : '⏰ Reminder Pengerjaan',
+        icon: isReviewReminder ? '🔔' : '⏰',
+        title: isReviewReminder ? `Reminder Review: ${r.taskTitle || 'Tugas'}` : `Reminder Pengerjaan: ${r.taskTitle || 'Tugas'}`,
+        subtitle: r.note ? `💬 ${r.note}` : `Dikirim oleh ${r.senderName || 'Evaluator'} • Workspace: ${r.wsName || 'Workspace'}`,
+        targetUrl: r.wsId ? `/dashboard/workspace/${r.wsId}?taskId=${r.taskId}` : '/dashboard',
+        createdAt: Number(r.created_at) || 0,
+        statusBadge: 'REMINDER',
+        color: isReviewReminder ? 'border-amber-500/20 bg-amber-500/5' : 'border-indigo-500/20 bg-indigo-500/5',
+      });
+    }
+  } catch (err) {
+    console.error('fetchUserNotifications reminder query error:', err);
+  }
+
   // Sort all notifications by newest timestamp
   feedItems.sort((a, b) => b.createdAt - a.createdAt);
 
