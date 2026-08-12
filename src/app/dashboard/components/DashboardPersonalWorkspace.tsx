@@ -627,9 +627,12 @@ export default function DashboardPersonalWorkspace({
     | 'ACTIVE'
     | 'MY_REVISION'
     | 'TROOPER_REVISION'
+    | 'MENTOR_REVISION'
     | 'TROOPER'
     | 'MENTOR'
     | 'REVIEW'
+    | 'TASK_PLAN'
+    | 'EXPIRED'
     | 'COMPLETED';
 
   const [activeTab, setActiveTab] = useState<DashboardTab>('ACTIVE');
@@ -645,6 +648,12 @@ export default function DashboardPersonalWorkspace({
   const isMentorUser = userRoles.includes('MENTOR') || userType === 'EXTERNAL' || userType === 'CREATOR';
   const isTrooperUser = userRoles.includes('TROOPERS') || (!isCoordinator && !isMentorUser);
 
+  const isMentorRow = (t: PersonalTaskRow) =>
+    t.workspace_type === 'MENTOR' ||
+    t.task_type === 'MENTOR' ||
+    t.user_type === 'EXTERNAL' ||
+    ['PIC', 'REVIEWER', 'APPROVER', 'HELPER', 'MENTOR'].includes(t.assignment_role || '');
+
   // Group task assignments by parent task
   const activeGrouped = groupTasksByParent(personalTasks);
   const trooperGrouped = groupTasksByParent(trooperTasks);
@@ -655,14 +664,14 @@ export default function DashboardPersonalWorkspace({
   // Combine all raw assignment rows
   const allRawTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks, ...completedTasks];
 
+  const nowUnix = Math.floor(Date.now() / 1000);
+
   // Filter 1: Perlu Revisi (STRICTLY for the user assigned to perform/resubmit the revision: row.user_id === currentUserId)
-  // Account ROLE (COORDINATOR/MENTOR/TROOPERS) does NOT override step assignee (row.user_id).
   const myRevisionTasks = allRawTasks.filter((t) => {
     if (t.status !== 'REVISION_REQUESTED') return false;
     if (currentUserId && t.user_id) {
       return t.user_id === currentUserId;
     }
-    // Fallback if user_id is missing on row: if in personalTasks for Troopers role
     return isTrooperUser && personalTasks.some((pt) => pt.id === t.id);
   });
   const myRevisionGrouped = groupTasksByParent(myRevisionTasks);
@@ -670,6 +679,7 @@ export default function DashboardPersonalWorkspace({
   // Filter 2: Troopers Revisi (For Mentors & Coordinators to track troopers' requested revisions: row.user_id !== currentUserId)
   const trooperRevisionTasks = allRawTasks.filter((t) => {
     if (t.status !== 'REVISION_REQUESTED') return false;
+    if (isMentorRow(t)) return false;
     if (currentUserId && t.user_id) {
       return t.user_id !== currentUserId;
     }
@@ -677,12 +687,37 @@ export default function DashboardPersonalWorkspace({
   });
   const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
 
+  // Filter 3: Mentor Revisi (Revisions requested for tasks assigned to Mentors/PICs)
+  const mentorRevisionTasks = allRawTasks.filter((t) => {
+    if (t.status !== 'REVISION_REQUESTED') return false;
+    return isMentorRow(t);
+  });
+  const mentorRevisionGrouped = groupTasksByParent(mentorRevisionTasks);
+
+  // Filter 4: Task Plan (Dijadwalkan / Draft)
+  const taskPlanTasks = allRawTasks.filter(
+    (t) => (t.start_at && t.start_at > nowUnix) || t.status === 'DRAFT'
+  );
+  const taskPlanGrouped = groupTasksByParent(taskPlanTasks);
+
+  // Filter 5: Expired Task (Deadline passed & not finished)
+  const expiredTasks = allRawTasks.filter(
+    (t) =>
+      t.deadline != null &&
+      t.deadline < nowUnix &&
+      !['APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(t.status)
+  );
+  const expiredGrouped = groupTasksByParent(expiredTasks);
+
   let displayedGroupedTasks = activeGrouped;
   if (activeTab === 'MY_REVISION') displayedGroupedTasks = myRevisionGrouped;
   if (activeTab === 'TROOPER_REVISION') displayedGroupedTasks = trooperRevisionGrouped;
+  if (activeTab === 'MENTOR_REVISION') displayedGroupedTasks = mentorRevisionGrouped;
   if (activeTab === 'TROOPER') displayedGroupedTasks = trooperGrouped;
   if (activeTab === 'MENTOR') displayedGroupedTasks = mentorGrouped;
   if (activeTab === 'REVIEW') displayedGroupedTasks = reviewGrouped;
+  if (activeTab === 'TASK_PLAN') displayedGroupedTasks = taskPlanGrouped;
+  if (activeTab === 'EXPIRED') displayedGroupedTasks = expiredGrouped;
   if (activeTab === 'COMPLETED') displayedGroupedTasks = completedGrouped;
 
   return (
@@ -751,7 +786,27 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 4: Troopers Task */}
+          {/* Tab 4: Mentor Revisi (Untuk Koordinator/Admin memantau revisi tugas mentor/PIC) */}
+          {(isCoordinator || userType === 'STAFF') && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('MENTOR_REVISION')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'MENTOR_REVISION'
+                  ? 'bg-amber-600 text-white shadow-sm shadow-amber-500/20'
+                  : mentorRevisionGrouped.length > 0
+                  ? 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span>🎓 Mentor Revisi</span>
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-[10px] font-mono font-bold">
+                {mentorRevisionGrouped.length} Task
+              </span>
+            </button>
+          )}
+
+          {/* Tab 5: Troopers Task */}
           {(isCoordinator || isMentorUser) && (
             <button
               type="button"
@@ -769,7 +824,7 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 5: Mentor Task */}
+          {/* Tab 6: Mentor Task */}
           {isCoordinator && (
             <button
               type="button"
@@ -787,7 +842,7 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 6: Perlu Di-Review */}
+          {/* Tab 7: Perlu Di-Review */}
           {(isCoordinator || isMentorUser) && (
             <button
               type="button"
@@ -805,7 +860,45 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 7: Selesai & ACC */}
+          {/* Tab 8: Task Plan (Dijadwalkan) */}
+          {(isCoordinator || userType === 'STAFF') && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('TASK_PLAN')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'TASK_PLAN'
+                  ? 'bg-white dark:bg-zinc-800 text-sky-600 dark:text-sky-400 shadow-sm border border-zinc-200/60 dark:border-zinc-700/60'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span>📅 Task Plan (Dijadwalkan)</span>
+              <span className="px-2 py-0.5 rounded-md bg-sky-500/10 text-[10px] font-mono font-bold">
+                {taskPlanGrouped.length} Task
+              </span>
+            </button>
+          )}
+
+          {/* Tab 9: Expired Task */}
+          {(isCoordinator || userType === 'STAFF') && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('EXPIRED')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'EXPIRED'
+                  ? 'bg-red-700 text-white shadow-sm shadow-red-600/20'
+                  : expiredGrouped.length > 0
+                  ? 'text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span>⏰ Expired Task</span>
+              <span className="px-2 py-0.5 rounded-md bg-red-500/20 text-[10px] font-mono font-bold">
+                {expiredGrouped.length} Task
+              </span>
+            </button>
+          )}
+
+          {/* Tab 10: Selesai & ACC */}
           <button
             type="button"
             onClick={() => setActiveTab('COMPLETED')}

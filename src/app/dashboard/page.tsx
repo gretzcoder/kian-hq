@@ -139,7 +139,11 @@ export default async function DashboardPage() {
         u.name AS assigned_name,
         u_creator.name AS creator_name,
         ta.assignment_role,
-        ta.sparks,
+        t.start_at,
+        t.task_type AS task_type,
+        t.created_by AS task_created_by,
+        ws.workspace_type AS workspace_type,
+        u.user_type AS user_type,
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
@@ -155,7 +159,7 @@ export default async function DashboardPage() {
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
-      LIMIT 50
+      LIMIT 500
     `
       )
       .all();
