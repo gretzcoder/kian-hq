@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useTransition } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
-import { fetchUserNotifications, NotificationFeedItem } from '../notificationActions';
+import { fetchUserNotifications, fetchReadNotificationIds, markNotificationsAsRead, NotificationFeedItem } from '../notificationActions';
 
 const READ_NOTIFS_STORAGE_KEY = 'kian_read_notification_ids';
 
@@ -42,19 +42,36 @@ export default function FloatingNotificationDrawer({
     setMounted(true);
   }, []);
 
-  // Load saved read notification IDs from localStorage
+  // Load saved read notification IDs from localStorage & DB
   useEffect(() => {
+    let localSet = new Set<string>();
     try {
       const saved = localStorage.getItem(READ_NOTIFS_STORAGE_KEY);
       if (saved) {
-        setReadIds(new Set(JSON.parse(saved)));
+        localSet = new Set(JSON.parse(saved));
+        setReadIds(localSet);
       }
     } catch {
       // ignore
     }
+
+    // Sync from DB
+    fetchReadNotificationIds().then((dbIds) => {
+      if (dbIds && dbIds.length > 0) {
+        setReadIds((prev) => {
+          const merged = new Set([...Array.from(prev), ...dbIds]);
+          try {
+            localStorage.setItem(READ_NOTIFS_STORAGE_KEY, JSON.stringify(Array.from(merged)));
+          } catch {
+            // ignore
+          }
+          return merged;
+        });
+      }
+    });
   }, []);
 
-  // Save read notification IDs to localStorage
+  // Save read notification IDs to localStorage & DB
   const markAsReadLocally = useCallback((notifId: string) => {
     setReadIds((prev) => {
       const updated = new Set(prev);
@@ -66,12 +83,14 @@ export default function FloatingNotificationDrawer({
       }
       return updated;
     });
+    markNotificationsAsRead([notifId]).catch(() => {});
   }, []);
 
   const markAllAsReadLocally = useCallback(() => {
+    const allIds = items.map((item) => item.id);
     setReadIds((prev) => {
       const updated = new Set(prev);
-      items.forEach((item) => updated.add(item.id));
+      allIds.forEach((id) => updated.add(id));
       try {
         localStorage.setItem(READ_NOTIFS_STORAGE_KEY, JSON.stringify(Array.from(updated)));
       } catch {
@@ -79,6 +98,7 @@ export default function FloatingNotificationDrawer({
       }
       return updated;
     });
+    markNotificationsAsRead(allIds).catch(() => {});
   }, [items]);
 
   // Load Notification Feed
@@ -95,10 +115,37 @@ export default function FloatingNotificationDrawer({
       });
   }, []);
 
+  // Realtime synchronization with Web Push ServiceWorker & Client Events
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 45_000); // refresh every 45s
-    return () => clearInterval(interval);
+
+    // 1. Service Worker Realtime Web Push listener (0ms latency upon push arrival)
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'KIAN_PUSH_RECEIVED') {
+        loadNotifications();
+      }
+    };
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+
+    // 2. Client Event listener
+    const handleCustomRefresh = () => {
+      loadNotifications();
+    };
+    window.addEventListener('kian_notif_refresh', handleCustomRefresh);
+
+    // 3. Fallback polling interval (every 20 seconds)
+    const interval = setInterval(loadNotifications, 20_000);
+
+    return () => {
+      if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+      window.removeEventListener('kian_notif_refresh', handleCustomRefresh);
+      clearInterval(interval);
+    };
   }, [loadNotifications]);
 
   // Unread Items Calculation

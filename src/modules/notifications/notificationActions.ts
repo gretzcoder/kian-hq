@@ -412,3 +412,57 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
 
   return feedItems;
 }
+
+/**
+ * Fetches IDs of notifications marked as read in DB by current user
+ */
+export async function fetchReadNotificationIds(): Promise<string[]> {
+  const session = await getSession();
+  if (!session?.userId) return [];
+
+  const db = await getDB();
+  try {
+    const { results } = await db
+      .prepare('SELECT notification_id FROM user_read_notifications WHERE user_id = ?')
+      .bind(session.userId)
+      .all();
+    return (results as any[]).map((r) => r.notification_id as string);
+  } catch (err) {
+    console.error('fetchReadNotificationIds error:', err);
+    return [];
+  }
+}
+
+/**
+ * Marks one or multiple notification IDs as read in DB for current user
+ */
+export async function markNotificationsAsRead(
+  notificationIds: string[]
+): Promise<{ success: boolean }> {
+  const session = await getSession();
+  if (!session?.userId || !notificationIds || notificationIds.length === 0) {
+    return { success: false };
+  }
+
+  const db = await getDB();
+  const now = Math.floor(Date.now() / 1000);
+
+  try {
+    for (const notifId of notificationIds) {
+      if (!notifId) continue;
+      await db
+        .prepare(
+          `INSERT INTO user_read_notifications (user_id, notification_id, read_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(user_id, notification_id) DO UPDATE SET read_at = excluded.read_at`
+        )
+        .bind(session.userId, notifId, now)
+        .run();
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('markNotificationsAsRead error:', err);
+    return { success: false };
+  }
+}
+

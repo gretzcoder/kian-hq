@@ -9,6 +9,18 @@ export async function ensureSchemaMigrations(db: any) {
   } catch {
     // Column already exists
   }
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS user_read_notifications (
+        user_id TEXT NOT NULL,
+        notification_id TEXT NOT NULL,
+        read_at INTEGER NOT NULL,
+        PRIMARY KEY (user_id, notification_id)
+      )
+    `).run();
+  } catch {
+    // Table creation handled
+  }
   migrationDone = true;
 }
 

@@ -20,6 +20,16 @@ self.addEventListener('push', (event) => {
       vibrate: [100, 50, 100],
     };
 
+    // Broadcast push notification event to active tabs for 0ms realtime UI update
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      windowClients.forEach((client) => {
+        client.postMessage({
+          type: 'KIAN_PUSH_RECEIVED',
+          payload: data,
+        });
+      });
+    });
+
     event.waitUntil(self.registration.showNotification(title, options));
   } catch (err) {
     console.error('[SW] Push parse error:', err);
