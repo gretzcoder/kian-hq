@@ -552,18 +552,18 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
     await db
       .prepare(`
         UPDATE task_assignments
-        SET status = ?, result_url = ?, submitted_at = ?,
-            lead_approved = CASE WHEN ? THEN 1 ELSE lead_approved END,
-            mentor_approved = CASE WHEN ? THEN 1 ELSE mentor_approved END,
-            coordinator_approved = CASE WHEN ? THEN 1 ELSE coordinator_approved END
+        SET status = ?, result_url = ?, submitted_at = ?, revision_note = NULL,
+            lead_approved = CASE WHEN ? THEN 1 ELSE 0 END,
+            mentor_approved = CASE WHEN ? THEN 1 ELSE 0 END,
+            coordinator_approved = CASE WHEN ? THEN 1 ELSE 0 END
         WHERE id = ?
       `)
       .bind(nextStatus, resultUrl.trim(), now, isLeader ? 1 : 0, isMentor ? 1 : 0, isCoordinator ? 1 : 0, assignmentId)
       .run();
 
-    if (task && task.status !== nextStatus) {
+    if (task) {
       await db
-        .prepare('UPDATE tasks SET status = ? WHERE id = ?')
+        .prepare('UPDATE tasks SET status = ?, revision_note = NULL WHERE id = ?')
         .bind(nextStatus, task.id)
         .run();
 
@@ -697,7 +697,7 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
       if (isMentor) newMentorApproved = 1;
       if (isCoordinator) newCoordinatorApproved = 1;
 
-      if (newLeadApproved === 1 && newMentorApproved === 1 && newCoordinatorApproved === 1) {
+      if (newLeadApproved === 1 || newMentorApproved === 1 || newCoordinatorApproved === 1) {
         nextStatus = 'APPROVED';
       } else {
         nextStatus = 'WAITING_REVIEW';
@@ -722,12 +722,12 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
 
     if (sparksValue !== null) {
       await db
-        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, sparks = ? WHERE id = ?')
+        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, sparks = ?, revision_note = NULL WHERE id = ?')
         .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, sparksValue, assignmentId)
         .run();
     } else {
       await db
-        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ? WHERE id = ?')
+        .prepare('UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, revision_note = NULL WHERE id = ?')
         .bind(nextStatus, now, newLeadApproved, newMentorApproved, newCoordinatorApproved, assignmentId)
         .run();
     }
@@ -756,9 +756,9 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
         .bind(task.id)
         .all();
 
-      if (pending.length === 0 && task.status !== 'APPROVED') {
+      if (pending.length === 0 || task.status !== 'APPROVED') {
         await db
-          .prepare('UPDATE tasks SET status = ? WHERE id = ?')
+          .prepare('UPDATE tasks SET status = ?, revision_note = NULL WHERE id = ?')
           .bind('APPROVED', task.id)
           .run();
 
@@ -883,7 +883,7 @@ export async function requestRevision(assignmentId: string, note: string) {
   const workspaceId = task.workspace_id || '';
   const ctx = await getSessionContext(session.userId);
 
-  const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR'].includes(assignment.assignment_role);
+  const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assignment.assignment_role);
 
   if (isOjtRole) {
     const isLeader = (await db
@@ -917,10 +917,10 @@ export async function requestRevision(assignmentId: string, note: string) {
       .bind(nextStatus, note.trim(), Math.floor(Date.now() / 1000), assignmentId)
       .run();
 
-    if (task && task.status !== nextStatus) {
+    if (task) {
       await db
-        .prepare('UPDATE tasks SET status = ? WHERE id = ?')
-        .bind(nextStatus, task.id)
+        .prepare('UPDATE tasks SET status = ?, revision_note = ? WHERE id = ?')
+        .bind(nextStatus, note.trim(), task.id)
         .run();
       await logWorkflowEvent({
         entityType: 'task',

@@ -418,11 +418,19 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
     await db
       .prepare(`
         UPDATE task_assignments
-        SET status = 'WAITING_REVIEW', result_url = ?, submitted_at = strftime('%s', 'now')
+        SET status = 'WAITING_REVIEW', result_url = ?, submitted_at = strftime('%s', 'now'),
+            revision_note = NULL, mentor_approved = 0, coordinator_approved = 0, lead_approved = 0
         WHERE id = ?
       `)
       .bind(resultUrl.trim(), assignmentId)
       .run();
+
+    if (assignment.task_id) {
+      await db
+        .prepare("UPDATE tasks SET status = 'WAITING_REVIEW', revision_note = NULL WHERE id = ?")
+        .bind(assignment.task_id)
+        .run();
+    }
 
     await logWorkflowEvent({
       entityType: 'task_assignment',
@@ -677,8 +685,8 @@ export async function requestAssessmentRevision(
 
     if (task) {
       await db
-        .prepare('UPDATE tasks SET status = ? WHERE id = ?')
-        .bind(nextStatus, task.id)
+        .prepare('UPDATE tasks SET status = ?, revision_note = ? WHERE id = ?')
+        .bind(nextStatus, revisionNote.trim(), task.id)
         .run();
     }
 
