@@ -19,8 +19,10 @@ export interface PersonalTaskRow {
   title: string;
   status: string;
   deadline: number | null;
+  start_at?: number | null;
   project_name: string;
   assigned_name?: string | null;
+  user_type?: string | null;
   creator_name?: string | null;
   assignment_role?: string | null;
   sparks?: number | null;
