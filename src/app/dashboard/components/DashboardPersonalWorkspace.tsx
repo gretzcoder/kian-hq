@@ -595,17 +595,23 @@ export default function DashboardPersonalWorkspace({
   const reviewGrouped = groupTasksByParent(reviewTasks);
   const completedGrouped = groupTasksByParent(completedTasks);
 
-  // Filter 1: Perlu Revisi (STRICTLY tasks assigned to current user as assignee that require revision)
+  // Filter 1: Perlu Revisi (For assigned troopers / users who must perform revision)
   const allRawTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks];
-  const myRevisionTasks = allRawTasks.filter(
-    (t) => t.status === 'REVISION_REQUESTED' && currentUserId != null && t.user_id === currentUserId
-  );
+  const myRevisionTasks = allRawTasks.filter((t) => {
+    if (t.status !== 'REVISION_REQUESTED') return false;
+    if (userType === 'OJT') return true;
+    if (currentUserId && t.user_id) return t.user_id === currentUserId;
+    return false;
+  });
   const myRevisionGrouped = groupTasksByParent(myRevisionTasks);
 
-  // Filter 2: Troopers Revisi (Tasks under mentorship or workspace where troopers are requested to revise)
-  const trooperRevisionTasks = allRawTasks.filter(
-    (t) => t.status === 'REVISION_REQUESTED' && (currentUserId == null || t.user_id !== currentUserId)
-  );
+  // Filter 2: Troopers Revisi (For Mentors & Coordinators to track troopers' revisions)
+  const trooperRevisionTasks = allRawTasks.filter((t) => {
+    if (t.status !== 'REVISION_REQUESTED') return false;
+    if (userType === 'OJT') return false;
+    if (currentUserId && t.user_id) return t.user_id !== currentUserId;
+    return true;
+  });
   const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
 
   let displayedGroupedTasks = activeGrouped;
