@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { DocxDocumentViewer } from './TiptapEditor';
 
 export type ParsedLinkInfo =
   | { type: 'CANVA'; embedUrl: string; originalUrl: string; label: string; icon: string }
@@ -9,12 +10,45 @@ export type ParsedLinkInfo =
   | { type: 'FIGMA'; embedUrl: string; originalUrl: string; label: string; icon: string }
   | { type: 'LOOM'; embedUrl: string; originalUrl: string; label: string; icon: string }
   | { type: 'YOUTUBE'; embedUrl: string; originalUrl: string; label: string; icon: string }
+  | { type: 'HTML_DOC'; htmlContent: string; originalUrl: string; label: string; icon: string; titleSnippet: string; extractedLink?: string }
   | { type: 'OTHER'; embedUrl?: string; originalUrl: string; label: string; icon: string };
 
 export function parseSubmittedLink(rawUrl: string): ParsedLinkInfo {
-  const url = (rawUrl ?? '').trim();
+  let url = (rawUrl ?? '').trim();
   if (!url) {
     return { type: 'OTHER', originalUrl: '', label: 'Link Result', icon: '🔗' };
+  }
+
+  // 0. Detect HTML rich text or multiline document content
+  const isHtml = /<[a-z][\s\S]*>/i.test(url) || url.includes('</p>') || url.includes('</div>') || url.includes('</span>') || url.includes('</ul>') || url.includes('</ol>') || url.includes('<h');
+  const isMultiline = url.includes('\n');
+
+  if (isHtml || isMultiline) {
+    const textOnly = url.replace(/<[^>]*>/g, '').trim();
+    const hrefMatch = url.match(/href=["'](https?:\/\/[^"']+)["']/i);
+    const firstUrlMatch = url.match(/(https?:\/\/[^\s<"']+)/i);
+
+    // If it's just a single URL wrapped inside a single tag (e.g. <p><a href="https://drive...">...</a></p>)
+    const isSingleWrappedUrl =
+      (hrefMatch && (textOnly === hrefMatch[1] || textOnly.startsWith('http'))) ||
+      (!url.includes('<h') && !url.includes('<ul') && !url.includes('<ol') && textOnly.length < 250 && firstUrlMatch && textOnly === firstUrlMatch[1]);
+
+    if (isSingleWrappedUrl) {
+      url = hrefMatch ? hrefMatch[1] : firstUrlMatch![1];
+    } else {
+      // It's a full rich text document report
+      const cleanSnippet = textOnly.slice(0, 120) + (textOnly.length > 120 ? '...' : '');
+      const extractedLink = hrefMatch ? hrefMatch[1] : firstUrlMatch ? firstUrlMatch[1] : undefined;
+      return {
+        type: 'HTML_DOC',
+        htmlContent: rawUrl,
+        originalUrl: extractedLink || '',
+        label: 'Dokumen Laporan Teks (.docx)',
+        icon: '📄',
+        titleSnippet: cleanSnippet || 'Dokumen Laporan Teks',
+        extractedLink,
+      };
+    }
   }
 
   // 1. Canva (both canva.com/design and shortlinks like canva.link / canva.me / canva.site)
@@ -166,6 +200,58 @@ export function SubmittedLinkPreviewer({
   const [showPreview, setShowPreview] = useState(autoExpand);
   const [loaded, setLoaded] = useState(false);
   const info = parseSubmittedLink(url);
+
+  // Render rich text HTML document report (e.g. DOCX Tiptap reports)
+  if (info.type === 'HTML_DOC') {
+    return (
+      <div className="border border-purple-500/20 dark:border-purple-500/30 bg-purple-500/5 dark:bg-purple-950/10 rounded-2xl p-4 space-y-3 shadow-sm">
+        {/* Header bar */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <span className="text-xl p-2 rounded-xl bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 font-bold shrink-0">
+              {info.icon}
+            </span>
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 block">
+                {info.label}
+              </span>
+              <p className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate max-w-xs sm:max-w-xl">
+                {info.titleSnippet}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowPreview((prev) => !prev)}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-zinc-800 text-purple-700 dark:text-purple-300 border border-purple-500/20 shadow-2xs hover:bg-purple-50 dark:hover:bg-zinc-700 transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>{showPreview ? '▲ Sembunyikan Dokumen' : '👁️ Buka Live Preview'}</span>
+            </button>
+
+            {info.extractedLink && (
+              <a
+                href={info.extractedLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white transition-all shadow-sm active:scale-95 flex items-center gap-1 cursor-pointer"
+              >
+                <span>Buka Link ↗</span>
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* Embedded Document Viewer */}
+        {showPreview && (
+          <div className="mt-2">
+            <DocxDocumentViewer content={info.htmlContent} />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   const embedUrl = 'embedUrl' in info ? info.embedUrl : null;
   const hasEmbed = Boolean(embedUrl);
