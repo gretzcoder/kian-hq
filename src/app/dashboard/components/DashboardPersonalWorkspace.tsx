@@ -349,12 +349,23 @@ function TaskCardItem({
         {/* Real-Time Statistics Badges */}
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
-              📊 {approvedSteps.length}/{totalSteps} ACC
-            </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
-              👥 {uniqueAssignees.length} Trooper ({totalSteps} Step)
-            </span>
+            {activeTab === 'COMPLETED' || approvedSteps.length === totalSteps ? (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-2xs">
+                ✅ Selesai & Full ACC ({approvedSteps.length}/{totalSteps})
+              </span>
+            ) : waitingReviewSteps.length > 0 ? (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse">
+                ⏳ {waitingReviewSteps.length} Step Perlu Review
+              </span>
+            ) : revisionSteps.length > 0 ? (
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30">
+                🔄 {revisionSteps.length} Step Perlu Revisi
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+                👥 {uniqueAssignees.length} Trooper ({totalSteps} Step)
+              </span>
+            )}
           </div>
           {parentTask.deadline && (
             <span className="text-[10px] text-zinc-400 font-mono">
@@ -365,50 +376,60 @@ function TaskCardItem({
       </div>
 
       {/* Step Quick Breakdown Summary Bar */}
-      <div className="flex items-center gap-1.5 flex-wrap pt-1">
-        <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">
-          ✓ {approvedSteps.length}/{totalSteps} ACC
-        </span>
-        {waitingReviewSteps.length > 0 && (
-          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 animate-pulse">
-            📥 {waitingReviewSteps.length} Submit (Wait QC)
+      {activeTab === 'COMPLETED' || approvedSteps.length === totalSteps ? (
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-xl flex items-center gap-1.5">
+            <span>✅</span> Seluruh {totalSteps} Step Workflow telah disetujui & diberikan ACC
           </span>
-        )}
-        {revisionSteps.length > 0 && (
-          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">
-            🔄 {revisionSteps.length} Perlu Revisi
-          </span>
-        )}
-        {unsubmittedAssignments.length > 0 && (
-          <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800">
-            ⚡ {unsubmittedAssignments.length} Belum Submit
-          </span>
-        )}
-
-        {/* Active chips ONLY for items that are submitted, revision, or approved */}
-        {activeSteps.slice(0, 5).map((st, idx) => {
-          const roleLabel = roleIcons[st.assignment_role || ''] || st.assignment_role || `Step ${idx+1}`;
-          const isDone = ['APPROVED', 'DONE', 'PUBLISHED'].includes(st.status);
-          const isRevision = st.status === 'REVISION_REQUESTED';
-
-          return (
-            <span
-              key={`quick-${st.id}-${idx}`}
-              className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border flex items-center gap-1.5 ${
-                isDone
-                  ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
-                  : isRevision
-                  ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 font-black'
-                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 font-black'
-              }`}
-            >
-              <span>{roleLabel}</span>
-              {st.assigned_name && <span className="opacity-80">({st.assigned_name.split(' ')[0]})</span>}:
-              <strong className="uppercase font-mono">{st.status === 'APPROVED' ? 'ACC' : st.status.replace('_', ' ')}</strong>
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 flex-wrap pt-1">
+          {approvedSteps.length > 0 && (
+            <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">
+              ✓ {approvedSteps.length}/{totalSteps} ACC
             </span>
-          );
-        })}
-      </div>
+          )}
+          {waitingReviewSteps.length > 0 && (
+            <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 animate-pulse">
+              📥 {waitingReviewSteps.length} Submit (Wait QC)
+            </span>
+          )}
+          {revisionSteps.length > 0 && (
+            <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">
+              🔄 {revisionSteps.length} Perlu Revisi
+            </span>
+          )}
+          {unsubmittedAssignments.length > 0 && (
+            <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-lg border bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800">
+              ⚡ {unsubmittedAssignments.length} Belum Submit
+            </span>
+          )}
+
+          {/* Active chips ONLY for items that are submitted or in revision */}
+          {activeSteps
+            .filter((s) => s.status !== 'APPROVED')
+            .slice(0, 5)
+            .map((st, idx) => {
+              const roleLabel = roleIcons[st.assignment_role || ''] || st.assignment_role || `Step ${idx + 1}`;
+              const isRevision = st.status === 'REVISION_REQUESTED';
+
+              return (
+                <span
+                  key={`quick-${st.id}-${idx}`}
+                  className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border flex items-center gap-1.5 ${
+                    isRevision
+                      ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 font-black'
+                      : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 font-black'
+                  }`}
+                >
+                  <span>{roleLabel}</span>
+                  {st.assigned_name && <span className="opacity-80">({st.assigned_name.split(' ')[0]})</span>}:
+                  <strong className="uppercase font-mono">{st.status.replace('_', ' ')}</strong>
+                </span>
+              );
+            })}
+        </div>
+      )}
 
       {/* Control Bar: Expand Detail, Smart Batch Reminder, Open Workspace */}
       <div className="flex items-center justify-between gap-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex-wrap">
