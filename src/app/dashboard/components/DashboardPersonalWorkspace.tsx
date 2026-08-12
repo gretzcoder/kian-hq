@@ -207,7 +207,7 @@ export default function DashboardPersonalWorkspace({
                 </div>
 
                 {/* Appreciation Note Box (if completed or approved task has feedback note) */}
-                {cleanedNote && (
+                {['APPROVED', 'DONE', 'PUBLISHED'].includes(task.status) && cleanedNote && (
                   <div className="mt-1 p-3.5 rounded-xl bg-purple-500/5 border border-purple-500/15 space-y-1">
                     <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1.5">
                       <span>💬 Catatan Apresiasi & Feedback Evaluator</span>

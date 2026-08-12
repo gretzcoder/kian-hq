@@ -115,7 +115,7 @@ export default async function DashboardPage() {
         u_creator.name AS creator_name,
         ta.assignment_role,
         ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
+        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND action IN ('APPROVE', 'REVIEW_APPROVE', 'COORDINATOR_APPROVE', 'LEAD_APPROVE', 'MENTOR_APPROVE') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at
       FROM task_assignments ta
@@ -149,7 +149,7 @@ export default async function DashboardPage() {
         u_creator.name AS creator_name,
         ta.assignment_role,
         ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
+        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND action IN ('APPROVE', 'REVIEW_APPROVE', 'COORDINATOR_APPROVE', 'LEAD_APPROVE', 'MENTOR_APPROVE') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
         ta.reviewed_at
@@ -186,7 +186,7 @@ export default async function DashboardPage() {
         u_creator.name AS creator_name,
         ta.assignment_role,
         ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
+        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND action IN ('APPROVE', 'REVIEW_APPROVE', 'COORDINATOR_APPROVE', 'LEAD_APPROVE', 'MENTOR_APPROVE') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at
       FROM task_assignments ta
@@ -219,7 +219,7 @@ export default async function DashboardPage() {
         u_creator.name AS creator_name,
         ta.assignment_role,
         ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
+        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND action IN ('APPROVE', 'REVIEW_APPROVE', 'COORDINATOR_APPROVE', 'LEAD_APPROVE', 'MENTOR_APPROVE') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
         ta.reviewed_at
