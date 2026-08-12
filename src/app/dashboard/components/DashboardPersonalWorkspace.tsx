@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import SendReminderButton, { TaskSmartReminderButton } from '@/components/SendReminderButton';
 import { cleanAppreciationNote } from '@/lib/noteUtils';
+import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
 
 export interface PersonalTaskRow {
   id: string; // task_id
@@ -335,25 +336,9 @@ function TaskCardItem({
                     </div>
                   </div>
 
-                  {/* Submitted Content Link & Preview Box */}
+                  {/* Submitted Content Link & Live Preview */}
                   {sub.result_url && (
-                    <div className="p-3 rounded-xl bg-white dark:bg-zinc-950 border border-purple-500/30 text-xs flex items-center justify-between gap-3 flex-wrap shadow-2xs">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-extrabold text-purple-600 dark:text-purple-400 shrink-0">📄 Hasil Submit:</span>
-                        <span className="truncate text-zinc-700 dark:text-zinc-300 font-mono text-[11px] max-w-[280px] sm:max-w-[420px]">
-                          {sub.result_url}
-                        </span>
-                      </div>
-                      <a
-                        href={sub.result_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-[11px] transition-all shrink-0 flex items-center gap-1 shadow-xs active:scale-95"
-                      >
-                        <span>Buka Hasil Submission</span>
-                        <span>&nearr;</span>
-                      </a>
-                    </div>
+                    <SubmittedLinkPreviewer url={sub.result_url} autoExpand={false} />
                   )}
 
                   {/* Appreciation Note */}
