@@ -135,9 +135,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u    ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
-        AND t.status != 'DELETED' AND t.deleted_at IS NULL
-        AND p.deleted_at IS NULL
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
       LIMIT 50
     `
@@ -173,9 +171,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
         AND (u.user_type = 'OJT' OR ta.assignment_role IN ('RESEARCHER', 'PLANNER', 'DESIGNER', 'CREATOR', 'VIDEO_EDITOR'))
-        AND t.status != 'DELETED' AND t.deleted_at IS NULL
-        AND p.deleted_at IS NULL
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
       LIMIT 50
     `
@@ -211,9 +207,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
         AND (u.user_type = 'CREATOR' OR ta.assignment_role IN ('PIC', 'REVIEWER', 'APPROVER', 'HELPER'))
-        AND t.status != 'DELETED' AND t.deleted_at IS NULL
-        AND p.deleted_at IS NULL
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
       LIMIT 50
     `
@@ -249,9 +243,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u    ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
-        AND t.status != 'DELETED' AND t.deleted_at IS NULL
-        AND p.deleted_at IS NULL
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
       LIMIT 50
     `
@@ -291,9 +283,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE (ta.user_id = ? OR t.created_by = ?)
         AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
-        AND t.status != 'DELETED' AND t.deleted_at IS NULL
-        AND p.deleted_at IS NULL
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY t.deadline ASC
       LIMIT 30
     `
@@ -330,9 +320,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE t.created_by = ? AND ta.user_id != ?
         AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
-        AND t.status != 'DELETED' AND t.deleted_at IS NULL
-        AND p.deleted_at IS NULL
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY t.deadline ASC
       LIMIT 30
     `
@@ -370,9 +358,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE (ta.user_id = ? OR t.created_by = ?)
         AND ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
-        AND t.status != 'DELETED' AND t.deleted_at IS NULL
-        AND p.deleted_at IS NULL
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
       LIMIT 30
     `
@@ -411,9 +397,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
-        AND t.status != 'DELETED' AND t.deleted_at IS NULL
-        AND p.deleted_at IS NULL
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY t.deadline ASC
       LIMIT 25
     `
@@ -449,9 +433,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.user_id = ? AND ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
-        AND t.status != 'DELETED' AND t.deleted_at IS NULL
-        AND p.deleted_at IS NULL
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
       LIMIT 25
     `
