@@ -31,6 +31,8 @@ export interface PersonalTaskRow {
   task_type?: string | null;
   task_created_by?: string | null;
   revision_note?: string | null;
+  revision_requested_by_name?: string | null;
+  revision_requested_by_role?: string | null;
 }
 
 export interface GroupedTask {
@@ -157,10 +159,14 @@ function InlineResubmitBox({
   assignmentId,
   currentResultUrl,
   revisionNote,
+  revisionRequestedByName,
+  revisionRequestedByRole,
 }: {
   assignmentId: string;
   currentResultUrl?: string | null;
   revisionNote?: string | null;
+  revisionRequestedByName?: string | null;
+  revisionRequestedByRole?: string | null;
 }) {
   const [resultUrl, setResultUrl] = useState(currentResultUrl || '');
   const [loading, setLoading] = useState(false);
@@ -197,24 +203,50 @@ function InlineResubmitBox({
   }
 
   return (
-    <div className="p-3.5 rounded-xl bg-amber-500/8 dark:bg-amber-500/15 border border-amber-500/30 space-y-3">
+    <div className="p-4 rounded-2xl bg-amber-500/8 dark:bg-amber-500/15 border border-amber-500/30 space-y-4 shadow-xs">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <span className="text-[10px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+        <span className="text-[11px] font-black text-amber-800 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
           <span>⚡ Form Perbaikan & Submit Ulang Revisi</span>
         </span>
-        <span className="text-[9px] font-extrabold text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 rounded-full">
+        <span className="text-[10px] font-extrabold text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 rounded-full">
           Perlu Revisi
         </span>
       </div>
 
+      {/* Styled Revision Note Card */}
       {revisionNote && (
-        <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-700 dark:text-red-300 leading-relaxed font-medium">
-          <strong>Catatan Evaluator:</strong> "{revisionNote}"
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30 border border-red-200/80 dark:border-red-800/60 shadow-2xs space-y-2.5">
+          <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-red-200/60 dark:border-red-800/40">
+            <div className="flex items-center gap-2">
+              <span className="w-7 h-7 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 flex items-center justify-center text-xs font-black shrink-0">
+                💬
+              </span>
+              <div>
+                <p className="text-xs font-black text-red-700 dark:text-red-300">
+                  Catatan Revisi dari {revisionRequestedByName || 'Evaluator'}
+                </p>
+                <p className="text-[10px] text-red-500 dark:text-red-400 font-semibold">
+                  {revisionRequestedByRole || 'Koordinator / Mentor QC'}
+                </p>
+              </div>
+            </div>
+
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/20">
+              ⚠️ Catatan Evaluator
+            </span>
+          </div>
+
+          <div className="p-3.5 rounded-xl bg-white/90 dark:bg-zinc-950/90 border border-red-100 dark:border-red-900/40 shadow-2xs">
+            <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic whitespace-pre-wrap">
+              "{revisionNote}"
+            </p>
+          </div>
         </div>
       )}
 
-      <div className="space-y-1.5">
-        <label className="block text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
+      {/* URL Input Form */}
+      <div className="space-y-2">
+        <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300">
           Masukkan Link Hasil Revisi Terbaru (Canva / Drive / Dokumen):
         </label>
         <div className="flex gap-2 flex-wrap sm:flex-nowrap">
@@ -223,13 +255,13 @@ function InlineResubmitBox({
             value={resultUrl}
             onChange={(e) => setResultUrl(e.target.value)}
             placeholder="https://canva.com/design/... atau https://drive.google.com/..."
-            className="flex-1 min-w-[200px] px-3 py-2 text-xs rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+            className="flex-1 min-w-[200px] px-3.5 py-2.5 text-xs rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono shadow-2xs"
           />
           <button
             type="button"
             onClick={handleResubmit}
             disabled={loading || !resultUrl.trim()}
-            className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 cursor-pointer"
+            className="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 cursor-pointer"
           >
             <span>{loading ? '⏳ Mengirim...' : '🚀 Ajukan Ulang Revisi'}</span>
           </button>
@@ -449,13 +481,46 @@ function TaskCardItem({
                     <SubmittedLinkPreviewer url={sub.result_url} autoExpand={false} />
                   )}
 
-                  {/* Inline Form Resubmit for REVISION_REQUESTED items */}
-                  {isRevision && sub.assignment_id && (
+                  {/* Inline Form Resubmit for REVISION_REQUESTED items (When viewing in MY_REVISION tab or by assigned user) */}
+                  {isRevision && sub.assignment_id && activeTab === 'MY_REVISION' && (
                     <InlineResubmitBox
                       assignmentId={sub.assignment_id}
                       currentResultUrl={sub.result_url}
                       revisionNote={sub.revision_note}
+                      revisionRequestedByName={sub.revision_requested_by_name || sub.creator_name}
+                      revisionRequestedByRole={sub.revision_requested_by_role}
                     />
+                  )}
+
+                  {/* Styled Revision Note Card when viewing under TROOPER_REVISION or outside MY_REVISION tab */}
+                  {isRevision && sub.revision_note && activeTab !== 'MY_REVISION' && (
+                    <div className="p-4 rounded-2xl bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30 border border-red-200/80 dark:border-red-800/60 shadow-xs space-y-2.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-red-200/60 dark:border-red-800/40">
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 flex items-center justify-center text-xs font-black shrink-0">
+                            💬
+                          </span>
+                          <div>
+                            <p className="text-xs font-black text-red-700 dark:text-red-300">
+                              Catatan Revisi dari {sub.revision_requested_by_name || sub.creator_name || 'Evaluator'}
+                            </p>
+                            <p className="text-[10px] text-red-500 dark:text-red-400 font-semibold">
+                              {sub.revision_requested_by_role || 'Koordinator / Mentor QC'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/20">
+                          ⚠️ Catatan Evaluator
+                        </span>
+                      </div>
+
+                      <div className="p-3.5 rounded-xl bg-white/90 dark:bg-zinc-950/90 border border-red-100 dark:border-red-900/40 shadow-2xs">
+                        <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic whitespace-pre-wrap">
+                          "{sub.revision_note}"
+                        </p>
+                      </div>
+                    </div>
                   )}
 
                   {/* Inline QC Review Actions for WAITING_REVIEW items */}
@@ -527,15 +592,14 @@ export default function DashboardPersonalWorkspace({
   const reviewGrouped = groupTasksByParent(reviewTasks);
   const completedGrouped = groupTasksByParent(completedTasks);
 
-  // Filter 1: Perlu Revisi (Task assigned to current user/troopers that require revision resubmission)
-  const allRawTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks];
-  const myRevisionTasks = allRawTasks.filter(
-    (t) => t.status === 'REVISION_REQUESTED' || (t.revision_note && t.revision_note.trim() !== '')
+  // Filter 1: Perlu Revisi (STRICTLY tasks assigned to current user as assignee that require revision)
+  const myRevisionTasks = personalTasks.filter(
+    (t) => t.status === 'REVISION_REQUESTED'
   );
   const myRevisionGrouped = groupTasksByParent(myRevisionTasks);
 
-  // Filter 2: Troopers Revisi (Task of troopers under guidance that received revision feedback)
-  const trooperRevisionTasks = [...trooperTasks, ...reviewTasks, ...personalTasks].filter(
+  // Filter 2: Troopers Revisi (Tasks under mentorship or workspace where troopers are requested to revise)
+  const trooperRevisionTasks = [...trooperTasks, ...mentorTasks, ...reviewTasks].filter(
     (t) => t.status === 'REVISION_REQUESTED'
   );
   const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
@@ -576,7 +640,7 @@ export default function DashboardPersonalWorkspace({
             </span>
           </button>
 
-          {/* Tab 2: Perlu Revisi (Task penerima revisi yang bisa di-submit ulang langsung) */}
+          {/* Tab 2: Perlu Revisi (HANYA untuk user yang ditugaskan & harus melakukan revisi) */}
           {myRevisionGrouped.length > 0 && (
             <button
               type="button"
@@ -594,7 +658,7 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 3: Troopers Revisi (Status task troopers bimbingan yang sedang minta revisi) */}
+          {/* Tab 3: Troopers Revisi (Untuk Mentor & Koordinator memantau status revisi Troopers) */}
           {(isCoordinator || isMentorUser) && trooperRevisionGrouped.length > 0 && (
             <button
               type="button"
