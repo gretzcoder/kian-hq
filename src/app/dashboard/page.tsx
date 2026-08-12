@@ -182,7 +182,10 @@ export default async function DashboardPage() {
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
-        COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE (entity_id = ta.id OR entity_id = t.id) AND (to_status = 'REVISION_REQUESTED' OR to_status = 'REVISION') AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
+        ta.revision_note,
+        t.task_type      AS task_type,
+        t.created_by     AS task_created_by,
+        ws.workspace_type AS workspace_type,
         (SELECT u_rev.name FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_name,
         (SELECT COALESCE(r_rev.name, CASE WHEN u_rev.user_type = 'STAFF' THEN 'Koordinator' ELSE 'Mentor' END) FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id LEFT JOIN user_roles ur_rev ON u_rev.id = ur_rev.user_id LEFT JOIN roles r_rev ON ur_rev.role_id = r_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_role
       FROM task_assignments ta
@@ -221,7 +224,10 @@ export default async function DashboardPage() {
         COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
         ta.result_url,
         ta.submitted_at,
-        ta.revision_note
+        ta.revision_note,
+        t.task_type      AS task_type,
+        t.created_by     AS task_created_by,
+        ws.workspace_type AS workspace_type
       FROM task_assignments ta
       JOIN tasks t         ON ta.task_id = t.id
       JOIN projects p      ON t.project_id = p.id
@@ -548,6 +554,7 @@ export default async function DashboardPage() {
       t.created_by     AS task_created_by,
       t.workspace_id,
       ws.name          AS workspace_name,
+      ws.workspace_type AS workspace_type,
       t.project_id,
       p.name           AS project_name,
       u.name           AS creator_name

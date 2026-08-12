@@ -95,7 +95,11 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
               isStaffOrCoord={true}
               mentorApproved={r.mentor_approved ?? 0}
               coordinatorApproved={r.coordinator_approved ?? 0}
-              isMentorWs={r.workspace_type === 'MENTOR'}
+              isMentorWs={
+                r.workspace_type === 'MENTOR' ||
+                r.task_type === 'MENTOR' ||
+                (r.project_name ? r.project_name.toUpperCase().includes('MENTOR') : false)
+              }
             />
           </div>
         ))}

@@ -549,7 +549,7 @@ function TaskCardItem({
                         mentorApproved={sub.mentor_approved ?? 0}
                         coordinatorApproved={sub.coordinator_approved ?? 0}
                         isTaskMentor={isTaskMentor}
-                        isMentorWs={sub.workspace_type === 'MENTOR'}
+                        isMentorWs={sub.workspace_type === 'MENTOR' || sub.task_type === 'MENTOR' || isTaskMentor}
                       />
                     </div>
                   )}
