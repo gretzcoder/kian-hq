@@ -839,9 +839,16 @@ export default function TaskActions({
                                     <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1">
                                       <span>💬 Catatan Apresiasi & Feedback Evaluator</span>
                                     </div>
-                                    <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
-                                      "{note}"
-                                    </p>
+                                    {note.includes('<') ? (
+                                      <div
+                                        className="prose dark:prose-invert prose-xs max-w-none text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed font-medium"
+                                        dangerouslySetInnerHTML={{ __html: note }}
+                                      />
+                                    ) : (
+                                      <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
+                                        "{note}"
+                                      </p>
+                                    )}
                                   </div>
                                 );
                               })()}

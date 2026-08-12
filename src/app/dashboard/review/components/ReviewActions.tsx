@@ -6,6 +6,7 @@ import { approveAssessmentMentorStep, requestAssessmentRevision as requestAssess
 import { useUI } from '@/components/ui/UIProvider';
 
 import SendReminderButton from '@/components/SendReminderButton';
+import TiptapEditor from '@/components/editor/TiptapEditor';
 
 export function getSparkMeta(spark: number): { label: string; emoji: string; color: string } {
   if (spark >= 9) return { label: 'LEGENDARY SPARK', emoji: '👑', color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' };
@@ -99,7 +100,8 @@ export default function ReviewActions({
   };
 
   const handleActionWithNote = async () => {
-    if (!noteText.trim()) {
+    const cleanContent = noteText.replace(/<[^>]*>/g, '').trim();
+    if (!cleanContent) {
       const msg = 'Harap isi catatan penjelasan keputusan terlebih dahulu.';
       setError(msg);
       toast(msg, 'warning');
@@ -377,17 +379,19 @@ export default function ReviewActions({
             })}
           </div>
 
-          <div>
-            <input
-              type="text"
+          <div className="space-y-1.5">
+            <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1">
+              <span>💬</span> Catatan Apresiasi & Feedback Evaluator (WYSIWYG / Opsional)
+            </label>
+            <TiptapEditor
               value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              placeholder="Catatan apresiasi pengerjaan (opsional)..."
-              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3.5 py-2 focus:outline-none focus:border-purple-500 transition-all"
+              onChange={(val) => setNoteText(val)}
+              placeholder="Tulis catatan apresiasi, saran perbaikan, atau tips berharga (opsional gunakan Bold, Highlight, List, Link, dll)..."
+              minHeight="min-h-[110px]"
             />
           </div>
 
-          <div className="flex gap-2 justify-end pt-0.5">
+          <div className="flex gap-2 justify-end pt-1">
             <button
               onClick={() => { setMode('NONE'); setNoteText(''); setError(null); }}
               disabled={loading}
@@ -398,51 +402,50 @@ export default function ReviewActions({
             <button
               onClick={handleApproveWithSparks}
               disabled={loading}
-              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-1.5 rounded-xl transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5"
             >
               {loading ? 'Menyimpan...' : `Kirim ${sparks} ✨ & Setujui`}
             </button>
           </div>
         </div>
       ) : (
-        <div className="space-y-2">
-          <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-            {mode === 'REVISION' ? 'Revision Note' : 'Decline Reason'} <span className="text-red-500">*</span>
+        <div className="space-y-3 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
+          <label className="block text-[10px] font-black text-zinc-600 dark:text-zinc-300 uppercase tracking-widest flex items-center gap-1">
+            <span>{mode === 'REVISION' ? '📝' : '⚠️'}</span>
+            <span>{mode === 'REVISION' ? 'Catatan Detail Revisi (WYSIWYG Text Editor)' : 'Alasan Penolakan (WYSIWYG Text Editor)'}</span>
+            <span className="text-red-500">*</span>
           </label>
-          <textarea
+          <TiptapEditor
             value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            rows={3}
+            onChange={(val) => setNoteText(val)}
             placeholder={
               mode === 'REVISION'
-                ? 'Explain what needs to be changed for this revision...'
-                : 'Explain why this submission is declined/rejected...'
+                ? 'Jelaskan secara detail poin-poin yang perlu diperbaiki (gunakan Bold, Poin List, atau Link jika ada rujukan/aset)...'
+                : 'Jelaskan alasan penolakan penugasan ini...'
             }
-            className={`w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-2.5 focus:outline-none transition-all resize-none ${
-              mode === 'REVISION'
-                ? 'focus:border-yellow-500 dark:focus:border-yellow-500 focus:ring-4 focus:ring-yellow-500/10'
-                : 'focus:border-red-500 dark:focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
-            }`}
+            minHeight="min-h-[140px]"
           />
-          <div className="flex gap-2">
-            <button
-              onClick={handleActionWithNote}
-              disabled={loading}
-              className={`flex-1 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] ${
-                mode === 'REVISION' ? 'bg-yellow-600 hover:bg-yellow-500' : 'bg-red-600 hover:bg-red-500'
-              }`}
-            >
-              {loading ? '...' : mode === 'REVISION' ? 'Send Revision Request' : 'Decline Submission'}
-            </button>
+          <div className="flex gap-2 justify-end pt-1">
             <button
               onClick={() => {
                 setMode('NONE');
                 setNoteText('');
                 setError(null);
               }}
-              className="px-4 py-2.5 text-xs font-bold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-all"
+              className="px-4 py-2 text-xs font-bold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-900/40 transition-all"
             >
-              Cancel
+              Batal
+            </button>
+            <button
+              onClick={handleActionWithNote}
+              disabled={loading}
+              className={`text-white font-bold text-xs px-5 py-2 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] ${
+                mode === 'REVISION'
+                  ? 'bg-yellow-600 hover:bg-yellow-500 shadow-md shadow-yellow-500/20'
+                  : 'bg-red-600 hover:bg-red-500 shadow-md shadow-red-500/20'
+              }`}
+            >
+              {loading ? 'Submitting...' : mode === 'REVISION' ? 'Kirim Permintaan Revisi' : 'Tolak Penugasan'}
             </button>
           </div>
         </div>

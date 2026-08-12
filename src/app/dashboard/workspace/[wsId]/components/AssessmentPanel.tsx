@@ -1586,13 +1586,20 @@ function OJTTaskCard({
                 </div>
 
                 {cleanedNote && (
-                  <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 space-y-1">
+                  <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 space-y-1.5">
                     <p className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
                       <span>💬 Catatan Apresiasi & Feedback Evaluator</span>
                     </p>
-                    <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
-                      "{cleanedNote}"
-                    </p>
+                    {cleanedNote.includes('<') ? (
+                      <div
+                        className="prose dark:prose-invert prose-xs max-w-none text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed font-medium"
+                        dangerouslySetInnerHTML={{ __html: cleanedNote }}
+                      />
+                    ) : (
+                      <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
+                        "{cleanedNote}"
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

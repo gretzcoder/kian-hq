@@ -10,11 +10,7 @@ export function cleanAppreciationNote(rawNote?: string | null): string | null {
   if (
     note.startsWith('Result submitted') ||
     note.includes('Result submitted:') ||
-    note.includes('<h3>') ||
-    note.includes('<p>') ||
-    note.includes('<ul>') ||
-    note.startsWith('Approved by:') ||
-    note.startsWith('Koordinator menyetujui')
+    (note.startsWith('Approved by:') && !note.includes('<') && !note.includes('Note:'))
   ) {
     return null;
   }

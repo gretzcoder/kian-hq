@@ -556,10 +556,20 @@ function TaskCardItem({
 
                   {/* Appreciation Note */}
                   {['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status) && cleanedNote && (
-                    <div className="p-2.5 rounded-lg bg-purple-500/5 border border-purple-500/15">
-                      <p className="text-[11px] text-zinc-700 dark:text-zinc-300 italic">
-                        "💬 Feedback Evaluator: {cleanedNote}"
+                    <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/15 space-y-1">
+                      <p className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1">
+                        💬 Feedback Evaluator
                       </p>
+                      {cleanedNote.includes('<') ? (
+                        <div
+                          className="prose dark:prose-invert prose-xs max-w-none text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed font-medium"
+                          dangerouslySetInnerHTML={{ __html: cleanedNote }}
+                        />
+                      ) : (
+                        <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
+                          "{cleanedNote}"
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
