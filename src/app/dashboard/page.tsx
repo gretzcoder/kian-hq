@@ -171,6 +171,8 @@ export default async function DashboardPage() {
       LEFT JOIN users u    ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
+        AND (ws.workspace_type IS NULL OR ws.workspace_type = 'TROOPERS')
+        AND UPPER(p.name) NOT LIKE '%MENTOR%'
         AND (u.user_type = 'OJT' OR ta.assignment_role IN ('RESEARCHER', 'PLANNER', 'DESIGNER', 'CREATOR', 'VIDEO_EDITOR'))
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
@@ -361,6 +363,8 @@ export default async function DashboardPage() {
       LEFT JOIN users u ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE t.created_by = ? AND ta.user_id != ?
+        AND (ws.workspace_type IS NULL OR ws.workspace_type = 'TROOPERS')
+        AND UPPER(p.name) NOT LIKE '%MENTOR%'
         AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY t.deadline ASC
