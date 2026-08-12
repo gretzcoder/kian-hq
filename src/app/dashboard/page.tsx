@@ -124,13 +124,10 @@ export default async function DashboardPage() {
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
       LEFT JOIN users u    ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE ta.status = 'WAITING_REVIEW'
-        AND ta.result_url IS NOT NULL
-        AND TRIM(ta.result_url) != ''
-        AND t.status = 'APPROVED'
+      WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY ta.submitted_at ASC
-      LIMIT 15
+      ORDER BY ta.submitted_at ASC, t.deadline ASC
+      LIMIT 20
     `
       )
       .all();

@@ -57,7 +57,7 @@ const roleColors: Record<string, string> = {
 };
 
 export default function DashboardPersonalWorkspace({
-  personalTasks,
+  personalTasks = [],
   completedTasks = [],
   canReview,
   widgetTitle,
@@ -65,7 +65,35 @@ export default function DashboardPersonalWorkspace({
 }: DashboardPersonalWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<'ACTIVE' | 'COMPLETED'>('ACTIVE');
 
-  const displayedTasks = activeTab === 'ACTIVE' ? personalTasks : completedTasks;
+  // Filter tasks strictly by tab status
+  const activeList = (personalTasks || []).filter(
+    (t) => !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED', 'ARCHIVED'].includes(t.status)
+  );
+
+  const completedList = (completedTasks || []).filter((t) =>
+    ['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(t.status)
+  );
+
+  // Deduplicate items by unique assignment_id / task identifier
+  const cleanActiveTasks = Array.from(
+    new Map(
+      activeList.map((t) => [
+        t.assignment_id || `${t.id}-${t.assignment_role}-${t.assigned_name}`,
+        t,
+      ])
+    ).values()
+  );
+
+  const cleanCompletedTasks = Array.from(
+    new Map(
+      completedList.map((t) => [
+        t.assignment_id || `${t.id}-${t.assignment_role}-${t.assigned_name}`,
+        t,
+      ])
+    ).values()
+  );
+
+  const displayedTasks = activeTab === 'ACTIVE' ? cleanActiveTasks : cleanCompletedTasks;
 
   return (
     <div className="space-y-4">
@@ -90,7 +118,7 @@ export default function DashboardPersonalWorkspace({
           >
             <span>📌 Tasks Aktif</span>
             <span className="px-1.5 py-0.2 rounded-md bg-purple-500/10 text-[10px] font-mono">
-              {personalTasks.length}
+              {cleanActiveTasks.length}
             </span>
           </button>
 
@@ -105,7 +133,7 @@ export default function DashboardPersonalWorkspace({
           >
             <span>✅ Selesai & ACC</span>
             <span className="px-1.5 py-0.2 rounded-md bg-emerald-500/10 text-[10px] font-mono">
-              {completedTasks.length}
+              {cleanCompletedTasks.length}
             </span>
           </button>
         </div>
@@ -121,12 +149,13 @@ export default function DashboardPersonalWorkspace({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3">
-          {displayedTasks.map((task) => {
+          {displayedTasks.map((task, idx) => {
             const cleanedNote = cleanAppreciationNote(task.appreciation_note);
+            const itemKey = `${activeTab}-${task.assignment_id || task.id}-${task.assignment_role || 'role'}-${idx}`;
 
             return (
               <div
-                key={`${task.id}-${task.assignment_role}-${task.status}`}
+                key={itemKey}
                 className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/40 hover:border-zinc-300 dark:hover:border-zinc-700 p-4 sm:p-5 rounded-2xl flex flex-col justify-between gap-3 transition-all duration-300 hover:shadow-md"
               >
                 <div className="flex items-start justify-between gap-3">
