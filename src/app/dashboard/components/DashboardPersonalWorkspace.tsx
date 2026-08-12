@@ -53,7 +53,8 @@ interface DashboardPersonalWorkspaceProps {
   mentorTasks?: PersonalTaskRow[];
   reviewTasks?: PersonalTaskRow[];
   completedTasks?: PersonalTaskRow[];
-  userType: string;
+  userType?: string;
+  roles?: string[];
   canReview: boolean;
   widgetTitle: string;
   widgetDesc: string;
@@ -569,6 +570,7 @@ export default function DashboardPersonalWorkspace({
   reviewTasks = [],
   completedTasks = [],
   userType,
+  roles,
   canReview,
   widgetTitle,
   widgetDesc,
@@ -585,8 +587,16 @@ export default function DashboardPersonalWorkspace({
 
   const [activeTab, setActiveTab] = useState<DashboardTab>('ACTIVE');
 
-  const isCoordinator = userType === 'STAFF' || canReview;
-  const isMentorUser = userType === 'EXTERNAL' || userType === 'CREATOR';
+  const userRoles = roles || [];
+  const isCoordinator =
+    userRoles.includes('COORDINATOR') ||
+    userRoles.includes('EXECUTIVE') ||
+    userRoles.includes('ADMIN') ||
+    userType === 'STAFF' ||
+    canReview;
+
+  const isMentorUser = userRoles.includes('MENTOR') || userType === 'EXTERNAL' || userType === 'CREATOR';
+  const isTrooperUser = userRoles.includes('TROOPERS') || (!isCoordinator && !isMentorUser);
 
   // Group task assignments by parent task
   const activeGrouped = groupTasksByParent(personalTasks);
@@ -596,17 +606,17 @@ export default function DashboardPersonalWorkspace({
   const completedGrouped = groupTasksByParent(completedTasks);
 
   // Combine all raw assignment rows
-  const allRawTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks];
+  const allRawTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks, ...completedTasks];
 
   // Filter 1: Perlu Revisi (STRICTLY for the user assigned to perform/resubmit the revision: row.user_id === currentUserId)
-  // Account classification (Staff/Mentor/OJT) does NOT override step assignee (row.user_id).
+  // Account ROLE (COORDINATOR/MENTOR/TROOPERS) does NOT override step assignee (row.user_id).
   const myRevisionTasks = allRawTasks.filter((t) => {
     if (t.status !== 'REVISION_REQUESTED') return false;
     if (currentUserId && t.user_id) {
       return t.user_id === currentUserId;
     }
-    // Fallback if user_id is missing on row: if in personalTasks for OJT trooper
-    return userType === 'OJT' && personalTasks.some((pt) => pt.id === t.id);
+    // Fallback if user_id is missing on row: if in personalTasks for Troopers role
+    return isTrooperUser && personalTasks.some((pt) => pt.id === t.id);
   });
   const myRevisionGrouped = groupTasksByParent(myRevisionTasks);
 
@@ -616,7 +626,7 @@ export default function DashboardPersonalWorkspace({
     if (currentUserId && t.user_id) {
       return t.user_id !== currentUserId;
     }
-    return userType !== 'OJT';
+    return !isTrooperUser;
   });
   const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
 

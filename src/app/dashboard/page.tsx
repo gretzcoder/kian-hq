@@ -110,10 +110,13 @@ export default async function DashboardPage() {
   let widgetDesc = 'Active tasks assigned to you across all projects.';
 
   const isCoordinator =
-    ctx.userType === 'STAFF' ||
-    ctx.can('MANAGE') ||
     ctx.roles.includes('COORDINATOR') ||
-    ctx.roles.includes('EXECUTIVE');
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.roles.includes('ADMIN') ||
+    ctx.userType === 'STAFF' ||
+    ctx.can('MANAGE');
+
+  const isMentor = ctx.roles.includes('MENTOR');
 
   if (isCoordinator) {
     widgetTitle = 'QC & Live Task Control Center';
@@ -316,7 +319,7 @@ export default async function DashboardPage() {
       )
       .all();
     completedTasks = cResults as unknown as PersonalTaskRow[];
-  } else if (ctx.roles.includes('MENTOR') || ctx.userType === 'EXTERNAL' || (ctx.userType as string) === 'CREATOR') {
+  } else if (isMentor || ctx.roles.includes('MENTOR') || ctx.userType === 'EXTERNAL' || (ctx.userType as string) === 'CREATOR') {
     // MENTOR: Active mentor tasks, troopers under mentorship, and completed work
     widgetTitle = 'Mentor Workspace & Control';
     widgetDesc = 'Daftar penugasan aktif Anda dan troopers yang berada di bawah bimbingan Anda.';
@@ -637,6 +640,7 @@ export default async function DashboardPage() {
             reviewTasks={reviewTasks}
             completedTasks={completedTasks}
             userType={ctx.userType}
+            roles={ctx.roles}
             canReview={canReview}
             widgetTitle={widgetTitle}
             widgetDesc={widgetDesc}
