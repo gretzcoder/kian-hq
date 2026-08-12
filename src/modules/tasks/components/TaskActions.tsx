@@ -532,41 +532,44 @@ export default function TaskActions({
                               </span>
                             </div>
 
-                            {/* Result Content / Link - Collapsible (Default Closed) */}
-                            {assign.result_url && (
-                              <div className="space-y-2 my-2">
-                                <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-                                  <div className="flex items-center gap-2 font-bold text-zinc-700 dark:text-zinc-300">
-                                    <span>📄</span>
-                                    <span>
-                                      {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role)
-                                        ? 'Aset Hasil Karya (Telah Diserahkan)'
-                                        : 'Dokumen Laporan Teks (Telah Diserahkan)'}
-                                    </span>
+                            {/* Result Content / Link - Collapsible (Default Open for Mentor/Coordinator Review) */}
+                            {assign.result_url && (() => {
+                              const isExpanded = expandedResultMap[assign.id] ?? true;
+                              return (
+                                <div className="space-y-2 my-2">
+                                  <div className="bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200/80 dark:border-zinc-800 rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                    <div className="flex items-center gap-2 font-bold text-zinc-700 dark:text-zinc-300">
+                                      <span>📄</span>
+                                      <span>
+                                        {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role)
+                                          ? 'Aset Hasil Karya (Telah Diserahkan)'
+                                          : 'Dokumen Laporan Teks (Telah Diserahkan)'}
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedResultMap((prev) => ({ ...prev, [assign.id]: !isExpanded }))}
+                                      className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-lg bg-purple-600/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600/20 transition-all border border-purple-500/20 active:scale-95 cursor-pointer"
+                                    >
+                                      {isExpanded ? '▲ Sembunyikan Hasil Submit' : '👁️ Lihat Hasil Submit'}
+                                    </button>
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => setExpandedResultMap((prev) => ({ ...prev, [assign.id]: !prev[assign.id] }))}
-                                    className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 rounded-lg bg-purple-600/10 text-purple-600 dark:text-purple-400 hover:bg-purple-600/20 transition-all border border-purple-500/20 active:scale-95"
-                                  >
-                                    {expandedResultMap[assign.id] ? '▲ Sembunyikan Hasil Submit' : '👁️ Lihat Hasil Submit'}
-                                  </button>
-                                </div>
 
-                                {expandedResultMap[assign.id] && (
-                                  <div className="pt-1">
-                                    {assign.result_url.includes('<') || assign.result_url.includes('\n') ? (
-                                      <DocxDocumentViewer
-                                        content={assign.result_url}
-                                        roleName={`Step: ${step.label} (${assign.assignment_role})`}
-                                      />
-                                    ) : (
-                                      <SubmittedLinkPreviewer url={assign.result_url} />
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            )}
+                                  {isExpanded && (
+                                    <div className="pt-1">
+                                      {assign.result_url.includes('<') || assign.result_url.includes('\n') ? (
+                                        <DocxDocumentViewer
+                                          content={assign.result_url}
+                                          roleName={`Step: ${step.label} (${assign.assignment_role})`}
+                                        />
+                                      ) : (
+                                        <SubmittedLinkPreviewer url={assign.result_url} autoExpand={true} />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
 
                             {/* Revision Note */}
                             {assign.revision_note && ['REVISION_REQUESTED', 'DECLINED'].includes(assign.status) && (
