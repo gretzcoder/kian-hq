@@ -6,6 +6,8 @@ import SendReminderButton, { TaskSmartReminderButton } from '@/components/SendRe
 import { cleanAppreciationNote } from '@/lib/noteUtils';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
 import ReviewActions from '@/app/dashboard/review/components/ReviewActions';
+import { submitResult } from '@/modules/tasks/actions';
+import { useUI } from '@/components/ui/UIProvider';
 
 export interface PersonalTaskRow {
   id: string; // task_id
@@ -59,7 +61,7 @@ const statusColors: Record<string, string> = {
   ASSIGNED: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
   IN_PROGRESS: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
   SUBMITTED: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
-  WAITING_REVIEW: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
+  WAITING_REVIEW: 'bg-yellow-500/10 text-yellow-700 dark:text-amber-400 border-amber-500/20',
   REVISION_REQUESTED: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
   RESUBMITTED: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20',
   APPROVED: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
@@ -95,6 +97,7 @@ const roleBadgeStyles: Record<string, string> = {
 
 function sortAssignments(list: PersonalTaskRow[]): PersonalTaskRow[] {
   const priority: Record<string, number> = {
+    REVISION_REQUESTED: 0,
     WAITING_REVIEW: 1,
     SUBMITTED: 1,
     RESUBMITTED: 1,
@@ -104,7 +107,6 @@ function sortAssignments(list: PersonalTaskRow[]): PersonalTaskRow[] {
     IN_PROGRESS: 3,
     ASSIGNED: 4,
     DRAFT: 5,
-    REVISION_REQUESTED: 6,
   };
 
   return [...list].sort((a, b) => {
@@ -148,6 +150,95 @@ function groupTasksByParent(rows: PersonalTaskRow[]): GroupedTask[] {
   return Array.from(map.values());
 }
 
+/**
+ * Inline Resubmit Box Component for tasks requiring revision
+ */
+function InlineResubmitBox({
+  assignmentId,
+  currentResultUrl,
+  revisionNote,
+}: {
+  assignmentId: string;
+  currentResultUrl?: string | null;
+  revisionNote?: string | null;
+}) {
+  const [resultUrl, setResultUrl] = useState(currentResultUrl || '');
+  const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const { toast } = useUI();
+
+  const handleResubmit = async () => {
+    if (!resultUrl.trim()) {
+      toast('Harap masukkan tautan / URL hasil revisi terbaru.', 'warning');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await submitResult(assignmentId, resultUrl.trim());
+      if (res.success) {
+        setSubmitted(true);
+        toast('Hasil revisi berhasil diajukan ulang! Menunggu review Mentor/Koordinator.', 'success');
+      } else {
+        toast(res.error || 'Gagal mengajukan revisi.', 'error');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Terjadi kesalahan saat submit.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+        <span>✓ Hasil revisi berhasil diajukan ulang! Halaman akan diperbarui otomatis.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-3.5 rounded-xl bg-amber-500/8 dark:bg-amber-500/15 border border-amber-500/30 space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-[10px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+          <span>⚡ Form Perbaikan & Submit Ulang Revisi</span>
+        </span>
+        <span className="text-[9px] font-extrabold text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-0.5 rounded-full">
+          Perlu Revisi
+        </span>
+      </div>
+
+      {revisionNote && (
+        <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-700 dark:text-red-300 leading-relaxed font-medium">
+          <strong>Catatan Evaluator:</strong> "{revisionNote}"
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <label className="block text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
+          Masukkan Link Hasil Revisi Terbaru (Canva / Drive / Dokumen):
+        </label>
+        <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+          <input
+            type="url"
+            value={resultUrl}
+            onChange={(e) => setResultUrl(e.target.value)}
+            placeholder="https://canva.com/design/... atau https://drive.google.com/..."
+            className="flex-1 min-w-[200px] px-3 py-2 text-xs rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono"
+          />
+          <button
+            type="button"
+            onClick={handleResubmit}
+            disabled={loading || !resultUrl.trim()}
+            className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md active:scale-95 transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 cursor-pointer"
+          >
+            <span>{loading ? '⏳ Mengirim...' : '🚀 Ajukan Ulang Revisi'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TaskCardItem({
   parentTask,
   isCoordinator,
@@ -159,7 +250,9 @@ function TaskCardItem({
   canReview?: boolean;
   activeTab: string;
 }) {
-  const [isExpanded, setIsExpanded] = useState(activeTab === 'REVIEW');
+  const [isExpanded, setIsExpanded] = useState(
+    ['REVIEW', 'MY_REVISION', 'TROOPER_REVISION'].includes(activeTab)
+  );
   const isTaskMentor = !isCoordinator || canReview || activeTab === 'MENTOR';
 
   const sortedAssignments = sortAssignments(parentTask.assignments);
@@ -232,12 +325,13 @@ function TaskCardItem({
         </div>
       </div>
 
-      {/* Step Quick Breakdown Bar (Shows status per step at a glance) */}
+      {/* Step Quick Breakdown Bar */}
       <div className="flex items-center gap-1.5 flex-wrap pt-1">
         {parentTask.assignments.map((st, idx) => {
           const roleLabel = roleIcons[st.assignment_role || ''] || st.assignment_role || `Step ${idx+1}`;
           const isDone = ['APPROVED', 'DONE', 'PUBLISHED'].includes(st.status);
           const isWaiting = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(st.status);
+          const isRevision = st.status === 'REVISION_REQUESTED';
 
           return (
             <span
@@ -245,6 +339,8 @@ function TaskCardItem({
               className={`text-[10px] font-bold px-2.5 py-0.5 rounded-lg border flex items-center gap-1.5 ${
                 isDone
                   ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20'
+                  : isRevision
+                  ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 font-black'
                   : isWaiting
                   ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 font-black'
                   : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800'
@@ -311,12 +407,15 @@ function TaskCardItem({
 
               const isSubmittedForReview = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(sub.status);
               const hasResultLink = sub.result_url && sub.result_url.trim() !== '';
+              const isRevision = sub.status === 'REVISION_REQUESTED';
 
               return (
                 <div
                   key={`${sub.id}-${sub.assignment_role}-${sIdx}`}
                   className={`p-3.5 rounded-xl border flex flex-col gap-2.5 transition-all ${
-                    isSubmittedForReview || hasResultLink
+                    isRevision
+                      ? 'bg-red-500/5 dark:bg-red-500/10 border-red-500/30'
+                      : isSubmittedForReview || hasResultLink
                       ? 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/30'
                       : 'bg-zinc-50/70 dark:bg-zinc-900/60 border-zinc-200/70 dark:border-zinc-800/80'
                   }`}
@@ -350,6 +449,15 @@ function TaskCardItem({
                     <SubmittedLinkPreviewer url={sub.result_url} autoExpand={false} />
                   )}
 
+                  {/* Inline Form Resubmit for REVISION_REQUESTED items */}
+                  {isRevision && sub.assignment_id && (
+                    <InlineResubmitBox
+                      assignmentId={sub.assignment_id}
+                      currentResultUrl={sub.result_url}
+                      revisionNote={sub.revision_note}
+                    />
+                  )}
+
                   {/* Inline QC Review Actions for WAITING_REVIEW items */}
                   {isSubmittedForReview && sub.assignment_id && (isCoordinator || canReview) && (
                     <div className="space-y-2 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60">
@@ -366,18 +474,6 @@ function TaskCardItem({
                         coordinatorApproved={sub.coordinator_approved ?? 0}
                         isTaskMentor={isTaskMentor}
                       />
-                    </div>
-                  )}
-
-                  {/* Participant Revision Note */}
-                  {sub.revision_note && ['REVISION_REQUESTED', 'RESUBMITTED'].includes(sub.status) && (
-                    <div className="p-3 rounded-xl bg-red-500/8 border border-red-500/20 space-y-1">
-                      <div className="text-[10px] font-black text-red-600 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
-                        <span>↩ Catatan Revisi Hasil Submit Peserta ({sub.assigned_name || 'Trooper'}):</span>
-                      </div>
-                      <p className="text-xs text-red-700 dark:text-red-300 font-medium leading-relaxed">
-                        "{sub.revision_note}"
-                      </p>
                     </div>
                   )}
 
@@ -410,7 +506,16 @@ export default function DashboardPersonalWorkspace({
   widgetTitle,
   widgetDesc,
 }: DashboardPersonalWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<'ACTIVE' | 'TROOPER' | 'MENTOR' | 'REVIEW' | 'COMPLETED'>('ACTIVE');
+  type DashboardTab =
+    | 'ACTIVE'
+    | 'MY_REVISION'
+    | 'TROOPER_REVISION'
+    | 'TROOPER'
+    | 'MENTOR'
+    | 'REVIEW'
+    | 'COMPLETED';
+
+  const [activeTab, setActiveTab] = useState<DashboardTab>('ACTIVE');
 
   const isCoordinator = userType === 'STAFF' || canReview;
   const isMentorUser = userType === 'EXTERNAL' || userType === 'CREATOR';
@@ -422,7 +527,22 @@ export default function DashboardPersonalWorkspace({
   const reviewGrouped = groupTasksByParent(reviewTasks);
   const completedGrouped = groupTasksByParent(completedTasks);
 
+  // Filter 1: Perlu Revisi (Task assigned to current user/troopers that require revision resubmission)
+  const allRawTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks];
+  const myRevisionTasks = allRawTasks.filter(
+    (t) => t.status === 'REVISION_REQUESTED' || (t.revision_note && t.revision_note.trim() !== '')
+  );
+  const myRevisionGrouped = groupTasksByParent(myRevisionTasks);
+
+  // Filter 2: Troopers Revisi (Task of troopers under guidance that received revision feedback)
+  const trooperRevisionTasks = [...trooperTasks, ...reviewTasks, ...personalTasks].filter(
+    (t) => t.status === 'REVISION_REQUESTED'
+  );
+  const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
+
   let displayedGroupedTasks = activeGrouped;
+  if (activeTab === 'MY_REVISION') displayedGroupedTasks = myRevisionGrouped;
+  if (activeTab === 'TROOPER_REVISION') displayedGroupedTasks = trooperRevisionGrouped;
   if (activeTab === 'TROOPER') displayedGroupedTasks = trooperGrouped;
   if (activeTab === 'MENTOR') displayedGroupedTasks = mentorGrouped;
   if (activeTab === 'REVIEW') displayedGroupedTasks = reviewGrouped;
@@ -456,7 +576,43 @@ export default function DashboardPersonalWorkspace({
             </span>
           </button>
 
-          {/* Tab 2: Troopers Task */}
+          {/* Tab 2: Perlu Revisi (Task penerima revisi yang bisa di-submit ulang langsung) */}
+          {myRevisionGrouped.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('MY_REVISION')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'MY_REVISION'
+                  ? 'bg-red-600 text-white shadow-sm shadow-red-500/20'
+                  : 'text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20'
+              }`}
+            >
+              <span>⚠️ Perlu Revisi</span>
+              <span className="px-2 py-0.5 rounded-md bg-white/20 text-[10px] font-mono font-bold">
+                {myRevisionGrouped.length} Task
+              </span>
+            </button>
+          )}
+
+          {/* Tab 3: Troopers Revisi (Status task troopers bimbingan yang sedang minta revisi) */}
+          {(isCoordinator || isMentorUser) && trooperRevisionGrouped.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('TROOPER_REVISION')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'TROOPER_REVISION'
+                  ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/20'
+                  : 'text-rose-600 dark:text-rose-400 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20'
+              }`}
+            >
+              <span>🔄 Troopers Revisi</span>
+              <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-[10px] font-mono font-bold">
+                {trooperRevisionGrouped.length} Task
+              </span>
+            </button>
+          )}
+
+          {/* Tab 4: Troopers Task */}
           {(isCoordinator || isMentorUser) && (
             <button
               type="button"
@@ -474,7 +630,7 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 3: Mentor Task (Mentor Execution & Mentor Workspace Tasks) */}
+          {/* Tab 5: Mentor Task */}
           {isCoordinator && (
             <button
               type="button"
@@ -492,7 +648,7 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 4: Perlu Di-Review */}
+          {/* Tab 6: Perlu Di-Review */}
           {(isCoordinator || isMentorUser) && (
             <button
               type="button"
@@ -510,7 +666,7 @@ export default function DashboardPersonalWorkspace({
             </button>
           )}
 
-          {/* Tab 5: Selesai & ACC */}
+          {/* Tab 7: Selesai & ACC */}
           <button
             type="button"
             onClick={() => setActiveTab('COMPLETED')}
@@ -532,6 +688,10 @@ export default function DashboardPersonalWorkspace({
         <div className="border border-dashed border-zinc-200 dark:border-zinc-800 bg-white dark:bg-transparent rounded-2xl p-10 text-center text-zinc-500 text-sm">
           {activeTab === 'ACTIVE'
             ? '🎉 Tidak ada penugasan aktif menggantung saat ini.'
+            : activeTab === 'MY_REVISION'
+            ? '✨ Bagus! Tidak ada tugas Anda yang perlu direvisi saat ini.'
+            : activeTab === 'TROOPER_REVISION'
+            ? '👍 Mantap! Belum ada tugas troopers bimbingan yang meminta revisi.'
             : activeTab === 'TROOPER'
             ? '👥 Tidak ada tugas Troopers yang sedang berjalan.'
             : activeTab === 'MENTOR'
