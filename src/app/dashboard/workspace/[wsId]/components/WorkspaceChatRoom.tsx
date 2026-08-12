@@ -25,6 +25,61 @@ import {
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import EmojiStickerPicker, { TEAM_STICKERS, TeamSticker } from './EmojiStickerPicker';
 import { SmartLinkMeta } from '@/modules/workspaces/smartLinkParser';
+import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
+
+function isImageUrl(url?: string): boolean {
+  if (!url) return false;
+  const clean = url.trim().split('?')[0].toLowerCase();
+  if (/\.(jpeg|jpg|gif|png|webp|svg|bmp|avif)$/i.test(clean)) return true;
+  if (
+    url.includes('drive.google.com/uc?') ||
+    url.includes('images.unsplash.com') ||
+    url.includes('i.imgur.com') ||
+    url.includes('res.cloudinary.com') ||
+    url.includes('r2.dev') ||
+    url.startsWith('data:image/')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function renderWorkspaceMessageContent(messageText: string, isMe: boolean) {
+  const parts = messageText.split(/(@[\w.-]+|(?:https?:\/\/[^\s<"']+))/gi);
+
+  return parts.map((part, index) => {
+    if (part.startsWith('@')) {
+      return (
+        <span
+          key={index}
+          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-md text-xs font-black transition-all ${
+            isMe
+              ? 'bg-white/25 text-white border border-white/30 shadow-2xs'
+              : 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30'
+          }`}
+        >
+          {part}
+        </span>
+      );
+    }
+    if (part.startsWith('http://') || part.startsWith('https://')) {
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noreferrer"
+          className={`underline font-bold text-xs hover:opacity-80 transition-opacity ${
+            isMe ? 'text-cyan-200' : 'text-blue-500 dark:text-blue-400'
+          }`}
+        >
+          {part} ↗
+        </a>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+}
 
 interface WorkspaceMemberOption {
   id: string;
@@ -807,48 +862,33 @@ export function WorkspaceChatRoom({
                     )}
 
                     {/* Message Text Content */}
-                    <div className="text-xs leading-relaxed break-words text-inherit">
-                      <MarkdownViewer content={msg.message} />
+                    <div className="text-xs leading-relaxed break-words text-inherit font-medium">
+                      {renderWorkspaceMessageContent(msg.message, isMe)}
                     </div>
 
                     {/* Edited Indicator */}
                     {msg.is_edited && (
-                      <span className="text-[8px] italic text-zinc-400 block mt-0.5 text-right">
+                      <span className="text-[8px] italic opacity-75 block mt-0.5 text-right">
                         (diedit)
                       </span>
                     )}
 
-                    {/* Smart Link Cards Render */}
-                    {msg.smart_links && msg.smart_links.length > 0 && (
-                      <div className="mt-2.5 space-y-2">
-                        {msg.smart_links.map((link, lIdx) => (
-                          <a
-                            key={lIdx}
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={`block p-2.5 rounded-2xl border transition-all hover:scale-[1.01] ${
-                              isMe
-                                ? 'bg-black/20 border-white/20 text-white hover:bg-black/30'
-                                : 'bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 hover:border-purple-500/40'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${link.badgeBg} ${link.badgeText} ${link.borderColor}`}>
-                                {link.icon} {link.platform}
-                              </span>
-                              <span className="text-[10px] text-zinc-400 font-mono">↗</span>
-                            </div>
-                            <p className="text-xs font-bold truncate mt-1.5">{link.title}</p>
-                            <p className="text-[10px] text-zinc-400 truncate font-mono mt-0.5">{link.domain}</p>
-                          </a>
-                        ))}
-                      </div>
-                    )}
+                    {/* Rich Submitted Link Previewer for Links inside Workspace Chat Message */}
+                    {(() => {
+                      const firstUrlMatch = msg.message.match(/(https?:\/\/[^\s<"']+)/i);
+                      if (firstUrlMatch && !isImageUrl(firstUrlMatch[1])) {
+                        return (
+                          <div className="mt-2.5">
+                            <SubmittedLinkPreviewer url={firstUrlMatch[1]} autoExpand={false} />
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
 
                     {/* Media & Attachment Preview */}
                     {msg.attachment_url && (
-                      <div className="mt-2.5 rounded-2xl overflow-hidden border border-white/20">
+                      <div className="mt-2.5 rounded-2xl overflow-hidden border border-white/20 shadow-sm relative group/img">
                         {msg.attachment_url.startsWith('voice:') || msg.attachment_url.startsWith('data:audio') || msg.attachment_url.includes('.mp3') || msg.attachment_url.includes('.webm') || msg.attachment_url.includes('.wav') ? (
                           <audio
                             controls
@@ -856,12 +896,17 @@ export function WorkspaceChatRoom({
                             className="w-full h-9 rounded-xl shadow-xs"
                           />
                         ) : (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={msg.attachment_url}
-                            alt="Attachment"
-                            className="object-cover max-h-60 w-full rounded-2xl"
-                          />
+                          <a href={msg.attachment_url} target="_blank" rel="noreferrer" className="block relative group/zoom">
+                            <img
+                              src={msg.attachment_url}
+                              alt="Attachment"
+                              className="object-cover max-h-64 w-full rounded-2xl group-hover/zoom:scale-[1.01] transition-transform duration-200"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/zoom:opacity-100 transition-opacity p-3 flex items-end justify-between">
+                              <span className="text-white text-[11px] font-bold truncate">Klik untuk gambar penuh ↗</span>
+                              <span className="text-white text-xs">🔍</span>
+                            </div>
+                          </a>
                         )}
                       </div>
                     )}

@@ -14,6 +14,8 @@ import {
   getCommunityMembers,
   sendCommunityMessage,
   toggleCommunityReaction,
+  clearCommunityChannelMessages,
+  clearCommunityCategoryMessages,
 } from '../communityActions';
 import type { EmojiClickData } from 'emoji-picker-react';
 
@@ -136,6 +138,29 @@ export default function CommunityChatView({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const messageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear Chat Handlers
+  const handleClearChannel = async (channelId: string) => {
+    if (!confirm(`Apakah Anda yakin ingin membersihkan seluruh riwayat percakapan di saluran #${activeChannel.name}?`)) return;
+    const res = await clearCommunityChannelMessages(channelId);
+    if (res.success) {
+      setMessages([]);
+    } else {
+      alert(res.error || 'Gagal membersihkan chat');
+    }
+  };
+
+  const handleClearCategory = async (cat: 'WORK' | 'GENERAL') => {
+    const label = cat === 'WORK' ? 'Kategori Kerjaan' : 'Kategori General & Santai';
+    if (!confirm(`Apakah Anda yakin ingin membersihkan seluruh percakapan di seluruh saluran ${label}?`)) return;
+    const res = await clearCommunityCategoryMessages(cat);
+    if (res.success) {
+      const msgs = await getCommunityMessages(activeChannel.id);
+      setMessages(msgs);
+    } else {
+      alert(res.error || 'Gagal membersihkan chat kategori');
+    }
+  };
 
   // Long-press handlers for mobile (touch and hold to show toolbar)
   const handleTouchStart = (msgId: string) => {
@@ -633,10 +658,21 @@ export default function CommunityChatView({
         <div className="flex-1 overflow-y-auto p-3 space-y-5">
           {/* 💼 KATEGORI KERJAAN */}
           <div className="space-y-1">
-            <p className="px-3 text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-              <span>💼</span>
-              <span>Kategori Kerjaan</span>
-            </p>
+            <div className="px-3 flex items-center justify-between mb-1.5">
+              <p className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
+                <span>💼</span>
+                <span>Kategori Kerjaan</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => handleClearCategory('WORK')}
+                className="text-[9px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 px-1.5 py-0.5 rounded-md transition-all flex items-center gap-1 cursor-pointer"
+                title="Bersihkan seluruh chat di Kategori Kerjaan"
+              >
+                <span>🧹</span>
+                <span>Bersihkan</span>
+              </button>
+            </div>
             {workChannels.map((ch) => {
               const isActive = activeChannel.id === ch.id;
               return (
@@ -665,10 +701,21 @@ export default function CommunityChatView({
 
           {/* 💬 GENERAL & SANTAI */}
           <div className="space-y-1">
-            <p className="px-3 text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-              <span>💬</span>
-              <span>General & Santai</span>
-            </p>
+            <div className="px-3 flex items-center justify-between mb-1.5">
+              <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+                <span>💬</span>
+                <span>General & Santai</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => handleClearCategory('GENERAL')}
+                className="text-[9px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 px-1.5 py-0.5 rounded-md transition-all flex items-center gap-1 cursor-pointer"
+                title="Bersihkan seluruh chat di Kategori General & Santai"
+              >
+                <span>🧹</span>
+                <span>Bersihkan</span>
+              </button>
+            </div>
             {generalChannels.map((ch) => {
               const isActive = activeChannel.id === ch.id;
               return (
@@ -726,20 +773,32 @@ export default function CommunityChatView({
             </div>
           </div>
 
-          {/* Desktop Right Member Toggle Button */}
-          <button
-            onClick={() => setShowMemberSidebar((p) => !p)}
-            className={`hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-2xl border text-xs font-bold transition-all active:scale-95 shadow-xs ${
-              showMemberSidebar
-                ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400'
-                : 'bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-purple-600'
-            }`}
-            title="Tampilkan / Sembunyikan Daftar Anggota"
-          >
-            <span>👥</span>
-            <span>{totalOnline} Online</span>
-            <span className="text-[10px] text-zinc-400">({totalOnline + totalOffline} Total)</span>
-          </button>
+          {/* Desktop Right Member Toggle & Clear Chat Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleClearChannel(activeChannel.id)}
+              className="flex items-center gap-1.5 bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-2xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+              title={`Bersihkan chat di saluran #${activeChannel.name}`}
+            >
+              <span>🧹</span>
+              <span>Bersihkan Chat Saluran</span>
+            </button>
+
+            <button
+              onClick={() => setShowMemberSidebar((p) => !p)}
+              className={`hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-2xl border text-xs font-bold transition-all active:scale-95 shadow-xs ${
+                showMemberSidebar
+                  ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400'
+                  : 'bg-zinc-100 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-purple-600'
+              }`}
+              title="Tampilkan / Sembunyikan Daftar Anggota"
+            >
+              <span>👥</span>
+              <span>{totalOnline} Online</span>
+              <span className="text-[10px] text-zinc-400">({totalOnline + totalOffline} Total)</span>
+            </button>
+          </div>
         </header>
 
         {/* Message Stream Scroll Area */}

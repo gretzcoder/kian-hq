@@ -1,9 +1,11 @@
 'use server';
 
 import { getSession } from '@/modules/auth/session';
+import { getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { sendPushNotificationToUser } from '@/modules/notifications/pushActions';
 import { getActiveSimulatedRole } from '@/modules/roles/viewAsRoleActions';
+import { revalidatePath } from 'next/cache';
 
 export interface CommunityChannel {
   id: string;
@@ -100,8 +102,8 @@ export async function getCommunityChannels(): Promise<{
     let lastMessage = '';
     let lastMessageAt = '';
 
-    if (session?.userId) {
-      const readRow = (await db
+    if (session) {
+      const readState = (await db
         .prepare(
           `SELECT last_read_at FROM community_channel_reads
            WHERE channel_id = ? AND user_id = ?`
@@ -109,32 +111,31 @@ export async function getCommunityChannels(): Promise<{
         .bind(ch.id, session.userId)
         .first()) as { last_read_at: string } | null;
 
-      const lastReadAt = readRow?.last_read_at || '1970-01-01 00:00:00';
+      const lastRead = readState?.last_read_at || '1970-01-01 00:00:00';
 
-      const unreadRow = (await db
+      const countRes = (await db
         .prepare(
           `SELECT COUNT(*) as count FROM community_messages
            WHERE channel_id = ? AND created_at > ?`
         )
-        .bind(ch.id, lastReadAt)
+        .bind(ch.id, lastRead)
         .first()) as { count: number } | null;
 
-      unreadCount = unreadRow?.count || 0;
+      unreadCount = countRes?.count || 0;
     }
 
-    const lastMsgRow = (await db
+    const lastMsgRes = (await db
       .prepare(
         `SELECT message, created_at FROM community_messages
          WHERE channel_id = ?
-         ORDER BY created_at DESC
-         LIMIT 1`
+         ORDER BY created_at DESC LIMIT 1`
       )
       .bind(ch.id)
       .first()) as { message: string; created_at: string } | null;
 
-    if (lastMsgRow) {
-      lastMessage = lastMsgRow.message;
-      lastMessageAt = lastMsgRow.created_at;
+    if (lastMsgRes) {
+      lastMessage = lastMsgRes.message;
+      lastMessageAt = lastMsgRes.created_at;
     }
 
     const item: CommunityChannel = {
@@ -159,19 +160,18 @@ export async function getCommunityChannels(): Promise<{
  */
 export async function getCommunityMessages(
   channelId: string,
-  limit = 60
+  limit = 100
 ): Promise<CommunityMessage[]> {
   const session = await getSession();
-  const simRole = await getActiveSimulatedRole();
   const db = await getDB();
 
-  const messagesRaw = (await db
+  const msgsRaw = (await db
     .prepare(
       `SELECT m.id, m.channel_id, m.user_id, m.message, m.attachment_url, m.parent_id, m.created_at,
               u.name as user_name, u.email as user_email, u.avatar_url as user_avatar,
-              r.name as user_role_name, r.color as user_role_color
+              r.name as user_role_name, r.description as user_role_color
        FROM community_messages m
-       JOIN users u ON m.user_id = u.id
+       LEFT JOIN users u ON m.user_id = u.id
        LEFT JOIN user_roles ur ON u.id = ur.user_id
        LEFT JOIN roles r ON ur.role_id = r.id
        WHERE m.channel_id = ?
@@ -188,63 +188,57 @@ export async function getCommunityMessages(
       attachment_url?: string;
       parent_id?: string;
       created_at: string;
-      user_name: string;
-      user_email: string;
+      user_name?: string;
+      user_email?: string;
       user_avatar?: string;
       user_role_name?: string;
       user_role_color?: string;
     }>;
   };
 
-  const messages = messagesRaw.results || [];
-  const currentUserId = session?.userId;
-
-  // Mark channel as read for current user
-  if (currentUserId) {
+  if (session) {
     await db
       .prepare(
         `INSERT INTO community_channel_reads (channel_id, user_id, last_read_at)
          VALUES (?, ?, CURRENT_TIMESTAMP)
          ON CONFLICT(channel_id, user_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`
       )
-      .bind(channelId, currentUserId)
+      .bind(channelId, session.userId)
       .run();
   }
 
+  const rawList = msgsRaw.results || [];
   const result: CommunityMessage[] = [];
 
-  for (const m of messages) {
-    // Check if current user is simulating a role
-    let displayRoleName = m.user_role_name;
-    let displayRoleColor = m.user_role_color;
-
-    if (simRole && currentUserId && m.user_id === currentUserId) {
-      displayRoleName = simRole.roleName;
-      if (simRole.roleName.toUpperCase().includes('TROOPERS')) {
-        displayRoleColor = '#3b82f6';
-      } else if (simRole.roleName.toUpperCase().includes('EXECUTIVE')) {
-        displayRoleColor = '#ec4899';
-      } else if (simRole.roleName.toUpperCase().includes('COORDINATOR')) {
-        displayRoleColor = '#2563eb';
-      }
+  for (const m of rawList) {
+    let roleColor = '#7c3aed';
+    if (m.user_role_color && m.user_role_color.startsWith('#')) {
+      roleColor = m.user_role_color;
+    } else {
+      const rName = (m.user_role_name || '').toUpperCase();
+      if (rName.includes('ADMIN')) roleColor = '#ef4444';
+      else if (rName.includes('EXECUTIVE')) roleColor = '#f59e0b';
+      else if (rName.includes('COORDINATOR')) roleColor = '#3b82f6';
+      else if (rName.includes('MENTOR')) roleColor = '#10b981';
+      else if (rName.includes('LEADER')) roleColor = '#8b5cf6';
+      else if (rName.includes('OJT')) roleColor = '#06b6d4';
     }
 
-    // Reactions for this message
     const reactionsRaw = (await db
       .prepare(
         `SELECT emoji, user_id FROM community_message_reactions
          WHERE message_id = ?`
       )
       .bind(m.id)
-      .all()) as { results: Array<{ emoji: string; user_id: string }> };
+      .all()) as {
+      results: Array<{ emoji: string; user_id: string }>;
+    };
 
-    const rawList = reactionsRaw.results || [];
     const reactionMap = new Map<string, { count: number; userReacted: boolean }>();
-
-    for (const r of rawList) {
+    for (const r of reactionsRaw.results || []) {
       const existing = reactionMap.get(r.emoji) || { count: 0, userReacted: false };
       existing.count += 1;
-      if (currentUserId && r.user_id === currentUserId) {
+      if (session && r.user_id === session.userId) {
         existing.userReacted = true;
       }
       reactionMap.set(r.emoji, existing);
@@ -258,24 +252,23 @@ export async function getCommunityMessages(
       })
     );
 
-    // Parent message details for Quote Reply
     let replyTo: CommunityMessage['reply_to'] = undefined;
     if (m.parent_id) {
-      const parentRow = (await db
+      const parentRaw = (await db
         .prepare(
           `SELECT m.id, m.message, u.name as user_name
            FROM community_messages m
-           JOIN users u ON m.user_id = u.id
+           LEFT JOIN users u ON m.user_id = u.id
            WHERE m.id = ?`
         )
         .bind(m.parent_id)
-        .first()) as { id: string; message: string; user_name: string } | null;
+        .first()) as { id: string; message: string; user_name?: string } | null;
 
-      if (parentRow) {
+      if (parentRaw) {
         replyTo = {
-          id: parentRow.id,
-          user_name: parentRow.user_name,
-          message: parentRow.message,
+          id: parentRaw.id,
+          user_name: parentRaw.user_name || 'User',
+          message: parentRaw.message,
         };
       }
     }
@@ -284,14 +277,14 @@ export async function getCommunityMessages(
       id: m.id,
       channel_id: m.channel_id,
       user_id: m.user_id,
-      user_name: m.user_name,
-      user_email: m.user_email,
-      user_avatar: m.user_avatar,
-      user_role_name: displayRoleName,
-      user_role_color: displayRoleColor,
+      user_name: m.user_name || 'Pengguna',
+      user_email: m.user_email || '',
+      user_avatar: m.user_avatar || undefined,
+      user_role_name: m.user_role_name || 'Member',
+      user_role_color: roleColor,
       message: m.message,
-      attachment_url: m.attachment_url,
-      parent_id: m.parent_id,
+      attachment_url: m.attachment_url || undefined,
+      parent_id: m.parent_id || undefined,
       reply_to: replyTo,
       created_at: m.created_at,
       reactions,
@@ -302,7 +295,7 @@ export async function getCommunityMessages(
 }
 
 /**
- * Gets members categorized strictly by role hierarchy for Online members, and a single Offline group at the bottom
+ * Gets members grouped by role (Online groups) + Single Offline group at bottom
  */
 export async function getCommunityMembers(): Promise<{
   onlineRoleGroups: CommunityMemberGroup[];
@@ -310,160 +303,119 @@ export async function getCommunityMembers(): Promise<{
   totalOnline: number;
   totalOffline: number;
 }> {
-  try {
-    const session = await getSession();
-    const simRole = await getActiveSimulatedRole();
-    const db = await getDB();
+  const db = await getDB();
+  const simulatedRole = await getActiveSimulatedRole();
 
-    const usersRaw = await db
+  try {
+    const membersRaw = (await db
       .prepare(
-        `SELECT u.id, u.name, u.email, u.avatar_url, u.created_at,
-                r.id as role_id, r.name as role_name, r.color as role_color
+        `SELECT u.id, u.name, u.email, u.avatar_url, u.user_type,
+                r.id as role_id, r.name as role_name, r.description as role_color
          FROM users u
          LEFT JOIN user_roles ur ON u.id = ur.user_id
          LEFT JOIN roles r ON ur.role_id = r.id
          ORDER BY r.name ASC, u.name ASC`
       )
-      .all();
+      .all()) as {
+      results: Array<{
+        id: string;
+        name: string;
+        email: string;
+        avatar_url?: string;
+        user_type?: string;
+        role_id?: string;
+        role_name?: string;
+        role_color?: string;
+      }>;
+    };
 
-    const users = ((usersRaw as any)?.results || usersRaw || []) as Array<{
-      id: string;
-      name: string;
-      email: string;
-      avatar_url?: string;
-      created_at?: string | number;
-      role_id?: string;
-      role_name?: string;
-      role_color?: string;
-    }>;
+    const readsRaw = (await db
+      .prepare('SELECT user_id, max(last_read_at) as last_active FROM community_channel_reads GROUP BY user_id')
+      .all()) as { results: Array<{ user_id: string; last_active: string }> };
 
-    const nowMs = Date.now();
-    const fifteenMinsMs = 15 * 60 * 1000;
+    const msgsRaw = (await db
+      .prepare('SELECT user_id, max(created_at) as last_active FROM community_messages GROUP BY user_id')
+      .all()) as { results: Array<{ user_id: string; last_active: string }> };
+
     const lastActiveMap = new Map<string, number>();
-
-    try {
-      const activeReadsRaw = await db
-        .prepare('SELECT user_id, max(last_read_at) as last_active FROM community_channel_reads GROUP BY user_id')
-        .all();
-      const activeReads = ((activeReadsRaw as any)?.results || activeReadsRaw || []) as Array<{
-        user_id: string;
-        last_active: string;
-      }>;
-      for (const row of activeReads) {
-        if (row.last_active) {
-          lastActiveMap.set(row.user_id, new Date(row.last_active).getTime());
-        }
-      }
-    } catch (e) {
-      console.warn('Channel reads query warning:', e);
+    for (const r of readsRaw.results || []) {
+      const t = new Date(r.last_active).getTime();
+      if (!isNaN(t)) lastActiveMap.set(r.user_id, Math.max(lastActiveMap.get(r.user_id) || 0, t));
+    }
+    for (const m of msgsRaw.results || []) {
+      const t = new Date(m.last_active).getTime();
+      if (!isNaN(t)) lastActiveMap.set(m.user_id, Math.max(lastActiveMap.get(m.user_id) || 0, t));
     }
 
-    try {
-      const activeMsgsRaw = await db
-        .prepare('SELECT user_id, max(created_at) as last_active FROM community_messages GROUP BY user_id')
-        .all();
-      const activeMsgs = ((activeMsgsRaw as any)?.results || activeMsgsRaw || []) as Array<{
-        user_id: string;
-        last_active: string;
-      }>;
-      for (const row of activeMsgs) {
-        if (row.last_active) {
-          const t = new Date(row.last_active).getTime();
-          const prev = lastActiveMap.get(row.user_id) || 0;
-          if (t > prev) lastActiveMap.set(row.user_id, t);
-        }
-      }
-    } catch (e) {
-      console.warn('Community msgs query warning:', e);
-    }
-
-    if (session?.userId) {
-      lastActiveMap.set(session.userId, nowMs);
-    }
-
+    const fiveMinsAgo = Date.now() - 5 * 60 * 1000;
     const onlineGroupMap = new Map<string, { roleColor?: string; members: CommunityMember[] }>();
     const offlineMembersList: CommunityMember[] = [];
-    const processedUserIds = new Set<string>();
 
-    let totalOnline = 0;
-    let totalOffline = 0;
+    const processedUsers = new Set<string>();
 
-    for (const u of users) {
-      if (processedUserIds.has(u.id)) continue;
-      processedUserIds.add(u.id);
+    for (const u of membersRaw.results || []) {
+      if (processedUsers.has(u.id)) continue;
+      processedUsers.add(u.id);
 
-      const lastActiveTime = lastActiveMap.get(u.id) || (u.created_at ? new Date(u.created_at).getTime() : 0);
-      const isOnline = nowMs - lastActiveTime < fifteenMinsMs;
+      const lastActive = lastActiveMap.get(u.id) || 0;
+      const isOnline = lastActive >= fiveMinsAgo;
 
-      let displayRoleName = u.role_name || 'Anggota Tim';
-      let displayRoleColor = u.role_color || '#7c3aed';
+      let rName = u.role_name || (u.user_type === 'STAFF' ? 'STAFF' : 'MEMBER');
+      let rColor = u.role_color;
 
-      if (simRole && session?.userId && u.id === session.userId) {
-        displayRoleName = simRole.roleName;
-        if (simRole.roleName.toUpperCase().includes('TROOPERS')) {
-          displayRoleColor = '#3b82f6';
-        } else if (simRole.roleName.toUpperCase().includes('EXECUTIVE')) {
-          displayRoleColor = '#ec4899';
-        } else if (simRole.roleName.toUpperCase().includes('COORDINATOR')) {
-          displayRoleColor = '#2563eb';
-        }
+      if (simulatedRole) {
+        rName = String(simulatedRole);
+      }
+
+      if (!rColor || !rColor.startsWith('#')) {
+        const uUpper = rName.toUpperCase();
+        if (uUpper.includes('ADMIN')) rColor = '#ef4444';
+        else if (uUpper.includes('EXECUTIVE')) rColor = '#f59e0b';
+        else if (uUpper.includes('COORDINATOR')) rColor = '#3b82f6';
+        else if (uUpper.includes('MENTOR')) rColor = '#10b981';
+        else if (uUpper.includes('LEADER')) rColor = '#8b5cf6';
+        else if (uUpper.includes('OJT')) rColor = '#06b6d4';
+        else rColor = '#8b5cf6';
       }
 
       const memberObj: CommunityMember = {
         id: u.id,
         name: u.name,
         email: u.email,
-        avatar_url: u.avatar_url,
-        role_id: u.role_id,
-        role_name: displayRoleName,
-        role_color: displayRoleColor,
+        avatar_url: u.avatar_url || undefined,
+        role_id: u.role_id || undefined,
+        role_name: rName,
+        role_color: rColor,
         is_online: isOnline,
-        last_active_at: u.created_at ? String(u.created_at) : undefined,
+        last_active_at: lastActive ? new Date(lastActive).toISOString() : undefined,
       };
 
       if (isOnline) {
-        totalOnline += 1;
-        const groupKey = displayRoleName;
-        const existing = onlineGroupMap.get(groupKey) || { roleColor: displayRoleColor, members: [] };
-        existing.members.push(memberObj);
-        onlineGroupMap.set(groupKey, existing);
+        const existingGroup = onlineGroupMap.get(rName) || { roleColor: rColor, members: [] };
+        existingGroup.members.push(memberObj);
+        onlineGroupMap.set(rName, existingGroup);
       } else {
-        totalOffline += 1;
         offlineMembersList.push(memberObj);
       }
     }
-
-    // Role Hierarchy Priority Sorting (Executive -> Coordinator -> Mentor -> Creator -> Collaborator -> Troopers)
-    const HIERARCHY: { [key: string]: number } = {
-      EXECUTIVE: 1,
-      ADMIN: 1,
-      STAFF: 1,
-      COORDINATOR: 2,
-      MENTOR: 3,
-      CREATOR: 4,
-      COLLABORATOR: 5,
-      TROOPERS: 6,
-    };
-
-    const getRank = (name: string) => {
-      const upper = name.toUpperCase();
-      for (const key of Object.keys(HIERARCHY)) {
-        if (upper.includes(key)) return HIERARCHY[key];
-      }
-      return 99;
-    };
 
     const onlineRoleGroups: CommunityMemberGroup[] = Array.from(onlineGroupMap.entries())
       .map(([groupName, data]) => ({
         groupName,
         roleColor: data.roleColor,
-        members: data.members.sort((a, b) => a.name.localeCompare(b.name)),
+        members: data.members,
       }))
-      .sort((a, b) => getRank(a.groupName) - getRank(b.groupName) || a.groupName.localeCompare(b.groupName));
+      .sort((a, b) => a.groupName.localeCompare(b.groupName));
 
-    const offlineMembers = offlineMembersList.sort((a, b) => a.name.localeCompare(b.name));
+    const totalOnline = onlineRoleGroups.reduce((acc, g) => acc + g.members.length, 0);
+    const totalOffline = offlineMembersList.length;
 
-    return { onlineRoleGroups, offlineMembers, totalOnline, totalOffline };
+    return {
+      onlineRoleGroups,
+      offlineMembers: offlineMembersList,
+      totalOnline,
+      totalOffline,
+    };
   } catch (err) {
     console.error('Failed in getCommunityMembers:', err);
     return { onlineRoleGroups: [], offlineMembers: [], totalOnline: 0, totalOffline: 0 };
@@ -483,19 +435,27 @@ export async function sendCommunityMessage(
   if (!session) return { success: false };
 
   const db = await getDB();
-  const id = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const id = `comm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
   await db
     .prepare(
       `INSERT INTO community_messages (id, channel_id, user_id, message, attachment_url, parent_id, created_at)
        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
     )
-    .bind(id, channelId, session.userId, message, attachmentUrl || null, parentId || null)
+    .bind(id, channelId, session.userId, message.trim(), attachmentUrl || null, parentId || null)
     .run();
 
-  // Handle @mentions push notifications
+  await db
+    .prepare(
+      `INSERT INTO community_channel_reads (channel_id, user_id, last_read_at)
+       VALUES (?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(channel_id, user_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`
+    )
+    .bind(channelId, session.userId)
+    .run();
+
   try {
-    const mentionMatches = message.match(/@([\w.-]+)/g);
+    const mentionMatches = message.match(/@[\w.-]+/g);
     if (mentionMatches && mentionMatches.length > 0) {
       const allUsers = (await db.prepare('SELECT id, name, email FROM users').all()) as {
         results: Array<{ id: string; name: string; email: string }>;
@@ -575,5 +535,97 @@ export async function toggleCommunityReaction(
       .bind(id, messageId, session.userId, emoji)
       .run();
     return { success: true, action: 'added' };
+  }
+}
+
+/**
+ * Clears all messages in a specific community channel
+ */
+export async function clearCommunityChannelMessages(
+  channelId: string
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+
+  const isStaffOrAdmin =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER', 'MENTOR'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isStaffOrAdmin) {
+    return { success: false, error: 'Hanya Admin, Koordinator, atau Mentor yang dapat membersihkan riwayat chat.' };
+  }
+
+  try {
+    await db
+      .prepare(
+        `DELETE FROM community_message_reactions WHERE message_id IN (SELECT id FROM community_messages WHERE channel_id = ?)`
+      )
+      .bind(channelId)
+      .run();
+
+    await db
+      .prepare(`DELETE FROM community_messages WHERE channel_id = ?`)
+      .bind(channelId)
+      .run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true };
+  } catch (err: any) {
+    console.error('clearCommunityChannelMessages failed:', err);
+    return { success: false, error: err.message || 'Gagal membersihkan chat saluran.' };
+  }
+}
+
+/**
+ * Clears all messages in all community channels of a specific category ('WORK' | 'GENERAL')
+ */
+export async function clearCommunityCategoryMessages(
+  category: 'WORK' | 'GENERAL'
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+
+  const isStaffOrAdmin =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER', 'MENTOR'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isStaffOrAdmin) {
+    return { success: false, error: 'Hanya Admin, Koordinator, atau Mentor yang dapat membersihkan riwayat chat kategori.' };
+  }
+
+  try {
+    await db
+      .prepare(
+        `DELETE FROM community_message_reactions
+         WHERE message_id IN (
+           SELECT m.id FROM community_messages m
+           JOIN community_channels c ON m.channel_id = c.id
+           WHERE c.category = ?
+         )`
+      )
+      .bind(category)
+      .run();
+
+    await db
+      .prepare(
+        `DELETE FROM community_messages
+         WHERE channel_id IN (SELECT id FROM community_channels WHERE category = ?)`
+      )
+      .bind(category)
+      .run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true };
+  } catch (err: any) {
+    console.error('clearCommunityCategoryMessages failed:', err);
+    return { success: false, error: err.message || 'Gagal membersihkan chat kategori.' };
   }
 }
