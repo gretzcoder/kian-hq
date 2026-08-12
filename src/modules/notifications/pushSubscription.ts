@@ -21,11 +21,56 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return outputArray;
 }
 
+export function isIOS(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
+export function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as any).standalone === true
+  );
+}
+
+/**
+ * Cross-browser wrapper for Notification.requestPermission
+ * Handles both Promise-based and Callback-based implementations on iOS Safari
+ */
+export async function requestNotificationPermission(): Promise<NotificationPermission> {
+  if (typeof window === 'undefined' || !('Notification' in window)) {
+    return 'denied';
+  }
+
+  if (Notification.permission === 'granted' || Notification.permission === 'denied') {
+    return Notification.permission;
+  }
+
+  return new Promise((resolve) => {
+    try {
+      const promise = Notification.requestPermission((permission) => {
+        resolve(permission);
+      });
+      if (promise && typeof promise.then === 'function') {
+        promise.then(resolve).catch(() => resolve(Notification.permission));
+      }
+    } catch (e) {
+      resolve(Notification.permission);
+    }
+  });
+}
+
 export interface PushSubscriptionState {
   isSupported: boolean;
   permission: NotificationPermission;
   isSubscribed: boolean;
   subscription: PushSubscription | null;
+  isIOS?: boolean;
+  isStandalone?: boolean;
 }
 
 /**
@@ -50,39 +95,56 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
  * Checks current push subscription status
  */
 export async function getPushSubscriptionState(): Promise<PushSubscriptionState> {
-  if (
-    typeof window === 'undefined' ||
-    !('serviceWorker' in navigator) ||
-    !('PushManager' in window)
-  ) {
+  const ios = isIOS();
+  const standalone = isStandalone();
+
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
     return {
       isSupported: false,
       permission: 'default',
       isSubscribed: false,
       subscription: null,
+      isIOS: ios,
+      isStandalone: standalone,
     };
   }
 
-  const permission = Notification.permission;
+  const permission: NotificationPermission =
+    typeof Notification !== 'undefined' ? Notification.permission : 'default';
+
   const registration = await registerServiceWorker();
 
-  if (!registration) {
+  if (!registration || !registration.pushManager) {
+    return {
+      isSupported: 'Notification' in window,
+      permission,
+      isSubscribed: false,
+      subscription: null,
+      isIOS: ios,
+      isStandalone: standalone,
+    };
+  }
+
+  try {
+    const subscription = await registration.pushManager.getSubscription();
+    return {
+      isSupported: true,
+      permission,
+      isSubscribed: Boolean(subscription),
+      subscription,
+      isIOS: ios,
+      isStandalone: standalone,
+    };
+  } catch (e) {
     return {
       isSupported: true,
       permission,
       isSubscribed: false,
       subscription: null,
+      isIOS: ios,
+      isStandalone: standalone,
     };
   }
-
-  const subscription = await registration.pushManager.getSubscription();
-
-  return {
-    isSupported: true,
-    permission,
-    isSubscribed: Boolean(subscription),
-    subscription,
-  };
 }
 
 /**
@@ -91,19 +153,34 @@ export async function getPushSubscriptionState(): Promise<PushSubscriptionState>
 export async function subscribeUserToPush(
   vapidPublicKey: string = DEFAULT_VAPID_PUBLIC_KEY
 ): Promise<{ success: boolean; subscription?: PushSubscription; error?: string }> {
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+  if (typeof window === 'undefined') {
     return { success: false, error: 'Web Push tidak didukung oleh peramban ini.' };
   }
 
   try {
-    const permission = await Notification.requestPermission();
+    const permission = await requestNotificationPermission();
     if (permission !== 'granted') {
-      return { success: false, error: 'Izin notifikasi tidak diberikan oleh pengguna.' };
+      return { success: false, error: 'Izin notifikasi tidak diberikan oleh peramban.' };
+    }
+
+    if (!('serviceWorker' in navigator)) {
+      return { success: false, error: 'Service worker tidak didukung.' };
     }
 
     const registration = await registerServiceWorker();
     if (!registration) {
-      return { success: false, error: 'Gagal merestorasi Service Worker.' };
+      return { success: false, error: 'Gagal mengaktifkan Service Worker.' };
+    }
+
+    if (!registration.pushManager) {
+      if (isIOS() && !isStandalone()) {
+        return {
+          success: false,
+          error:
+            'Di iOS, buka menu Share (⎋) di Safari lalu pilih "Tambah ke Layar Utama" (Add to Home Screen) untuk mengaktifkan notifikasi push.',
+        };
+      }
+      return { success: false, error: 'Push Manager belum didukung oleh peramban ini.' };
     }
 
     let subscription = await registration.pushManager.getSubscription();
@@ -132,7 +209,7 @@ export async function unsubscribeUserFromPush(): Promise<{ success: boolean; err
 
   try {
     const registration = await registerServiceWorker();
-    if (!registration) return { success: true };
+    if (!registration || !registration.pushManager) return { success: true };
 
     const subscription = await registration.pushManager.getSubscription();
     if (subscription) {
@@ -143,3 +220,4 @@ export async function unsubscribeUserFromPush(): Promise<{ success: boolean; err
     return { success: false, error: err?.message || 'Gagal menghentikan langganan notifikasi.' };
   }
 }
+

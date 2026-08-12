@@ -26,6 +26,8 @@ export default function NotificationSettingsForm({ initialSettings }: Notificati
     permission: 'default',
     isSubscribed: false,
     subscription: null,
+    isIOS: false,
+    isStandalone: false,
   });
 
   const [isPending, startTransition] = useTransition();
