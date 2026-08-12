@@ -12,6 +12,7 @@ import { useUI } from '@/components/ui/UIProvider';
 export interface PersonalTaskRow {
   id: string; // task_id
   assignment_id?: string;
+  user_id?: string | null;
   project_id: string;
   workspace_id: string | null;
   title: string;
@@ -56,6 +57,7 @@ interface DashboardPersonalWorkspaceProps {
   canReview: boolean;
   widgetTitle: string;
   widgetDesc: string;
+  currentUserId?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -223,7 +225,7 @@ function InlineResubmitBox({
               </span>
               <div>
                 <p className="text-xs font-black text-red-700 dark:text-red-300">
-                  Catatan Revisi dari {revisionRequestedByName || 'Evaluator / QC'}
+                  Catatan Revisi dari {revisionRequestedByName || 'Koordinator / Evaluator QC'}
                 </p>
                 <p className="text-[10px] text-red-500 dark:text-red-400 font-semibold">
                   {revisionRequestedByRole || 'Koordinator / Mentor QC'}
@@ -487,7 +489,7 @@ function TaskCardItem({
                       assignmentId={sub.assignment_id}
                       currentResultUrl={sub.result_url}
                       revisionNote={sub.revision_note}
-                      revisionRequestedByName={sub.revision_requested_by_name || sub.creator_name}
+                      revisionRequestedByName={sub.revision_requested_by_name}
                       revisionRequestedByRole={sub.revision_requested_by_role}
                     />
                   )}
@@ -502,7 +504,7 @@ function TaskCardItem({
                           </span>
                           <div>
                             <p className="text-xs font-black text-red-700 dark:text-red-300">
-                              Catatan Revisi dari {sub.revision_requested_by_name || 'Evaluator / QC'}
+                              Catatan Revisi dari {sub.revision_requested_by_name || 'Koordinator / Evaluator QC'}
                             </p>
                             <p className="text-[10px] text-red-500 dark:text-red-400 font-semibold">
                               {sub.revision_requested_by_role || 'Koordinator / Mentor QC'}
@@ -570,6 +572,7 @@ export default function DashboardPersonalWorkspace({
   canReview,
   widgetTitle,
   widgetDesc,
+  currentUserId,
 }: DashboardPersonalWorkspaceProps) {
   type DashboardTab =
     | 'ACTIVE'
@@ -593,14 +596,15 @@ export default function DashboardPersonalWorkspace({
   const completedGrouped = groupTasksByParent(completedTasks);
 
   // Filter 1: Perlu Revisi (STRICTLY tasks assigned to current user as assignee that require revision)
-  const myRevisionTasks = personalTasks.filter(
-    (t) => t.status === 'REVISION_REQUESTED'
+  const allRawTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks];
+  const myRevisionTasks = allRawTasks.filter(
+    (t) => t.status === 'REVISION_REQUESTED' && currentUserId != null && t.user_id === currentUserId
   );
   const myRevisionGrouped = groupTasksByParent(myRevisionTasks);
 
   // Filter 2: Troopers Revisi (Tasks under mentorship or workspace where troopers are requested to revise)
-  const trooperRevisionTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks].filter(
-    (t) => t.status === 'REVISION_REQUESTED'
+  const trooperRevisionTasks = allRawTasks.filter(
+    (t) => t.status === 'REVISION_REQUESTED' && (currentUserId == null || t.user_id !== currentUserId)
   );
   const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
 
