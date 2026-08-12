@@ -8,6 +8,7 @@ import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreview
 import ReviewActions from '@/app/dashboard/review/components/ReviewActions';
 import { submitResult } from '@/modules/tasks/actions';
 import { useUI } from '@/components/ui/UIProvider';
+import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 
 export interface PersonalTaskRow {
   id: string; // task_id
@@ -219,42 +220,15 @@ function InlineResubmitBox({
         </span>
       </div>
 
-      {/* Styled Revision Note Card */}
+      {/* Styled Collapsible Revision Note Card */}
       {revisionNote && (
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30 border border-red-200/80 dark:border-red-800/60 shadow-2xs space-y-2.5">
-          <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-red-200/60 dark:border-red-800/40">
-            <div className="flex items-center gap-2">
-              <span className="w-7 h-7 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 flex items-center justify-center text-xs font-black shrink-0">
-                💬
-              </span>
-              <div>
-                <p className="text-xs font-black text-red-700 dark:text-red-300">
-                  Catatan Revisi dari {revisionRequestedByName || 'Koordinator / Evaluator QC'}
-                </p>
-                <p className="text-[10px] text-red-500 dark:text-red-400 font-semibold">
-                  {revisionRequestedByRole || 'Koordinator / Mentor QC'}
-                </p>
-              </div>
-            </div>
-
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/20">
-              ⚠️ Catatan Evaluator
-            </span>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-white/90 dark:bg-zinc-950/90 border border-red-100 dark:border-red-900/40 shadow-2xs">
-            {revisionNote.includes('<') ? (
-              <div
-                className="prose dark:prose-invert prose-xs max-w-none text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 font-medium leading-relaxed"
-                dangerouslySetInnerHTML={{ __html: revisionNote }}
-              />
-            ) : (
-              <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic whitespace-pre-wrap">
-                "{revisionNote}"
-              </p>
-            )}
-          </div>
-        </div>
+        <CollapsibleNoteViewer
+          content={revisionNote}
+          authorName={revisionRequestedByName || 'Koordinator / Evaluator QC'}
+          authorRole={revisionRequestedByRole || 'Koordinator / Mentor QC'}
+          badgeLabel="⚠️ Catatan Evaluator"
+          type="REVISION"
+        />
       )}
 
       {/* URL Input Form */}
@@ -510,42 +484,15 @@ function TaskCardItem({
                     />
                   )}
 
-                  {/* Styled Revision Note Card when viewing under TROOPER_REVISION or outside MY_REVISION tab */}
+                  {/* Styled Collapsible Revision Note Card when viewing under TROOPER_REVISION or outside MY_REVISION tab */}
                   {isRevision && sub.revision_note && activeTab !== 'MY_REVISION' && (
-                    <div className="p-4 rounded-2xl bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30 border border-red-200/80 dark:border-red-800/60 shadow-xs space-y-2.5">
-                      <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-red-200/60 dark:border-red-800/40">
-                        <div className="flex items-center gap-2">
-                          <span className="w-7 h-7 rounded-xl bg-red-500/15 text-red-600 dark:text-red-400 flex items-center justify-center text-xs font-black shrink-0">
-                            💬
-                          </span>
-                          <div>
-                            <p className="text-xs font-black text-red-700 dark:text-red-300">
-                              Catatan Revisi dari {sub.revision_requested_by_name || 'Koordinator / Evaluator QC'}
-                            </p>
-                            <p className="text-[10px] text-red-500 dark:text-red-400 font-semibold">
-                              {sub.revision_requested_by_role || 'Koordinator / Mentor QC'}
-                            </p>
-                          </div>
-                        </div>
-
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/20">
-                          ⚠️ Catatan Evaluator
-                        </span>
-                      </div>
-
-                      <div className="p-3.5 rounded-xl bg-white/90 dark:bg-zinc-950/90 border border-red-100 dark:border-red-900/40 shadow-2xs">
-                        {sub.revision_note.includes('<') ? (
-                          <div
-                            className="prose dark:prose-invert prose-xs max-w-none text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 font-medium leading-relaxed"
-                            dangerouslySetInnerHTML={{ __html: sub.revision_note }}
-                          />
-                        ) : (
-                          <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic whitespace-pre-wrap">
-                            "{sub.revision_note}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                    <CollapsibleNoteViewer
+                      content={sub.revision_note}
+                      authorName={sub.revision_requested_by_name || 'Koordinator / Evaluator QC'}
+                      authorRole={sub.revision_requested_by_role || 'Koordinator / Mentor QC'}
+                      badgeLabel="⚠️ Catatan Evaluator"
+                      type="REVISION"
+                    />
                   )}
 
                   {/* Inline QC Review Actions for WAITING_REVIEW items */}
@@ -568,23 +515,13 @@ function TaskCardItem({
                     </div>
                   )}
 
-                  {/* Appreciation Note */}
+                  {/* Collapsible Appreciation Note */}
                   {['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status) && cleanedNote && (
-                    <div className="p-3 rounded-xl bg-purple-500/5 border border-purple-500/15 space-y-1">
-                      <p className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1">
-                        💬 Feedback Evaluator
-                      </p>
-                      {cleanedNote.includes('<') ? (
-                        <div
-                          className="prose dark:prose-invert prose-xs max-w-none text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed font-medium"
-                          dangerouslySetInnerHTML={{ __html: cleanedNote }}
-                        />
-                      ) : (
-                        <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
-                          "{cleanedNote}"
-                        </p>
-                      )}
-                    </div>
+                    <CollapsibleNoteViewer
+                      content={cleanedNote}
+                      badgeLabel="✨ Apresiasi"
+                      type="APPRECIATION"
+                    />
                   )}
                 </div>
               );

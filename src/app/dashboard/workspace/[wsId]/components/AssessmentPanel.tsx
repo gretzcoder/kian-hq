@@ -18,6 +18,7 @@ import {
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
+import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 import { cleanAppreciationNote } from '@/lib/noteUtils';
 import SendReminderButton from '@/components/SendReminderButton';
 
@@ -346,26 +347,11 @@ function OJTSubmitForm({
       )}
 
       {assignment.revision_note && (
-        <div className="bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30 border border-red-200/80 dark:border-red-800/60 rounded-2xl p-4 space-y-2 shadow-2xs">
-          <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-red-200/60 dark:border-red-800/40">
-            <span className="text-[10px] font-black text-red-700 dark:text-red-300 uppercase tracking-widest flex items-center gap-1.5">
-              <span>💬 Catatan Revisi Evaluator</span>
-            </span>
-            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/20">
-              Perlu Revisi
-            </span>
-          </div>
-          {assignment.revision_note.includes('<') ? (
-            <div
-              className="prose dark:prose-invert prose-xs max-w-none text-xs text-red-900 dark:text-red-200 font-medium leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: assignment.revision_note }}
-            />
-          ) : (
-            <p className="text-xs text-red-800 dark:text-red-300 font-medium italic leading-relaxed whitespace-pre-wrap">
-              "{assignment.revision_note}"
-            </p>
-          )}
-        </div>
+        <CollapsibleNoteViewer
+          content={assignment.revision_note}
+          badgeLabel="Perlu Revisi"
+          type="REVISION"
+        />
       )}
 
       {!isLocked && (
@@ -1603,21 +1589,11 @@ function OJTTaskCard({
                 </div>
 
                 {cleanedNote && (
-                  <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 space-y-1.5">
-                    <p className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <span>💬 Catatan Apresiasi & Feedback Evaluator</span>
-                    </p>
-                    {cleanedNote.includes('<') ? (
-                      <div
-                        className="prose dark:prose-invert prose-xs max-w-none text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed font-medium"
-                        dangerouslySetInnerHTML={{ __html: cleanedNote }}
-                      />
-                    ) : (
-                      <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
-                        "{cleanedNote}"
-                      </p>
-                    )}
-                  </div>
+                  <CollapsibleNoteViewer
+                    content={cleanedNote}
+                    badgeLabel="✨ Apresiasi"
+                    type="APPRECIATION"
+                  />
                 )}
               </div>
             );

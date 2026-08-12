@@ -10,6 +10,7 @@ import { useUI } from '@/components/ui/UIProvider';
 import ReviewActions from '@/app/dashboard/review/components/ReviewActions';
 import { cleanAppreciationNote } from '@/lib/noteUtils';
 import SendReminderButton from '@/components/SendReminderButton';
+import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 
 // ─── CreatorDrivePreview ────────────────────────────────────────────────────
 // Aspect-ratio aware, user-friendly Google Drive preview widget for Creator step
@@ -572,23 +573,13 @@ export default function TaskActions({
                               );
                             })()}
 
-                            {/* Revision Note */}
+                            {/* Collapsible Revision Note */}
                             {assign.revision_note && ['REVISION_REQUESTED', 'DECLINED'].includes(assign.status) && (
-                              <div className="bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-950/40 dark:to-rose-950/30 border border-red-200/80 dark:border-red-800/60 rounded-2xl p-3.5 space-y-1.5 shadow-2xs">
-                                <span className="font-black text-[10px] text-red-700 dark:text-red-300 uppercase tracking-widest block flex items-center gap-1">
-                                  <span>💬</span> Catatan Revisi Evaluator
-                                </span>
-                                {assign.revision_note.includes('<') ? (
-                                  <div
-                                    className="prose dark:prose-invert prose-xs max-w-none text-xs text-red-900 dark:text-red-200 font-medium leading-relaxed"
-                                    dangerouslySetInnerHTML={{ __html: assign.revision_note }}
-                                  />
-                                ) : (
-                                  <p className="text-xs text-red-800 dark:text-red-300 font-medium italic leading-relaxed whitespace-pre-wrap">
-                                    "{assign.revision_note}"
-                                  </p>
-                                )}
-                              </div>
+                              <CollapsibleNoteViewer
+                                content={assign.revision_note}
+                                badgeLabel="⚠️ Perlu Revisi"
+                                type="REVISION"
+                              />
                             )}
 
                             {/* Clean Consolidated QC Approval Indicator */}
@@ -847,21 +838,12 @@ export default function TaskActions({
                                 const note = cleanAppreciationNote((assign as any).appreciation_note);
                                 if (!note) return null;
                                 return (
-                                  <div className="mt-2.5 p-3 rounded-xl bg-purple-500/5 border border-purple-500/15 space-y-1">
-                                    <div className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider flex items-center gap-1">
-                                      <span>💬 Catatan Apresiasi & Feedback Evaluator</span>
-                                    </div>
-                                    {note.includes('<') ? (
-                                      <div
-                                        className="prose dark:prose-invert prose-xs max-w-none text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed font-medium"
-                                        dangerouslySetInnerHTML={{ __html: note }}
-                                      />
-                                    ) : (
-                                      <p className="text-xs text-zinc-800 dark:text-zinc-200 italic font-medium leading-relaxed">
-                                        "{note}"
-                                      </p>
-                                    )}
-                                  </div>
+                                  <CollapsibleNoteViewer
+                                    content={note}
+                                    badgeLabel="✨ Apresiasi"
+                                    type="APPRECIATION"
+                                    className="mt-2.5"
+                                  />
                                 );
                               })()}
 
