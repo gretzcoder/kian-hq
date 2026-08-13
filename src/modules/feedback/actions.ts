@@ -5,15 +5,25 @@ import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { revalidatePath } from 'next/cache';
 
+export interface FeedbackReaction {
+  emoji: string;
+  count: number;
+  hasReacted: boolean;
+  userNames: string[];
+}
+
 export interface ExecutiveFeedbackReply {
   id: string;
   feedback_id: string;
+  parent_id?: string | null;
+  parent_user_name?: string | null;
   user_id: string;
   message: string;
   created_at: number;
   user_name: string;
   user_email: string;
   user_avatar?: string | null;
+  reactions: FeedbackReaction[];
 }
 
 export interface ExecutiveFeedbackItem {
@@ -30,6 +40,7 @@ export interface ExecutiveFeedbackItem {
   sparks_given_by?: string | null;
   sparks_given_by_name?: string | null;
   sparks_adjustment_id?: string | null;
+  reactions: FeedbackReaction[];
   replies: ExecutiveFeedbackReply[];
 }
 
@@ -84,9 +95,9 @@ export async function getExecutiveFeedbacks(): Promise<ExecutiveFeedbackItem[]> 
   if (!feedbackRows || feedbackRows.length === 0) return [];
 
   const feedbackIds = feedbackRows.map((f: any) => f.id);
-  const placeholders = feedbackIds.map(() => '?').join(',');
+  const fbPlaceholders = feedbackIds.map(() => '?').join(',');
 
-  // Fetch replies for these feedbacks
+  // Fetch replies for these feedbacks (with parent author name if nested)
   let replyRows: any[] = [];
   try {
     const { results } = await db
@@ -95,19 +106,74 @@ export async function getExecutiveFeedbacks(): Promise<ExecutiveFeedbackItem[]> 
           r.*, 
           u.name as user_name, 
           u.email as user_email, 
-          u.avatar_url as user_avatar
+          u.avatar_url as user_avatar,
+          pu.name as parent_user_name
         FROM executive_feedback_replies r
         JOIN users u ON r.user_id = u.id
-        WHERE r.feedback_id IN (${placeholders})
+        LEFT JOIN executive_feedback_replies pr ON r.parent_id = pr.id
+        LEFT JOIN users pu ON pr.user_id = pu.id
+        WHERE r.feedback_id IN (${fbPlaceholders})
         ORDER BY r.created_at ASC
       `)
       .bind(...feedbackIds)
       .all();
     replyRows = results || [];
   } catch (err) {
-    // If replies table doesn't exist yet or query fails, fall back to empty
     replyRows = [];
   }
+
+  // Fetch reactions for feedbacks & replies
+  let feedbackReactionsRaw: any[] = [];
+  let replyReactionsRaw: any[] = [];
+
+  try {
+    const { results: fbRx } = await db
+      .prepare(`
+        SELECT r.target_id, r.emoji, r.user_id, u.name as user_name
+        FROM executive_feedback_reactions r
+        JOIN users u ON r.user_id = u.id
+        WHERE r.target_type = 'FEEDBACK' AND r.target_id IN (${fbPlaceholders})
+      `)
+      .bind(...feedbackIds)
+      .all();
+    feedbackReactionsRaw = fbRx || [];
+  } catch {}
+
+  const replyIds = replyRows.map((r: any) => r.id);
+  if (replyIds.length > 0) {
+    const replyPlaceholders = replyIds.map(() => '?').join(',');
+    try {
+      const { results: repRx } = await db
+        .prepare(`
+          SELECT r.target_id, r.emoji, r.user_id, u.name as user_name
+          FROM executive_feedback_reactions r
+          JOIN users u ON r.user_id = u.id
+          WHERE r.target_type = 'REPLY' AND r.target_id IN (${replyPlaceholders})
+        `)
+        .bind(...replyIds)
+        .all();
+      replyReactionsRaw = repRx || [];
+    } catch {}
+  }
+
+  // Helper to build reaction objects
+  const formatReactions = (rawRows: any[], targetId: string): FeedbackReaction[] => {
+    const map = new Map<string, { count: number; hasReacted: boolean; userNames: string[] }>();
+    for (const r of rawRows) {
+      if (r.target_id !== targetId) continue;
+      const entry = map.get(r.emoji) || { count: 0, hasReacted: false, userNames: [] };
+      entry.count++;
+      if (r.user_id === session.userId) entry.hasReacted = true;
+      if (r.user_name && !entry.userNames.includes(r.user_name)) entry.userNames.push(r.user_name);
+      map.set(r.emoji, entry);
+    }
+    return Array.from(map.entries()).map(([emoji, item]) => ({
+      emoji,
+      count: item.count,
+      hasReacted: item.hasReacted,
+      userNames: item.userNames,
+    }));
+  };
 
   // Group replies by feedback_id
   const repliesByFeedbackId = new Map<string, ExecutiveFeedbackReply[]>();
@@ -116,12 +182,15 @@ export async function getExecutiveFeedbacks(): Promise<ExecutiveFeedbackItem[]> 
     list.push({
       id: r.id,
       feedback_id: r.feedback_id,
+      parent_id: r.parent_id || null,
+      parent_user_name: r.parent_user_name || null,
       user_id: r.user_id,
       message: r.message,
       created_at: Number(r.created_at),
       user_name: r.user_name,
       user_email: r.user_email,
       user_avatar: r.user_avatar,
+      reactions: formatReactions(replyReactionsRaw, r.id),
     });
     repliesByFeedbackId.set(r.feedback_id, list);
   }
@@ -140,11 +209,12 @@ export async function getExecutiveFeedbacks(): Promise<ExecutiveFeedbackItem[]> 
     sparks_given_by: f.sparks_given_by || null,
     sparks_given_by_name: f.sparks_given_by_name || null,
     sparks_adjustment_id: f.sparks_adjustment_id || null,
+    reactions: formatReactions(feedbackReactionsRaw, f.id),
     replies: repliesByFeedbackId.get(f.id) || [],
   }));
 }
 
-export async function replyToExecutiveFeedback(feedbackId: string, message: string) {
+export async function replyToExecutiveFeedback(feedbackId: string, message: string, parentId?: string) {
   const session = await getSession();
   if (!session) return { success: false, error: 'Tidak terautentikasi.' };
 
@@ -158,11 +228,49 @@ export async function replyToExecutiveFeedback(feedbackId: string, message: stri
 
   await db
     .prepare(`
-      INSERT INTO executive_feedback_replies (id, feedback_id, user_id, message, created_at)
-      VALUES (?, ?, ?, ?, strftime('%s', 'now'))
+      INSERT INTO executive_feedback_replies (id, feedback_id, parent_id, user_id, message, created_at)
+      VALUES (?, ?, ?, ?, ?, strftime('%s', 'now'))
     `)
-    .bind(id, feedbackId, session.userId, cleanMessage)
+    .bind(id, feedbackId, parentId || null, session.userId, cleanMessage)
     .run();
+
+  revalidatePath('/dashboard/feedbacks');
+  return { success: true };
+}
+
+export async function toggleFeedbackReaction(
+  targetType: 'FEEDBACK' | 'REPLY',
+  targetId: string,
+  emoji: string
+) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Tidak terautentikasi.' };
+
+  const db = await getDB();
+
+  const existing = await db
+    .prepare(`
+      SELECT id FROM executive_feedback_reactions
+      WHERE target_type = ? AND target_id = ? AND user_id = ? AND emoji = ?
+    `)
+    .bind(targetType, targetId, session.userId, emoji)
+    .first() as { id: string } | null;
+
+  if (existing) {
+    await db
+      .prepare('DELETE FROM executive_feedback_reactions WHERE id = ?')
+      .bind(existing.id)
+      .run();
+  } else {
+    const rxId = `fbrx_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    await db
+      .prepare(`
+        INSERT INTO executive_feedback_reactions (id, target_type, target_id, user_id, emoji, created_at)
+        VALUES (?, ?, ?, ?, ?, strftime('%s', 'now'))
+      `)
+      .bind(rxId, targetType, targetId, session.userId, emoji)
+      .run();
+  }
 
   revalidatePath('/dashboard/feedbacks');
   return { success: true };

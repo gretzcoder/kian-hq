@@ -43,6 +43,22 @@ export async function ensureSchemaMigrations(db: any) {
   try {
     await db.prepare('ALTER TABLE executive_feedbacks ADD COLUMN sparks_adjustment_id TEXT REFERENCES sparks_adjustments(id)').run();
   } catch {}
+  try {
+    await db.prepare('ALTER TABLE executive_feedback_replies ADD COLUMN parent_id TEXT REFERENCES executive_feedback_replies(id) ON DELETE CASCADE').run();
+  } catch {}
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS executive_feedback_reactions (
+        id TEXT PRIMARY KEY,
+        target_type TEXT NOT NULL,
+        target_id TEXT NOT NULL,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        emoji TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        UNIQUE(target_type, target_id, user_id, emoji)
+      )
+    `).run();
+  } catch {}
   migrationDone = true;
 }
 
