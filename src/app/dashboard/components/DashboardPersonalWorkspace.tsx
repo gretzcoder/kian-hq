@@ -454,74 +454,73 @@ export default function DashboardPersonalWorkspace({
   }
   const combinedRawTasks = Array.from(mapById.values());
 
+  // Group ALL raw assignments into complete GroupedTask objects FIRST.
+  // This ensures parentTask.assignments ALWAYS retains all workflow steps (realtime live status).
+  const allGroupedTasks = groupTasksByParent(combinedRawTasks);
+
   const nowUnix = Math.floor(Date.now() / 1000);
 
-  // Filter 1: Active Grouped Tasks
-  const activeTasks = combinedRawTasks.filter(
-    (t) =>
-      (!t.start_at || t.start_at <= nowUnix) &&
-      !['APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(t.status)
-  );
-  const activeGrouped = groupTasksByParent(activeTasks);
+  // Helper to check if a GroupedTask belongs to a Mentor Workspace
+  const isMentorGroupedTask = (gt: GroupedTask) =>
+    gt.assignments.some(
+      (t: any) =>
+        t.workspace_type === 'MENTOR' ||
+        t.task_type === 'MENTOR' ||
+        (t.project_name && t.project_name.toUpperCase().includes('MENTOR'))
+    ) || (gt.project_name && gt.project_name.toUpperCase().includes('MENTOR'));
 
-  // Filter 2: Completed / Approved Tasks
-  const finishedTasks = combinedRawTasks.filter((t) =>
-    ['APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(t.status)
+  // Filter 1: Active Grouped Tasks (has active steps not fully completed)
+  const activeGrouped = allGroupedTasks.filter((gt) =>
+    gt.assignments.some(
+      (t) =>
+        (!t.start_at || t.start_at <= nowUnix) &&
+        !['APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(t.status)
+    )
   );
-  const completedGrouped = groupTasksByParent(finishedTasks);
 
-  // Helper to identify tasks in Mentor Workspaces vs Troopers Workspaces
-  const isMentorTask = (t: any) =>
-    t.workspace_type === 'MENTOR' ||
-    t.task_type === 'MENTOR' ||
-    (t.project_name && t.project_name.toUpperCase().includes('MENTOR'));
+  // Filter 2: Completed / Approved Grouped Tasks (all steps approved/completed)
+  const completedGrouped = allGroupedTasks.filter((gt) =>
+    gt.assignments.length > 0 &&
+    gt.assignments.every((t) => ['APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(t.status))
+  );
 
   // Filter 3: Perlu Revisi untuk User Ini
-  const myRevisionTasks = combinedRawTasks.filter(
-    (t) => t.user_id === currentUserId && t.status === 'REVISION_REQUESTED'
+  const myRevisionGrouped = allGroupedTasks.filter((gt) =>
+    gt.assignments.some((t) => t.user_id === currentUserId && t.status === 'REVISION_REQUESTED')
   );
-  const myRevisionGrouped = groupTasksByParent(myRevisionTasks);
 
   // Filter 3b: Troopers Revisi
-  const trooperRevisionTasks = combinedRawTasks.filter(
-    (t) => t.status === 'REVISION_REQUESTED' && !isMentorTask(t)
+  const trooperRevisionGrouped = allGroupedTasks.filter(
+    (gt) => !isMentorGroupedTask(gt) && gt.assignments.some((t) => t.status === 'REVISION_REQUESTED')
   );
-  const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
 
   // Filter 3c: Mentor Revisi
-  const mentorRevisionTasks = combinedRawTasks.filter(
-    (t) => t.status === 'REVISION_REQUESTED' && isMentorTask(t)
+  const mentorRevisionGrouped = allGroupedTasks.filter(
+    (gt) => isMentorGroupedTask(gt) && gt.assignments.some((t) => t.status === 'REVISION_REQUESTED')
   );
-  const mentorRevisionGrouped = groupTasksByParent(mentorRevisionTasks);
 
-  // Filter 3d: Troopers Task (strictly tasks in TROOPERS / non-Mentor workspaces)
-  const trooperTasksFiltered = activeTasks.filter((t) => !isMentorTask(t));
-  const trooperGrouped = groupTasksByParent(trooperTasksFiltered);
+  // Filter 3d: Troopers Task (active tasks in TROOPERS workspace)
+  const trooperGrouped = activeGrouped.filter((gt) => !isMentorGroupedTask(gt));
 
-  // Filter 3e: Mentor Task (strictly tasks in MENTOR workspaces)
-  const mentorTasksFiltered = activeTasks.filter((t) => isMentorTask(t));
-  const mentorGrouped = groupTasksByParent(mentorTasksFiltered);
+  // Filter 3e: Mentor Task (active tasks in MENTOR workspace)
+  const mentorGrouped = activeGrouped.filter((gt) => isMentorGroupedTask(gt));
 
-  // Filter 4: Review Grouped Tasks (Pending Review)
-  const reviewTasksFiltered = combinedRawTasks.filter((t) =>
-    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(t.status)
+  // Filter 4: Review Grouped Tasks (tasks that have at least 1 step waiting for review)
+  const reviewGrouped = allGroupedTasks.filter((gt) =>
+    gt.assignments.some((t) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(t.status))
   );
-  const reviewGrouped = groupTasksByParent(reviewTasksFiltered);
 
   // Filter 5: Task Plan (Dijadwalkan / Draft)
-  const taskPlanTasks = combinedRawTasks.filter(
-    (t) => (t.start_at && t.start_at > nowUnix) || t.status === 'DRAFT'
+  const taskPlanGrouped = allGroupedTasks.filter((gt) =>
+    gt.assignments.some((t) => (t.start_at && t.start_at > nowUnix) || t.status === 'DRAFT')
   );
-  const taskPlanGrouped = groupTasksByParent(taskPlanTasks);
 
   // Filter 6: Expired Task
-  const expiredTasks = combinedRawTasks.filter(
-    (t) =>
-      t.deadline != null &&
-      t.deadline < nowUnix &&
-      !['APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(t.status)
+  const expiredGrouped = allGroupedTasks.filter((gt) =>
+    gt.deadline != null &&
+    gt.deadline < nowUnix &&
+    gt.assignments.some((t) => !['APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(t.status))
   );
-  const expiredGrouped = groupTasksByParent(expiredTasks);
 
   let displayedGroupedTasks = activeGrouped;
   if (activeTab === 'MY_REVISION') displayedGroupedTasks = myRevisionGrouped;
