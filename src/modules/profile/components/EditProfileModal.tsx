@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { updateOjtProfile, changePassword } from '../actions';
 
 interface EditProfileModalProps {
@@ -33,6 +34,7 @@ const AVAILABLE_ROLES = [
 ];
 
 export default function EditProfileModal({ initialData, isOpen, onClose }: EditProfileModalProps) {
+  const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
   const isStaff = initialData.userType === 'STAFF';
 
@@ -64,7 +66,43 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
   const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Sync state if initialData changes or modal re-opens
+  useEffect(() => {
+    if (isOpen) {
+      setName(initialData.name || '');
+      setEmail(initialData.email || '');
+      setUsername(initialData.username || '');
+      setUniversity(initialData.university || '');
+      setStudyProgram(initialData.study_program || '');
+      setSemester(initialData.semester || '');
+      setWhatsappNumber(initialData.whatsapp_number || '');
+      setAvatarUrl(initialData.avatar_url || '');
+      setSelectedRoles(initialData.main_roles || []);
+      setCustomRole(initialData.custom_role || '');
+      setTools(initialData.tools || '');
+      setPortfolioUrl(initialData.portfolio_url || '');
+      setDepartment(initialData.department || '');
+      setBio(initialData.bio || '');
+    }
+  }, [isOpen, initialData]);
+
+  // Lock background scroll when modal is active
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  if (!isOpen || !mounted) return null;
 
   const toggleRole = (roleKey: string) => {
     setSelectedRoles((prev) =>
@@ -127,19 +165,20 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
   const labelCls =
     'block text-[9px] font-black uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-1';
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="w-full max-w-lg bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-5 my-auto max-h-[90vh] flex flex-col">
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+      <div className="w-full max-w-lg bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 my-auto max-h-[90vh] flex flex-col z-[1001]">
         
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3 shrink-0">
           <div>
-            <h3 className="text-lg font-black text-zinc-900 dark:text-white">Pengaturan Profil</h3>
+            <h3 className="text-base sm:text-lg font-black text-zinc-900 dark:text-white">Pengaturan Profil</h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">Perbarui data diri & keamanan akunmu.</p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-white font-bold flex items-center justify-center text-sm transition-colors"
+            className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-white font-bold flex items-center justify-center text-sm transition-colors shrink-0"
           >
             ✕
           </button>
@@ -457,6 +496,7 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
