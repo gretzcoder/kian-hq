@@ -193,6 +193,9 @@ function TaskCardItem({
     return true;
   });
 
+  const isExplicitCategoryTab =
+    ['REVIEW', 'COMPLETED'].includes(activeTab) || activeTab.includes('REVISION');
+
   return (
     <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/50 hover:border-purple-500/30 p-3.5 sm:p-4 rounded-2xl space-y-2.5 transition-all duration-200 shadow-xs">
       {/* Main Top Row: Info Left, Actions Right */}
@@ -297,9 +300,15 @@ function TaskCardItem({
         <div className="space-y-2.5 pt-2.5 border-t border-dashed border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center justify-between gap-2 flex-wrap pb-1">
             <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Rincian Step Workflow ({totalSteps} Step):
+              {activeTab === 'REVIEW'
+                ? `Rincian Step Perlu Review (${displayAssignments.length} Step):`
+                : activeTab.includes('REVISION')
+                ? `Rincian Step Perlu Revisi (${displayAssignments.length} Step):`
+                : activeTab === 'COMPLETED'
+                ? `Rincian Step Selesai & ACC (${displayAssignments.length} Step):`
+                : `Rincian Step Workflow (${totalSteps} Step):`}
             </p>
-            {submittedSteps.length > 0 && (
+            {!isExplicitCategoryTab && submittedSteps.length > 0 && (
               <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
                 {[
                   { id: 'ALL', label: `Semua (${totalSteps})` },
