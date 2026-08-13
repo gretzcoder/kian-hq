@@ -67,28 +67,32 @@ const roleBadgeStyles: Record<string, string> = {
 
 const ROLE_ORDER = ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'];
 
-function groupTasksByParent(rawAssignments: RawAssignmentRow[]): GroupedTask[] {
+function groupTasksByParent(rawAssignments: any[]): GroupedTask[] {
   const map = new Map<string, GroupedTask>();
 
   for (const row of rawAssignments) {
-    if (!map.has(row.task_id)) {
-      map.set(row.task_id, {
-        id: row.task_id,
-        title: row.task_title,
-        task_type: row.task_type,
-        status: row.task_status,
-        task_created_by: row.task_created_by,
-        creator_name: row.creator_name,
-        project_id: row.project_id,
-        project_name: row.project_name,
-        workspace_id: row.workspace_id,
-        deadline: row.deadline,
-        start_at: row.start_at,
+    if (!row) continue;
+    const taskId = row.task_id || row.id;
+    if (!taskId) continue;
+
+    if (!map.has(taskId)) {
+      map.set(taskId, {
+        id: taskId,
+        title: row.title || row.task_title || 'Penugasan Tim',
+        task_type: row.task_type || '',
+        status: row.task_status || row.status || '',
+        task_created_by: row.task_created_by || null,
+        creator_name: row.creator_name || null,
+        project_id: row.project_id || '',
+        project_name: row.project_name || 'PROJECT',
+        workspace_id: row.workspace_id || null,
+        deadline: row.deadline || null,
+        start_at: row.start_at || null,
         assignments: [],
       });
     }
 
-    const item = map.get(row.task_id)!;
+    const item = map.get(taskId)!;
     item.assignments.push(row);
   }
 
@@ -433,9 +437,13 @@ export default function DashboardPersonalWorkspace({
     ...completedTasks,
   ];
 
-  const mapById = new Map<string, RawAssignmentRow>();
+  const mapById = new Map<string, any>();
   for (const item of rawList) {
-    if (item && item.id) mapById.set(item.id, item);
+    if (!item) continue;
+    const assignKey =
+      item.assignment_id ||
+      (item.user_id && item.assignment_role ? `${item.task_id || item.id}-${item.user_id}-${item.assignment_role}` : item.id);
+    if (assignKey) mapById.set(assignKey, item);
   }
   const combinedRawTasks = Array.from(mapById.values());
 
