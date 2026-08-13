@@ -4,6 +4,7 @@ import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { revalidatePath } from 'next/cache';
+import { sendPushNotificationToUser } from '@/modules/notifications/pushActions';
 
 export interface FeedbackReaction {
   emoji: string;
@@ -383,4 +384,68 @@ export async function editFeedbackSparks(feedbackId: string, newSparksAmount: nu
   revalidatePath('/dashboard/leaderboard');
 
   return { success: true, message: `✓ Jumlah Sparks berhasil diperbarui menjadi ${newSparksAmount} ✨!` };
+}
+
+export async function deleteExecutiveFeedbackReply(replyId: string) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Tidak terautentikasi.' };
+
+  const db = await getDB();
+
+  const reply = await db
+    .prepare('SELECT id, feedback_id, user_id, message FROM executive_feedback_replies WHERE id = ?')
+    .bind(replyId)
+    .first() as { id: string; feedback_id: string; user_id: string; message: string } | null;
+
+  if (!reply) return { success: false, error: 'Komentar tidak ditemukan.' };
+
+  const ctx = await getSessionContext(session.userId);
+  const isCoordinator =
+    ctx.userType === 'STAFF' &&
+    (ctx.roles.includes('COORDINATOR') ||
+      ctx.roles.includes('EXECUTIVE') ||
+      ctx.can('MANAGE') ||
+      ctx.permissions.has('ADMIN_SYSTEM'));
+
+  const isOwner = reply.user_id === session.userId;
+  const isAuthorized = isOwner || isCoordinator || ctx.userType === 'STAFF';
+
+  if (!isAuthorized) {
+    return { success: false, error: 'Anda tidak memiliki izin untuk menghapus komentar ini.' };
+  }
+
+  // If deleted by Admin/Coordinator on someone else's comment, send a push notification to comment author
+  if (!isOwner && (isCoordinator || ctx.userType === 'STAFF')) {
+    try {
+      const truncatedMessage = reply.message.length > 40 ? `${reply.message.substring(0, 40)}...` : reply.message;
+      await sendPushNotificationToUser(reply.user_id, 'MENTION', {
+        title: 'Komentar Dihapus oleh Admin',
+        body: `Komentar Anda ("${truncatedMessage}") pada Kritik & Saran telah dihapus oleh Koordinator/Admin.`,
+        url: '/dashboard/feedbacks',
+      });
+    } catch (err) {
+      console.error('Failed to send comment deletion notification:', err);
+    }
+  }
+
+  // Delete reactions for this reply
+  await db
+    .prepare("DELETE FROM executive_feedback_reactions WHERE target_type = 'REPLY' AND target_id = ?")
+    .bind(replyId)
+    .run();
+
+  // Delete child sub-replies that reference this reply as parent_id
+  await db
+    .prepare('DELETE FROM executive_feedback_replies WHERE parent_id = ?')
+    .bind(replyId)
+    .run();
+
+  // Delete the reply
+  await db
+    .prepare('DELETE FROM executive_feedback_replies WHERE id = ?')
+    .bind(replyId)
+    .run();
+
+  revalidatePath('/dashboard/feedbacks');
+  return { success: true };
 }

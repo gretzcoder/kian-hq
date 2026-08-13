@@ -54,6 +54,7 @@ export default async function FeedbacksPage() {
               feedback={fb}
               currentUserId={session.userId}
               canManageSparks={canManageSparks}
+              canDeleteComment={canManageSparks || isCoordinator || ctx.userType === 'STAFF'}
             />
           ))}
         </div>

@@ -10,6 +10,7 @@ import {
   giveFeedbackSparks,
   editFeedbackSparks,
   toggleFeedbackReaction,
+  deleteExecutiveFeedbackReply,
 } from '@/modules/feedback/actions';
 import FeedbackReactionPicker from './FeedbackReactionPicker';
 
@@ -17,17 +18,20 @@ interface FeedbackCardItemProps {
   feedback: ExecutiveFeedbackItem;
   currentUserId: string;
   canManageSparks: boolean;
+  canDeleteComment?: boolean;
 }
 
 export default function FeedbackCardItem({
   feedback,
   currentUserId,
   canManageSparks,
+  canDeleteComment = false,
 }: FeedbackCardItemProps) {
   // CRITICAL REQUIREMENT: "bila total chat dari user banyak, dibuat collapse dan jangan auto expand."
   const [isExpanded, setIsExpanded] = useState(false);
   const INITIAL_REPLY_LIMIT = 3;
   const [visibleReplyCount, setVisibleReplyCount] = useState(INITIAL_REPLY_LIMIT);
+  const [expandedSubThreads, setExpandedSubThreads] = useState<Record<string, boolean>>({});
 
   function handleToggleExpand() {
     if (isExpanded) {
@@ -36,6 +40,16 @@ export default function FeedbackCardItem({
     } else {
       setIsExpanded(true);
     }
+  }
+
+  function handleDeleteReply(replyId: string) {
+    if (!confirm('Apakah kamu yakin ingin menghapus komentar ini?')) return;
+    startTransition(async () => {
+      const res = await deleteExecutiveFeedbackReply(replyId);
+      if (!res.success) {
+        alert(res.error || 'Gagal menghapus komentar.');
+      }
+    });
   }
 
   // Reply state
@@ -282,95 +296,235 @@ export default function FeedbackCardItem({
         </form>
       )}
 
-      {/* Instagram-Style "View replies" Toggle Button */}
-      {feedback.replies.length > 0 && (
-        <div className="pt-1">
-          <button
-            type="button"
-            onClick={handleToggleExpand}
-            className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer group"
-          >
-            <span className="w-6 h-[1px] bg-zinc-400 dark:bg-zinc-700 group-hover:bg-purple-500 transition-colors"></span>
-            <span>{isExpanded ? 'Sembunyikan balasan' : `Lihat ${feedback.replies.length} balasan`}</span>
-          </button>
-        </div>
-      )}
+      {/* Grouping replies into Instagram comment hierarchy tree */}
+      {(() => {
+        const replyIdSet = new Set(feedback.replies.map((r) => r.id));
+        const topLevelComments = feedback.replies.filter(
+          (r) => !r.parent_id || !replyIdSet.has(r.parent_id)
+        );
 
-      {/* Instagram-Style Clean Reply List with Anti-Spam Incremental Pagination */}
-      {isExpanded && feedback.replies.length > 0 && (
-        <div className="pl-3 sm:pl-6 border-l border-zinc-200 dark:border-zinc-800/80 space-y-3 pt-1">
-          {feedback.replies.slice(0, visibleReplyCount).map((reply) => (
-            <div key={reply.id} className="flex items-start gap-2.5 group">
-              <Link href={`/dashboard/profile?userId=${reply.user_id}`} className="shrink-0 pt-0.5">
-                <UserAvatar
-                  src={reply.user_avatar}
-                  name={reply.user_name}
-                  size="w-7 h-7 text-[10px] font-bold"
-                  square={false}
-                />
-              </Link>
+        const subRepliesMap = new Map<string, ExecutiveFeedbackReply[]>();
+        for (const reply of feedback.replies) {
+          if (topLevelComments.some((top) => top.id === reply.id)) continue;
 
-              <div className="flex-1 min-w-0 text-xs">
-                {/* Instagram Comment Text Layout: Bold Username + Message */}
-                <div className="text-zinc-800 dark:text-zinc-200 leading-snug">
-                  <Link
-                    href={`/dashboard/profile?userId=${reply.user_id}`}
-                    className="font-extrabold text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400 mr-1.5"
-                  >
-                    {reply.user_name}
-                  </Link>
-                  {reply.parent_user_name && (
-                    <span className="text-purple-600 dark:text-purple-400 font-bold mr-1.5">
-                      @{reply.parent_user_name}
-                    </span>
-                  )}
-                  <span className="whitespace-pre-wrap font-normal text-zinc-700 dark:text-zinc-300">
-                    {reply.message}
-                  </span>
-                </div>
+          let rootId = reply.parent_id;
+          let currentParent = feedback.replies.find((r) => r.id === rootId);
+          while (currentParent && currentParent.parent_id && replyIdSet.has(currentParent.parent_id)) {
+            rootId = currentParent.parent_id;
+            currentParent = feedback.replies.find((r) => r.id === rootId);
+          }
 
-                {/* Sub Metadata Bar: Time • Balas • Reactions */}
-                <div className="flex items-center gap-3 mt-1 text-[11px] text-zinc-400 flex-wrap">
-                  <span className="font-mono text-[10px] text-zinc-500">
-                    {new Date(reply.created_at * 1000).toLocaleDateString('id-ID', {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
+          if (rootId) {
+            const list = subRepliesMap.get(rootId) || [];
+            list.push(reply);
+            subRepliesMap.set(rootId, list);
+          }
+        }
 
+        const visibleTopLevel = topLevelComments.slice(0, visibleReplyCount);
+
+        return (
+          <>
+            {/* Instagram-Style "View replies" Toggle Button */}
+            {feedback.replies.length > 0 && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={handleToggleExpand}
+                  className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer group"
+                >
+                  <span className="w-6 h-[1px] bg-zinc-400 dark:bg-zinc-700 group-hover:bg-purple-500 transition-colors"></span>
+                  <span>{isExpanded ? 'Sembunyikan balasan' : `Lihat ${feedback.replies.length} balasan`}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Instagram-Style Nested Comment Tree */}
+            {isExpanded && topLevelComments.length > 0 && (
+              <div className="space-y-3.5 pt-2 pl-1 sm:pl-2">
+                {visibleTopLevel.map((topComment) => {
+                  const subReplies = subRepliesMap.get(topComment.id) || [];
+                  const isSubExpanded = expandedSubThreads[topComment.id] ?? false;
+
+                  return (
+                    <div key={topComment.id} className="space-y-2">
+                      {/* Top-Level Comment (Komentar Umum) */}
+                      <div className="flex items-start gap-2.5 group">
+                        <Link href={`/dashboard/profile?userId=${topComment.user_id}`} className="shrink-0 pt-0.5">
+                          <UserAvatar
+                            src={topComment.user_avatar}
+                            name={topComment.user_name}
+                            size="w-7 h-7 text-[10px] font-bold"
+                            square={false}
+                          />
+                        </Link>
+
+                        <div className="flex-1 min-w-0 text-xs">
+                          {/* Instagram Comment Text Layout: Bold Username + Message */}
+                          <div className="text-zinc-800 dark:text-zinc-200 leading-snug">
+                            <Link
+                              href={`/dashboard/profile?userId=${topComment.user_id}`}
+                              className="font-extrabold text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400 mr-1.5"
+                            >
+                              {topComment.user_name}
+                            </Link>
+                            <span className="whitespace-pre-wrap font-normal text-zinc-700 dark:text-zinc-300">
+                              {topComment.message}
+                            </span>
+                          </div>
+
+                          {/* Sub Metadata Bar: Time • Balas • Hapus • Reactions */}
+                          <div className="flex items-center gap-3 mt-1 text-[11px] text-zinc-400 flex-wrap">
+                            <span className="font-mono text-[10px] text-zinc-500">
+                              {new Date(topComment.created_at * 1000).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleStartReply(topComment.id, topComment.user_name)}
+                              className="font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors cursor-pointer"
+                            >
+                              Balas
+                            </button>
+
+                            {(canDeleteComment || topComment.user_id === currentUserId) && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteReply(topComment.id)}
+                                className="font-bold text-red-500/70 hover:text-red-500 transition-colors cursor-pointer"
+                              >
+                                Hapus
+                              </button>
+                            )}
+
+                            <FeedbackReactionPicker
+                              reactions={topComment.reactions}
+                              isPending={isPending}
+                              onToggleReaction={(emoji) => handleToggleRx('REPLY', topComment.id, emoji)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Toggle Link for Sub-Replies Under THIS Top-Level Comment */}
+                      {subReplies.length > 0 && (
+                        <div className="pl-9 sm:pl-10">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedSubThreads((prev) => ({
+                                ...prev,
+                                [topComment.id]: !isSubExpanded,
+                              }))
+                            }
+                            className="inline-flex items-center gap-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-colors cursor-pointer group"
+                          >
+                            <span className="w-5 h-[1px] bg-zinc-400 dark:bg-zinc-700 group-hover:bg-purple-500 transition-colors"></span>
+                            <span>
+                              {isSubExpanded ? 'Hide replies' : `View replies (${subReplies.length})`}
+                            </span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Sub-Replies Tree Indented Under Top-Level Comment (Komentar Dalam Komentar) */}
+                      {isSubExpanded && subReplies.length > 0 && (
+                        <div className="pl-9 sm:pl-10 border-l border-zinc-200 dark:border-zinc-800/80 space-y-2.5 pt-1 ml-3.5">
+                          {subReplies.map((subReply) => (
+                            <div key={subReply.id} className="flex items-start gap-2.5 group">
+                              <Link href={`/dashboard/profile?userId=${subReply.user_id}`} className="shrink-0 pt-0.5">
+                                <UserAvatar
+                                  src={subReply.user_avatar}
+                                  name={subReply.user_name}
+                                  size="w-6.5 h-6.5 text-[9px] font-bold"
+                                  square={false}
+                                />
+                              </Link>
+
+                              <div className="flex-1 min-w-0 text-xs">
+                                {/* Instagram Sub-Comment Text: Bold Username + @Parent + Message */}
+                                <div className="text-zinc-800 dark:text-zinc-200 leading-snug">
+                                  <Link
+                                    href={`/dashboard/profile?userId=${subReply.user_id}`}
+                                    className="font-extrabold text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400 mr-1.5"
+                                  >
+                                    {subReply.user_name}
+                                  </Link>
+                                  {subReply.parent_user_name && (
+                                    <span className="text-purple-600 dark:text-purple-400 font-bold mr-1.5">
+                                      @{subReply.parent_user_name}
+                                    </span>
+                                  )}
+                                  <span className="whitespace-pre-wrap font-normal text-zinc-700 dark:text-zinc-300">
+                                    {subReply.message}
+                                  </span>
+                                </div>
+
+                                {/* Sub-metadata Bar */}
+                                <div className="flex items-center gap-3 mt-1 text-[11px] text-zinc-400 flex-wrap">
+                                  <span className="font-mono text-[10px] text-zinc-500">
+                                    {new Date(subReply.created_at * 1000).toLocaleDateString('id-ID', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </span>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartReply(subReply.id, subReply.user_name)}
+                                    className="font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors cursor-pointer"
+                                  >
+                                    Balas
+                                  </button>
+
+                                  {(canDeleteComment || subReply.user_id === currentUserId) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteReply(subReply.id)}
+                                      className="font-bold text-red-500/70 hover:text-red-500 transition-colors cursor-pointer"
+                                    >
+                                      Hapus
+                                    </button>
+                                  )}
+
+                                  <FeedbackReactionPicker
+                                    reactions={subReply.reactions}
+                                    isPending={isPending}
+                                    onToggleReaction={(emoji) => handleToggleRx('REPLY', subReply.id, emoji)}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Instagram-Style "View More Comments" Link */}
+                {topLevelComments.length > visibleReplyCount && (
                   <button
                     type="button"
-                    onClick={() => handleStartReply(reply.id, reply.user_name)}
-                    className="font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                    onClick={() => setVisibleReplyCount((prev) => prev + 5)}
+                    className="inline-flex items-center gap-2 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline pt-1 cursor-pointer"
                   >
-                    Balas
+                    <span className="w-4 h-[1px] bg-purple-500/40"></span>
+                    <span>Lihat {topLevelComments.length - visibleReplyCount} komentar lainnya</span>
                   </button>
-
-                  <FeedbackReactionPicker
-                    reactions={reply.reactions}
-                    isPending={isPending}
-                    onToggleReaction={(emoji) => handleToggleRx('REPLY', reply.id, emoji)}
-                  />
-                </div>
+                )}
               </div>
-            </div>
-          ))}
-
-          {/* Instagram-Style "View More Replies" Link */}
-          {feedback.replies.length > visibleReplyCount && (
-            <button
-              type="button"
-              onClick={() => setVisibleReplyCount((prev) => prev + 5)}
-              className="inline-flex items-center gap-2 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline pt-1 cursor-pointer"
-            >
-              <span className="w-4 h-[1px] bg-purple-500/40"></span>
-              <span>Lihat {feedback.replies.length - visibleReplyCount} balasan lainnya</span>
-            </button>
-          )}
-        </div>
-      )}
+            )}
+          </>
+        );
+      })()}
 
       {/* Give / Edit Sparks Modal */}
       {showSparksModal && (
