@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { TaskSmartReminderButton } from '@/components/SendReminderButton';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
 import { cleanAppreciationNote } from '@/lib/noteUtils';
+import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 
 export interface RawAssignmentRow {
   id: string;
@@ -17,6 +18,8 @@ export interface RawAssignmentRow {
   result_url: string | null;
   revision_note: string | null;
   appreciation_note: string | null;
+  revision_requested_by_name?: string | null;
+  revision_requested_by_role?: string | null;
   sparks: number | null;
   submitted_at: number | null;
   reviewed_at: number | null;
@@ -276,28 +279,30 @@ function TaskCardItem({
             <p className="text-[10px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
               Rincian Step Workflow ({totalSteps} Step):
             </p>
-            <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
-              {[
-                { id: 'ALL', label: `Semua (${totalSteps})` },
-                ...(waitingReviewSteps.length > 0 ? [{ id: 'SUBMITTED', label: `📥 Review (${waitingReviewSteps.length})` }] : []),
-                ...(revisionSteps.length > 0 ? [{ id: 'REVISION', label: `🔄 Revisi (${revisionSteps.length})` }] : []),
-                ...(approvedSteps.length > 0 ? [{ id: 'APPROVED', label: `✅ ACC (${approvedSteps.length})` }] : []),
-                ...(unsubmittedAssignments.length > 0 ? [{ id: 'UNSUBMITTED', label: `⚡ Belum (${unsubmittedAssignments.length})` }] : []),
-              ].map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setStepFilter(f.id as any)}
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all shrink-0 cursor-pointer ${
-                    stepFilter === f.id
-                      ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
-                      : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-purple-300'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
+            {submittedSteps.length > 0 && (
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5">
+                {[
+                  { id: 'ALL', label: `Semua (${totalSteps})` },
+                  ...(waitingReviewSteps.length > 0 ? [{ id: 'SUBMITTED', label: `📥 Review (${waitingReviewSteps.length})` }] : []),
+                  ...(revisionSteps.length > 0 ? [{ id: 'REVISION', label: `🔄 Revisi (${revisionSteps.length})` }] : []),
+                  ...(approvedSteps.length > 0 ? [{ id: 'APPROVED', label: `✅ ACC (${approvedSteps.length})` }] : []),
+                  ...(unsubmittedAssignments.length > 0 && unsubmittedAssignments.length < totalSteps ? [{ id: 'UNSUBMITTED', label: `⚡ Belum (${unsubmittedAssignments.length})` }] : []),
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setStepFilter(f.id as any)}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all shrink-0 cursor-pointer ${
+                      stepFilter === f.id
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
+                        : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-purple-300'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-2">
@@ -366,17 +371,19 @@ function TaskCardItem({
                   )}
 
                   {sub.revision_note && (
-                    <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-700 dark:text-red-300">
-                      <strong className="block text-[10px] uppercase font-mono">Catatan Revisi:</strong>
-                      <p className="whitespace-pre-wrap">{sub.revision_note}</p>
-                    </div>
+                    <CollapsibleNoteViewer
+                      content={sub.revision_note}
+                      type="REVISION"
+                      authorName={sub.revision_requested_by_name || 'Evaluator QC'}
+                      authorRole={sub.revision_requested_by_role || 'QC'}
+                    />
                   )}
 
                   {cleanedNote && (
-                    <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-700 dark:text-emerald-300">
-                      <strong className="block text-[10px] uppercase font-mono">Apresiasi & Feedback:</strong>
-                      <p className="whitespace-pre-wrap">{cleanedNote}</p>
-                    </div>
+                    <CollapsibleNoteViewer
+                      content={cleanedNote}
+                      type="APPRECIATION"
+                    />
                   )}
                 </div>
               );
