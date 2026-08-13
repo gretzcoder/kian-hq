@@ -190,34 +190,14 @@ export default function ReviewActions({
 
       {mode === 'NONE' ? (
         isAssessmentMentorStep ? (
-          /* Assessment Step 1: Mentor creator — ACC Mentor (no sparks) + Request Revisi */
+          /* Assessment Step 1: Mentor creator — ACC Mentor + Request Revisi */
           <div className="flex gap-2 flex-wrap">
             <button
-              onClick={async () => {
-                setLoading(true);
-                setError(null);
-                try {
-                  const res = await approveAssessmentMentorStep(assignmentId, '');
-                  if (res.success) {
-                    setDone(true);
-                    toast('ACC Mentor berhasil! Submission diteruskan ke Koordinator.', 'success');
-                  } else {
-                    const msg = res.error ?? 'Gagal ACC Mentor';
-                    setError(msg);
-                    toast(msg, 'error');
-                  }
-                } catch (e: any) {
-                  const msg = e.message ?? 'An error occurred';
-                  setError(msg);
-                  toast(msg, 'error');
-                } finally {
-                  setLoading(false);
-                }
-              }}
+              onClick={() => setMode('SPARK_MODAL')}
               disabled={loading}
               className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5"
             >
-              <span>✓ ACC Mentor</span>
+              <span>✓ ACC Mentor & Catatan Improvement</span>
             </button>
             <button
               onClick={() => setMode('REVISION')}
@@ -268,16 +248,12 @@ export default function ReviewActions({
               <>
                 <button
                   onClick={() => {
-                    if (canAwardBadge) {
-                      setMode('SPARK_MODAL');
-                    } else {
-                      handleQuickApprove();
-                    }
+                    setMode('SPARK_MODAL');
                   }}
                   disabled={loading}
                   className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px]"
                 >
-                  <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ Approve QC'}</span>
+                  <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ ACC & Catatan Improvement'}</span>
                 </button>
                 {canRequestRevision && (
                   <>
@@ -304,16 +280,12 @@ export default function ReviewActions({
               <>
                 <button
                   onClick={() => {
-                    if (canAwardBadge) {
-                      setMode('SPARK_MODAL');
-                    } else {
-                      handleQuickApprove();
-                    }
+                    setMode('SPARK_MODAL');
                   }}
                   disabled={loading}
                   className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px]"
                 >
-                  <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ Approve QC'}</span>
+                  <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ ACC & Catatan Improvement'}</span>
                 </button>
                 {canRequestRevision && (
                   <>
@@ -345,16 +317,12 @@ export default function ReviewActions({
             <>
               <button
                 onClick={() => {
-                  if (canAwardBadge) {
-                    setMode('SPARK_MODAL');
-                  } else {
-                    handleQuickApprove();
-                  }
+                  setMode('SPARK_MODAL');
                 }}
                 disabled={loading}
                 className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px]"
               >
-                <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ Approve QC'}</span>
+                <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ ACC & Catatan Improvement'}</span>
               </button>
               {canRequestRevision && (
                 <>
@@ -380,44 +348,48 @@ export default function ReviewActions({
         )
       ) : mode === 'SPARK_MODAL' ? (
         <div className="space-y-3.5 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
-          <div className="flex items-center justify-between">
-            <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
-              ✨ Berikan Creative Sparks (1 - 10)
-            </label>
-            <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${currentSparkMeta.color}`}>
-              {currentSparkMeta.emoji} {currentSparkMeta.label} ({sparks}/10)
-            </span>
-          </div>
+          {!isAssessmentMentorStep && canAwardBadge && (
+            <>
+              <div className="flex items-center justify-between">
+                <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+                  ✨ Berikan Creative Sparks (1 - 10)
+                </label>
+                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${currentSparkMeta.color}`}>
+                  {currentSparkMeta.emoji} {currentSparkMeta.label} ({sparks}/10)
+                </span>
+              </div>
 
-          {/* 1 to 10 Sparks Selector Buttons */}
-          <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
-              const isSelected = sparks === num;
-              return (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => setSparks(num)}
-                  className={`py-2 rounded-xl text-xs font-black transition-all ${
-                    isSelected
-                      ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/20 scale-105 ring-2 ring-purple-500/30'
-                      : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
-                  }`}
-                >
-                  {num}
-                </button>
-              );
-            })}
-          </div>
+              {/* 1 to 10 Sparks Selector Buttons */}
+              <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+                  const isSelected = sparks === num;
+                  return (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setSparks(num)}
+                      className={`py-2 rounded-xl text-xs font-black transition-all ${
+                        isSelected
+                          ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/20 scale-105 ring-2 ring-purple-500/30'
+                          : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
           <div className="space-y-1.5">
             <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1">
-              <span>💬</span> Catatan Apresiasi & Feedback Evaluator (WYSIWYG / Opsional)
+              <span>💬</span> Catatan Improvement, Apresiasi & Feedback Evaluator (WYSIWYG / Opsional)
             </label>
             <TiptapEditor
               value={noteText}
               onChange={(val) => setNoteText(val)}
-              placeholder="Tulis catatan apresiasi, saran perbaikan, atau tips berharga (opsional gunakan Bold, Highlight, List, Link, dll)..."
+              placeholder="Tulis catatan apresiasi, masukan improvement, atau saran perbaikan untuk trooper (opsional gunakan Bold, Highlight, List, Link, dll)..."
               minHeight="min-h-[110px]"
             />
           </div>
@@ -433,9 +405,9 @@ export default function ReviewActions({
             <button
               onClick={handleApproveWithSparks}
               disabled={loading}
-              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5"
             >
-              {loading ? 'Menyimpan...' : `Kirim ${sparks} ✨ & Setujui`}
+              {loading ? 'Menyimpan...' : isAssessmentMentorStep ? '✓ ACC Mentor & Kirim Catatan Improvement' : canAwardBadge ? `Kirim ${sparks} ✨ & Setujui` : '✓ ACC & Kirim Catatan Improvement'}
             </button>
           </div>
         </div>

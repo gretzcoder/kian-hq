@@ -575,7 +575,8 @@ export async function approveAssessmentSubmission(
  */
 export async function approveAssessmentMentorStep(
   assignmentId: string,
-  workspaceId: string
+  workspaceId: string,
+  note?: string
 ) {
   const session = await getSession();
   if (!session) return { success: false, error: 'Unauthorized' };
@@ -601,15 +602,17 @@ export async function approveAssessmentMentorStep(
   }
 
   try {
+    const cleanNote = note && note.trim() !== '' ? note.trim() : null;
     await db
       .prepare(`
         UPDATE task_assignments
         SET mentor_approved = 1,
             lead_approved = 1,
+            appreciation_note = COALESCE(?, appreciation_note),
             reviewed_at = strftime('%s', 'now')
         WHERE id = ?
       `)
-      .bind(assignmentId)
+      .bind(cleanNote, assignmentId)
       .run();
 
     await logWorkflowEvent({
@@ -618,7 +621,9 @@ export async function approveAssessmentMentorStep(
       fromStatus: 'WAITING_REVIEW',
       toStatus: 'WAITING_REVIEW',
       triggeredBy: session.userId,
-      note: 'Mentor pembuat tugas ACC submission — menunggu approval & Sparks dari Koordinator',
+      note: cleanNote
+        ? `Mentor ACC dengan catatan improvement: ${cleanNote.replace(/<[^>]*>/g, '').substring(0, 100)}`
+        : 'Mentor pembuat tugas ACC submission — menunggu approval & Sparks dari Koordinator',
     });
 
     const resolvedWsId = workspaceId || task.workspace_id || '';

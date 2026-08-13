@@ -457,12 +457,12 @@ function MentorSubmissionCard({
     });
   };
 
-  const handleMentorAcc = () => {
+  const handleMentorAcc = (note?: string) => {
     setError(null);
     startTransition(async () => {
       try {
         const res = await safeExecuteAction(
-          () => approveAssessmentMentorStep(assignment.id, workspaceId),
+          () => approveAssessmentMentorStep(assignment.id, workspaceId, note),
           async () => {
             const r = await fetch('/api/review/action', {
               method: 'POST',
@@ -471,6 +471,7 @@ function MentorSubmissionCard({
                 actionType: 'APPROVE',
                 assignmentId: assignment.id,
                 workspaceId,
+                noteText: note || '',
                 isAssessmentMentorStep: true,
               }),
             });
@@ -695,7 +696,7 @@ function MentorSubmissionCard({
                   {!showRevForm && !showSparkModal ? (
                     <div className="flex gap-2 items-center">
                       <button
-                        onClick={handleMentorAcc}
+                        onClick={() => handleMentorAcc()}
                         disabled={pending}
                         className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1.5"
                       >

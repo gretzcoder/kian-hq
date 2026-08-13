@@ -34,7 +34,7 @@ export async function POST(req: Request) {
       if (isAssessmentCoordStep) {
         result = await approveAssessmentSubmission(assignmentId, workspaceId || '', sparks || 8, noteText || '');
       } else if (isAssessmentMentorStep) {
-        result = await approveAssessmentMentorStep(assignmentId, workspaceId || '');
+        result = await approveAssessmentMentorStep(assignmentId, workspaceId || '', noteText || '');
       } else {
         result = await approveAssignment(assignmentId, sparks, noteText || '');
       }
