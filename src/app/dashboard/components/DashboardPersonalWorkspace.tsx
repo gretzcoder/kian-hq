@@ -21,6 +21,9 @@ export interface RawAssignmentRow {
   revision_requested_by_name?: string | null;
   revision_requested_by_role?: string | null;
   sparks: number | null;
+  mentor_approved?: number | null;
+  coordinator_approved?: number | null;
+  lead_approved?: number | null;
   submitted_at: number | null;
   reviewed_at: number | null;
 
@@ -126,8 +129,23 @@ function TaskCardItem({
   activeTab: string;
   currentUserId?: string;
 }) {
+  const waitingReviewSteps = parentTask.assignments.filter((a) =>
+    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status)
+  );
+
+  const revisionSteps = parentTask.assignments.filter(
+    (a) => a.status === 'REVISION_REQUESTED'
+  );
+
+  const initialFilter =
+    activeTab === 'REVIEW' && waitingReviewSteps.length > 0
+      ? 'SUBMITTED'
+      : activeTab.includes('REVISION') && revisionSteps.length > 0
+      ? 'REVISION'
+      : 'ALL';
+
   const [isExpanded, setIsExpanded] = useState(false);
-  const [stepFilter, setStepFilter] = useState<'ALL' | 'SUBMITTED' | 'REVISION' | 'APPROVED' | 'UNSUBMITTED'>('ALL');
+  const [stepFilter, setStepFilter] = useState<'ALL' | 'SUBMITTED' | 'REVISION' | 'APPROVED' | 'UNSUBMITTED'>(initialFilter);
   const isTaskMentor =
     currentUserId != null &&
     (parentTask.task_created_by === currentUserId ||
@@ -146,16 +164,8 @@ function TaskCardItem({
       (a.result_url && a.result_url.trim() !== '')
   );
 
-  const waitingReviewSteps = parentTask.assignments.filter((a) =>
-    ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status)
-  );
-
   const approvedSteps = parentTask.assignments.filter((a) =>
     ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)
-  );
-
-  const revisionSteps = parentTask.assignments.filter(
-    (a) => a.status === 'REVISION_REQUESTED'
   );
 
   const unsubmittedAssignments = parentTask.assignments.filter(
@@ -178,19 +188,18 @@ function TaskCardItem({
       <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
         <div className="min-w-0 flex-1 space-y-1">
           {/* Project & Mentor Micro Tag */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+          <div className="flex items-center gap-2 flex-wrap text-[10px]">
+            <span className="font-mono font-black uppercase text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
               {parentTask.project_name}
             </span>
             {parentTask.creator_name && (
-              <span className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">
-                • 🎓 Mentor: <strong className="text-zinc-800 dark:text-zinc-200">{parentTask.creator_name}</strong>
+              <span className="text-zinc-400 font-medium">
+                • 🎓 Mentor: <strong className="text-zinc-600 dark:text-zinc-300">{parentTask.creator_name}</strong>
               </span>
             )}
           </div>
 
-          {/* Task Title */}
-          <h3 className="text-sm sm:text-base font-extrabold text-zinc-900 dark:text-zinc-100 tracking-tight leading-snug">
+          <h3 className="font-black text-sm sm:text-base text-zinc-900 dark:text-zinc-100 tracking-tight leading-snug">
             {parentTask.title}
           </h3>
         </div>
@@ -322,7 +331,9 @@ function TaskCardItem({
                     isRevision
                       ? 'bg-red-500/5 dark:bg-red-500/10 border-red-500/30'
                       : isSubmittedForReview
-                      ? 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/30'
+                      ? sub.mentor_approved === 1
+                        ? 'bg-purple-500/5 dark:bg-purple-500/10 border-purple-500/30'
+                        : 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/30'
                       : sub.status === 'APPROVED'
                       ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20'
                       : 'bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200/80 dark:border-zinc-800/60'
@@ -353,9 +364,15 @@ function TaskCardItem({
                           🔄 Perlu Revisi
                         </span>
                       ) : isSubmittedForReview ? (
-                        <span className="text-[10px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md animate-pulse">
-                          ⏳ Wait Review
-                        </span>
+                        sub.mentor_approved === 1 ? (
+                          <span className="text-[10px] font-black bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-md animate-pulse">
+                            ⏳ Review Koordinator
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md animate-pulse">
+                            ⏳ Review Mentor
+                          </span>
+                        )
                       ) : (
                         <span className="text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded-md">
                           ⚡ Belum Submit
