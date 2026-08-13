@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { approveAssignment, requestRevision, declineAssignment } from '@/modules/tasks/actions';
 import { approveAssessmentMentorStep, requestAssessmentRevision as requestAssessmentRevisionAction, approveAssessmentSubmission } from '@/modules/workspaces/assessmentActions';
 import { useUI } from '@/components/ui/UIProvider';
+import { safeExecuteAction } from '@/lib/safeAction';
 
 import SendReminderButton from '@/components/SendReminderButton';
 import TiptapEditor from '@/components/editor/TiptapEditor';
@@ -51,11 +52,30 @@ export default function ReviewActions({
 
   const { toast } = useUI();
 
+  const callApiFallback = async (actionType: 'APPROVE' | 'REVISION' | 'DECLINE') => {
+    const res = await fetch('/api/review/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        actionType,
+        assignmentId,
+        sparks,
+        noteText: noteText.trim(),
+        isAssessmentCoordStep: taskType === 'ASSESSMENT' && !isAssessmentMentorStep,
+        isAssessmentMentorStep,
+      }),
+    });
+    return await res.json();
+  };
+
   const handleQuickApprove = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await approveAssignment(assignmentId);
+      const res = await safeExecuteAction<any>(
+        () => approveAssignment(assignmentId),
+        () => callApiFallback('APPROVE')
+      );
       if (res.success) {
         setDone(true);
         if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kian_notif_refresh'));
@@ -78,11 +98,14 @@ export default function ReviewActions({
     setLoading(true);
     setError(null);
     try {
-      // For assessment coordinator step, use the assessment-specific action
       const isAssessmentCoordStep = taskType === 'ASSESSMENT' && !isAssessmentMentorStep;
-      const res = isAssessmentCoordStep
-        ? await approveAssessmentSubmission(assignmentId, '', sparks, noteText.trim())
-        : await approveAssignment(assignmentId, sparks, noteText.trim());
+      const res = await safeExecuteAction<any>(
+        () =>
+          isAssessmentCoordStep
+            ? approveAssessmentSubmission(assignmentId, '', sparks, noteText.trim())
+            : approveAssignment(assignmentId, sparks, noteText.trim()),
+        () => callApiFallback('APPROVE')
+      );
       if (res.success) {
         setDone(true);
         if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kian_notif_refresh'));
@@ -112,12 +135,17 @@ export default function ReviewActions({
     setLoading(true);
     setError(null);
     try {
-      const res =
-        mode === 'REVISION'
-          ? (taskType === 'ASSESSMENT'
-              ? await requestAssessmentRevisionAction(assignmentId, '', noteText.trim())
-              : await requestRevision(assignmentId, noteText.trim()))
-          : await declineAssignment(assignmentId, noteText.trim());
+      const isRevision = mode === 'REVISION';
+      const actionType = isRevision ? 'REVISION' : 'DECLINE';
+      const res = await safeExecuteAction<any>(
+        () =>
+          isRevision
+            ? taskType === 'ASSESSMENT'
+              ? requestAssessmentRevisionAction(assignmentId, '', noteText.trim())
+              : requestRevision(assignmentId, noteText.trim())
+            : declineAssignment(assignmentId, noteText.trim()),
+        () => callApiFallback(actionType)
+      );
 
       if (res.success) {
         setDone(true);

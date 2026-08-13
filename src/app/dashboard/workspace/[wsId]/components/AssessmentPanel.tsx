@@ -21,6 +21,7 @@ import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreview
 import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 import { cleanAppreciationNote } from '@/lib/noteUtils';
 import SendReminderButton from '@/components/SendReminderButton';
+import { safeExecuteAction } from '@/lib/safeAction';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -427,12 +428,31 @@ function MentorSubmissionCard({
   const handleApprove = () => {
     setError(null);
     startTransition(async () => {
-      // Coordinator Step 2: Approve with Sparks
-      const res = await approveAssessmentSubmission(assignment.id, workspaceId, sparks);
-      if (res.success) {
-        setShowSparkModal(false);
-      } else {
-        setError(res.error ?? 'Gagal approve');
+      try {
+        const res = await safeExecuteAction(
+          () => approveAssessmentSubmission(assignment.id, workspaceId, sparks),
+          async () => {
+            const r = await fetch('/api/review/action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                actionType: 'APPROVE',
+                assignmentId: assignment.id,
+                workspaceId,
+                sparks,
+                isAssessmentCoordStep: true,
+              }),
+            });
+            return await r.json();
+          }
+        );
+        if (res.success) {
+          setShowSparkModal(false);
+        } else {
+          setError(res.error ?? 'Gagal approve');
+        }
+      } catch (err: any) {
+        setError(err.message ?? 'Gagal approve');
       }
     });
   };
@@ -440,10 +460,28 @@ function MentorSubmissionCard({
   const handleMentorAcc = () => {
     setError(null);
     startTransition(async () => {
-      // Step 1: Mentor creator ACC (no sparks)
-      const res = await approveAssessmentMentorStep(assignment.id, workspaceId);
-      if (!res.success) {
-        setError(res.error ?? 'Gagal ACC Mentor');
+      try {
+        const res = await safeExecuteAction(
+          () => approveAssessmentMentorStep(assignment.id, workspaceId),
+          async () => {
+            const r = await fetch('/api/review/action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                actionType: 'APPROVE',
+                assignmentId: assignment.id,
+                workspaceId,
+                isAssessmentMentorStep: true,
+              }),
+            });
+            return await r.json();
+          }
+        );
+        if (!res.success) {
+          setError(res.error ?? 'Gagal ACC Mentor');
+        }
+      } catch (err: any) {
+        setError(err.message ?? 'Gagal ACC Mentor');
       }
     });
   };
