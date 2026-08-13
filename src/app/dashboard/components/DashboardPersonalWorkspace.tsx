@@ -116,6 +116,118 @@ function sortAssignments(assignments: RawAssignmentRow[]): RawAssignmentRow[] {
   });
 }
 
+function StepAssignmentRowItem({
+  sub,
+  sIdx,
+}: {
+  sub: RawAssignmentRow;
+  sIdx: number;
+}) {
+  const [showDetail, setShowDetail] = useState(false);
+  const cleanedNote = cleanAppreciationNote(sub.appreciation_note);
+  const roleLabel = roleIcons[sub.assignment_role || ''] || sub.assignment_role || 'SUB-TASK';
+  const roleStyle = roleBadgeStyles[sub.assignment_role || ''] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
+
+  const isSubmittedForReview = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(sub.status);
+  const hasResultLink = sub.result_url && sub.result_url.trim() !== '';
+  const isRevision = sub.status === 'REVISION_REQUESTED';
+  const hasContentToExpand = hasResultLink || Boolean(sub.revision_note) || Boolean(cleanedNote);
+
+  return (
+    <div
+      className={`p-2.5 rounded-xl border flex flex-col gap-2 transition-all ${
+        isRevision
+          ? 'bg-red-500/5 dark:bg-red-500/10 border-red-500/30'
+          : isSubmittedForReview
+          ? sub.mentor_approved === 1
+            ? 'bg-purple-500/5 dark:bg-purple-500/10 border-purple-500/30'
+            : 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/30'
+          : sub.status === 'APPROVED'
+          ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20'
+          : 'bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200/80 dark:border-zinc-800/60'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border shrink-0 ${roleStyle}`}>
+            {roleLabel}
+          </span>
+          <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100 truncate">
+            {sub.assigned_name ?? 'Unassigned'}
+          </span>
+          {sub.assigned_email && (
+            <span className="text-[10px] text-zinc-400 font-mono hidden sm:inline truncate">
+              ({sub.assigned_email})
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {sub.status === 'APPROVED' ? (
+            <span className="text-[10px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+              ✅ ACC ({sub.sparks ?? 8} ✨)
+            </span>
+          ) : isRevision ? (
+            <span className="text-[10px] font-black bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
+              🔄 Perlu Revisi
+            </span>
+          ) : isSubmittedForReview ? (
+            sub.mentor_approved === 1 ? (
+              <span className="text-[10px] font-black bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-md animate-pulse">
+                ⏳ Review Koordinator
+              </span>
+            ) : (
+              <span className="text-[10px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md animate-pulse">
+                ⏳ Review Mentor
+              </span>
+            )
+          ) : (
+            <span className="text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded-md">
+              ⚡ Belum Submit
+            </span>
+          )}
+
+          {hasContentToExpand && (
+            <button
+              type="button"
+              onClick={() => setShowDetail(!showDetail)}
+              className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/10 transition-all cursor-pointer flex items-center gap-1 active:scale-95 shadow-2xs"
+            >
+              <span>{showDetail ? '▲ Sembunyikan' : '👁️ Lihat Detail Submit'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showDetail && hasContentToExpand && (
+        <div className="space-y-2 pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60 animate-in fade-in duration-150">
+          {hasResultLink && (
+            <div className="text-xs">
+              <SubmittedLinkPreviewer url={sub.result_url!} autoExpand={false} />
+            </div>
+          )}
+
+          {sub.revision_note && (
+            <CollapsibleNoteViewer
+              content={sub.revision_note}
+              type="REVISION"
+              authorName={sub.revision_requested_by_name || 'Evaluator QC'}
+              authorRole={sub.revision_requested_by_role || 'QC'}
+            />
+          )}
+
+          {cleanedNote && (
+            <CollapsibleNoteViewer
+              content={cleanedNote}
+              type="APPRECIATION"
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TaskCardItem({
   parentTask,
   isCoordinator,
@@ -196,6 +308,8 @@ function TaskCardItem({
   const isExplicitCategoryTab =
     ['REVIEW', 'COMPLETED'].includes(activeTab) || activeTab.includes('REVISION');
 
+  const rincianCount = isExplicitCategoryTab ? displayAssignments.length : totalSteps;
+
   return (
     <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/50 hover:border-purple-500/30 p-3.5 sm:p-4 rounded-2xl space-y-2.5 transition-all duration-200 shadow-xs">
       {/* Main Top Row: Info Left, Actions Right */}
@@ -225,7 +339,7 @@ function TaskCardItem({
             onClick={() => setIsExpanded(!isExpanded)}
             className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 px-2.5 py-1 rounded-xl border border-purple-500/20 bg-purple-500/5 transition-all flex items-center gap-1 cursor-pointer"
           >
-            <span>{isExpanded ? '▲ Sembunyikan' : `▼ Rincian (${totalSteps} Step)`}</span>
+            <span>{isExpanded ? '▲ Sembunyikan' : `▼ Rincian (${rincianCount} Step)`}</span>
           </button>
 
           {isCoordinator && activeTab !== 'COMPLETED' && (unsubmittedAssignments.length > 0 || (waitingReviewSteps.length > 0 && !isTaskMentor)) && (
@@ -335,96 +449,13 @@ function TaskCardItem({
           </div>
 
           <div className="grid grid-cols-1 gap-2">
-            {displayAssignments.map((sub, sIdx) => {
-              const cleanedNote = cleanAppreciationNote(sub.appreciation_note);
-              const roleLabel = roleIcons[sub.assignment_role || ''] || sub.assignment_role || 'SUB-TASK';
-              const roleStyle = roleBadgeStyles[sub.assignment_role || ''] || 'bg-zinc-500/10 text-zinc-600 border-zinc-500/20';
-
-              const isSubmittedForReview = ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(sub.status);
-              const hasResultLink = sub.result_url && sub.result_url.trim() !== '';
-              const isRevision = sub.status === 'REVISION_REQUESTED';
-
-              return (
-                <div
-                  key={`${sub.id}-${sub.assignment_role}-${sIdx}`}
-                  className={`p-2.5 rounded-xl border flex flex-col gap-2 transition-all ${
-                    isRevision
-                      ? 'bg-red-500/5 dark:bg-red-500/10 border-red-500/30'
-                      : isSubmittedForReview
-                      ? sub.mentor_approved === 1
-                        ? 'bg-purple-500/5 dark:bg-purple-500/10 border-purple-500/30'
-                        : 'bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/30'
-                      : sub.status === 'APPROVED'
-                      ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20'
-                      : 'bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200/80 dark:border-zinc-800/60'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${roleStyle}`}>
-                        {roleLabel}
-                      </span>
-                      <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100">
-                        {sub.assigned_name ?? 'Unassigned'}
-                      </span>
-                      {sub.assigned_email && (
-                        <span className="text-[10px] text-zinc-400 font-mono hidden sm:inline">
-                          ({sub.assigned_email})
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {sub.status === 'APPROVED' ? (
-                        <span className="text-[10px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-md">
-                          ✅ ACC ({sub.sparks ?? 8} ✨)
-                        </span>
-                      ) : isRevision ? (
-                        <span className="text-[10px] font-black bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
-                          🔄 Perlu Revisi
-                        </span>
-                      ) : isSubmittedForReview ? (
-                        sub.mentor_approved === 1 ? (
-                          <span className="text-[10px] font-black bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 px-2 py-0.5 rounded-md animate-pulse">
-                            ⏳ Review Koordinator
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-md animate-pulse">
-                            ⏳ Review Mentor
-                          </span>
-                        )
-                      ) : (
-                        <span className="text-[10px] font-bold bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded-md">
-                          ⚡ Belum Submit
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {hasResultLink && (
-                    <div className="text-xs">
-                      <SubmittedLinkPreviewer url={sub.result_url!} autoExpand={false} />
-                    </div>
-                  )}
-
-                  {sub.revision_note && (
-                    <CollapsibleNoteViewer
-                      content={sub.revision_note}
-                      type="REVISION"
-                      authorName={sub.revision_requested_by_name || 'Evaluator QC'}
-                      authorRole={sub.revision_requested_by_role || 'QC'}
-                    />
-                  )}
-
-                  {cleanedNote && (
-                    <CollapsibleNoteViewer
-                      content={cleanedNote}
-                      type="APPRECIATION"
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {displayAssignments.map((sub, sIdx) => (
+              <StepAssignmentRowItem
+                key={`${sub.id}-${sub.assignment_role}-${sIdx}`}
+                sub={sub}
+                sIdx={sIdx}
+              />
+            ))}
           </div>
         </div>
       )}
