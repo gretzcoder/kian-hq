@@ -179,6 +179,17 @@ function TaskCardItem({
     if (stepFilter === 'REVISION') return sub.status === 'REVISION_REQUESTED';
     if (stepFilter === 'APPROVED') return ['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status);
     if (stepFilter === 'UNSUBMITTED') return ['ASSIGNED', 'IN_PROGRESS', 'DRAFT'].includes(sub.status);
+
+    // Contextual filtering based on activeTab when stepFilter === 'ALL'
+    if (activeTab === 'REVIEW') {
+      return ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(sub.status);
+    }
+    if (activeTab.includes('REVISION')) {
+      return sub.status === 'REVISION_REQUESTED';
+    }
+    if (activeTab === 'COMPLETED') {
+      return ['APPROVED', 'DONE', 'PUBLISHED'].includes(sub.status);
+    }
     return true;
   });
 
