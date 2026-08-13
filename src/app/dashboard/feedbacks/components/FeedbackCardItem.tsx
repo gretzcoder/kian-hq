@@ -284,49 +284,56 @@ export default function FeedbackCardItem({
         </form>
       )}
 
-      {/* Threads-Style Nested Replies Tree */}
+      {/* Instagram-Style "View replies" Toggle Button */}
+      {feedback.replies.length > 0 && (
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer group"
+          >
+            <span className="w-6 h-[1px] bg-zinc-400 dark:bg-zinc-700 group-hover:bg-purple-500 transition-colors"></span>
+            <span>{isExpanded ? 'Sembunyikan balasan' : `Lihat ${feedback.replies.length} balasan`}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Instagram-Style Clean Reply List */}
       {isExpanded && feedback.replies.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 space-y-3">
-          <div className="flex items-center justify-between text-[11px] font-bold text-zinc-400 uppercase tracking-wider px-1">
-            <span>Daftar Balasan ({feedback.replies.length})</span>
-            <button
-              type="button"
-              onClick={() => setIsExpanded(false)}
-              className="hover:text-zinc-200 transition-colors"
-            >
-              Tutup ▲
-            </button>
-          </div>
+        <div className="pl-3 sm:pl-6 border-l border-zinc-200 dark:border-zinc-800/80 space-y-3 pt-1">
+          {feedback.replies.map((reply) => (
+            <div key={reply.id} className="flex items-start gap-2.5 group">
+              <Link href={`/dashboard/profile?userId=${reply.user_id}`} className="shrink-0 pt-0.5">
+                <UserAvatar
+                  src={reply.user_avatar}
+                  name={reply.user_name}
+                  size="w-7 h-7 text-[10px] font-bold"
+                  square={false}
+                />
+              </Link>
 
-          {/* Thread Connector Line Container */}
-          <div className="space-y-3 pl-2 sm:pl-4 border-l-2 border-purple-500/30">
-            {feedback.replies.map((reply) => (
-              <div
-                key={reply.id}
-                className="p-3.5 bg-zinc-50/80 dark:bg-zinc-900/40 border border-zinc-100 dark:border-zinc-800/60 rounded-2xl space-y-2 relative group hover:border-purple-500/30 transition-all"
-              >
-                {/* Reply Header & Replying To Indicator */}
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <UserAvatar
-                      src={reply.user_avatar}
-                      name={reply.user_name}
-                      size="w-6 h-6 text-[10px] font-bold"
-                      square
-                    />
-                    <span className="font-bold text-xs text-zinc-900 dark:text-zinc-100">
-                      {reply.user_name}
+              <div className="flex-1 min-w-0 text-xs">
+                {/* Instagram Comment Text Layout: Bold Username + Message */}
+                <div className="text-zinc-800 dark:text-zinc-200 leading-snug">
+                  <Link
+                    href={`/dashboard/profile?userId=${reply.user_id}`}
+                    className="font-extrabold text-zinc-900 dark:text-zinc-100 hover:text-purple-600 dark:hover:text-purple-400 mr-1.5"
+                  >
+                    {reply.user_name}
+                  </Link>
+                  {reply.parent_user_name && (
+                    <span className="text-purple-600 dark:text-purple-400 font-bold mr-1.5">
+                      @{reply.parent_user_name}
                     </span>
+                  )}
+                  <span className="whitespace-pre-wrap font-normal text-zinc-700 dark:text-zinc-300">
+                    {reply.message}
+                  </span>
+                </div>
 
-                    {/* Social Media Style "@ParentUserName" Tag */}
-                    {reply.parent_user_name && (
-                      <span className="text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded-md font-bold">
-                        Membalas @{reply.parent_user_name}
-                      </span>
-                    )}
-                  </div>
-
-                  <span className="text-[10px] text-zinc-400 font-mono">
+                {/* Sub Metadata Bar: Time • Balas • Reactions */}
+                <div className="flex items-center gap-3 mt-1 text-[11px] text-zinc-400 flex-wrap">
+                  <span className="font-mono text-[10px] text-zinc-500">
                     {new Date(reply.created_at * 1000).toLocaleDateString('id-ID', {
                       day: 'numeric',
                       month: 'short',
@@ -334,34 +341,24 @@ export default function FeedbackCardItem({
                       minute: '2-digit',
                     })}
                   </span>
-                </div>
 
-                {/* Reply Content */}
-                <p className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap pl-8">
-                  {reply.message}
-                </p>
+                  <button
+                    type="button"
+                    onClick={() => handleStartReply(reply.id, reply.user_name)}
+                    className="font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+                  >
+                    Balas
+                  </button>
 
-                {/* Reply Action Bar (Discord Reactions + Reply Button) */}
-                <div className="flex items-center justify-between gap-2 pl-8 pt-1 flex-wrap">
-                  {/* Discord Reactions on Reply */}
                   <FeedbackReactionPicker
                     reactions={reply.reactions}
                     isPending={isPending}
                     onToggleReaction={(emoji) => handleToggleRx('REPLY', reply.id, emoji)}
                   />
-
-                  {/* Direct Reply to Comment Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleStartReply(reply.id, reply.user_name)}
-                    className="text-[11px] font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors flex items-center gap-1"
-                  >
-                    <span>↩ Balas</span>
-                  </button>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </div>
       )}
 
