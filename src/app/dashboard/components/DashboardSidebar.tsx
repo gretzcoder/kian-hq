@@ -251,9 +251,12 @@ export default function DashboardSidebar({
           >
             ☰
           </button>
-          <span className="text-sm sm:text-base font-black tracking-widest bg-gradient-to-r from-purple-500 to-indigo-500 bg-clip-text text-transparent truncate">
-            KIAN HQ
-          </span>
+          <Link href="/dashboard" className="flex items-center gap-2 truncate">
+            <img src="/kian.ico" alt="Kian HQ Logo" className="w-7 h-7 rounded-xl object-contain shadow-xs shrink-0" />
+            <span className="text-sm sm:text-base font-black tracking-widest bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 bg-clip-text text-transparent truncate">
+              KIAN HQ
+            </span>
+          </Link>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
           <FloatingNotificationDrawer
@@ -302,9 +305,11 @@ export default function DashboardSidebar({
             className="flex items-center gap-3 min-w-0 group"
             title={collapsed ? 'Klik Logo untuk Memperluas Navigasi' : undefined}
           >
-            <span className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-md shadow-purple-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200">
-              K
-            </span>
+            <img
+              src="/kian.ico"
+              alt="Kian HQ Logo"
+              className="w-9 h-9 rounded-2xl object-contain shadow-md shadow-purple-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200"
+            />
             <span
               className={`text-lg font-black tracking-widest bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 bg-clip-text text-transparent whitespace-nowrap transition-all duration-300 ${
                 collapsed ? 'opacity-0 w-0 pointer-events-none' : 'opacity-100 w-auto'

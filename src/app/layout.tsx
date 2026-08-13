@@ -18,11 +18,13 @@ export const metadata: Metadata = {
   description: "KIAN HQ is an AI-powered creative team operating system built for modern creative agencies. Manage projects, tasks, timelines, briefs, and team collaboration in one unified platform.",
   icons: {
     icon: [
-      { url: '/kian.ico?v=2', type: 'image/x-icon' },
-      { url: '/favicon.ico?v=2', type: 'image/x-icon' },
+      { url: '/kian.ico?v=4', type: 'image/x-icon' },
+      { url: '/favicon.ico?v=4', type: 'image/x-icon' },
+      { url: '/icon-192.png?v=4', type: 'image/png', sizes: '192x192' },
+      { url: '/icon-512.png?v=4', type: 'image/png', sizes: '512x512' },
     ],
-    shortcut: '/kian.ico?v=2',
-    apple: '/kian.ico?v=2',
+    shortcut: '/kian.ico?v=4',
+    apple: '/apple-touch-icon.png?v=4',
   },
   manifest: "/manifest.json",
   appleWebApp: {
@@ -54,9 +56,11 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <link rel="icon" href="/kian.ico?v=2" type="image/x-icon" sizes="any" />
-        <link rel="shortcut icon" href="/kian.ico?v=2" type="image/x-icon" />
-        <link rel="apple-touch-icon" href="/kian.ico?v=2" />
+        <link rel="icon" href="/kian.ico?v=4" type="image/x-icon" sizes="any" />
+        <link rel="shortcut icon" href="/kian.ico?v=4" type="image/x-icon" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=4" />
+        <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png?v=4" />
+        <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png?v=4" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
