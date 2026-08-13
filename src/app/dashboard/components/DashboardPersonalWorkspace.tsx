@@ -463,6 +463,12 @@ export default function DashboardPersonalWorkspace({
   );
   const completedGrouped = groupTasksByParent(finishedTasks);
 
+  // Helper to identify tasks in Mentor Workspaces vs Troopers Workspaces
+  const isMentorTask = (t: any) =>
+    t.workspace_type === 'MENTOR' ||
+    t.task_type === 'MENTOR' ||
+    (t.project_name && t.project_name.toUpperCase().includes('MENTOR'));
+
   // Filter 3: Perlu Revisi untuk User Ini
   const myRevisionTasks = combinedRawTasks.filter(
     (t) => t.user_id === currentUserId && t.status === 'REVISION_REQUESTED'
@@ -471,30 +477,22 @@ export default function DashboardPersonalWorkspace({
 
   // Filter 3b: Troopers Revisi
   const trooperRevisionTasks = combinedRawTasks.filter(
-    (t) =>
-      t.status === 'REVISION_REQUESTED' &&
-      ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(t.assignment_role)
+    (t) => t.status === 'REVISION_REQUESTED' && !isMentorTask(t)
   );
   const trooperRevisionGrouped = groupTasksByParent(trooperRevisionTasks);
 
   // Filter 3c: Mentor Revisi
   const mentorRevisionTasks = combinedRawTasks.filter(
-    (t) =>
-      t.status === 'REVISION_REQUESTED' &&
-      (t.assignment_role === 'MENTOR' || t.task_type === 'MENTOR')
+    (t) => t.status === 'REVISION_REQUESTED' && isMentorTask(t)
   );
   const mentorRevisionGrouped = groupTasksByParent(mentorRevisionTasks);
 
-  // Filter 3d: Troopers Task
-  const trooperTasksFiltered = activeTasks.filter((t) =>
-    ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(t.assignment_role)
-  );
+  // Filter 3d: Troopers Task (strictly tasks in TROOPERS / non-Mentor workspaces)
+  const trooperTasksFiltered = activeTasks.filter((t) => !isMentorTask(t));
   const trooperGrouped = groupTasksByParent(trooperTasksFiltered);
 
-  // Filter 3e: Mentor Task
-  const mentorTasksFiltered = activeTasks.filter(
-    (t) => t.assignment_role === 'MENTOR' || t.task_type === 'MENTOR'
-  );
+  // Filter 3e: Mentor Task (strictly tasks in MENTOR workspaces)
+  const mentorTasksFiltered = activeTasks.filter((t) => isMentorTask(t));
   const mentorGrouped = groupTasksByParent(mentorTasksFiltered);
 
   // Filter 4: Review Grouped Tasks (Pending Review)

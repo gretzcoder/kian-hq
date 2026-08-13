@@ -199,6 +199,7 @@ export default async function DashboardPage() {
       LEFT JOIN users u    ON ta.user_id = u.id
       LEFT JOIN users u_creator ON t.created_by = u_creator.id
       WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
+        AND (ws.workspace_type IS NULL OR ws.workspace_type != 'MENTOR')
         AND (t.task_type IS NULL OR t.task_type != 'MENTOR')
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
@@ -208,7 +209,7 @@ export default async function DashboardPage() {
       .all();
     trooperTasks = tActive as unknown as PersonalTaskRow[];
 
-    // 3. Mentor Task (Category 3: Active Mentor Tasks strictly assigned to Mentors)
+    // 3. Mentor Task (Category 3: Active Mentor Tasks strictly in Mentor Workspaces)
     const { results: mActive } = await db
       .prepare(
         `
@@ -243,8 +244,6 @@ export default async function DashboardPage() {
           ws.workspace_type = 'MENTOR'
           OR UPPER(p.name) LIKE '%MENTOR%'
           OR t.task_type = 'MENTOR'
-          OR u.user_type = 'EXTERNAL'
-          OR ta.assignment_role IN ('PIC', 'REVIEWER', 'APPROVER', 'HELPER', 'MENTOR')
         )
         AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       ORDER BY ta.submitted_at ASC, t.deadline ASC
