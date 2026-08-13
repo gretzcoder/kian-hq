@@ -25,8 +25,18 @@ export default function FeedbackCardItem({
   canManageSparks,
 }: FeedbackCardItemProps) {
   // CRITICAL REQUIREMENT: "bila total chat dari user banyak, dibuat collapse dan jangan auto expand."
-  // Initial state is ALWAYS false so threads are collapsed on load.
   const [isExpanded, setIsExpanded] = useState(false);
+  const INITIAL_REPLY_LIMIT = 3;
+  const [visibleReplyCount, setVisibleReplyCount] = useState(INITIAL_REPLY_LIMIT);
+
+  function handleToggleExpand() {
+    if (isExpanded) {
+      setIsExpanded(false);
+      setVisibleReplyCount(INITIAL_REPLY_LIMIT);
+    } else {
+      setIsExpanded(true);
+    }
+  }
 
   // Reply state
   const [isReplying, setIsReplying] = useState(false);
@@ -212,18 +222,6 @@ export default function FeedbackCardItem({
               )
             )}
 
-            {/* Reply Count Toggle */}
-            {feedback.replies.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 hover:bg-purple-500/10 transition-colors"
-              >
-                <span>💬 {feedback.replies.length} Balasan</span>
-                <span className="text-[10px]">{isExpanded ? '▲' : '▼'}</span>
-              </button>
-            )}
-
             {/* Balas Post Button */}
             <button
               type="button"
@@ -289,7 +287,7 @@ export default function FeedbackCardItem({
         <div className="pt-1">
           <button
             type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={handleToggleExpand}
             className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer group"
           >
             <span className="w-6 h-[1px] bg-zinc-400 dark:bg-zinc-700 group-hover:bg-purple-500 transition-colors"></span>
@@ -298,10 +296,10 @@ export default function FeedbackCardItem({
         </div>
       )}
 
-      {/* Instagram-Style Clean Reply List */}
+      {/* Instagram-Style Clean Reply List with Anti-Spam Incremental Pagination */}
       {isExpanded && feedback.replies.length > 0 && (
         <div className="pl-3 sm:pl-6 border-l border-zinc-200 dark:border-zinc-800/80 space-y-3 pt-1">
-          {feedback.replies.map((reply) => (
+          {feedback.replies.slice(0, visibleReplyCount).map((reply) => (
             <div key={reply.id} className="flex items-start gap-2.5 group">
               <Link href={`/dashboard/profile?userId=${reply.user_id}`} className="shrink-0 pt-0.5">
                 <UserAvatar
@@ -359,6 +357,18 @@ export default function FeedbackCardItem({
               </div>
             </div>
           ))}
+
+          {/* Instagram-Style "View More Replies" Link */}
+          {feedback.replies.length > visibleReplyCount && (
+            <button
+              type="button"
+              onClick={() => setVisibleReplyCount((prev) => prev + 5)}
+              className="inline-flex items-center gap-2 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:underline pt-1 cursor-pointer"
+            >
+              <span className="w-4 h-[1px] bg-purple-500/40"></span>
+              <span>Lihat {feedback.replies.length - visibleReplyCount} balasan lainnya</span>
+            </button>
+          )}
         </div>
       )}
 
