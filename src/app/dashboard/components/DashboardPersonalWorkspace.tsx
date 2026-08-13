@@ -342,12 +342,19 @@ function TaskCardItem({
             <span>{isExpanded ? '▲ Sembunyikan' : `▼ Rincian (${rincianCount} Step)`}</span>
           </button>
 
-          {isCoordinator && activeTab !== 'COMPLETED' && (unsubmittedAssignments.length > 0 || (waitingReviewSteps.length > 0 && !isTaskMentor)) && (
+          {isCoordinator && activeTab !== 'COMPLETED' && (
+            (activeTab.includes('REVISION') && revisionSteps.length > 0) ||
+            (activeTab === 'REVIEW' && waitingReviewSteps.length > 0) ||
+            unsubmittedAssignments.length > 0 ||
+            (waitingReviewSteps.length > 0 && !isTaskMentor)
+          ) && (
             <TaskSmartReminderButton
               taskId={parentTask.id}
               unsubmittedCount={unsubmittedAssignments.length}
               waitingReviewCount={waitingReviewSteps.length}
+              revisionCount={revisionSteps.length}
               mentorName={parentTask.creator_name}
+              activeTab={activeTab}
             />
           )}
 

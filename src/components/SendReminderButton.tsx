@@ -104,7 +104,9 @@ interface TaskSmartReminderButtonProps {
   taskId: string;
   unsubmittedCount: number;
   waitingReviewCount: number;
+  revisionCount?: number;
   mentorName?: string | null;
+  activeTab?: string;
   className?: string;
 }
 
@@ -112,7 +114,9 @@ export function TaskSmartReminderButton({
   taskId,
   unsubmittedCount,
   waitingReviewCount,
+  revisionCount = 0,
   mentorName,
+  activeTab,
   className = '',
 }: TaskSmartReminderButtonProps) {
   const [loading, setLoading] = useState(false);
@@ -123,7 +127,7 @@ export function TaskSmartReminderButton({
     if (loading || sent) return;
     setLoading(true);
     try {
-      const res = await sendTaskSmartReminder(taskId);
+      const res = await sendTaskSmartReminder(taskId, activeTab);
       if (res.success) {
         setSent(true);
         toast(res.message || 'Smart Reminder berhasil dikirim!', 'success');
@@ -138,12 +142,25 @@ export function TaskSmartReminderButton({
   };
 
   let buttonText = 'Ingatkan Task';
-  if (unsubmittedCount > 0 && waitingReviewCount > 0) {
-    buttonText = `Ingatkan All (${unsubmittedCount} Trooper & Mentor)`;
-  } else if (unsubmittedCount > 0) {
-    buttonText = `Ingatkan All Peserta (${unsubmittedCount} Belum Submit)`;
-  } else if (waitingReviewCount > 0) {
+  if (activeTab === 'REVIEW') {
     buttonText = `Ingatkan Mentor Review (${mentorName || 'Mentor'})`;
+  } else if (activeTab && activeTab.includes('REVISION')) {
+    const revNum = revisionCount > 0 ? revisionCount : 1;
+    buttonText = `Ingatkan Trooper Revisi (${revNum} Person)`;
+  } else if (activeTab === 'TROOPER' || activeTab === 'MENTOR') {
+    if (unsubmittedCount > 0) {
+      buttonText = `Ingatkan ${unsubmittedCount} Trooper Belum Submit`;
+    } else if (waitingReviewCount > 0) {
+      buttonText = `Ingatkan Mentor Review (${mentorName || 'Mentor'})`;
+    }
+  } else {
+    if (unsubmittedCount > 0 && waitingReviewCount > 0) {
+      buttonText = `Ingatkan All (${unsubmittedCount} Trooper & Mentor)`;
+    } else if (unsubmittedCount > 0) {
+      buttonText = `Ingatkan ${unsubmittedCount} Trooper Belum Submit`;
+    } else if (waitingReviewCount > 0) {
+      buttonText = `Ingatkan Mentor Review (${mentorName || 'Mentor'})`;
+    }
   }
 
   return (
@@ -156,7 +173,7 @@ export function TaskSmartReminderButton({
           ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
           : 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border-amber-500/20 dark:text-amber-300 dark:hover:bg-amber-500/30'
       } ${className}`}
-      title="Kirim notifikasi reminder otomatis ke semua peserta & mentor"
+      title="Kirim notifikasi reminder terfokus ke peserta/mentor sesuai kategori"
     >
       <span>{loading ? '⏳' : sent ? '✓' : '🔔'}</span>
       <span>{loading ? 'Mengirim...' : sent ? 'Reminder Terkirim' : buttonText}</span>

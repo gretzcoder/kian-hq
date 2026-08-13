@@ -1457,7 +1457,7 @@ export async function sendSubmissionReminderToTrooper(
  * 1. Notifies ALL assigned Troopers who haven't submitted yet (ASSIGNED, IN_PROGRESS).
  * 2. Notifies the Mentor if there are submissions waiting review (WAITING_REVIEW, SUBMITTED).
  */
-export async function sendTaskSmartReminder(taskId: string) {
+export async function sendTaskSmartReminder(taskId: string, categoryMode?: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
@@ -1522,8 +1522,12 @@ export async function sendTaskSmartReminder(taskId: string) {
   let notifiedCount = 0;
   let messagesSent: string[] = [];
 
-  // 1. Notify troopers who need revision
-  if (needRevision.length > 0) {
+  const isRevisionCategory = categoryMode && categoryMode.includes('REVISION');
+  const isReviewCategory = categoryMode === 'REVIEW';
+  const isUnsubmittedCategory = categoryMode === 'TROOPER' || categoryMode === 'UNSUBMITTED';
+
+  // 1. Notify troopers who need revision (if in revision tab or general batch)
+  if (needRevision.length > 0 && (!categoryMode || isRevisionCategory)) {
     for (const sub of needRevision) {
       await sendPushNotificationToUser(sub.user_id, 'TASK', {
         title: `🔄 Reminder Revisi Tugas: ${task.title}`,
@@ -1535,28 +1539,32 @@ export async function sendTaskSmartReminder(taskId: string) {
     messagesSent.push(`Reminder Revisi dikirim ke ${needRevision.length} Peserta`);
   }
 
-  // 2. Notify troopers who haven't submitted
-  if (unsubmitted.length > 0) {
-    for (const sub of unsubmitted) {
-      await sendPushNotificationToUser(sub.user_id, 'TASK', {
-        title: `⏰ Reminder Pengerjaan Tugas: ${task.title}`,
-        body: `${senderName} mengingatkan Anda untuk segera menyelesaikan & mengunggah hasil karya.`,
+  // 2. Notify troopers who haven't submitted (if in unsubmitted/trooper tab or general batch)
+  if (unsubmitted.length > 0 && (!categoryMode || isUnsubmittedCategory || categoryMode === 'ACTIVE' || categoryMode === 'MENTOR')) {
+    if (!isRevisionCategory && !isReviewCategory) {
+      for (const sub of unsubmitted) {
+        await sendPushNotificationToUser(sub.user_id, 'TASK', {
+          title: `⏰ Reminder Pengerjaan Tugas: ${task.title}`,
+          body: `${senderName} mengingatkan Anda untuk segera menyelesaikan & mengunggah hasil karya.`,
+          url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard',
+        });
+        notifiedCount++;
+      }
+      messagesSent.push(`Reminder Pengerjaan dikirim ke ${unsubmitted.length} Peserta`);
+    }
+  }
+
+  // 3. Notify mentor if there are submissions waiting review (if in review tab or general batch)
+  if (waitingReview.length > 0 && task.created_by && (!categoryMode || isReviewCategory || categoryMode === 'ACTIVE' || categoryMode === 'MENTOR')) {
+    if (!isRevisionCategory && !isUnsubmittedCategory) {
+      await sendPushNotificationToUser(task.created_by, 'TASK', {
+        title: `🔔 Reminder Review Tugas: ${task.title}`,
+        body: `${senderName} mengingatkan Anda untuk segera meninjau ${waitingReview.length} karya peserta yang telah diunggah.`,
         url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard',
       });
       notifiedCount++;
+      messagesSent.push(`Notifikasi review dikirim ke Mentor (${task.creator_name || 'Mentor'})`);
     }
-    messagesSent.push(`Reminder Pengerjaan dikirim ke ${unsubmitted.length} Peserta`);
-  }
-
-  // 3. Notify mentor if there are submissions waiting review
-  if (waitingReview.length > 0 && task.created_by) {
-    await sendPushNotificationToUser(task.created_by, 'TASK', {
-      title: `🔔 Reminder Review Tugas: ${task.title}`,
-      body: `${senderName} mengingatkan Anda untuk segera meninjau ${waitingReview.length} karya peserta yang telah diunggah.`,
-      url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard',
-    });
-    notifiedCount++;
-    messagesSent.push(`Notifikasi review dikirim ke Mentor (${task.creator_name || 'Mentor'})`);
   }
 
   if (notifiedCount === 0) {
