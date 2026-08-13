@@ -225,9 +225,7 @@ export default function DashboardSidebar({
         ...(canViewOJT
           ? [{ href: '/dashboard/ojt', label: 'OJT Directory', icon: '🎓', exact: false }]
           : []),
-        ...(canManageUsers
-          ? [{ href: '/dashboard/feedbacks', label: 'Kritik & Saran', icon: '💌', exact: false }]
-          : []),
+        { href: '/dashboard/feedbacks', label: 'Kritik & Saran', icon: '💌', exact: false },
         ...(canManageUsers
           ? [{ href: '/dashboard/users', label: 'Users', icon: '👥', exact: false }]
           : []),
