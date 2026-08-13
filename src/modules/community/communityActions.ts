@@ -7,14 +7,23 @@ import { sendPushNotificationToUser } from '@/modules/notifications/pushActions'
 import { getActiveSimulatedRole } from '@/modules/roles/viewAsRoleActions';
 import { revalidatePath } from 'next/cache';
 
+export interface CommunityCategory {
+  id: string;
+  name: string;
+  icon: string;
+  sort_order: number;
+}
+
 export interface CommunityChannel {
   id: string;
   slug: string;
   name: string;
   description: string;
-  category: 'WORK' | 'GENERAL';
+  category: string;
+  category_id?: string;
   icon: string;
   sort_order: number;
+  is_default?: number;
   unreadCount?: number;
   lastMessage?: string;
   lastMessageAt?: string;
@@ -66,18 +75,91 @@ export interface CommunityMemberGroup {
 }
 
 /**
- * Gets all community chat channels grouped by category with unread counts
+ * Ensures DB tables for community categories and default channel column exist
+ */
+async function initCommunityTables(db: any) {
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS community_categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        icon TEXT DEFAULT '📁',
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+
+    const catCount = (await db.prepare(`SELECT COUNT(*) as count FROM community_categories`).first()) as { count: number } | null;
+    if (!catCount || catCount.count === 0) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO community_categories (id, name, icon, sort_order) VALUES
+        ('cat_work', 'KATEGORI KERJAAN', '💼', 1),
+        ('cat_general', 'GENERAL & SANTAI', '💬', 2)
+      `).run();
+    }
+
+    try {
+      await db.prepare(`ALTER TABLE community_channels ADD COLUMN is_default INTEGER DEFAULT 0`).run();
+    } catch (e) {
+      // Column exists
+    }
+
+    try {
+      await db.prepare(`ALTER TABLE community_channels ADD COLUMN category_id TEXT`).run();
+    } catch (e) {
+      // Column exists
+    }
+
+    const defaultCheck = (await db.prepare(`SELECT id FROM community_channels WHERE is_default = 1 LIMIT 1`).first()) as { id: string } | null;
+    if (!defaultCheck) {
+      await db.prepare(`UPDATE community_channels SET is_default = 1 WHERE slug = 'general-chit-chat' OR id = 'chan_general'`).run();
+      const checkAgain = (await db.prepare(`SELECT id FROM community_channels WHERE is_default = 1 LIMIT 1`).first()) as { id: string } | null;
+      if (!checkAgain) {
+        await db.prepare(`UPDATE community_channels SET is_default = 1 WHERE rowid = (SELECT MIN(rowid) FROM community_channels)`).run();
+      }
+    }
+  } catch (err) {
+    console.error('initCommunityTables error:', err);
+  }
+}
+
+/**
+ * Gets all community chat channels grouped by category with unread counts and default channel info
  */
 export async function getCommunityChannels(): Promise<{
   workChannels: CommunityChannel[];
   generalChannels: CommunityChannel[];
+  categories: CommunityCategory[];
+  defaultChannelId: string | null;
+  canManage: boolean;
 }> {
   const session = await getSession();
   const db = await getDB();
 
+  await initCommunityTables(db);
+
+  let canManage = false;
+  if (session) {
+    const ctx = await getSessionContext(session.userId);
+    canManage =
+      ctx.userType === 'STAFF' ||
+      ctx.userType === 'EXTERNAL' ||
+      ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER', 'MENTOR'].includes(String(r).toUpperCase())) ||
+      ctx.can('MANAGE');
+  }
+
+  const categoriesRaw = (await db
+    .prepare(`SELECT id, name, icon, sort_order FROM community_categories ORDER BY sort_order ASC, name ASC`)
+    .all()) as { results: CommunityCategory[] };
+
+  const categories = categoriesRaw.results || [
+    { id: 'cat_work', name: 'KATEGORI KERJAAN', icon: '💼', sort_order: 1 },
+    { id: 'cat_general', name: 'GENERAL & SANTAI', icon: '💬', sort_order: 2 },
+  ];
+
   const channelsRaw = (await db
     .prepare(
-      `SELECT id, slug, name, description, category, icon, sort_order
+      `SELECT id, slug, name, description, category, category_id, icon, sort_order, COALESCE(is_default, 0) as is_default
        FROM community_channels
        ORDER BY sort_order ASC, name ASC`
     )
@@ -87,17 +169,24 @@ export async function getCommunityChannels(): Promise<{
       slug: string;
       name: string;
       description: string;
-      category: 'WORK' | 'GENERAL';
+      category: string;
+      category_id?: string;
       icon: string;
       sort_order: number;
+      is_default: number;
     }>;
   };
 
   const channels = channelsRaw.results || [];
   const workChannels: CommunityChannel[] = [];
   const generalChannels: CommunityChannel[] = [];
+  let defaultChannelId: string | null = null;
 
   for (const ch of channels) {
+    if (ch.is_default === 1 && !defaultChannelId) {
+      defaultChannelId = ch.id;
+    }
+
     let unreadCount = 0;
     let lastMessage = '';
     let lastMessageAt = '';
@@ -145,14 +234,18 @@ export async function getCommunityChannels(): Promise<{
       lastMessageAt,
     };
 
-    if (ch.category === 'WORK') {
+    if (ch.category === 'WORK' || ch.category_id === 'cat_work' || ch.category.toLowerCase().includes('kerja')) {
       workChannels.push(item);
     } else {
       generalChannels.push(item);
     }
   }
 
-  return { workChannels, generalChannels };
+  if (!defaultChannelId && channels.length > 0) {
+    defaultChannelId = channels[0].id;
+  }
+
+  return { workChannels, generalChannels, categories, defaultChannelId, canManage };
 }
 
 /**
@@ -627,5 +720,354 @@ export async function clearCommunityCategoryMessages(
   } catch (err: any) {
     console.error('clearCommunityCategoryMessages failed:', err);
     return { success: false, error: err.message || 'Gagal membersihkan chat kategori.' };
+  }
+}
+
+/**
+ * Creates a new community category
+ */
+export async function createCommunityCategory(data: {
+  name: string;
+  icon?: string;
+}): Promise<{ success: boolean; categoryId?: string; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  await initCommunityTables(db);
+
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrAdmin =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isStaffOrAdmin) {
+    return { success: false, error: 'Hanya Admin/Koordinator yang dapat membuat kategori baru.' };
+  }
+
+  if (!data.name || data.name.trim() === '') {
+    return { success: false, error: 'Nama kategori wajib diisi.' };
+  }
+
+  const id = `cat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const icon = data.icon?.trim() || '📁';
+
+  const maxOrderRes = (await db
+    .prepare(`SELECT COALESCE(MAX(sort_order), 0) as max_order FROM community_categories`)
+    .first()) as { max_order: number } | null;
+
+  const nextOrder = (maxOrderRes?.max_order || 0) + 1;
+
+  try {
+    await db
+      .prepare(`INSERT INTO community_categories (id, name, icon, sort_order) VALUES (?, ?, ?, ?)`)
+      .bind(id, data.name.trim(), icon, nextOrder)
+      .run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true, categoryId: id };
+  } catch (err: any) {
+    console.error('createCommunityCategory error:', err);
+    return { success: false, error: err.message || 'Gagal membuat kategori.' };
+  }
+}
+
+/**
+ * Updates a community category
+ */
+export async function updateCommunityCategory(data: {
+  id: string;
+  name: string;
+  icon?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrAdmin =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isStaffOrAdmin) {
+    return { success: false, error: 'Hanya Admin/Koordinator yang dapat mengubah kategori.' };
+  }
+
+  try {
+    await db
+      .prepare(`UPDATE community_categories SET name = ?, icon = ? WHERE id = ?`)
+      .bind(data.name.trim(), data.icon?.trim() || '📁', data.id)
+      .run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Gagal mengedit kategori.' };
+  }
+}
+
+/**
+ * Deletes a community category
+ */
+export async function deleteCommunityCategory(categoryId: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrAdmin =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isStaffOrAdmin) {
+    return { success: false, error: 'Hanya Admin/Koordinator yang dapat menghapus kategori.' };
+  }
+
+  try {
+    await db.prepare(`DELETE FROM community_categories WHERE id = ?`).bind(categoryId).run();
+    revalidatePath('/dashboard/community');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Gagal menghapus kategori.' };
+  }
+}
+
+/**
+ * Reorders a community category up or down
+ */
+export async function reorderCommunityCategory(
+  categoryId: string,
+  direction: 'UP' | 'DOWN'
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const categoriesRaw = (await db
+    .prepare(`SELECT id, sort_order FROM community_categories ORDER BY sort_order ASC, name ASC`)
+    .all()) as { results: Array<{ id: string; sort_order: number }> };
+
+  const cats = categoriesRaw.results || [];
+  const idx = cats.findIndex((c) => c.id === categoryId);
+  if (idx === -1) return { success: false, error: 'Kategori tidak ditemukan.' };
+
+  const targetIdx = direction === 'UP' ? idx - 1 : idx + 1;
+  if (targetIdx < 0 || targetIdx >= cats.length) return { success: true }; // Boundary limit
+
+  const currentCat = cats[idx];
+  const targetCat = cats[targetIdx];
+
+  try {
+    await db.prepare(`UPDATE community_categories SET sort_order = ? WHERE id = ?`).bind(targetCat.sort_order, currentCat.id).run();
+    await db.prepare(`UPDATE community_categories SET sort_order = ? WHERE id = ?`).bind(currentCat.sort_order, targetCat.id).run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Gagal mengubah urutan kategori.' };
+  }
+}
+
+/**
+ * Creates a new channel
+ */
+export async function createCommunityChannel(data: {
+  name: string;
+  description?: string;
+  category: 'WORK' | 'GENERAL' | string;
+  icon?: string;
+}): Promise<{ success: boolean; channelId?: string; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  await initCommunityTables(db);
+
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrAdmin =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isStaffOrAdmin) {
+    return { success: false, error: 'Hanya Admin/Koordinator yang dapat membuat saluran baru.' };
+  }
+
+  if (!data.name || data.name.trim() === '') {
+    return { success: false, error: 'Nama saluran wajib diisi.' };
+  }
+
+  const slug = data.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const id = `chan_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const icon = data.icon?.trim() || '💬';
+
+  const maxOrderRes = (await db
+    .prepare(`SELECT COALESCE(MAX(sort_order), 0) as max_order FROM community_channels WHERE category = ?`)
+    .bind(data.category)
+    .first()) as { max_order: number } | null;
+
+  const nextOrder = (maxOrderRes?.max_order || 0) + 1;
+
+  try {
+    await db
+      .prepare(`INSERT INTO community_channels (id, slug, name, description, category, icon, sort_order, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, 0)`)
+      .bind(id, slug, data.name.trim(), data.description?.trim() || '', data.category, icon, nextOrder)
+      .run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true, channelId: id };
+  } catch (err: any) {
+    console.error('createCommunityChannel error:', err);
+    return { success: false, error: err.message || 'Gagal membuat saluran chat.' };
+  }
+}
+
+/**
+ * Updates a community channel
+ */
+export async function updateCommunityChannel(data: {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  icon?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrAdmin =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isStaffOrAdmin) {
+    return { success: false, error: 'Hanya Admin/Koordinator yang dapat mengedit saluran.' };
+  }
+
+  try {
+    const slug = data.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    await db
+      .prepare(`UPDATE community_channels SET name = ?, slug = ?, description = ?, icon = ? WHERE id = ?`)
+      .bind(data.name.trim(), slug, data.description?.trim() || '', data.icon?.trim() || '💬', data.id)
+      .run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Gagal mengedit saluran chat.' };
+  }
+}
+
+/**
+ * Deletes a community channel
+ */
+export async function deleteCommunityChannel(channelId: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrAdmin =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isStaffOrAdmin) {
+    return { success: false, error: 'Hanya Admin/Koordinator yang dapat menghapus saluran.' };
+  }
+
+  try {
+    await db.prepare(`DELETE FROM community_message_reactions WHERE message_id IN (SELECT id FROM community_messages WHERE channel_id = ?)`).bind(channelId).run();
+    await db.prepare(`DELETE FROM community_messages WHERE channel_id = ?`).bind(channelId).run();
+    await db.prepare(`DELETE FROM community_channel_reads WHERE channel_id = ?`).bind(channelId).run();
+    await db.prepare(`DELETE FROM community_channels WHERE id = ?`).bind(channelId).run();
+
+    // Ensure there is still at least one default channel if deleted channel was default
+    const defaultCheck = (await db.prepare(`SELECT id FROM community_channels WHERE is_default = 1 LIMIT 1`).first()) as { id: string } | null;
+    if (!defaultCheck) {
+      await db.prepare(`UPDATE community_channels SET is_default = 1 WHERE rowid = (SELECT MIN(rowid) FROM community_channels)`).run();
+    }
+
+    revalidatePath('/dashboard/community');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Gagal menghapus saluran.' };
+  }
+}
+
+/**
+ * Reorders a channel up or down inside its category
+ */
+export async function reorderCommunityChannel(
+  channelId: string,
+  direction: 'UP' | 'DOWN'
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const targetChannel = (await db.prepare(`SELECT category, sort_order FROM community_channels WHERE id = ?`).bind(channelId).first()) as { category: string; sort_order: number } | null;
+  if (!targetChannel) return { success: false, error: 'Saluran tidak ditemukan.' };
+
+  const channelsRaw = (await db
+    .prepare(`SELECT id, sort_order FROM community_channels WHERE category = ? ORDER BY sort_order ASC, name ASC`)
+    .bind(targetChannel.category)
+    .all()) as { results: Array<{ id: string; sort_order: number }> };
+
+  const chans = channelsRaw.results || [];
+  const idx = chans.findIndex((c) => c.id === channelId);
+  if (idx === -1) return { success: false, error: 'Saluran tidak ditemukan.' };
+
+  const targetIdx = direction === 'UP' ? idx - 1 : idx + 1;
+  if (targetIdx < 0 || targetIdx >= chans.length) return { success: true }; // Boundary limit
+
+  const currentCh = chans[idx];
+  const neighborCh = chans[targetIdx];
+
+  try {
+    await db.prepare(`UPDATE community_channels SET sort_order = ? WHERE id = ?`).bind(neighborCh.sort_order, currentCh.id).run();
+    await db.prepare(`UPDATE community_channels SET sort_order = ? WHERE id = ?`).bind(currentCh.sort_order, neighborCh.id).run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Gagal mengurutkan saluran.' };
+  }
+}
+
+/**
+ * Sets a specific channel as the Default Chat Room for all users opening Community Chat
+ */
+export async function setDefaultCommunityChannel(channelId: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  await initCommunityTables(db);
+
+  const ctx = await getSessionContext(session.userId);
+  const isStaffOrAdmin =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isStaffOrAdmin) {
+    return { success: false, error: 'Hanya Admin/Koordinator yang dapat menentukan Default Chat Room.' };
+  }
+
+  try {
+    await db.prepare(`UPDATE community_channels SET is_default = 0`).run();
+    await db.prepare(`UPDATE community_channels SET is_default = 1 WHERE id = ?`).bind(channelId).run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true };
+  } catch (err: any) {
+    console.error('setDefaultCommunityChannel error:', err);
+    return { success: false, error: err.message || 'Gagal mengubah Default Chat Room.' };
   }
 }

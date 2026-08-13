@@ -19,15 +19,20 @@ export default async function CommunityPage({ searchParams }: PageProps) {
   }
 
   const resolvedParams = await searchParams;
-  const { workChannels, generalChannels } = await getCommunityChannels();
+  const { workChannels, generalChannels, categories, defaultChannelId, canManage } = await getCommunityChannels();
   const { onlineRoleGroups, offlineMembers, totalOnline, totalOffline } = await getCommunityMembers();
+
+  const selectedChannelId = resolvedParams.channelId || defaultChannelId || undefined;
 
   return (
     <div className="sm:space-y-4 max-w-7xl mx-auto pb-0 sm:pb-6 w-full min-w-0">
       <CommunityChatView
         initialWorkChannels={workChannels}
         initialGeneralChannels={generalChannels}
-        initialChannelId={resolvedParams.channelId}
+        initialCategories={categories}
+        initialDefaultChannelId={defaultChannelId}
+        initialChannelId={selectedChannelId}
+        canManageCommunity={canManage}
         initialOnlineRoleGroups={onlineRoleGroups}
         initialOfflineMembers={offlineMembers}
         initialTotalOnline={totalOnline}
