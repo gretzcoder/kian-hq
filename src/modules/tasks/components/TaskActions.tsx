@@ -814,6 +814,7 @@ export default function TaskActions({
   const renderNormalAssignments = () => {
     const isMentorWs = workspaceType === 'MENTOR';
     const isReviewer = isLeader || isMentor || isCoordinator;
+    const canUserSubmitDirect = !isCoordinator; // Koordinator / Admin / Executive does NOT submit!
 
     // Deduplicate assignments by user_id for DIRECT_BRIEF tasks & filter for clean display
     let displayAssignments = assignments;
@@ -840,8 +841,10 @@ export default function TaskActions({
       }
     }
 
-    // Helper to render Direct Brief submit box for any member/mentor
+    // Helper to render Direct Brief submit box for participants/mentors (NOT for Koordinator)
     const renderDirectBriefSubmitBox = () => {
+      if (!canUserSubmitDirect) return null; // Koordinator / Admin does NOT see submit form
+
       const mySubmission = assignments.find(a => a.user_id === currentUserId && (a.result_url || a.status !== 'ASSIGNED'));
 
       if (mySubmission && !showDirectForm) {
@@ -870,10 +873,10 @@ export default function TaskActions({
         <div className="bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-purple-500/10 border border-purple-500/20 rounded-2xl p-4 space-y-3 mb-3">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-black text-purple-700 dark:text-purple-300 flex items-center gap-1.5 uppercase tracking-wider">
-              <span>📤</span> Submit Hasil Karya Saya
+              <span>📤</span> {isMentorWs ? 'Submit Hasil Karya Mentor' : 'Submit Hasil Karya Saya'}
             </span>
             <span className="text-[10px] font-medium text-purple-600/80 dark:text-purple-300/80">
-              (Semua anggota & mentor workspace berhak submit)
+              {isMentorWs ? '(Peserta Workspace ini adalah Mentor)' : '(Masukkan link karya hasil pekerjaan Anda)'}
             </span>
           </div>
 
@@ -904,10 +907,12 @@ export default function TaskActions({
           {renderDirectBriefSubmitBox()}
           <div className="p-6 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center space-y-1.5 bg-zinc-50/50 dark:bg-zinc-900/20">
             <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-center gap-1.5">
-              <span>📌</span> Belum Ada Peserta Lain yang Mengumpulkan Hasil Karya
+              <span>📌</span> {isMentorWs ? 'Belum Ada Submission dari Mentor' : 'Belum Ada Peserta yang Mengumpulkan Hasil Karya'}
             </p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-              Daftar submission akan otomatis muncul di sini begitu peserta menempelkan link hasil karya mereka.
+              {isMentorWs
+                ? 'Daftar hasil karya yang dikirimkan oleh mentor akan otomatis muncul di sini untuk Anda review & berikan Sparks.'
+                : 'Daftar submission akan otomatis muncul di sini begitu peserta menempelkan link hasil karya mereka.'}
             </p>
           </div>
         </div>
@@ -919,7 +924,9 @@ export default function TaskActions({
         {isDirectBriefTask && renderDirectBriefSubmitBox()}
         <div className="flex items-center justify-between">
           <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-            {isDirectBriefTask ? '⚡ Daftar Submit Peserta (Direct Brief)' : 'Assignments'}
+            {isDirectBriefTask
+              ? (isMentorWs ? '⚡ Daftar Submit Peserta (Mentor)' : '⚡ Daftar Submit Peserta (Direct Brief)')
+              : 'Assignments'}
           </p>
           <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
             {displayAssignments.filter(a => ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)).length}/{displayAssignments.length} Selesai ACC
