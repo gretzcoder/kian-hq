@@ -25,7 +25,7 @@ export default async function CommunityPage({ searchParams }: PageProps) {
   const selectedChannelId = resolvedParams.channelId || defaultChannelId || undefined;
 
   return (
-    <div className="sm:space-y-4 max-w-7xl mx-auto pb-0 sm:pb-6 w-full min-w-0">
+    <div className="sm:space-y-4 max-w-7xl mx-auto pb-0 sm:pb-6 w-full min-w-0 max-w-full overflow-x-hidden">
       <CommunityChatView
         initialWorkChannels={workChannels}
         initialGeneralChannels={generalChannels}

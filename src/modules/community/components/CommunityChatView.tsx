@@ -467,12 +467,12 @@ export default function CommunityChatView({
       if (part.startsWith('http://') || part.startsWith('https://')) {
         const isImg = isImageUrl(part);
         return (
-          <span key={index} className="inline-block my-1">
+          <span key={index} className="inline-block my-1 max-w-full min-w-0">
             <a
               href={part}
               target="_blank"
               rel="noreferrer"
-              className="underline font-bold text-xs hover:opacity-80 transition-opacity text-blue-500 dark:text-blue-400"
+              className="underline font-bold text-xs hover:opacity-80 transition-opacity text-blue-500 dark:text-blue-400 break-all [overflow-wrap:anywhere]"
             >
               {part} ➔
             </a>
@@ -780,9 +780,9 @@ export default function CommunityChatView({
   );
 
   return (
-    <div className="flex-1 w-full flex flex-col lg:flex-row bg-white dark:bg-[#09090b] rounded-none sm:rounded-3xl border-0 sm:border border-zinc-200/80 dark:border-zinc-800/80 shadow-sm overflow-hidden h-[calc(100dvh-100px)] sm:h-[calc(100dvh-120px)] lg:h-[calc(100vh-140px)] min-h-0 sm:min-h-[580px] relative">
+    <div className="flex-1 w-full max-w-full overflow-x-hidden flex flex-col lg:flex-row bg-white dark:bg-[#09090b] rounded-none sm:rounded-3xl border-0 sm:border border-zinc-200/80 dark:border-zinc-800/80 shadow-sm overflow-hidden h-[calc(100dvh-100px)] sm:h-[calc(100dvh-120px)] lg:h-[calc(100vh-140px)] min-h-0 sm:min-h-[580px] relative">
       {/* ── MOBILE TOP CHANNEL & MEMBER CONTROLLER BAR ── */}
-      <div className="lg:hidden p-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between gap-2 shrink-0 z-20">
+      <div className="lg:hidden p-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center justify-between gap-2 shrink-0 z-20 max-w-full overflow-hidden">
         <button
           onClick={() => setMobileChannelOpen((p) => !p)}
           className="flex items-center gap-2 px-3.5 py-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-xs font-black text-zinc-900 dark:text-zinc-100 bg-white dark:bg-zinc-900 active:scale-95 transition-transform shadow-2xs truncate max-w-[60%]"
@@ -1157,7 +1157,7 @@ export default function CommunityChatView({
         </header>
 
         {/* Message Stream Scroll Area */}
-        <div className="flex-1 overflow-y-auto p-2.5 sm:p-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 sm:p-6 min-w-0 max-w-full">
           {loadingMessages ? (
             <div className="flex items-center justify-center h-full text-xs text-zinc-400 gap-2">
               <span className="animate-spin text-purple-500">⏳</span>
@@ -1190,9 +1190,9 @@ export default function CommunityChatView({
                   onTouchStart={() => handleTouchStart(msg.id)}
                   onTouchEnd={handleTouchEnd}
                   onTouchMove={handleTouchEnd}
-                  className={`flex gap-2 sm:gap-3 group transition-colors duration-150 -mx-2 sm:-mx-3 px-2 sm:px-3 py-0.5 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/40 ${
+                  className={`flex gap-2 sm:gap-3 group transition-colors duration-150 rounded-xl px-2 sm:px-3 py-1 max-w-full min-w-0 overflow-hidden ${
                     isHighlighted ? 'bg-purple-500/10 border-l-2 border-purple-500' : ''
-                  } ${longPressMessageId === msg.id ? 'bg-zinc-100/80 dark:bg-zinc-800/60' : ''} ${isPrevSameUser ? '' : 'mt-3 pt-1'}`}
+                  } ${longPressMessageId === msg.id ? 'bg-zinc-100/80 dark:bg-zinc-800/60' : ''} ${isPrevSameUser ? '' : 'mt-2.5 pt-0.5'}`}
                 >
                   {!isPrevSameUser ? (
                     <button
@@ -1215,20 +1215,20 @@ export default function CommunityChatView({
                     </div>
                   )}
 
-                  <div className="flex-1 min-w-0 space-y-0.5 relative">
+                  <div className="flex-1 min-w-0 space-y-0.5 relative overflow-hidden">
                     {!isPrevSameUser && (
-                      <div className="flex items-baseline gap-2 flex-wrap">
+                      <div className="flex items-baseline gap-2 flex-wrap min-w-0 max-w-full">
                         <button
                           type="button"
                           onClick={() => openMemberCardFromMessage(msg)}
-                          className="font-bold text-sm hover:underline transition-colors text-left"
+                          className="font-bold text-sm hover:underline transition-colors text-left truncate max-w-[160px] sm:max-w-xs"
                           style={{ color: msg.user_role_color || '#a78bfa' }}
                         >
                           {msg.user_name}
                         </button>
                         {msg.user_role_name && (
                           <span
-                            className="text-[9px] font-bold px-2 py-0.2 rounded-full text-white shadow-2xs"
+                            className="text-[9px] font-bold px-2 py-0.2 rounded-full text-white shadow-2xs shrink-0"
                             style={{
                               backgroundColor: msg.user_role_color || '#7c3aed',
                             }}
@@ -1236,7 +1236,7 @@ export default function CommunityChatView({
                             {msg.user_role_name}
                           </span>
                         )}
-                        <span className="text-[10px] text-zinc-400 font-mono">
+                        <span className="text-[10px] text-zinc-400 font-mono shrink-0">
                           {new Date(msg.created_at).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit',
@@ -1249,12 +1249,12 @@ export default function CommunityChatView({
                     {msg.reply_to && (
                       <button
                         onClick={() => scrollToMessage(msg.reply_to!.id)}
-                        className="w-full max-w-[85%] sm:max-w-xl text-left p-1.5 sm:p-2 rounded-lg border-l-3 border-purple-500 bg-purple-500/10 hover:bg-purple-500/15 transition-all text-xs mb-0.5 group/quote block"
+                        className="w-full max-w-[85%] sm:max-w-xl text-left p-1.5 sm:p-2 rounded-lg border-l-3 border-purple-500 bg-purple-500/10 hover:bg-purple-500/15 transition-all text-xs mb-0.5 group/quote block min-w-0 overflow-hidden"
                       >
                         <p className="font-bold text-[10px] text-purple-600 dark:text-purple-300 flex items-center gap-1">
                           <span>↩️ Membalas @{msg.reply_to.user_name}</span>
                         </p>
-                        <p className="text-zinc-600 dark:text-zinc-300 line-clamp-1 italic text-[11px] mt-0.5">
+                        <p className="text-zinc-600 dark:text-zinc-300 line-clamp-1 italic text-[11px] mt-0.5 truncate">
                           "{msg.reply_to.message}"
                         </p>
                       </button>
@@ -1262,10 +1262,10 @@ export default function CommunityChatView({
 
                     {/* Message Body or Sticker */}
                     {sticker ? (
-                      <div className="inline-flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl bg-zinc-100/80 dark:bg-zinc-800/50 border border-zinc-200/60 dark:border-zinc-700/40 hover:scale-[1.02] transition-all">
-                        <span className="text-3xl sm:text-4xl drop-shadow-md">{sticker.icon}</span>
-                        <div>
-                          <span className="text-xs font-bold tracking-tight text-zinc-900 dark:text-zinc-100 block">
+                      <div className="inline-flex items-center gap-3 p-2.5 sm:p-3 rounded-2xl bg-zinc-100/80 dark:bg-zinc-800/50 border border-zinc-200/60 dark:border-zinc-700/40 hover:scale-[1.02] transition-all max-w-full min-w-0 overflow-hidden">
+                        <span className="text-3xl sm:text-4xl drop-shadow-md shrink-0">{sticker.icon}</span>
+                        <div className="min-w-0">
+                          <span className="text-xs font-bold tracking-tight text-zinc-900 dark:text-zinc-100 block truncate">
                             {sticker.label}
                           </span>
                           <span className="inline-block text-[9px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full mt-0.5">
@@ -1274,16 +1274,16 @@ export default function CommunityChatView({
                         </div>
                       </div>
                     ) : (
-                      <div className="text-[13px] sm:text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap break-words overflow-hidden max-w-full">
+                      <div className="text-[13px] sm:text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap break-words [overflow-wrap:anywhere] break-all overflow-hidden max-w-full min-w-0">
                         {renderMessageContent(msg.message, isSelf)}
                       </div>
                     )}
 
                     {/* Attachment */}
                     {msg.attachment_url && (
-                      <div className="mt-1">
+                      <div className="mt-1 max-w-full min-w-0 overflow-hidden">
                         {isImageUrl(msg.attachment_url) ? (
-                          <div className="overflow-hidden rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 max-w-sm shadow-sm bg-zinc-950/40 group/img relative">
+                          <div className="overflow-hidden rounded-xl border border-zinc-200/80 dark:border-zinc-800/80 max-w-xs sm:max-w-sm shadow-sm bg-zinc-950/40 group/img relative">
                             <a href={msg.attachment_url} target="_blank" rel="noreferrer" className="block relative group/zoom">
                               <img
                                 src={msg.attachment_url}
@@ -1295,7 +1295,7 @@ export default function CommunityChatView({
                               />
                               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/zoom:opacity-100 transition-opacity p-3 flex items-end justify-between">
                                 <span className="text-white text-[11px] font-bold truncate">Klik untuk gambar penuh ↗</span>
-                                <span className="text-white text-xs">🔍</span>
+                                <span className="text-white text-xs shrink-0">🔍</span>
                               </div>
                             </a>
                           </div>
@@ -1304,11 +1304,11 @@ export default function CommunityChatView({
                             href={msg.attachment_url}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border bg-zinc-100/80 dark:bg-zinc-800/50 hover:bg-zinc-200/80 dark:hover:bg-zinc-700/50 text-blue-500 dark:text-blue-400 border-zinc-200/80 dark:border-zinc-700/40"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border bg-zinc-100/80 dark:bg-zinc-800/50 hover:bg-zinc-200/80 dark:hover:bg-zinc-700/50 text-blue-500 dark:text-blue-400 border-zinc-200/80 dark:border-zinc-700/40 max-w-full min-w-0 overflow-hidden"
                           >
-                            <span>📎</span>
-                            <span className="truncate max-w-xs">{msg.attachment_url}</span>
-                            <span>➔</span>
+                            <span className="shrink-0">📎</span>
+                            <span className="truncate max-w-[140px] xs:max-w-[180px] sm:max-w-xs min-w-0">{msg.attachment_url}</span>
+                            <span className="shrink-0">➔</span>
                           </a>
                         )}
                       </div>
@@ -1525,7 +1525,7 @@ export default function CommunityChatView({
         )}
 
         {/* ── MESSAGE INPUT & REPLY FOOTER ── */}
-        <footer className="p-2.5 sm:p-4 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b] shrink-0">
+        <footer className="p-2.5 sm:p-4 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b] shrink-0 max-w-full overflow-hidden">
           {/* Quote Reply Banner Active Bar */}
           {replyingTo && (
             <div className="mb-3 p-2.5 sm:p-3 bg-purple-500/10 border-l-4 border-purple-500 rounded-r-2xl flex items-center justify-between gap-2 animate-in fade-in">
