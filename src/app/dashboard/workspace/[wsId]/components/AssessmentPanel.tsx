@@ -403,6 +403,8 @@ function MentorSubmissionCard({
   const [sparks,            setSparks]            = useState<number>(8);
   const [revNote,           setRevNote]           = useState('');
   const [showRevForm,       setShowRevForm]       = useState(false);
+  const [showAccForm,       setShowAccForm]       = useState(false);
+  const [accNote,           setAccNote]           = useState('');
   const [error,             setError]             = useState<string | null>(null);
   const [pending,           startTransition]      = useTransition();
 
@@ -478,7 +480,10 @@ function MentorSubmissionCard({
             return await r.json();
           }
         );
-        if (!res.success) {
+        if (res.success) {
+          setShowAccForm(false);
+          setAccNote('');
+        } else {
           setError(res.error ?? 'Gagal ACC Mentor');
         }
       } catch (err: any) {
@@ -604,6 +609,15 @@ function MentorSubmissionCard({
             )
           )}
 
+          {/* Appreciation / Catatan Improvement Viewer */}
+          {assignment.appreciation_note && (
+            <CollapsibleNoteViewer
+              content={assignment.appreciation_note}
+              badgeLabel="✨ Catatan Improvement Mentor"
+              type="APPRECIATION"
+            />
+          )}
+
           {/* Revision Note Viewer for Evaluators / Mentor / Coordinator / Admin */}
           {assignment.revision_note && (
             <CollapsibleNoteViewer
@@ -688,28 +702,58 @@ function MentorSubmissionCard({
               );
             }
 
-            // Step 1: Creator mentor sees ACC Mentor + Request Revisi
+            // Step 1: Creator mentor sees ACC Mentor & Catatan Improvement + Request Revisi
             if (isTaskCreator && !isMentorApproved && assignment.status === 'WAITING_REVIEW') {
               return (
                 <div className="space-y-2">
                   {badges}
-                  {!showRevForm && !showSparkModal ? (
-                    <div className="flex gap-2 items-center">
+                  {!showRevForm && !showAccForm ? (
+                    <div className="flex gap-2 items-center flex-wrap">
                       <button
-                        onClick={() => handleMentorAcc()}
+                        onClick={() => setShowAccForm(true)}
                         disabled={pending}
-                        className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1.5"
+                        className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1.5"
                       >
-                        <span>✓ ACC Mentor</span>
+                        <span>✓ ACC Mentor & Catatan Improvement</span>
                       </button>
                       <button
                         onClick={() => setShowRevForm(true)}
                         disabled={pending}
-                        className="px-3.5 py-2 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all disabled:opacity-50"
+                        className="px-3.5 py-2.5 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all disabled:opacity-50"
                       >
                         ↩ Request Revisi
                       </button>
                     </div>
+                  ) : showAccForm ? (
+                    <form onSubmit={(e) => { e.preventDefault(); handleMentorAcc(accNote); }} className="space-y-2.5 p-3.5 rounded-2xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20">
+                      <label className="block text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
+                        ✨ Catatan Improvement Mentor (Opsional)
+                      </label>
+                      <textarea
+                        value={accNote}
+                        onChange={(e) => setAccNote(e.target.value)}
+                        rows={2}
+                        placeholder="Tuliskan catatan apresiasi, masukkan perbaikan, atau saran untuk peserta..."
+                        className="w-full bg-white dark:bg-zinc-900 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-zinc-900 dark:text-zinc-100 resize-none"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setShowAccForm(false)}
+                          disabled={pending}
+                          className="px-3 py-1.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        >
+                          Batal
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={pending}
+                          className="px-4 py-1.5 text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md transition-all disabled:opacity-50"
+                        >
+                          {pending ? '...' : '✓ Kirim ACC & Catatan'}
+                        </button>
+                      </div>
+                    </form>
                   ) : showRevForm ? (
                     <form onSubmit={handleRevise} className="space-y-2">
                       <textarea
