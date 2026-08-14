@@ -14,6 +14,8 @@ import ViewAsRoleTrigger from '@/modules/roles/components/ViewAsRoleTrigger';
 import { ViewAsRoleItem, ActiveSimulatedRole } from '@/modules/roles/viewAsRoleActions';
 import { ImpersonateUserItem, stopImpersonatingUser } from '@/modules/users/impersonationActions';
 
+import { getLatestSystemVersion } from '@/lib/changelog';
+
 // ── Badge colour map ──────────────────────────────────────────────────────────
 const BADGE_BG: Record<'red' | 'amber', string> = {
   red:   'bg-red-500',
@@ -166,6 +168,8 @@ export default function DashboardSidebar({
   const isStaffWorkspaceManager =
     !isOJT && (canManageUsers || canManageRoles || canReview || canViewProjects);
 
+  const systemVersion = getLatestSystemVersion();
+
   const navGroups: { title: string; items: NavItem[] }[] = [
     {
       title: 'UTAMA',
@@ -226,6 +230,7 @@ export default function DashboardSidebar({
           ? [{ href: '/dashboard/ojt', label: 'OJT Directory', icon: '🎓', exact: false }]
           : []),
         { href: '/dashboard/feedbacks', label: 'Kritik & Saran', icon: '💌', exact: false },
+        { href: '/dashboard/changelog', label: 'Log Update', icon: '📜', exact: false },
         ...(canManageUsers
           ? [{ href: '/dashboard/users', label: 'Users', icon: '👥', exact: false }]
           : []),
@@ -310,13 +315,18 @@ export default function DashboardSidebar({
               alt="Kian HQ Logo"
               className="w-9 h-9 rounded-2xl object-contain shadow-md shadow-purple-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200"
             />
-            <span
-              className={`text-lg font-black tracking-widest bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 bg-clip-text text-transparent whitespace-nowrap transition-all duration-300 ${
+            <div
+              className={`flex items-center gap-1.5 transition-all duration-300 ${
                 collapsed ? 'opacity-0 w-0 pointer-events-none' : 'opacity-100 w-auto'
               }`}
             >
-              KIAN HQ
-            </span>
+              <span className="text-lg font-black tracking-widest bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 bg-clip-text text-transparent whitespace-nowrap">
+                KIAN HQ
+              </span>
+              <span className="text-[9px] font-black text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20 px-1.5 py-0.2 rounded-md shadow-xs">
+                {systemVersion}
+              </span>
+            </div>
           </Link>
 
           {!collapsed && (
