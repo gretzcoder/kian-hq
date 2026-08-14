@@ -94,6 +94,66 @@ function isImageUrl(url?: string): boolean {
   return false;
 }
 
+/**
+ * Format timestamp strictly in GMT+7 (Asia/Jakarta / WIB)
+ */
+function formatWibMessageTime(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    return new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(d) + ' WIB';
+  } catch (e) {
+    return dateStr;
+  }
+}
+
+/**
+ * WhatsApp / Discord style Date Separator Divider label
+ */
+function formatDateDivider(dateStr: string): string {
+  try {
+    const msgDate = new Date(dateStr);
+    const now = new Date();
+
+    const msgYmd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(msgDate);
+    const nowYmd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+
+    const [msgY, msgM, msgD] = msgYmd.split('-').map(Number);
+    const [nowY, nowM, nowD] = nowYmd.split('-').map(Number);
+
+    const dMsg = new Date(msgY, msgM - 1, msgD);
+    const dNow = new Date(nowY, nowM - 1, nowD);
+
+    const diffMs = dNow.getTime() - dMsg.getTime();
+    const diffDays = Math.round(diffMs / (1000 * 3600 * 24));
+
+    if (diffDays === 0) return 'Hari Ini';
+    if (diffDays === 1) return 'Kemarin';
+
+    if (diffDays > 1 && diffDays < 7) {
+      const dayName = new Intl.DateTimeFormat('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        weekday: 'long',
+      }).format(msgDate);
+      return dayName.charAt(0).toUpperCase() + dayName.slice(1);
+    }
+
+    return new Intl.DateTimeFormat('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(msgDate);
+  } catch (e) {
+    return dateStr;
+  }
+}
+
 export default function CommunityChatView({
   initialWorkChannels,
   initialGeneralChannels,
@@ -1183,67 +1243,82 @@ export default function CommunityChatView({
               const isHighlighted = highlightedMessageId === msg.id;
               const sticker = parseSticker(msg.message);
 
+              const msgDateLabel = formatDateDivider(msg.created_at);
+              const prevMsgDateLabel =
+                index > 0 ? formatDateDivider(messages[index - 1].created_at) : null;
+              const showDateDivider = index === 0 || msgDateLabel !== prevMsgDateLabel;
+              const isHeaderRow = !isPrevSameUser || showDateDivider;
+
               return (
-                <div
-                  key={msg.id}
-                  ref={(el) => { messageRefs.current[msg.id] = el; }}
-                  onTouchStart={() => handleTouchStart(msg.id)}
-                  onTouchEnd={handleTouchEnd}
-                  onTouchMove={handleTouchEnd}
-                  className={`flex gap-2 sm:gap-3 group transition-colors duration-150 rounded-xl px-2 sm:px-3 py-1 max-w-full min-w-0 overflow-hidden ${
-                    isHighlighted ? 'bg-purple-500/10 border-l-2 border-purple-500' : ''
-                  } ${longPressMessageId === msg.id ? 'bg-zinc-100/80 dark:bg-zinc-800/60' : ''} ${isPrevSameUser ? '' : 'mt-2.5 pt-0.5'}`}
-                >
-                  {!isPrevSameUser ? (
-                    <button
-                      type="button"
-                      onClick={() => openMemberCardFromMessage(msg)}
-                      className="shrink-0 hover:opacity-80 transition-opacity mt-0.5"
-                    >
-                      <UserAvatar
-                        src={msg.user_avatar}
-                        name={msg.user_name}
-                        size="md"
-                        square
-                      />
-                    </button>
-                  ) : (
-                    <div className="w-9 shrink-0 flex items-center justify-center">
-                      <span className="text-[9px] text-zinc-400 font-mono opacity-0 group-hover:opacity-100 transition-opacity select-none">
-                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                <React.Fragment key={msg.id}>
+                  {showDateDivider && (
+                    <div className="flex items-center my-4 px-2 select-none">
+                      <div className="flex-1 border-t border-zinc-200/80 dark:border-zinc-800/80" />
+                      <span className="px-3.5 py-1 text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 rounded-full shadow-2xs mx-3 shrink-0">
+                        📅 {msgDateLabel}
                       </span>
+                      <div className="flex-1 border-t border-zinc-200/80 dark:border-zinc-800/80" />
                     </div>
                   )}
 
-                  <div className="flex-1 min-w-0 space-y-0.5 relative overflow-hidden">
-                    {!isPrevSameUser && (
-                      <div className="flex items-baseline gap-2 flex-wrap min-w-0 max-w-full">
-                        <button
-                          type="button"
-                          onClick={() => openMemberCardFromMessage(msg)}
-                          className="font-bold text-sm hover:underline transition-colors text-left truncate max-w-[160px] sm:max-w-xs"
-                          style={{ color: msg.user_role_color || '#a78bfa' }}
-                        >
-                          {msg.user_name}
-                        </button>
-                        {msg.user_role_name && (
-                          <span
-                            className="text-[9px] font-bold px-2 py-0.2 rounded-full text-white shadow-2xs shrink-0"
-                            style={{
-                              backgroundColor: msg.user_role_color || '#7c3aed',
-                            }}
-                          >
-                            {msg.user_role_name}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-zinc-400 font-mono shrink-0">
-                          {new Date(msg.created_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                  <div
+                    ref={(el) => { messageRefs.current[msg.id] = el; }}
+                    onTouchStart={() => handleTouchStart(msg.id)}
+                    onTouchEnd={handleTouchEnd}
+                    onTouchMove={handleTouchEnd}
+                    className={`flex gap-2 sm:gap-3 group transition-colors duration-150 rounded-xl px-2 sm:px-3 py-1 max-w-full min-w-0 overflow-hidden ${
+                      isHighlighted ? 'bg-purple-500/10 border-l-2 border-purple-500' : ''
+                    } ${longPressMessageId === msg.id ? 'bg-zinc-100/80 dark:bg-zinc-800/60' : ''} ${
+                      isHeaderRow ? 'mt-2.5 pt-0.5' : ''
+                    }`}
+                  >
+                    {isHeaderRow ? (
+                      <button
+                        type="button"
+                        onClick={() => openMemberCardFromMessage(msg)}
+                        className="shrink-0 hover:opacity-80 transition-opacity mt-0.5"
+                      >
+                        <UserAvatar
+                          src={msg.user_avatar}
+                          name={msg.user_name}
+                          size="md"
+                          square
+                        />
+                      </button>
+                    ) : (
+                      <div className="w-9 shrink-0 flex items-center justify-center">
+                        <span className="text-[9px] text-zinc-400 font-mono opacity-0 group-hover:opacity-100 transition-opacity select-none">
+                          {formatWibMessageTime(msg.created_at)}
                         </span>
                       </div>
                     )}
+
+                    <div className="flex-1 min-w-0 space-y-0.5 relative overflow-hidden">
+                      {isHeaderRow && (
+                        <div className="flex items-baseline gap-2 flex-wrap min-w-0 max-w-full">
+                          <button
+                            type="button"
+                            onClick={() => openMemberCardFromMessage(msg)}
+                            className="font-bold text-sm hover:underline transition-colors text-left truncate max-w-[160px] sm:max-w-xs"
+                            style={{ color: msg.user_role_color || '#a78bfa' }}
+                          >
+                            {msg.user_name}
+                          </button>
+                          {msg.user_role_name && (
+                            <span
+                              className="text-[9px] font-bold px-2 py-0.2 rounded-full text-white shadow-2xs shrink-0"
+                              style={{
+                                backgroundColor: msg.user_role_color || '#7c3aed',
+                              }}
+                            >
+                              {msg.user_role_name}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-zinc-400 font-mono shrink-0">
+                            {formatWibMessageTime(msg.created_at)}
+                          </span>
+                        </div>
+                      )}
 
                     {/* Quoted Reply Card (If this message is replying to another message) */}
                     {msg.reply_to && (
@@ -1382,8 +1457,9 @@ export default function CommunityChatView({
                     </div>
                   </div>
                 </div>
-              );
-            })
+              </React.Fragment>
+            );
+          })
           )}
           <div ref={messagesEndRef} />
         </div>
