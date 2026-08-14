@@ -311,33 +311,33 @@ function TaskCardItem({
   const rincianCount = isExplicitCategoryTab ? displayAssignments.length : totalSteps;
 
   return (
-    <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/50 hover:border-purple-500/30 p-3.5 sm:p-4 rounded-2xl space-y-2.5 transition-all duration-200 shadow-xs">
+    <div className="border border-zinc-200 dark:border-zinc-800/80 bg-white dark:bg-[#09090b]/50 hover:border-purple-500/30 p-3 sm:p-4 rounded-2xl space-y-2.5 transition-all duration-200 shadow-xs max-w-full min-w-0 overflow-hidden">
       {/* Main Top Row: Info Left, Actions Right */}
-      <div className="flex items-start justify-between gap-3 flex-wrap sm:flex-nowrap">
+      <div className="flex items-start justify-between gap-2.5 flex-wrap sm:flex-nowrap max-w-full min-w-0">
         <div className="min-w-0 flex-1 space-y-1">
           {/* Project & Mentor Micro Tag */}
-          <div className="flex items-center gap-2 flex-wrap text-[10px]">
-            <span className="font-mono font-black uppercase text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap text-[10px] min-w-0 max-w-full">
+            <span className="font-mono font-black uppercase text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 shrink-0">
               {parentTask.project_name}
             </span>
             {parentTask.creator_name && (
-              <span className="text-zinc-400 font-medium">
+              <span className="text-zinc-400 font-medium truncate">
                 • 🎓 Mentor: <strong className="text-zinc-600 dark:text-zinc-300">{parentTask.creator_name}</strong>
               </span>
             )}
           </div>
 
-          <h3 className="font-black text-sm sm:text-base text-zinc-900 dark:text-zinc-100 tracking-tight leading-snug">
+          <h3 className="font-black text-sm sm:text-base text-zinc-900 dark:text-zinc-100 tracking-tight leading-snug break-words">
             {parentTask.title}
           </h3>
         </div>
 
         {/* Compact Right-Aligned Actions */}
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto shrink-0 justify-start sm:justify-end min-w-0 max-w-full pt-1 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800/40">
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 px-2.5 py-1 rounded-xl border border-purple-500/20 bg-purple-500/5 transition-all flex items-center gap-1 cursor-pointer"
+            className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 px-2.5 py-1 rounded-xl border border-purple-500/20 bg-purple-500/5 transition-all flex items-center gap-1 cursor-pointer shrink-0"
           >
             <span>{isExpanded ? '▲ Sembunyikan' : `▼ Rincian (${rincianCount} Step)`}</span>
           </button>
@@ -364,7 +364,7 @@ function TaskCardItem({
                 ? `/dashboard/workspace/${parentTask.workspace_id}`
                 : `/dashboard/projects/${parentTask.project_id}`
             }
-            className="text-xs border border-zinc-200 dark:border-zinc-800 hover:border-purple-500/40 bg-zinc-100 dark:bg-zinc-800/80 hover:bg-purple-600 hover:text-white px-3 py-1 rounded-xl transition-all font-bold flex items-center gap-1 text-zinc-800 dark:text-zinc-200 shadow-xs"
+            className="text-xs border border-zinc-200 dark:border-zinc-800 hover:border-purple-500/40 bg-zinc-100 dark:bg-zinc-800/80 hover:bg-purple-600 hover:text-white px-2.5 sm:px-3 py-1 rounded-xl transition-all font-bold flex items-center gap-1 text-zinc-800 dark:text-zinc-200 shadow-xs shrink-0"
           >
             <span>Workspace</span>
             <span>&rarr;</span>
@@ -373,35 +373,35 @@ function TaskCardItem({
       </div>
 
       {/* Summary Status Badges Bar */}
-      <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-zinc-100 dark:border-zinc-800/50">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20">
+      <div className="flex items-center justify-between gap-2 flex-wrap pt-1.5 border-t border-zinc-100 dark:border-zinc-800/50 min-w-0 max-w-full">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0 max-w-full">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 shrink-0">
             👥 {uniqueAssignees.length} Trooper ({totalSteps} Step)
           </span>
 
           {activeTab === 'COMPLETED' || approvedSteps.length === totalSteps ? (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
               ✅ Selesai & Full ACC ({approvedSteps.length}/{totalSteps})
             </span>
           ) : (
             <>
               {approvedSteps.length > 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 shrink-0">
                   ✓ {approvedSteps.length}/{totalSteps} ACC
                 </span>
               )}
               {waitingReviewSteps.length > 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 animate-pulse">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 animate-pulse shrink-0">
                   ⏳ {waitingReviewSteps.length} Step Perlu Review
                 </span>
               )}
               {revisionSteps.length > 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 shrink-0">
                   🔄 {revisionSteps.length} Perlu Revisi
                 </span>
               )}
               {unsubmittedAssignments.length > 0 && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 shrink-0">
                   ⚡ {unsubmittedAssignments.length} Belum Submit
                 </span>
               )}
@@ -410,7 +410,7 @@ function TaskCardItem({
         </div>
 
         {parentTask.deadline && (
-          <span className="text-[10px] text-zinc-400 font-mono">
+          <span className="text-[10px] text-zinc-400 font-mono shrink-0">
             Deadline: {new Date(parentTask.deadline).toLocaleDateString()}
           </span>
         )}

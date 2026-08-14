@@ -168,15 +168,15 @@ export function TaskSmartReminderButton({
       type="button"
       onClick={handleSendBatchReminder}
       disabled={loading}
-      className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all border active:scale-95 cursor-pointer ${
+      className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-black transition-all border active:scale-95 cursor-pointer max-w-full min-w-0 overflow-hidden shrink-0 ${
         sent
           ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400'
           : 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 border-amber-500/20 dark:text-amber-300 dark:hover:bg-amber-500/30'
       } ${className}`}
       title="Kirim notifikasi reminder terfokus ke peserta/mentor sesuai kategori"
     >
-      <span>{loading ? '⏳' : sent ? '✓' : '🔔'}</span>
-      <span>{loading ? 'Mengirim...' : sent ? 'Reminder Terkirim' : buttonText}</span>
+      <span className="shrink-0">{loading ? '⏳' : sent ? '✓' : '🔔'}</span>
+      <span className="truncate min-w-0 max-w-[200px] xs:max-w-none">{loading ? 'Mengirim...' : sent ? 'Reminder Terkirim' : buttonText}</span>
     </button>
   );
 }

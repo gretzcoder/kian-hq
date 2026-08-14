@@ -607,7 +607,7 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6 sm:space-y-10 min-w-0 max-w-full overflow-x-hidden">
       {/* Welcome Hero */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-zinc-200/80 dark:border-zinc-800/80">
         <div>
