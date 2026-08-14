@@ -95,17 +95,29 @@ function isImageUrl(url?: string): boolean {
 }
 
 /**
- * Format timestamp strictly in GMT+7 (Asia/Jakarta / WIB)
+ * Safely parse SQLite UTC timestamp string into JS Date object
+ */
+function parseUtcDate(dateStr: string): Date {
+  if (!dateStr) return new Date();
+  let s = dateStr.trim();
+  if (!s.endsWith('Z') && !s.includes('+') && !s.includes('Z')) {
+    s = s.replace(' ', 'T') + 'Z';
+  }
+  return new Date(s);
+}
+
+/**
+ * Format timestamp strictly in GMT+7 (Asia/Jakarta) 24-hour HH:mm format without WIB suffix
  */
 function formatWibMessageTime(dateStr: string): string {
   try {
-    const d = new Date(dateStr);
+    const d = parseUtcDate(dateStr);
     return new Intl.DateTimeFormat('id-ID', {
       timeZone: 'Asia/Jakarta',
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
-    }).format(d) + ' WIB';
+    }).format(d);
   } catch (e) {
     return dateStr;
   }
@@ -116,7 +128,7 @@ function formatWibMessageTime(dateStr: string): string {
  */
 function formatDateDivider(dateStr: string): string {
   try {
-    const msgDate = new Date(dateStr);
+    const msgDate = parseUtcDate(dateStr);
     const now = new Date();
 
     const msgYmd = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(msgDate);
