@@ -671,6 +671,60 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
   }
 }
 
+/**
+ * Allows ANY active workspace member (Mentor, Leader, Trooper, Coordinator)
+ * to submit a result for a Direct Brief Task.
+ * If no assignment exists for the user yet, it auto-creates an assignment row for them!
+ */
+export async function submitDirectTaskResult(taskId: string, resultUrl: string) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  if (!resultUrl?.trim()) {
+    return { success: false, error: 'Link hasil karya wajib diisi.' };
+  }
+
+  const db = await getDB();
+
+  const task = await db
+    .prepare('SELECT id, workspace_id, task_type FROM tasks WHERE id = ?')
+    .bind(taskId)
+    .first() as { id: string; workspace_id: string | null; task_type: string } | null;
+
+  if (!task) return { success: false, error: 'Tugas tidak ditemukan.' };
+
+  // Check if an assignment already exists for this user in this task
+  let assignment = await db
+    .prepare('SELECT id, status FROM task_assignments WHERE task_id = ? AND user_id = ?')
+    .bind(taskId, session.userId)
+    .first() as { id: string; status: string } | null;
+
+  const now = Math.floor(Date.now() / 1000);
+  const defaultRole = task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : 'DESIGNER';
+
+  if (!assignment) {
+    const newId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+    await db
+      .prepare(`
+        INSERT INTO task_assignments
+          (id, task_id, user_id, assignment_role, assigned_by, status, result_url, submitted_at, created_at)
+        VALUES (?, ?, ?, ?, ?, 'WAITING_REVIEW', ?, ?, ?)
+      `)
+      .bind(newId, taskId, session.userId, defaultRole, session.userId, resultUrl.trim(), now, now)
+      .run();
+
+    if (task.workspace_id) {
+      revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
+    }
+    revalidatePath('/dashboard/workspace');
+    revalidatePath('/dashboard/review');
+    return { success: true };
+  } else {
+    // Reuse submitResult logic for existing assignment
+    return submitResult(assignment.id, resultUrl);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // APPROVE ASSIGNMENT  (IN_REVIEW → APPROVED)
 // ---------------------------------------------------------------------------

@@ -219,6 +219,14 @@ export default function TaskAccordion({
                     <span className={`text-[9px] font-black uppercase tracking-widest ${pCfg.color}`}>
                       {pCfg.label}
                     </span>
+                    {/* Output Type Badge (Design vs Video) */}
+                    <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
+                      task.task_type === 'VIDEO'
+                        ? 'text-pink-600 dark:text-pink-400 bg-pink-500/10 border-pink-500/20'
+                        : 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20'
+                    }`}>
+                      {task.task_type === 'VIDEO' ? '🎬 Video Task' : '🎨 Design Task'}
+                    </span>
                     {(task.task_type === 'DIRECT_BRIEF' || (task.description && task.description.includes('[DIRECT_BRIEF]'))) && (
                       <span className="text-[9px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                         <span>⚡</span> Brief Direct Koordinator
@@ -255,7 +263,7 @@ export default function TaskAccordion({
                 {/* Description — only show when collapsed */}
                 {!isOpen && task.description && (
                   <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 truncate leading-relaxed">
-                    {task.description}
+                    {task.description.replace(/\[DIRECT_BRIEF\]/g, '').replace(/<[^>]*>/g, '').trim()}
                   </p>
                 )}
               </div>
@@ -331,8 +339,8 @@ export default function TaskAccordion({
                 />
               </div>
 
-              {/* Assignment Panel — Leader/Mentor only */}
-              {canAssignTask && (
+              {/* Assignment Panel — Leader/Mentor only (Not needed for Direct Brief Tasks) */}
+              {canAssignTask && task.task_type !== 'DIRECT_BRIEF' && (
                 <div className="border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/20 px-5 py-4">
                   <TaskAssignmentPanel
                     taskId={task.id}

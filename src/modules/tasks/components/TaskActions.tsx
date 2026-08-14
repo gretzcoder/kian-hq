@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { submitResult, deleteTask, approveAssignment, requestRevision, startWork, updateSparks } from '../actions';
+import { submitResult, submitDirectTaskResult, deleteTask, approveAssignment, requestRevision, startWork, updateSparks } from '../actions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
@@ -362,7 +362,28 @@ export default function TaskActions({
   const ojtAssignments = assignments.filter((a) => ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(a.assignment_role));
   const isOjtTask = !isDirectBriefTask && (isOjt || ojtAssignments.length > 0);
 
-  // Collapsible step state: track user explicit toggles (role -> boolean)
+  // Direct Brief submission state
+  const [directUrlInput, setDirectUrlInput] = useState('');
+  const [showDirectForm, setShowDirectForm] = useState(false);
+
+  const handleDirectSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!directUrlInput.trim()) return;
+    setLoading('direct_submit');
+    try {
+      const res = await submitDirectTaskResult(taskId, directUrlInput.trim());
+      if (res.success) {
+        setDirectUrlInput('');
+        setShowDirectForm(false);
+      } else {
+        alert(res.error ?? 'Gagal mengirimkan hasil karya.');
+      }
+    } catch (err: any) {
+      alert(err.message ?? 'Terjadi kesalahan.');
+    } finally {
+      setLoading(null);
+    }
+  };
   const [collapsedStepsMap, setCollapsedStepsMap] = useState<Record<string, boolean>>({});
 
   const toggleStepCollapse = (stepRole: string) => {
@@ -810,7 +831,6 @@ export default function TaskActions({
         }
       }
       const deduplicated = Array.from(userMap.values());
-
       if (isReviewer) {
         // For Coordinator / Mentor view: show only actual submissions (where result_url is present or status != ASSIGNED)
         displayAssignments = deduplicated.filter(a => a.result_url || a.status !== 'ASSIGNED');
@@ -820,21 +840,83 @@ export default function TaskActions({
       }
     }
 
+    // Helper to render Direct Brief submit box for any member/mentor
+    const renderDirectBriefSubmitBox = () => {
+      const mySubmission = assignments.find(a => a.user_id === currentUserId && (a.result_url || a.status !== 'ASSIGNED'));
+
+      if (mySubmission && !showDirectForm) {
+        return (
+          <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-1">
+                <span>✓</span> Anda Sudah Mengumpulkan Karya
+              </span>
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+                ({mySubmission.status.replace('_', ' ')})
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowDirectForm(true)}
+              className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/20"
+            >
+              📤 Kirim Ulang (Resubmit)
+            </button>
+          </div>
+        );
+      }
+
+      return (
+        <div className="bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-purple-500/10 border border-purple-500/20 rounded-2xl p-4 space-y-3 mb-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-black text-purple-700 dark:text-purple-300 flex items-center gap-1.5 uppercase tracking-wider">
+              <span>📤</span> Submit Hasil Karya Saya
+            </span>
+            <span className="text-[10px] font-medium text-purple-600/80 dark:text-purple-300/80">
+              (Semua anggota & mentor workspace berhak submit)
+            </span>
+          </div>
+
+          <form onSubmit={handleDirectSubmit} className="flex gap-2">
+            <input
+              type="url"
+              value={directUrlInput}
+              onChange={(e) => setDirectUrlInput(e.target.value)}
+              placeholder="Paste URL Karya (Google Drive / Figma / Canva / Youtube)..."
+              required
+              className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+            />
+            <button
+              type="submit"
+              disabled={loading === 'direct_submit'}
+              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 shrink-0"
+            >
+              {loading === 'direct_submit' ? 'Mengirim...' : 'Kirim Submit'}
+            </button>
+          </form>
+        </div>
+      );
+    };
+
     if (isDirectBriefTask && displayAssignments.length === 0) {
       return (
-        <div className="p-6 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center space-y-1.5 bg-zinc-50/50 dark:bg-zinc-900/20 my-2">
-          <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-center gap-1.5">
-            <span>📌</span> Belum Ada Peserta yang Mengumpulkan Hasil Karya
-          </p>
-          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-            Daftar submission akan otomatis muncul di sini begitu peserta menempelkan link hasil karya mereka.
-          </p>
+        <div className="space-y-3 my-2">
+          {renderDirectBriefSubmitBox()}
+          <div className="p-6 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center space-y-1.5 bg-zinc-50/50 dark:bg-zinc-900/20">
+            <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-center gap-1.5">
+              <span>📌</span> Belum Ada Peserta Lain yang Mengumpulkan Hasil Karya
+            </p>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+              Daftar submission akan otomatis muncul di sini begitu peserta menempelkan link hasil karya mereka.
+            </p>
+          </div>
         </div>
       );
     }
 
     return (
       <div className="space-y-3">
+        {isDirectBriefTask && renderDirectBriefSubmitBox()}
         <div className="flex items-center justify-between">
           <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
             {isDirectBriefTask ? '⚡ Daftar Submit Peserta (Direct Brief)' : 'Assignments'}
