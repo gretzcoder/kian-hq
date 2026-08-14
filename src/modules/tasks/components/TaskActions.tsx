@@ -357,9 +357,10 @@ export default function TaskActions({
     }
   };
 
-  // Identify OJT assignments
+  // Identify Direct Brief & OJT assignments
+  const isDirectBriefTask = taskType === 'DIRECT_BRIEF';
   const ojtAssignments = assignments.filter((a) => ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(a.assignment_role));
-  const isOjtTask = isOjt || ojtAssignments.length > 0;
+  const isOjtTask = !isDirectBriefTask && (isOjt || ojtAssignments.length > 0);
 
   // Collapsible step state: track user explicit toggles (role -> boolean)
   const [collapsedStepsMap, setCollapsedStepsMap] = useState<Record<string, boolean>>({});
@@ -758,120 +759,20 @@ export default function TaskActions({
                               )}
 
                               {/* QC Approver Actions */}
-                              {assign.status === 'WAITING_REVIEW' && (() => {
-                                const isMentorWs = workspaceType === 'MENTOR';
-
-                                if (isMentorWs) {
-                                  if (!isCoordinator) return null;
-
-                                  if (assign.coordinator_approved === 1) {
-                                    return (
-                                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-2">
-                                        <span>✓ Persetujuan Koordinator telah diberikan.</span>
-                                      </div>
-                                    );
-                                  }
-
-                                  return (
-                                    <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
-                                      <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400">
-                                        Persetujuan QC (Koordinator)
-                                      </p>
-
-                                      <ReviewActions
-                                        assignmentId={assign.id}
-                                        canRequestRevision={true}
-                                        canAwardBadge={true}
-                                        isStaffOrCoord={isCoordinator}
-                                        mentorApproved={assign.mentor_approved ?? 0}
-                                        coordinatorApproved={assign.coordinator_approved ?? 0}
-                                        isMentorWs={isMentorWs}
-                                      />
-                                    </div>
-                                  );
-                                }
-
-                                const alreadyApproved =
-                                  (isLeader && assign.lead_approved === 1) ||
-                                  (isMentor && assign.mentor_approved === 1) ||
-                                  (isCoordinator && assign.coordinator_approved === 1);
-
-                                if (alreadyApproved) {
-                                  return (
-                                    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-2 flex items-center gap-2">
-                                      <span>✓ Anda telah memberikan persetujuan (QC). Menunggu reviewer lain.</span>
-                                    </div>
-                                  );
-                                }
-
-                                if (!isLeader && !isMentor && !isCoordinator) return null;
-
-                                return (
-                                  <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
-                                    <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400">
-                                      Persetujuan QC (Anda sebagai:{' '}
-                                      {[
-                                        isLeader ? 'Ketua Tim' : '',
-                                        isMentor ? 'Mentor' : '',
-                                        isCoordinator ? 'Koordinator' : '',
-                                      ]
-                                        .filter(Boolean)
-                                        .join(', ')}
-                                      )
-                                    </p>
-
-                                    <ReviewActions
-                                      assignmentId={assign.id}
-                                      canRequestRevision={isLeader || isMentor || isCoordinator}
-                                      canAwardBadge={isMentor || isCoordinator}
-                                      isStaffOrCoord={isCoordinator}
-                                      mentorApproved={assign.mentor_approved ?? 0}
-                                      coordinatorApproved={assign.coordinator_approved ?? 0}
-                                      isMentorWs={isMentorWs}
-                                    />
-                                  </div>
-                                );
-                              })()}
-
-                              {/* Appreciation Note */}
-                              {['APPROVED', 'DONE', 'PUBLISHED'].includes(assign.status) && (() => {
-                                const note = cleanAppreciationNote((assign as any).appreciation_note);
-                                if (!note) return null;
-                                return (
-                                  <CollapsibleNoteViewer
-                                    content={note}
-                                    badgeLabel="✨ Apresiasi"
-                                    type="APPRECIATION"
-                                    className="mt-2.5"
+                              {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(assign.status) && (
+                                <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
+                                  <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                                    Persetujuan QC & Pemberian Sparks
+                                  </p>
+                                  <ReviewActions
+                                    assignmentId={assign.id}
+                                    canRequestRevision={isLeader || isMentor || isCoordinator}
+                                    canAwardBadge={isMentor || isCoordinator}
+                                    isStaffOrCoord={isCoordinator}
+                                    mentorApproved={assign.mentor_approved ?? 0}
+                                    coordinatorApproved={assign.coordinator_approved ?? 0}
+                                    isMentorWs={isMentorWs}
                                   />
-                                );
-                              })()}
-
-                              {/* Edit Sparks Control */}
-                              {(workspaceType === 'MENTOR' ? isCoordinator : (isLeader || isMentor || isCoordinator)) && ['WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED'].includes(assign.status) && (
-                                <div className="mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                                    ✨ Sparks: <strong>{assign.sparks || 0} Poin</strong>
-                                  </span>
-                                  {isCoordinator && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingSparksAssignId(assign.id)}
-                                      className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 bg-purple-500/10 px-2.5 py-1 rounded-lg border border-purple-500/20 active:scale-95 transition-all shadow-sm flex items-center gap-1"
-                                    >
-                                      <span>✏️</span> Ubah Sparks
-                                    </button>
-                                  )}
-
-                                  {editingSparksAssignId === assign.id && (
-                                    <EditSparksModal
-                                      assignmentId={assign.id}
-                                      assigneeName={assign.user_name ?? 'Assignee'}
-                                      currentSparks={assign.sparks || 8}
-                                      isOpen={true}
-                                      onClose={() => setEditingSparksAssignId(null)}
-                                    />
-                                  )}
                                 </div>
                               )}
                             </div>
@@ -889,41 +790,51 @@ export default function TaskActions({
     );
   };
 
-  // Render normal assignments (for non-OJT / regular tasks)
   const renderNormalAssignments = () => {
+    const isMentorWs = workspaceType === 'MENTOR';
     return (
-      <div className="space-y-2">
-        <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">Assignments</p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
+            {isDirectBriefTask ? '⚡ Daftar Submit Peserta (Direct Brief)' : 'Assignments'}
+          </p>
+          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
+            {assignments.filter(a => ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)).length}/{assignments.length} Selesai ACC
+          </span>
+        </div>
         {assignments.map((a) => {
           const isMe = a.user_id === currentUserId;
           const role = a.assignment_role;
           const status = statusColors[a.status] ?? statusColors.DRAFT;
-
           return (
             <div
               key={a.id}
-              className={`rounded-xl border p-3 space-y-2 text-xs ${isMe
-                  ? 'bg-white dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800'
-                  : 'bg-zinc-50/50 dark:bg-zinc-900/20 border-zinc-100 dark:border-zinc-800/50'
+              className={`rounded-2xl border p-4 space-y-3 text-xs transition-all ${isMe
+                  ? 'bg-purple-500/[0.02] dark:bg-purple-500/[0.04] border-purple-500/20 shadow-sm'
+                  : 'bg-zinc-50/50 dark:bg-zinc-900/30 border-zinc-200/80 dark:border-zinc-800/80'
                 }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border text-purple-600 bg-purple-500/10 border-purple-500/15">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border text-purple-600 bg-purple-500/10 border-purple-500/15">
                     {role}
                   </span>
-                  <span className="text-zinc-700 dark:text-zinc-300 font-bold">{a.user_name ?? 'Unknown'}</span>
-                  {isMe && <span className="text-[9px] text-purple-600 dark:text-purple-400 font-black">(you)</span>}
+                  <span className="text-zinc-900 dark:text-zinc-100 font-extrabold text-sm">
+                    {a.user_name ?? 'Peserta'}
+                  </span>
+                  {isMe && (
+                    <span className="text-[9px] font-black text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full">
+                      (Anda)
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {getDeadlineBadge(a.deadline, ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status))}
-                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${status}`}>
+                  <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${status}`}>
                     {a.status.replace('_', ' ')}
                   </span>
                 </div>
               </div>
-
-
               {a.revision_note && ['REVISION_REQUESTED', 'DECLINED'].includes(a.status) && (
                 <CollapsibleNoteViewer
                   content={a.revision_note}
@@ -931,70 +842,99 @@ export default function TaskActions({
                   type="REVISION"
                 />
               )}
-
               {a.result_url && (
-                <a
-                  href={a.result_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-500 hover:underline font-bold truncate"
-                >
-                  🔗 View result
-                </a>
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                    Hasil Karya Peserta:
+                  </span>
+                  <CreatorDrivePreview url={a.result_url} />
+                </div>
               )}
-
-              {isMe && (
-                <div className="space-y-2 pt-1">
-                  {errorMap[a.id] && <p className="text-[10px] text-red-600 dark:text-red-400 font-bold">{errorMap[a.id]}</p>}
-
-                  {a.status === 'ASSIGNED' && (
+              {isMe && ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(a.status) && (
+                <div className="pt-1">
+                  {showSubmitMap[a.id] ? (
+                    <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="flex gap-2">
+                      <input
+                        type="url"
+                        value={urlInputs[a.id] ?? ''}
+                        onChange={(e) => setUrlInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                        placeholder="Paste Google Drive / Figma / Result URL..."
+                        required
+                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
+                      />
+                      <button
+                        type="submit"
+                        disabled={loading === a.id}
+                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                      >
+                        {loading === a.id ? '...' : 'Submit'}
+                      </button>
+                    </form>
+                  ) : (
                     <button
                       type="button"
-                      onClick={() => handleStartWork(a.id)}
-                      disabled={loading === a.id}
-                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg transition-all"
+                      onClick={() => setShowSubmitMap((prev) => ({ ...prev, [a.id]: true }))}
+                      className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98]"
                     >
-                      {loading === a.id ? 'Starting...' : '🚀 Start Work'}
+                      {a.status === 'REVISION_REQUESTED' ? '📤 Resubmit Hasil Karya' : '📤 Submit Hasil Karya'}
                     </button>
-                  )}
-
-                  {['DRAFT', 'REVISION_REQUESTED', 'DECLINED', 'IN_PROGRESS'].includes(a.status) && (
-                    <>
-                      {showSubmitMap[a.id] ? (
-                        <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="flex gap-1.5">
-                          <input
-                            type="url"
-                            value={urlInputs[a.id] ?? ''}
-                            onChange={(e) => setUrlInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
-                            placeholder="Paste result link..."
-                            required
-                            className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-[11px] rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
-                          />
-                          <button
-                            type="submit"
-                            disabled={loading === a.id}
-                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all"
-                          >
-                            {loading === a.id ? '...' : 'Submit'}
-                          </button>
-                        </form>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setShowSubmitMap((prev) => ({ ...prev, [a.id]: true }))}
-                          className="w-full bg-purple-500/5 hover:bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/15 font-bold text-[11px] px-3 py-1.5 rounded-lg transition-all"
-                        >
-                          {a.status === 'REVISION_REQUESTED'
-                            ? '📤 Resubmit Result'
-                            : a.status === 'DECLINED'
-                              ? '🔄 Create Again & Submit'
-                              : '📤 Submit Result'}
-                        </button>
-                      )}
-                    </>
                   )}
                 </div>
               )}
+              {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status) && (
+                <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
+                  <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                    Persetujuan QC & Pemberian Sparks
+                  </p>
+                  <ReviewActions
+                    assignmentId={a.id}
+                    canRequestRevision={isLeader || isMentor || isCoordinator}
+                    canAwardBadge={isMentor || isCoordinator}
+                    isStaffOrCoord={isCoordinator}
+                    mentorApproved={a.mentor_approved ?? 0}
+                    coordinatorApproved={a.coordinator_approved ?? 0}
+                    isMentorWs={isMentorWs}
+                  />
+                </div>
+              )}
+              {['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status) && (() => {
+                const note = cleanAppreciationNote((a as any).appreciation_note);
+                return (
+                  <div className="space-y-2 mt-2 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+                    {note && (
+                      <CollapsibleNoteViewer
+                        content={note}
+                        badgeLabel="✨ Apresiasi"
+                        type="APPRECIATION"
+                      />
+                    )}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-black text-purple-600 dark:text-purple-400 flex items-center gap-1.5 bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/20">
+                        <span>✨ Sparks Diperoleh:</span>
+                        <strong className="text-sm">{a.sparks || 0} Poin</strong>
+                      </span>
+                      {isCoordinator && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingSparksAssignId(a.id)}
+                          className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/20 active:scale-95 transition-all flex items-center gap-1"
+                        >
+                          <span>✏️</span> Ubah Sparks
+                        </button>
+                      )}
+                    </div>
+                    {editingSparksAssignId === a.id && (
+                      <EditSparksModal
+                        assignmentId={a.id}
+                        assigneeName={a.user_name ?? 'Peserta'}
+                        currentSparks={a.sparks || 8}
+                        isOpen={true}
+                        onClose={() => setEditingSparksAssignId(null)}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}

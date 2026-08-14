@@ -140,7 +140,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
     if (isNaN(startAt)) startAt = null;
   }
 
-  // Determine initial status based on task type
+  const taskTypeValue = isDirectBrief ? 'DIRECT_BRIEF' : outputType;
   const initialStatus = 'DRAFT';
 
   try {
@@ -161,14 +161,52 @@ export async function createTask(workspaceId: string, formData: FormData) {
         session.userId, 
         deadline,
         startAt,
-        outputType,
+        taskTypeValue,
         parentTaskId
       )
       .run();
 
-    // If an assignee is selected directly by Coordinator, create assignment step immediately
-    if (assigneeUserId && assigneeUserId.trim()) {
-      const defaultRole = outputType === 'VIDEO' ? 'VIDEO_EDITOR' : 'DESIGNER';
+    const defaultRole = outputType === 'VIDEO' ? 'VIDEO_EDITOR' : 'DESIGNER';
+
+    if (isDirectBrief) {
+      if (assigneeUserId && assigneeUserId.trim()) {
+        const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+        await db
+          .prepare(`
+            INSERT OR IGNORE INTO task_assignments
+              (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+            VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+          `)
+          .bind(assignId, taskId, assigneeUserId.trim(), defaultRole, session.userId, deadline, startAt)
+          .run();
+      } else {
+        // Mass auto-assign all active OJT / Trooper members of workspace
+        const { results: ojtMembers } = await db
+          .prepare(`
+            SELECT DISTINCT u.id AS user_id
+            FROM users u
+            JOIN workspace_members wm ON u.id = wm.user_id
+            WHERE wm.workspace_id = ?
+              AND wm.team_role != 'LEADER'
+              AND (u.user_type IS NULL OR u.user_type != 'STAFF')
+              AND u.status = 'ACTIVE'
+          `)
+          .bind(workspaceId)
+          .all();
+
+        for (const m of (ojtMembers as { user_id: string }[])) {
+          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+          await db
+            .prepare(`
+              INSERT OR IGNORE INTO task_assignments
+                (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+              VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+            `)
+            .bind(assignId, taskId, m.user_id, defaultRole, session.userId, deadline, startAt)
+            .run();
+        }
+      }
+    } else if (assigneeUserId && assigneeUserId.trim()) {
       const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
       await db
         .prepare(`
