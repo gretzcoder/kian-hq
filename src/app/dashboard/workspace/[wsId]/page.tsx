@@ -460,7 +460,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         }
         createTaskForm={
           workspace.workspace_type !== 'ASSESSMENT' && canCreateTask ? (
-            <CreateTaskForm workspaceId={wsId} existingTasks={existingTasks} />
+            <CreateTaskForm workspaceId={wsId} existingTasks={existingTasks} members={membersList} />
           ) : undefined
         }
       />

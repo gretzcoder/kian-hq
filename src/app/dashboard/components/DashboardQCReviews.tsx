@@ -54,7 +54,7 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5 mb-1">
+                <div className="flex items-center gap-1.5 mb-1 flex-wrap">
                   <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400">
                     {r.project_name}
                   </span>
@@ -65,6 +65,11 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
                         {r.workspace_name}
                       </span>
                     </>
+                  )}
+                  {(r.task_type === 'DIRECT_BRIEF' || (r as any).is_direct_brief) && (
+                    <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.2 rounded-full">
+                      ⚡ Brief Direct Koordinator
+                    </span>
                   )}
                 </div>
                 <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm truncate">

@@ -119,6 +119,18 @@ export async function createTask(workspaceId: string, formData: FormData) {
     return { success: false, error: 'Jenis output karya wajib dipilih (Design atau Video).' };
   }
 
+  const isDirectBrief = (formData.get('isDirectBrief') as string) === 'true' || (formData.get('briefSource') as string) === 'DIRECT_COORDINATOR';
+  const briefUrl = (formData.get('briefUrl') as string) || (formData.get('brief_url') as string);
+  const assigneeUserId = (formData.get('assigneeUserId') as string) || (formData.get('assigned_user_id') as string);
+
+  let finalDescription = description ? description.trim() : '';
+  if (isDirectBrief && !finalDescription.includes('[DIRECT_BRIEF]')) {
+    finalDescription = `[DIRECT_BRIEF]\n${finalDescription}`;
+  }
+  if (briefUrl && briefUrl.trim() && !finalDescription.includes(briefUrl.trim())) {
+    finalDescription = `${finalDescription}\n📎 Link Brief: ${briefUrl.trim()}`;
+  }
+
   const taskId = `task_${crypto.randomUUID().replace(/-/g, '')}`;
   const deadline = new Date(deadlineStr).getTime();
 
@@ -143,7 +155,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
         ws.project_id, 
         workspaceId, 
         title.trim(), 
-        description || null, 
+        finalDescription || null, 
         initialStatus, 
         priority, 
         session.userId, 
@@ -153,6 +165,20 @@ export async function createTask(workspaceId: string, formData: FormData) {
         parentTaskId
       )
       .run();
+
+    // If an assignee is selected directly by Coordinator, create assignment step immediately
+    if (assigneeUserId && assigneeUserId.trim()) {
+      const defaultRole = outputType === 'VIDEO' ? 'VIDEO_EDITOR' : 'DESIGNER';
+      const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+      await db
+        .prepare(`
+          INSERT OR IGNORE INTO task_assignments
+            (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+          VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+        `)
+        .bind(assignId, taskId, assigneeUserId.trim(), defaultRole, session.userId, deadline, startAt)
+        .run();
+    }
 
     // If this is a MENTOR workspace, auto-assign all mentor members to EVERY step of the task
     if (ws.workspace_type === 'MENTOR') {

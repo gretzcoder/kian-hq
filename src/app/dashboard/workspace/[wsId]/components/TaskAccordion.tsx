@@ -218,6 +218,11 @@ export default function TaskAccordion({
                     <span className={`text-[9px] font-black uppercase tracking-widest ${pCfg.color}`}>
                       {pCfg.label}
                     </span>
+                    {(task.task_type === 'DIRECT_BRIEF' || (task.description && task.description.includes('[DIRECT_BRIEF]'))) && (
+                      <span className="text-[9px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <span>⚡</span> Brief Direct Koordinator
+                      </span>
+                    )}
                     {totalTaskSparks > 0 && (
                       <span className="text-[10px] font-black bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                         <span>✨</span> {totalTaskSparks} Total Sparks

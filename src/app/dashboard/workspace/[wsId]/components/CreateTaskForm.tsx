@@ -5,17 +5,29 @@ import { createTask } from '@/modules/tasks/actions';
 
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
 
+interface CreateTaskFormProps {
+  workspaceId: string;
+  existingTasks?: { id: string; title: string }[];
+  members?: Array<{
+    userId?: string;
+    id?: string;
+    userName?: string | null;
+    name?: string | null;
+    userEmail?: string;
+  }>;
+}
+
 export default function CreateTaskForm({
   workspaceId,
   existingTasks = [],
-}: {
-  workspaceId: string;
-  existingTasks?: { id: string; title: string }[];
-}) {
+  members = [],
+}: CreateTaskFormProps) {
   const [loading, setLoading] = useState(false);
   const [outputType, setOutputType] = useState<'DESIGN' | 'VIDEO'>('DESIGN');
+  const [isDirectBrief, setIsDirectBrief] = useState(true);
   const [priority, setPriority] = useState<'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
   const [parentTaskId, setParentTaskId] = useState('');
+  const [assigneeUserId, setAssigneeUserId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -37,14 +49,18 @@ export default function CreateTaskForm({
     formData.set('outputType', outputType);
     formData.set('priority', priority);
     formData.set('parentTaskId', parentTaskId);
+    formData.set('isDirectBrief', String(isDirectBrief));
+    formData.set('assigneeUserId', assigneeUserId);
 
     try {
       const res = await createTask(workspaceId, formData);
       if (res.success) {
         form.reset();
         setOutputType('DESIGN');
+        setIsDirectBrief(true);
         setPriority('NORMAL');
         setParentTaskId('');
+        setAssigneeUserId('');
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       } else {
@@ -66,9 +82,31 @@ export default function CreateTaskForm({
       )}
       {success && (
         <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-3 font-bold">
-          ✓ Tugas berhasil dibuat!
+          ✓ Tugas berhasil dibuat dengan Brief Direct Koordinator!
         </p>
       )}
+
+      {/* Case Indicator & Brief Origin Tag */}
+      <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-xs space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-black text-blue-700 dark:text-blue-300 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+            <span>⚡ Brief Direct Koordinator</span>
+            <span className="bg-blue-500/20 text-blue-600 dark:text-blue-300 px-2 py-0.2 rounded-full text-[9px]">Bukan Assessment</span>
+          </span>
+          <label className="inline-flex items-center gap-2 cursor-pointer select-none text-[11px] font-bold text-blue-800 dark:text-blue-200">
+            <input
+              type="checkbox"
+              checked={isDirectBrief}
+              onChange={(e) => setIsDirectBrief(e.target.checked)}
+              className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+            />
+            Brief Diberikan Langsung oleh Koordinator
+          </label>
+        </div>
+        <p className="text-[11px] text-blue-600/80 dark:text-blue-300/80 leading-relaxed">
+          Instruksi & kebutuhan tugas ditulis langsung oleh Koordinator di form ini (tanpa alur dokumen Content Brief terpisah & bukan Ujian Skill/Assessment).
+        </p>
+      </div>
 
       {/* Required Output Type Selector (Design vs Video) */}
       <div>
@@ -124,6 +162,32 @@ export default function CreateTaskForm({
               className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all"
             />
           </div>
+
+          {/* Optional Assignee Selection for Koordinator */}
+          {members.length > 0 && (
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                Penugasan Langsung ke Trooper (Opsional)
+              </label>
+              <select
+                value={assigneeUserId}
+                onChange={(e) => setAssigneeUserId(e.target.value)}
+                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-700 dark:text-zinc-300 text-xs rounded-xl px-4 py-3 focus:outline-none transition-all cursor-pointer"
+              >
+                <option value="">-- Pilih Trooper / Anggota Workspace (Nanti Dibuat di Daftar Task) --</option>
+                {members.map((m) => {
+                  const uid = m.userId || m.id || '';
+                  const uname = m.userName || m.name || m.userEmail || 'Anggota';
+                  if (!uid) return null;
+                  return (
+                    <option key={uid} value={uid}>
+                      👤 {uname}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -182,13 +246,26 @@ export default function CreateTaskForm({
         <div className="space-y-4">
           <div>
             <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-              Deskripsi & Instruksi
+              Deskripsi & Brief Instruksi Koordinator
             </label>
             <textarea
               name="description"
               rows={4}
-              placeholder="Rincian tugas, referensi link, kebutuhan..."
+              placeholder="Tuliskan rincian brief tugas, standar hasil, pesan koordinator, dan kebutuhan karya..."
               className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all resize-none"
+            />
+          </div>
+
+          {/* Optional Reference / Brief URL */}
+          <div>
+            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+              Link Referensi / Lampiran Brief (Opsional)
+            </label>
+            <input
+              type="url"
+              name="brief_url"
+              placeholder="Paste URL Canva / Figma / Google Drive / Notion / Reference..."
+              className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-4 py-3 focus:outline-none transition-all"
             />
           </div>
 
