@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createTask } from '@/modules/tasks/actions';
+import TiptapEditor from '@/components/editor/TiptapEditor';
 
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
 
@@ -28,6 +29,7 @@ export default function CreateTaskForm({
   const [priority, setPriority] = useState<'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
   const [parentTaskId, setParentTaskId] = useState('');
   const [assigneeUserId, setAssigneeUserId] = useState('');
+  const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
@@ -51,6 +53,7 @@ export default function CreateTaskForm({
     formData.set('parentTaskId', parentTaskId);
     formData.set('isDirectBrief', String(isDirectBrief));
     formData.set('assigneeUserId', assigneeUserId);
+    formData.set('description', description);
 
     try {
       const res = await createTask(workspaceId, formData);
@@ -61,6 +64,7 @@ export default function CreateTaskForm({
         setPriority('NORMAL');
         setParentTaskId('');
         setAssigneeUserId('');
+        setDescription('');
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
       } else {
@@ -245,15 +249,17 @@ export default function CreateTaskForm({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-              Deskripsi & Brief Instruksi Koordinator
+            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+              <span>Deskripsi & Brief Instruksi Koordinator</span>
+              <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">✨ WYSIWYG Rich Text</span>
             </label>
-            <textarea
-              name="description"
-              rows={4}
-              placeholder="Tuliskan rincian brief tugas, standar hasil, pesan koordinator, dan kebutuhan karya..."
-              className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all resize-none"
+            <TiptapEditor
+              value={description}
+              onChange={setDescription}
+              placeholder="Tuliskan rincian brief tugas, standar hasil, pesan koordinator, dan kebutuhan karya dengan format lengkap..."
+              minHeight="min-h-[220px]"
             />
+            <input type="hidden" name="description" value={description} />
           </div>
 
           {/* Optional Reference / Brief URL */}

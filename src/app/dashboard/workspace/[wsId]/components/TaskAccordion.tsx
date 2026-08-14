@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskActions from '@/modules/tasks/components/TaskActions';
+import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
 import { updateTask, deleteTask } from '@/modules/tasks/actions';
 
@@ -311,9 +312,9 @@ export default function TaskAccordion({
               <div className="px-5 pb-5">
                 {/* Description when expanded */}
                 {task.description && (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-4 leading-relaxed">
-                    {task.description}
-                  </p>
+                  <div className="mb-4 text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
+                    <MarkdownViewer content={task.description.replace('[DIRECT_BRIEF]', '')} />
+                  </div>
                 )}
                 {/* Assignments + Actions */}
                 <TaskActions

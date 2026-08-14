@@ -792,6 +792,47 @@ export default function TaskActions({
 
   const renderNormalAssignments = () => {
     const isMentorWs = workspaceType === 'MENTOR';
+    const isReviewer = isLeader || isMentor || isCoordinator;
+
+    // Deduplicate assignments by user_id for DIRECT_BRIEF tasks & filter for clean display
+    let displayAssignments = assignments;
+    if (isDirectBriefTask) {
+      const userMap = new Map();
+      for (const a of assignments) {
+        const existing = userMap.get(a.user_id);
+        if (!existing) {
+          userMap.set(a.user_id, a);
+        } else {
+          // If existing is ASSIGNED but this one has a submission, pick the one with submission!
+          if (existing.status === 'ASSIGNED' && a.status !== 'ASSIGNED') {
+            userMap.set(a.user_id, a);
+          }
+        }
+      }
+      const deduplicated = Array.from(userMap.values());
+
+      if (isReviewer) {
+        // For Coordinator / Mentor view: show only actual submissions (where result_url is present or status != ASSIGNED)
+        displayAssignments = deduplicated.filter(a => a.result_url || a.status !== 'ASSIGNED');
+      } else {
+        // For Participant view: show own assignment (or submitted ones)
+        displayAssignments = deduplicated.filter(a => a.user_id === currentUserId || a.result_url || a.status !== 'ASSIGNED');
+      }
+    }
+
+    if (isDirectBriefTask && displayAssignments.length === 0) {
+      return (
+        <div className="p-6 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center space-y-1.5 bg-zinc-50/50 dark:bg-zinc-900/20 my-2">
+          <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-center gap-1.5">
+            <span>📌</span> Belum Ada Peserta yang Mengumpulkan Hasil Karya
+          </p>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+            Daftar submission akan otomatis muncul di sini begitu peserta menempelkan link hasil karya mereka.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -799,12 +840,12 @@ export default function TaskActions({
             {isDirectBriefTask ? '⚡ Daftar Submit Peserta (Direct Brief)' : 'Assignments'}
           </p>
           <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
-            {assignments.filter(a => ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)).length}/{assignments.length} Selesai ACC
+            {displayAssignments.filter(a => ['APPROVED', 'DONE', 'PUBLISHED'].includes(a.status)).length}/{displayAssignments.length} Selesai ACC
           </span>
         </div>
-        {assignments.map((a) => {
+        {displayAssignments.map((a) => {
           const isMe = a.user_id === currentUserId;
-          const role = a.assignment_role;
+          const roleLabel = isDirectBriefTask ? 'Submitter' : a.assignment_role;
           const status = statusColors[a.status] ?? statusColors.DRAFT;
           return (
             <div
@@ -816,11 +857,13 @@ export default function TaskActions({
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border text-purple-600 bg-purple-500/10 border-purple-500/15">
-                    {role}
-                  </span>
-                  <span className="text-zinc-900 dark:text-zinc-100 font-extrabold text-sm">
-                    {a.user_name ?? 'Peserta'}
+                  {!isDirectBriefTask && (
+                    <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border text-purple-600 bg-purple-500/10 border-purple-500/15">
+                      {roleLabel}
+                    </span>
+                  )}
+                  <span className="text-zinc-900 dark:text-zinc-100 font-extrabold text-sm flex items-center gap-1.5">
+                    <span>👤</span> {a.user_name ?? 'Peserta'}
                   </span>
                   {isMe && (
                     <span className="text-[9px] font-black text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full">
