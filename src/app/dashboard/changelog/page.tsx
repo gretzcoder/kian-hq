@@ -95,7 +95,7 @@ export default function ChangelogPage() {
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 max-w-2xl leading-relaxed">
-                Catatan resmi pembaruan rilis semantik (v1.0.0 &ndash; {latestVersion}) dan riwayat commit asli langsung dari repositori master GitHub KIAN HQ.
+                Catatan resmi pembaruan fitur, perbaikan sistem, dan riwayat perkembangan aplikasi KIAN HQ.
               </p>
             </div>
 
@@ -114,15 +114,15 @@ export default function ChangelogPage() {
               <p className="text-lg font-black text-purple-600 dark:text-purple-400 mt-0.5">{latestVersion}</p>
             </div>
             <div className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md rounded-2xl p-3.5 border border-zinc-200/60 dark:border-zinc-800/60">
-              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Total Git Commit</p>
-              <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 mt-0.5">{totalCommitsCount} Commits</p>
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Total Pembaruan</p>
+              <p className="text-lg font-black text-indigo-600 dark:text-indigo-400 mt-0.5">{totalCommitsCount} Catatan Update</p>
             </div>
             <div className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md rounded-2xl p-3.5 border border-zinc-200/60 dark:border-zinc-800/60">
-              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Milestone Release</p>
-              <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{totalReleases} Rilis Utama</p>
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Versi Rilis</p>
+              <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{totalReleases} Versi Utama</p>
             </div>
             <div className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-md rounded-2xl p-3.5 border border-zinc-200/60 dark:border-zinc-800/60">
-              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Pertama Dipublikasi</p>
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Pertama Dirilis</p>
               <p className="text-sm font-black text-zinc-800 dark:text-zinc-200 mt-1">v1.0.0 ({firstCommitDate})</p>
             </div>
           </div>
@@ -139,7 +139,7 @@ export default function ChangelogPage() {
               : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800'
           }`}
         >
-          <span>⭐ Versi Rilis Semantik ({totalReleases})</span>
+          <span>⭐ Rilis Versi Utama ({totalReleases})</span>
         </button>
         <button
           onClick={() => { setActiveTab('GIT_COMMITS'); setSearchQuery(''); }}
@@ -149,7 +149,7 @@ export default function ChangelogPage() {
               : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800'
           }`}
         >
-          <span>🌿 Master Git Commit History ({totalCommitsCount})</span>
+          <span>📜 Riwayat Pembaruan Detail ({totalCommitsCount})</span>
         </button>
       </div>
 
@@ -180,7 +180,7 @@ export default function ChangelogPage() {
           </div>
         ) : (
           <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
-            <span className="text-[10px] font-black text-zinc-400 uppercase mr-1 shrink-0">Author:</span>
+            <span className="text-[10px] font-black text-zinc-400 uppercase mr-1 shrink-0">Pengembang:</span>
             <button
               onClick={() => setSelectedAuthor('ALL')}
               className={`text-[11px] font-bold px-3.5 py-2 rounded-xl transition-all whitespace-nowrap shrink-0 ${
@@ -189,7 +189,7 @@ export default function ChangelogPage() {
                   : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800'
               }`}
             >
-              Semua Contributor
+              Semua Pengembang
             </button>
             {uniqueAuthors.map((author) => (
               <button
@@ -214,7 +214,7 @@ export default function ChangelogPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={activeTab === 'RELEASES' ? "Cari versi atau fitur..." : "Cari commit hash / pesan..."}
+            placeholder={activeTab === 'RELEASES' ? "Cari versi atau fitur..." : "Cari catatan pembaruan..."}
             className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl pl-9 pr-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
           />
         </div>
@@ -323,18 +323,18 @@ export default function ChangelogPage() {
         </div>
       )}
 
-      {/* Content Tab 2: Raw Git Commit History */}
+      {/* Content Tab 2: Detail Updates List */}
       {activeTab === 'GIT_COMMITS' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
             <span className="text-xs font-bold text-zinc-500">
-              Menampilkan {filteredCommits.length} dari {GIT_COMMIT_LOGS.length} total git commit master:
+              Menampilkan {filteredCommits.length} dari {GIT_COMMIT_LOGS.length} total catatan pembaruan:
             </span>
           </div>
 
           {filteredCommits.length === 0 ? (
             <div className="p-12 text-center rounded-3xl border border-dashed border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-900/20">
-              <p className="text-base font-bold text-zinc-600 dark:text-zinc-400">Tidak ada git commit yang cocok.</p>
+              <p className="text-base font-bold text-zinc-600 dark:text-zinc-400">Tidak ada pembaruan yang cocok.</p>
               <p className="text-xs text-zinc-400 mt-1">Coba sesuaikan kata kunci pencarian Anda.</p>
             </div>
           ) : (
@@ -361,13 +361,13 @@ export default function ChangelogPage() {
                   >
                     <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
                       <span className="font-mono text-xs font-black bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-xl shrink-0">
-                        {commit.hash}
+                        #{commit.hash}
                       </span>
 
                       <div className="min-w-0 flex-1 space-y-0.5">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.2 rounded-md border ${commitTypeStyle}`}>
-                            {isFeat ? '✨ FEAT' : isFix ? '🐛 FIX' : isStyle ? '🎨 UI/REF' : isChore ? '⚙️ CHORE' : '📝 COMMIT'}
+                            {isFeat ? '✨ FITUR' : isFix ? '🐛 FIX' : isStyle ? '🎨 TAMPILAN' : isChore ? '⚙️ SISTEM' : '📝 UPDATE'}
                           </span>
                           <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
                             {commit.message}

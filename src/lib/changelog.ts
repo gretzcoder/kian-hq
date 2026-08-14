@@ -47,7 +47,7 @@ export const SYSTEM_CHANGELOG: ChangelogItem[] = [
       },
       {
         "category": "📜 Feature",
-        "description": "Real Log Update & Changelog Hub: Menu riwayat update sistem berdasarkan commit master GitHub & versi rilis semantik v1.0.0 s/d v1.8.0."
+        "description": "Log Update & Changelog Hub: Pusat riwayat pembaruan dan catatan perkembangan sistem KIAN HQ secara terpadu."
       }
     ]
   },
