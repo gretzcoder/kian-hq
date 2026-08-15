@@ -627,7 +627,9 @@ export async function approveAssessmentMentorStep(
     });
 
     const resolvedWsId = workspaceId || task.workspace_id || '';
-    revalidatePath(`/dashboard/workspace/${resolvedWsId}`);
+    if (resolvedWsId) {
+      revalidatePath(`/dashboard/workspace/${resolvedWsId}`);
+    }
     revalidatePath('/dashboard/review');
     revalidatePath('/dashboard');
     return { success: true };

@@ -103,13 +103,20 @@ export default function ReviewActions({
         () =>
           isAssessmentCoordStep
             ? approveAssessmentSubmission(assignmentId, '', sparks, noteText.trim())
+            : isAssessmentMentorStep
+            ? approveAssessmentMentorStep(assignmentId, '', noteText.trim())
             : approveAssignment(assignmentId, sparks, noteText.trim()),
         () => callApiFallback('APPROVE')
       );
       if (res.success) {
         setDone(true);
         if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kian_notif_refresh'));
-        toast(`Persetujuan disimpan dengan ${sparks} ✨ Creative Sparks!`, 'success');
+        toast(
+          isAssessmentMentorStep
+            ? 'ACC Mentor & Catatan Improvement berhasil disimpan!'
+            : `Persetujuan disimpan dengan ${sparks} ✨ Creative Sparks!`,
+          'success'
+        );
       } else {
         const msg = res.error ?? 'Failed to approve';
         setError(msg);
@@ -140,7 +147,7 @@ export default function ReviewActions({
       const res = await safeExecuteAction<any>(
         () =>
           isRevision
-            ? taskType === 'ASSESSMENT'
+            ? (taskType === 'ASSESSMENT' || isAssessmentMentorStep)
               ? requestAssessmentRevisionAction(assignmentId, '', noteText.trim())
               : requestRevision(assignmentId, noteText.trim())
             : declineAssignment(assignmentId, noteText.trim()),
