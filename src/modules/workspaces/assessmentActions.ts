@@ -401,9 +401,9 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
 
   // Validate parent task approval, start date & deadline
   const parentTask = await db
-    .prepare('SELECT status, start_at, deadline FROM tasks WHERE id = ?')
+    .prepare('SELECT status, start_at, deadline, extended_deadline FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { status: string; start_at: number | null; deadline: number | null } | null;
+    .first() as { status: string; start_at: number | null; deadline: number | null; extended_deadline: number | null } | null;
 
   if (!parentTask || parentTask.status !== 'APPROVED') {
     return { success: false, error: 'Assessment ini belum disetujui / ACC oleh Koordinator.' };
@@ -414,7 +414,8 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
     return { success: false, error: 'Assessment ini belum dimulai.' };
   }
 
-  if (parentTask.deadline && parentTask.deadline < now) {
+  const effectiveDeadline = parentTask.extended_deadline || parentTask.deadline;
+  if (effectiveDeadline && effectiveDeadline < now) {
     return { success: false, error: 'Tenggat waktu (deadline) assessment ini telah berakhir. Pengumpulan tidak dapat dilakukan.' };
   }
 

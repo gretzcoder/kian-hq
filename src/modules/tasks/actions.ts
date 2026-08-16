@@ -565,16 +565,17 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
 
   try {
     const task = await db
-      .prepare('SELECT id, project_id, workspace_id, status, task_type, parent_task_id, start_at, deadline FROM tasks WHERE id = ?')
+      .prepare('SELECT id, project_id, workspace_id, status, task_type, parent_task_id, start_at, deadline, extended_deadline FROM tasks WHERE id = ?')
       .bind(assignment.task_id)
-      .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; parent_task_id: string | null; start_at: number | null; deadline: number | null } | null;
+      .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; parent_task_id: string | null; start_at: number | null; deadline: number | null; extended_deadline: number | null } | null;
 
     const nowMs = Date.now();
     if (task?.start_at && task.start_at > nowMs) {
       return { success: false, error: 'Tugas ini belum dimulai.' };
     }
 
-    if (task?.deadline && task.deadline < nowMs) {
+    const effectiveDeadline = task?.extended_deadline || task?.deadline;
+    if (effectiveDeadline && effectiveDeadline < nowMs) {
       return { success: false, error: 'Tenggat waktu (deadline) tugas ini telah berakhir. Pengumpulan tidak dapat dilakukan.' };
     }
 
@@ -1712,3 +1713,69 @@ export async function sendTaskSmartReminder(taskId: string, categoryMode?: strin
     message: `✅ Smart Reminder berhasil dikirim! (${messagesSent.join(' & ')})`,
   };
 }
+
+/**
+ * Extends the deadline of a task.
+ * Permitted for: Admin, Coordinator, or Task Creator (Mentor owner).
+ */
+export async function extendTaskDeadline(
+  taskId: string,
+  newDeadline: number, // Unix timestamp in ms
+  workspaceId?: string
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+
+  // Fetch task
+  const task = await db
+    .prepare('SELECT id, workspace_id, created_by, deadline, extended_deadline FROM tasks WHERE id = ?')
+    .bind(taskId)
+    .first() as { id: string; workspace_id: string | null; created_by: string | null; deadline: number | null; extended_deadline: number | null } | null;
+
+  if (!task) return { success: false, error: 'Task tidak ditemukan.' };
+
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+  const isCreator = task.created_by != null && task.created_by === session.userId;
+  const isAdmin = ctx.permissions.has('ADMIN_SYSTEM') || (ctx.userType as string) === 'ADMIN';
+
+  if (!isCoordinator && !isCreator && !isAdmin) {
+    return { success: false, error: 'Hanya Admin, Koordinator, atau Pembuat Task yang dapat memperpanjang deadline.' };
+  }
+
+  const effectiveCurrentDeadline = task.extended_deadline || task.deadline || Date.now();
+  if (newDeadline <= effectiveCurrentDeadline) {
+    return { success: false, error: 'Deadline perpanjangan harus lebih lama dari deadline saat ini.' };
+  }
+
+  try {
+    await db
+      .prepare('UPDATE tasks SET extended_deadline = ? WHERE id = ?')
+      .bind(newDeadline, taskId)
+      .run();
+
+    await logWorkflowEvent({
+      entityType: 'task',
+      entityId: taskId,
+      fromStatus: 'DEADLINE_EXPIRED',
+      toStatus: 'DEADLINE_EXTENDED',
+      triggeredBy: session.userId,
+      note: `Deadline diperpanjang hingga ${new Date(newDeadline).toLocaleString('id-ID')}`,
+    });
+
+    const targetWsId = workspaceId || task.workspace_id;
+    if (targetWsId) {
+      revalidatePath(`/dashboard/workspace/${targetWsId}`);
+    }
+    revalidatePath('/dashboard/review');
+    revalidatePath('/dashboard');
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('extendTaskDeadline error:', err);
+    return { success: false, error: err.message || 'Gagal memperpanjang deadline.' };
+  }
+}
+

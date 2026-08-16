@@ -62,6 +62,8 @@ export default async function ReviewPage() {
       t.priority       AS task_priority,
       t.task_type       AS task_type,
       t.created_by      AS task_created_by,
+      t.deadline,
+      t.extended_deadline,
       tu.name          AS task_creator_name,
       t.workspace_id,
       ws.name          AS workspace_name,
@@ -282,6 +284,11 @@ export default async function ReviewPage() {
                 mentorApproved={(r as any).mentor_approved ?? 0}
                 coordinatorApproved={(r as any).coordinator_approved ?? 0}
                 isMentorWs={(r as any).workspace_type === 'MENTOR'}
+                taskId={r.task_id}
+                taskTitle={r.task_title}
+                taskDeadline={(r as any).deadline}
+                taskExtendedDeadline={(r as any).extended_deadline}
+                workspaceId={r.workspace_id || ''}
               />
             </div>
           ))}

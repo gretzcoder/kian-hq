@@ -8,6 +8,7 @@ import { safeExecuteAction } from '@/lib/safeAction';
 
 import SendReminderButton from '@/components/SendReminderButton';
 import TiptapEditor from '@/components/editor/TiptapEditor';
+import { ExtendDeadlineModal } from '@/components/ExtendDeadlineModal';
 
 export function getSparkMeta(spark: number): { label: string; emoji: string; color: string } {
   if (spark >= 9) return { label: 'LEGENDARY SPARK', emoji: '👑', color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' };
@@ -29,6 +30,11 @@ export default function ReviewActions({
   coordinatorApproved = 0,
   isTaskMentor = false,
   isMentorWs = false,
+  taskId,
+  taskTitle,
+  taskDeadline,
+  taskExtendedDeadline,
+  workspaceId,
 }: {
   assignmentId: string;
   canRequestRevision: boolean;
@@ -41,10 +47,16 @@ export default function ReviewActions({
   coordinatorApproved?: number;
   isTaskMentor?: boolean;
   isMentorWs?: boolean;
+  taskId?: string;
+  taskTitle?: string;
+  taskDeadline?: number | null;
+  taskExtendedDeadline?: number | null;
+  workspaceId?: string;
 }) {
   const isMentorWorkspace = isMentorWs || taskType === 'MENTOR';
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'NONE' | 'SPARK_MODAL' | 'REVISION' | 'DECLINE'>('NONE');
+  const [showExtendModal, setShowExtendModal] = useState(false);
   const [sparks, setSparks] = useState<number>(8);
   const [noteText, setNoteText] = useState('');
   const [done, setDone] = useState(false);
@@ -347,6 +359,17 @@ export default function ReviewActions({
                   >
                     Decline
                   </button>
+                  {taskId && (
+                    <button
+                      type="button"
+                      onClick={() => setShowExtendModal(true)}
+                      disabled={loading}
+                      className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-bold text-xs px-3 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1 shrink-0 cursor-pointer"
+                      title="Extend Deadline Task"
+                    >
+                      <span>⏳ Extend</span>
+                    </button>
+                  )}
                 </>
               )}
             </>
@@ -459,6 +482,19 @@ export default function ReviewActions({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Extend Deadline Modal */}
+      {showExtendModal && taskId && (
+        <ExtendDeadlineModal
+          taskId={taskId}
+          taskTitle={taskTitle || 'Tugas Queue'}
+          currentDeadline={taskDeadline || null}
+          currentExtendedDeadline={taskExtendedDeadline || null}
+          workspaceId={workspaceId}
+          isOpen={showExtendModal}
+          onClose={() => setShowExtendModal(false)}
+        />
       )}
     </div>
   );

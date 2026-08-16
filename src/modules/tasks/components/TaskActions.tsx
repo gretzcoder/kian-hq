@@ -133,8 +133,13 @@ interface TaskAssignment {
 }
 
 
+import { ExtendDeadlineModal } from '@/components/ExtendDeadlineModal';
+
 interface TaskActionsProps {
   taskId: string;
+  taskTitle?: string;
+  taskDeadline?: number | null;
+  taskExtendedDeadline?: number | null;
   taskType?: string;
   workspaceType?: string;
   assignments: TaskAssignment[];
@@ -164,6 +169,9 @@ import EditSparksModal from './EditSparksModal';
 
 export default function TaskActions({
   taskId,
+  taskTitle,
+  taskDeadline,
+  taskExtendedDeadline,
   taskType,
   workspaceType,
   assignments,
@@ -176,6 +184,7 @@ export default function TaskActions({
 }: TaskActionsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [showExtendModal, setShowExtendModal] = useState(false);
   const [editingSparksAssignId, setEditingSparksAssignId] = useState<string | null>(null);
   const [urlInputs, setUrlInputs] = useState<Record<string, string>>({});
   const [showSubmitMap, setShowSubmitMap] = useState<Record<string, boolean>>({});
@@ -1100,17 +1109,43 @@ export default function TaskActions({
       {/* Dynamic Render based on Task Type */}
       {isOjtTask ? renderOJTRundown() : renderNormalAssignments()}
 
-      {/* Delete task action */}
-      {canDelete && (
-        <div className="pt-2 border-t border-zinc-100 dark:border-zinc-900/60 mt-2">
-          <button
-            onClick={handleDelete}
-            disabled={deleting}
-            className="text-red-600 dark:text-red-400 hover:bg-red-500/5 font-bold text-xs px-3.5 py-1.5 rounded-xl border border-transparent hover:border-red-500/10 transition-all disabled:opacity-50 active:scale-[0.97]"
-          >
-            {deleting ? 'Deleting...' : 'Delete Task'}
-          </button>
+      {/* Manage actions (Extend Deadline / Delete) */}
+      {(canDelete || isCoordinator || isMentor || isLeader) && (
+        <div className="pt-2 border-t border-zinc-100 dark:border-zinc-900/60 mt-2 flex items-center justify-between gap-2 flex-wrap">
+          {(isCoordinator || isMentor || isLeader) && (
+            <button
+              type="button"
+              onClick={() => setShowExtendModal(true)}
+              title="Extend Deadline Task"
+              className="text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 font-bold text-xs px-3.5 py-1.5 rounded-xl border border-amber-500/20 transition-all active:scale-[0.97] flex items-center gap-1 cursor-pointer"
+            >
+              <span>⏳</span>
+              <span>Extend Deadline Task</span>
+            </button>
+          )}
+
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="text-red-600 dark:text-red-400 hover:bg-red-500/5 font-bold text-xs px-3.5 py-1.5 rounded-xl border border-transparent hover:border-red-500/10 transition-all disabled:opacity-50 active:scale-[0.97]"
+            >
+              {deleting ? 'Deleting...' : 'Delete Task'}
+            </button>
+          )}
         </div>
+      )}
+
+      {/* Extend Deadline Modal */}
+      {showExtendModal && (
+        <ExtendDeadlineModal
+          taskId={taskId}
+          taskTitle={taskTitle || 'Tugas Workspace'}
+          currentDeadline={taskDeadline || null}
+          currentExtendedDeadline={taskExtendedDeadline || null}
+          isOpen={showExtendModal}
+          onClose={() => setShowExtendModal(false)}
+        />
       )}
     </div>
   );

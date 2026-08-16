@@ -24,6 +24,7 @@ import SendReminderButton from '@/components/SendReminderButton';
 import { safeExecuteAction } from '@/lib/safeAction';
 
 import EditTaskMultiplierModal from '@/modules/tasks/components/EditTaskMultiplierModal';
+import { ExtendDeadlineModal } from '@/components/ExtendDeadlineModal';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ interface TaskRow {
   status: string;
   created_at: number;
   deadline?: number | null;
+  extended_deadline?: number | null;
   start_at?: number | null;
   revision_note?: string | null;
   sparks?: number | null;
@@ -89,11 +91,21 @@ interface AssessmentPanelProps {
 export function getTaskAssignmentStatusMeta(
   status: string,
   startAt?: number | null,
-  deadline?: number | null
-): { label: string; badgeClass: string; isPastDeadline: boolean; isNotStarted: boolean } {
+  deadline?: number | null,
+  extendedDeadline?: number | null
+): { label: string; badgeClass: string; isPastDeadline: boolean; isNotStarted: boolean; isExtended: boolean; penaltyPercent: number } {
   const now = Date.now();
+  const effectiveDeadline = extendedDeadline || deadline;
   const isNotStarted = Boolean(startAt && startAt > now);
-  const isPastDeadline = Boolean(deadline && deadline < now);
+  const isPastDeadline = Boolean(effectiveDeadline && effectiveDeadline < now);
+  const isExtended = Boolean(extendedDeadline && extendedDeadline > (deadline || 0));
+
+  let penaltyPercent = 0;
+  let daysLate = 0;
+  if (deadline && now > deadline) {
+    daysLate = Math.ceil((now - deadline) / (24 * 3600 * 1000));
+    penaltyPercent = Math.min(100, Math.max(10, daysLate * 10));
+  }
 
   if (status === 'APPROVED') {
     return {
@@ -101,15 +113,20 @@ export function getTaskAssignmentStatusMeta(
       badgeClass: 'bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 border-emerald-500/15 font-bold',
       isPastDeadline: false,
       isNotStarted: false,
+      isExtended: false,
+      penaltyPercent: 0,
     };
   }
 
   if (status === 'WAITING_REVIEW' || status === 'RESUBMITTED') {
+    const subLabel = isExtended && daysLate > 0 ? `📤 Menunggu Review (Extend H+${daysLate})` : '📤 Menunggu Review';
     return {
-      label: '📤 Menunggu Review',
+      label: subLabel,
       badgeClass: 'bg-yellow-500/8 text-yellow-700 dark:text-yellow-400 border-yellow-500/15 font-bold',
       isPastDeadline: false,
       isNotStarted: false,
+      isExtended,
+      penaltyPercent,
     };
   }
 
@@ -119,6 +136,8 @@ export function getTaskAssignmentStatusMeta(
       badgeClass: 'bg-indigo-500/8 text-indigo-600 dark:text-indigo-400 border-indigo-500/15 font-bold',
       isPastDeadline: false,
       isNotStarted: true,
+      isExtended: false,
+      penaltyPercent: 0,
     };
   }
 
@@ -129,6 +148,8 @@ export function getTaskAssignmentStatusMeta(
         badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 font-black animate-pulse',
         isPastDeadline: true,
         isNotStarted: false,
+        isExtended,
+        penaltyPercent,
       };
     }
     return {
@@ -136,6 +157,20 @@ export function getTaskAssignmentStatusMeta(
       badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 font-black animate-pulse',
       isPastDeadline: true,
       isNotStarted: false,
+      isExtended,
+      penaltyPercent,
+    };
+  }
+
+  if (isExtended) {
+    const hLabel = daysLate > 0 ? `H+${daysLate}` : 'Extend';
+    return {
+      label: `⏳ Extended (${hLabel} • Sparks -${penaltyPercent}%)`,
+      badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 font-black',
+      isPastDeadline: false,
+      isNotStarted: false,
+      isExtended: true,
+      penaltyPercent,
     };
   }
 
@@ -145,6 +180,8 @@ export function getTaskAssignmentStatusMeta(
       badgeClass: 'bg-red-500/8 text-red-600 dark:text-red-400 border-red-500/15 font-bold',
       isPastDeadline: false,
       isNotStarted: false,
+      isExtended: false,
+      penaltyPercent: 0,
     };
   }
 
@@ -154,6 +191,8 @@ export function getTaskAssignmentStatusMeta(
       badgeClass: 'bg-indigo-500/8 text-indigo-600 dark:text-indigo-400 border-indigo-500/15 font-bold',
       isPastDeadline: false,
       isNotStarted: false,
+      isExtended: false,
+      penaltyPercent: 0,
     };
   }
 
@@ -162,6 +201,8 @@ export function getTaskAssignmentStatusMeta(
     badgeClass: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 font-bold',
     isPastDeadline: false,
     isNotStarted: false,
+    isExtended: false,
+    penaltyPercent: 0,
   };
 }
 
@@ -1276,6 +1317,7 @@ function MentorTaskCard({
   const [showConfirmDelete,        setShowConfirmDelete]        = useState(false);
   const [showAddParticipantModal,  setShowAddParticipantModal]  = useState(false);
   const [showMultiplierModal,      setShowMultiplierModal]      = useState(false);
+  const [showExtendModal,          setShowExtendModal]          = useState(false);
   const [pendingApprove,           startApproveTransition]      = useTransition();
   const [pendingDelete,            startDeleteTransition]       = useTransition();
 
@@ -1399,6 +1441,19 @@ function MentorTaskCard({
         />
       )}
 
+      {/* Modal Extend Deadline Task */}
+      {showExtendModal && (
+        <ExtendDeadlineModal
+          taskId={task.id}
+          taskTitle={task.title}
+          currentDeadline={task.deadline || null}
+          currentExtendedDeadline={task.extended_deadline || null}
+          workspaceId={workspaceId}
+          isOpen={showExtendModal}
+          onClose={() => setShowExtendModal(false)}
+        />
+      )}
+
       {/* Accordion Task Header */}
       <div
         onClick={() => setIsCardExpanded((prev) => !prev)}
@@ -1466,6 +1521,12 @@ function MentorTaskCard({
                   <span>{new Date(task.deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
                 </span>
               )}
+              {task.extended_deadline && (
+                <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span>⏳ Extend:</span>
+                  <span>{new Date(task.extended_deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </span>
+              )}
             </div>
             <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug">{task.title}</h3>
           </div>
@@ -1482,6 +1543,19 @@ function MentorTaskCard({
                 </p>
               )}
             </div>
+            {canEditOrDelete && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowExtendModal(true);
+                }}
+                title="Extend Deadline Assessment Task"
+                className="w-8 h-8 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition-all flex items-center justify-center text-xs shrink-0 cursor-pointer"
+              >
+                ⏳
+              </button>
+            )}
             {isCoordinator && (
               <button
                 type="button"

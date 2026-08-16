@@ -84,6 +84,9 @@ export async function ensureSchemaMigrations(db: any) {
   try {
     await db.prepare('UPDATE user_notification_settings SET notify_chat = 1 WHERE notify_chat IS NULL').run();
   } catch {}
+  try {
+    await db.prepare('ALTER TABLE tasks ADD COLUMN extended_deadline INTEGER').run();
+  } catch {}
   migrationDone = true;
 }
 

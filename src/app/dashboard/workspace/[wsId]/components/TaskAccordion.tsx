@@ -8,6 +8,7 @@ import TaskAssignmentPanel from './TaskAssignmentPanel';
 import { updateTask, deleteTask } from '@/modules/tasks/actions';
 
 import EditTaskMultiplierModal from '@/modules/tasks/components/EditTaskMultiplierModal';
+import { ExtendDeadlineModal } from '@/components/ExtendDeadlineModal';
 
 interface TaskAssignment {
   id: string;
@@ -33,8 +34,10 @@ interface TaskRow {
   status: string;
   priority: string;
   deadline: number | null;
+  extended_deadline?: number | null;
   start_at?: number | null;
   created_at: number;
+  created_by?: string | null;
   task_type: string;
   parent_task_id: string | null;
   sparks_multiplier?: number;
@@ -99,17 +102,39 @@ function getBorderColor(status: string): string {
   return 'border-zinc-200/80 dark:border-zinc-800/80';
 }
 
-function getTaskDeadlineBadge(deadline: number | null, status: string) {
-  if (!deadline) return null;
+function getTaskDeadlineBadge(deadline: number | null, status: string, extendedDeadline?: number | null) {
+  const activeDeadline = extendedDeadline || deadline;
+  if (!activeDeadline) return null;
   const isFinished = ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(status);
   const now = Date.now();
-  const diffDays = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
-  const dateStr = new Date(deadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+  const diffDays = Math.ceil((activeDeadline - now) / (1000 * 60 * 60 * 24));
+  const dateStr = new Date(activeDeadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   if (isFinished) {
     return (
       <span className="text-[10px] font-bold px-2.5 py-1 rounded-full border bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
-        📅 Task Selesai: {dateStr}
+        ✅ Selesai: {dateStr}
+      </span>
+    );
+  }
+
+  if (extendedDeadline && extendedDeadline > (deadline || 0)) {
+    const daysLate = deadline && now > deadline ? Math.ceil((now - deadline) / (24 * 3600 * 1000)) : 0;
+    const penalty = Math.min(100, daysLate * 10);
+    const hText = daysLate > 0 ? `H+${daysLate}` : 'Extend';
+
+    if (diffDays < 0) {
+      return (
+        <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full border bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 animate-pulse">
+          ⚠️ Extend Melewati Deadline ({dateStr})
+        </span>
+      );
+    }
+
+    return (
+      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 flex items-center gap-1 font-mono">
+        <span>⏳ Extended ({hText} • Sparks -{penalty}%)</span>
+        <span className="text-[9px] font-normal opacity-80">({dateStr})</span>
       </span>
     );
   }
@@ -118,25 +143,25 @@ function getTaskDeadlineBadge(deadline: number | null, status: string) {
     const lateDays = Math.abs(diffDays);
     return (
       <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full border bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 animate-pulse">
-        ⚠️ Task Terlambat {lateDays} hr ({dateStr})
+        ⚠️ Terlambat {lateDays} hr ({dateStr})
       </span>
     );
   } else if (diffDays === 0) {
     return (
       <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
-        ⏳ Task Jatuh Tempo Hari Ini ({dateStr})
+        ⏳ Jatuh Tempo Hari Ini ({dateStr})
       </span>
     );
   } else if (diffDays <= 3) {
     return (
       <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full border bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20">
-        ⏱️ Task H-{diffDays} ({dateStr})
+        ⏱️ H-{diffDays} ({dateStr})
       </span>
     );
   } else {
     return (
       <span className="text-[10px] font-bold px-2.5 py-1 rounded-full border bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700">
-        📅 Deadline Task: {dateStr}
+        📅 Deadline: {dateStr}
       </span>
     );
   }
@@ -162,6 +187,7 @@ export default function TaskAccordion({
   // Target task open if in URL searchParams, otherwise ALL tasks start collapsed
   const [openTaskId, setOpenTaskId] = useState<string | null>(targetTaskId || null);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
+  const [extendTask, setExtendTask] = useState<TaskRow | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [multiplierTask, setMultiplierTask] = useState<TaskRow | null>(null);
 
@@ -291,10 +317,18 @@ export default function TaskAccordion({
                   </span>
                 )}
 
-                {getTaskDeadlineBadge(task.deadline, task.status)}
+                {getTaskDeadlineBadge(task.deadline, task.status, task.extended_deadline)}
 
-                {(workspaceType === 'MENTOR' ? isCoordinator : (canDeleteTask || isLeader || isMentor || isCoordinator)) && (
+                {(workspaceType === 'MENTOR' ? isCoordinator : (canDeleteTask || isLeader || isMentor || isCoordinator || (task.created_by != null && task.created_by === currentUserId))) && (
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setExtendTask(task)}
+                      title="Extend Deadline Task (Admin/Koordinator/Pembuat Task)"
+                      className="w-7 h-7 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition-all flex items-center justify-center text-xs shrink-0 cursor-pointer"
+                    >
+                      ⏳
+                    </button>
                     {isCoordinator && (
                       <button
                         type="button"
@@ -408,6 +442,18 @@ export default function TaskAccordion({
           onSuccess={() => {
             if (typeof window !== 'undefined') window.location.reload();
           }}
+        />
+      )}
+
+      {/* Extend Task Deadline Modal */}
+      {extendTask && (
+        <ExtendDeadlineModal
+          taskId={extendTask.id}
+          taskTitle={extendTask.title}
+          currentDeadline={extendTask.deadline}
+          currentExtendedDeadline={extendTask.extended_deadline}
+          isOpen={!!extendTask}
+          onClose={() => setExtendTask(null)}
         />
       )}
 
