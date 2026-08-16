@@ -105,8 +105,7 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
     if (r.isZeroRev && r.isOnTime) qualMult = 1.21;
     else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;
 
-    const baseFormulaSparks = Math.round(raw * roleMult * qualMult);
-    const weighted = Math.round(baseFormulaSparks * effectiveTaskMult);
+    const weighted = Math.round(raw * roleMult * qualMult * effectiveTaskMult);
     taskSparks += weighted;
     const roleKey = r.role || 'CREATOR';
     roleSparksMap[roleKey] = (roleSparksMap[roleKey] || 0) + weighted;

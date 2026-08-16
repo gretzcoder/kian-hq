@@ -192,9 +192,6 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     const wsId = r.wsId || '';
     const taskId = r.taskId || '';
     const rawSparks = Number(r.sparks) || 8;
-    const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
-    const baseFormulaSparks = Math.round(rawSparks * roleMult * 1.1);
-
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
     const isDesign = r.role === 'DESIGNER' || r.task_type === 'DESIGN' || (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN'));
     const isVideo = r.role === 'VIDEO_EDITOR' || r.task_type === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
@@ -202,7 +199,8 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
     const effectiveTaskMult = customTaskMult !== 1.0 ? customTaskMult : catMult;
 
-    const calculatedSparks = Math.round(baseFormulaSparks * effectiveTaskMult);
+    const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
+    const calculatedSparks = Math.round(rawSparks * roleMult * 1.1 * effectiveTaskMult);
 
     if (r.status === 'ACTIVE') {
       feedItems.push({

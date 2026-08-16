@@ -141,8 +141,7 @@ export async function getSparksManagementOverview(
     if (r.isZeroRev && r.isOnTime) qualMult = 1.21;
     else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;
 
-    const baseFormulaSparks = Math.round(raw * roleMult * qualMult);
-    const weighted = Math.round(baseFormulaSparks * effectiveTaskMult);
+    const weighted = Math.round(raw * roleMult * qualMult * effectiveTaskMult);
     userSparksMap[userId].total += weighted;
     userSparksMap[userId].tasks += 1;
     totalTroopersSparks += weighted;

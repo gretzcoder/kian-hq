@@ -192,7 +192,7 @@ export async function getLeaderboardData(
           ta.user_id AS userId,
           ta.id AS assignmentId,
           ROUND(
-            ROUND( (COALESCE(ta.sparks, 8) * ${roleWeight('ta')}) * ${disciplineMultiplier('ta')} ) *
+            (COALESCE(ta.sparks, 8) * ${roleWeight('ta')} * ${disciplineMultiplier('ta')}) *
             CASE
               WHEN t.sparks_multiplier IS NOT NULL AND t.sparks_multiplier != 1.0 THEN t.sparks_multiplier
               WHEN ta.assignment_role = 'DESIGNER' OR t.task_type = 'DESIGN' OR UPPER(t.title) LIKE '%DESIGN%' THEN ${designMultiplier}
@@ -609,8 +609,6 @@ export async function getSparksHistory(
     if (isZeroRevision && isOnTime) qualityMultiplier = 1.21;
     else if (isZeroRevision || isOnTime) qualityMultiplier = 1.10;
 
-    const baseFormulaSparks = Math.round(rawSparks * roleMultiplier * qualityMultiplier);
-
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
     const isDesign = r.assignmentRole === 'DESIGNER' || r.taskType === 'DESIGN' || (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN'));
     const isVideo = r.assignmentRole === 'VIDEO_EDITOR' || r.taskType === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
@@ -618,7 +616,7 @@ export async function getSparksHistory(
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
     const coordinatorMultiplier = customTaskMult !== 1.0 ? customTaskMult : catMult;
 
-    const calculatedSparks = Math.round(baseFormulaSparks * coordinatorMultiplier);
+    const calculatedSparks = Math.round(rawSparks * roleMultiplier * qualityMultiplier * coordinatorMultiplier);
 
     return {
       assignmentId: r.assignmentId,
