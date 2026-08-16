@@ -1,5 +1,6 @@
 import ReviewActions from '../review/components/ReviewActions';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
+import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 
 export interface QCReviewItem {
   assignment_id: string;
@@ -9,6 +10,8 @@ export interface QCReviewItem {
   lead_approved: number;
   mentor_approved: number;
   coordinator_approved: number;
+  appreciation_note?: string | null;
+  revision_note?: string | null;
   task_id: string;
   task_title: string;
   task_priority: string;
@@ -89,6 +92,24 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
 
             {r.result_url && (
               <SubmittedLinkPreviewer url={r.result_url} autoExpand={false} />
+            )}
+
+            {/* Appreciation Note */}
+            {r.appreciation_note && (
+              <CollapsibleNoteViewer
+                content={r.appreciation_note}
+                badgeLabel="✨ Catatan Improvement Mentor"
+                type="APPRECIATION"
+              />
+            )}
+
+            {/* Revision Note */}
+            {r.revision_note && (
+              <CollapsibleNoteViewer
+                content={r.revision_note}
+                badgeLabel="💬 Catatan Revisi Evaluator"
+                type="REVISION"
+              />
             )}
 
             <ReviewActions

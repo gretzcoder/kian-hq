@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import {
   SYSTEM_CHANGELOG,
   GIT_COMMIT_LOGS,
   getLatestSystemVersion,
-  ChangelogItem,
-  GitCommitLog,
 } from '@/lib/changelog';
 
 export default function ChangelogPage() {
@@ -15,7 +13,25 @@ export default function ChangelogPage() {
   const [activeTab, setActiveTab] = useState<'RELEASES' | 'GIT_COMMITS'>('RELEASES');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-  const [selectedAuthor, setSelectedAuthor] = useState<string>('ALL');
+
+  const [commits, setCommits] = useState<{ id: string; message: string; date: string }[]>(
+    GIT_COMMIT_LOGS.map((c) => ({ id: c.hash, message: c.message, date: c.date }))
+  );
+  const [isLiveSync, setIsLiveSync] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/github/commits')
+      .then((res) => res.json())
+      .then((data: any) => {
+        if (data && data.success && Array.isArray(data.commits) && data.commits.length > 0) {
+          setCommits(data.commits);
+          if (data.source === 'github_live') {
+            setIsLiveSync(true);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Filter changelog releases
   const filteredReleases = useMemo(() => {
@@ -38,34 +54,20 @@ export default function ChangelogPage() {
     });
   }, [searchQuery, selectedCategory]);
 
-  // Unique authors from git commits
-  const uniqueAuthors = useMemo(() => {
-    const authors = Array.from(new Set(GIT_COMMIT_LOGS.map((c) => c.author)));
-    return authors.sort();
-  }, []);
-
   // Filter git commits
   const filteredCommits = useMemo(() => {
-    return GIT_COMMIT_LOGS.filter((commit) => {
+    return commits.filter((commit) => {
       const matchesSearch =
-        commit.hash.toLowerCase().includes(searchQuery.toLowerCase()) ||
         commit.message.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        commit.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
         commit.date.toLowerCase().includes(searchQuery.toLowerCase());
 
-      if (!matchesSearch) return false;
-
-      if (selectedAuthor !== 'ALL' && commit.author !== selectedAuthor) {
-        return false;
-      }
-
-      return true;
+      return matchesSearch;
     });
-  }, [searchQuery, selectedAuthor]);
+  }, [searchQuery, commits]);
 
   const totalReleases = SYSTEM_CHANGELOG.length;
-  const totalCommitsCount = GIT_COMMIT_LOGS.length;
-  const firstCommitDate = GIT_COMMIT_LOGS[GIT_COMMIT_LOGS.length - 1]?.date ?? '2026-07-23';
+  const totalCommitsCount = commits.length;
+  const firstCommitDate = commits[commits.length - 1]?.date ?? '2026-07-23';
 
   return (
     <div className="min-h-screen space-y-5 sm:space-y-6 pb-12 max-w-6xl mx-auto px-1 sm:px-0">
@@ -102,7 +104,7 @@ export default function ChangelogPage() {
             <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
               <span className="text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border border-emerald-500/20 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span>Production Live</span>
+                <span>{isLiveSync ? '🟢 GitHub Live Track' : 'Production Live'}</span>
               </span>
             </div>
           </div>
@@ -155,7 +157,7 @@ export default function ChangelogPage() {
 
       {/* Filter & Search Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800/80 p-3 sm:p-3.5 rounded-2xl shadow-xs">
-        {/* Category / Author Pills */}
+        {/* Category Pills */}
         {activeTab === 'RELEASES' ? (
           <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
             {[
@@ -179,31 +181,11 @@ export default function ChangelogPage() {
             ))}
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
-            <span className="text-[10px] font-black text-zinc-400 uppercase mr-1 shrink-0">Pengembang:</span>
-            <button
-              onClick={() => setSelectedAuthor('ALL')}
-              className={`text-[11px] font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl transition-all whitespace-nowrap shrink-0 ${
-                selectedAuthor === 'ALL'
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
-                  : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800'
-              }`}
-            >
-              Semua Pengembang
-            </button>
-            {uniqueAuthors.map((author) => (
-              <button
-                key={author}
-                onClick={() => setSelectedAuthor(author)}
-                className={`text-[11px] font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl transition-all whitespace-nowrap shrink-0 ${
-                  selectedAuthor === author
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/20'
-                    : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800'
-                }`}
-              >
-                👤 {author}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>GitHub Live Repository Updates</span>
+            </span>
           </div>
         )}
 
@@ -328,7 +310,7 @@ export default function ChangelogPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
             <span className="text-[11px] sm:text-xs font-bold text-zinc-500">
-              Menampilkan {filteredCommits.length} dari {GIT_COMMIT_LOGS.length} total catatan pembaruan:
+              Menampilkan {filteredCommits.length} dari {commits.length} total catatan pembaruan:
             </span>
           </div>
 
@@ -356,33 +338,21 @@ export default function ChangelogPage() {
 
                 return (
                   <div
-                    key={commit.hash + idx}
-                    className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-[#09090b]/80 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-indigo-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 shadow-xs"
+                    key={commit.id + idx}
+                    className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-[#09090b]/80 border border-zinc-200/80 dark:border-zinc-800/80 hover:border-indigo-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 shadow-2xs"
                   >
-                    <div className="flex items-start sm:items-center gap-2.5 min-w-0 flex-1">
-                      <span className="font-mono text-[10px] sm:text-xs font-black bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-lg shrink-0">
-                        #{commit.hash}
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md border shrink-0 ${commitTypeStyle}`}>
+                        {isFeat ? '✨ FITUR' : isFix ? '🐛 FIX' : isStyle ? '🎨 TAMPILAN' : isChore ? '⚙️ SISTEM' : '📝 UPDATE'}
                       </span>
-
-                      <div className="min-w-0 flex-1 space-y-1">
-                        <div className="flex items-start gap-2 flex-wrap">
-                          <span className={`text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded-md border shrink-0 ${commitTypeStyle}`}>
-                            {isFeat ? '✨ FITUR' : isFix ? '🐛 FIX' : isStyle ? '🎨 TAMPILAN' : isChore ? '⚙️ SISTEM' : '📝 UPDATE'}
-                          </span>
-                          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 break-words leading-relaxed flex-1">
-                            {commit.message}
-                          </span>
-                        </div>
-                      </div>
+                      <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100 break-words leading-relaxed flex-1">
+                        {commit.message}
+                      </span>
                     </div>
 
-                    <div className="flex items-center gap-2 sm:gap-3 shrink-0 text-[11px] sm:text-xs text-zinc-400 dark:text-zinc-500 font-medium pt-1.5 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-900 justify-between sm:justify-start">
-                      <span className="flex items-center gap-1">
-                        <span>👤</span>
-                        <strong className="text-zinc-700 dark:text-zinc-300 font-bold">{commit.author}</strong>
-                      </span>
-                      <span>•</span>
-                      <span className="font-mono">{commit.date}</span>
+                    <div className="flex items-center gap-1.5 shrink-0 text-[11px] sm:text-xs text-zinc-400 dark:text-zinc-500 font-medium font-mono self-end sm:self-center">
+                      <span>📅</span>
+                      <span>{commit.date}</span>
                     </div>
                   </div>
                 );

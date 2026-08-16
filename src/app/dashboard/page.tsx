@@ -550,6 +550,8 @@ export default async function DashboardPage() {
       ta.lead_approved,
       ta.mentor_approved,
       ta.coordinator_approved,
+      COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
+      ta.revision_note,
       t.id             AS task_id,
       t.title          AS task_title,
       t.priority       AS task_priority,

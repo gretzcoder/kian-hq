@@ -7,12 +7,15 @@ import ReviewActions from './components/ReviewActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
+import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 
 interface ReviewRow {
   assignment_id:   string;
   assignment_role: string;
   result_url:      string | null;
   submitted_at:    number | null;
+  appreciation_note?: string | null;
+  revision_note?:     string | null;
   task_id:         string;
   task_title:      string;
   task_priority:   string;
@@ -51,6 +54,8 @@ export default async function ReviewPage() {
       ta.lead_approved,
       ta.mentor_approved,
       ta.coordinator_approved,
+      COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
+      ta.revision_note,
       t.id             AS task_id,
       t.title          AS task_title,
       t.priority       AS task_priority,
@@ -217,6 +222,24 @@ export default async function ReviewPage() {
                 )
               ) : (
                 <div className="text-xs text-zinc-400 italic">No result URL submitted</div>
+              )}
+
+              {/* Appreciation / Catatan Improvement Viewer */}
+              {r.appreciation_note && (
+                <CollapsibleNoteViewer
+                  content={r.appreciation_note}
+                  badgeLabel="✨ Catatan Improvement Mentor"
+                  type="APPRECIATION"
+                />
+              )}
+
+              {/* Revision Note Viewer */}
+              {r.revision_note && (
+                <CollapsibleNoteViewer
+                  content={r.revision_note}
+                  badgeLabel="💬 Catatan Revisi Evaluator"
+                  type="REVISION"
+                />
               )}
 
               {/* Action buttons — client component */}
