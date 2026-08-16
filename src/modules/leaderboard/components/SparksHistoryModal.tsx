@@ -501,6 +501,9 @@ export default function SparksHistoryModal({
                       <span>Base: {item.rawSparks}</span>
                       <span>• Role Mult: x{item.roleMultiplier}</span>
                       <span>• Quality Mult: x{item.qualityMultiplier}</span>
+                      {item.coordinatorMultiplier && item.coordinatorMultiplier !== 1.0 && (
+                        <span className="font-bold text-amber-500">• Coordinator Mult: x{item.coordinatorMultiplier}</span>
+                      )}
                     </div>
                   )}
 

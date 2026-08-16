@@ -175,12 +175,31 @@ export async function getLeaderboardData(
     const includeMentorBriefs = !['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
     const isRoleCategory = ['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
 
+    const { results: settingsRows } = await db
+      .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
+      .all();
+
+    let designMultiplier = 1.0;
+    let videoMultiplier = 1.0;
+    for (const row of (settingsRows || []) as any[]) {
+      if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
+      if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
+    }
+
     const query = `
       WITH user_task_sparks AS (
         SELECT
           ta.user_id AS userId,
           ta.id AS assignmentId,
-          (COALESCE(ta.sparks, 8) * ${roleWeight('ta')}) * ${disciplineMultiplier('ta')} AS weightedSparks,
+          ROUND(
+            ROUND( (COALESCE(ta.sparks, 8) * ${roleWeight('ta')}) * ${disciplineMultiplier('ta')} ) *
+            CASE
+              WHEN t.sparks_multiplier IS NOT NULL AND t.sparks_multiplier != 1.0 THEN t.sparks_multiplier
+              WHEN ta.assignment_role = 'DESIGNER' OR t.output_type = 'DESIGN' THEN ${designMultiplier}
+              WHEN ta.assignment_role = 'VIDEO_EDITOR' OR t.output_type = 'VIDEO' THEN ${videoMultiplier}
+              ELSE 1.0
+            END
+          ) AS weightedSparks,
           COALESCE(ta.sparks, 8) AS rawSparks,
           CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev,
           CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime,
@@ -454,6 +473,7 @@ export interface SparksHistoryItem {
   rawSparks: number;
   roleMultiplier: number;
   qualityMultiplier: number;
+  coordinatorMultiplier?: number;
   reviewedAt: number;
   revisionNote: string | null;
   isZeroRevision: boolean;
@@ -470,6 +490,18 @@ export async function getSparksHistory(
 ): Promise<SparksHistoryItem[]> {
   const db = await getDB();
   const now = Math.floor(Date.now() / 1000);
+
+  // Fetch category multipliers
+  const { results: settingsRows } = await db
+    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
+    .all();
+
+  let designMultiplier = 1.0;
+  let videoMultiplier = 1.0;
+  for (const row of (settingsRows || []) as any[]) {
+    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
+    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
+  }
 
   let timeClause = '';
   if (period === 'week') {
@@ -501,6 +533,8 @@ export async function getSparksHistory(
       SELECT
         ta.id   AS assignmentId,
         t.title AS taskTitle,
+        t.output_type AS outputType,
+        COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
         ta.assignment_role                                                              AS assignmentRole,
         ws.name                                                                         AS workspaceName,
         p.name                                                                          AS projectName,
@@ -556,6 +590,7 @@ export async function getSparksHistory(
         rawSparks: sparksVal,
         roleMultiplier: 1,
         qualityMultiplier: 1.0,
+        coordinatorMultiplier: 1.0,
         reviewedAt: Number(r.reviewedAt) || 0,
         revisionNote: r.revisionNote,
         isZeroRevision: true,
@@ -574,7 +609,16 @@ export async function getSparksHistory(
     if (isZeroRevision && isOnTime) qualityMultiplier = 1.21;
     else if (isZeroRevision || isOnTime) qualityMultiplier = 1.10;
 
-    const calculatedSparks = Math.round(rawSparks * roleMultiplier * qualityMultiplier);
+    const baseFormulaSparks = Math.round(rawSparks * roleMultiplier * qualityMultiplier);
+
+    const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
+    const isDesign = r.assignmentRole === 'DESIGNER' || r.outputType === 'DESIGN';
+    const isVideo = r.assignmentRole === 'VIDEO_EDITOR' || r.outputType === 'VIDEO';
+
+    const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
+    const coordinatorMultiplier = customTaskMult !== 1.0 ? customTaskMult : catMult;
+
+    const calculatedSparks = Math.round(baseFormulaSparks * coordinatorMultiplier);
 
     return {
       assignmentId: r.assignmentId,
@@ -586,6 +630,7 @@ export async function getSparksHistory(
       rawSparks,
       roleMultiplier,
       qualityMultiplier,
+      coordinatorMultiplier,
       reviewedAt: Number(r.reviewedAt) || 0,
       revisionNote: r.revisionNote,
       isZeroRevision,

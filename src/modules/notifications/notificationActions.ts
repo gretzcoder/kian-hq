@@ -157,10 +157,23 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
 
   const feedItems: NotificationFeedItem[] = [];
 
+  // 0. Fetch category multipliers
+  const { results: settingsRows } = await db
+    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
+    .all();
+
+  let designMultiplier = 1.0;
+  let videoMultiplier = 1.0;
+  for (const row of (settingsRows || []) as any[]) {
+    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
+    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
+  }
+
   // 1. Fetch user's task assignments & status events
   const { results: myAssignments } = await db
     .prepare(
       `SELECT ta.id, ta.status, ta.assignment_role AS role, ta.sparks, ta.revision_note,
+              t.output_type, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
               COALESCE(ta.reviewed_at, ta.submitted_at, ta.created_at) AS ts,
               t.id AS taskId, t.title AS taskTitle, t.workspace_id AS wsId,
               ws.name AS wsName, p.name AS pName
@@ -180,7 +193,16 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     const taskId = r.taskId || '';
     const rawSparks = Number(r.sparks) || 8;
     const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
-    const calculatedSparks = Math.round(rawSparks * roleMult * 1.1);
+    const baseFormulaSparks = Math.round(rawSparks * roleMult * 1.1);
+
+    const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
+    const isDesign = r.role === 'DESIGNER' || r.output_type === 'DESIGN';
+    const isVideo = r.role === 'VIDEO_EDITOR' || r.output_type === 'VIDEO';
+
+    const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
+    const effectiveTaskMult = customTaskMult !== 1.0 ? customTaskMult : catMult;
+
+    const calculatedSparks = Math.round(baseFormulaSparks * effectiveTaskMult);
 
     if (r.status === 'ACTIVE') {
       feedItems.push({

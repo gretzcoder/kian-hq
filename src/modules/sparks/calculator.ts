@@ -98,14 +98,15 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
     const isVideo = r.role === 'VIDEO_EDITOR' || r.output_type === 'VIDEO';
 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
-    const effectiveTaskMult = customTaskMult > 1.0 ? customTaskMult : catMult;
+    const effectiveTaskMult = customTaskMult !== 1.0 ? customTaskMult : catMult;
 
     const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
     let qualMult = 1.0;
     if (r.isZeroRev && r.isOnTime) qualMult = 1.21;
     else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;
 
-    const weighted = Math.round(raw * roleMult * qualMult * effectiveTaskMult);
+    const baseFormulaSparks = Math.round(raw * roleMult * qualMult);
+    const weighted = Math.round(baseFormulaSparks * effectiveTaskMult);
     taskSparks += weighted;
     const roleKey = r.role || 'CREATOR';
     roleSparksMap[roleKey] = (roleSparksMap[roleKey] || 0) + weighted;
