@@ -17,7 +17,7 @@ export interface SidebarCounts {
 
 export interface NotificationFeedItem {
   id: string;
-  category: 'WORKSPACE' | 'REVIEW' | 'BRIEF' | 'ANNOUNCEMENT' | 'SPARKS';
+  category: 'WORKSPACE' | 'CHAT_WORKSPACE' | 'CHAT_COMMUNITY' | 'REVIEW' | 'BRIEF' | 'ANNOUNCEMENT' | 'SPARKS';
   typeLabel: string;
   icon: string;
   title: string;
@@ -397,14 +397,14 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
       const isMention = (r.message || '').toLowerCase().includes('@');
       feedItems.push({
         id: `notif_wc_${r.id}`,
-        category: 'WORKSPACE',
-        typeLabel: isMention ? 'Sebutan Chat Tim' : 'Pesan Chat Workspace',
+        category: 'CHAT_WORKSPACE',
+        typeLabel: isMention ? '💬 Mention Workspace Chat' : '💬 Pesan Workspace Chat',
         icon: '💬',
         title: isMention ? `Sebutan Chat dari ${r.senderName}` : `Pesan Chat dari ${r.senderName}`,
         subtitle: `"${r.message}" • Workspace: ${r.wsName || 'Workspace'}`,
         targetUrl: `/dashboard/workspace/${r.workspace_id}?tab=chat`,
         createdAt: Number(r.created_at) || 0,
-        color: isMention ? 'border-purple-500/20 bg-purple-500/5' : 'border-blue-500/20 bg-blue-500/5',
+        color: isMention ? 'border-purple-500/20 bg-purple-500/5' : 'border-purple-500/10 bg-purple-500/5',
       });
     }
   } catch (err) {
@@ -436,14 +436,14 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
 
       feedItems.push({
         id: `notif_comm_${r.id}`,
-        category: 'WORKSPACE',
-        typeLabel: isMention ? 'Sebutan Community Chat' : 'Pesan Community Chat',
+        category: 'CHAT_COMMUNITY',
+        typeLabel: isMention ? '🌐 Mention Community Chat' : '🌐 Pesan Community Chat',
         icon: '🌐',
         title: `Community Chat (#${r.channelName})`,
         subtitle: `${r.senderName}: "${r.message}"`,
         targetUrl: `/dashboard/community?channelId=${r.channel_id}`,
         createdAt: createdTs,
-        color: 'border-emerald-500/20 bg-emerald-500/5',
+        color: isMention ? 'border-cyan-500/20 bg-cyan-500/5' : 'border-blue-500/10 bg-blue-500/5',
       });
     }
   } catch (err) {

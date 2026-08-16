@@ -36,7 +36,7 @@ export default function FloatingNotificationDrawer({
   const [items, setItems] = useState<NotificationFeedItem[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-  const [filter, setFilter] = useState<'ALL' | 'WORKSPACE' | 'REVIEW' | 'SPARKS'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'WORKSPACE' | 'CHAT' | 'CHAT_WS' | 'CHAT_COMM' | 'REVIEW' | 'SPARKS'>('ALL');
   const [loading, setLoading] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -105,7 +105,20 @@ export default function FloatingNotificationDrawer({
     markNotificationsAsRead(allIds).catch(() => {});
   }, [items]);
 
-  const handleDismissItem = useCallback((e: React.MouseEvent, notifId: string) => {
+  const handleClearRead = useCallback(() => {
+    setDismissedIds((prev) => {
+      const updated = new Set(prev);
+      readIds.forEach((id) => updated.add(id));
+      try {
+        localStorage.setItem(DISMISSED_NOTIFS_STORAGE_KEY, JSON.stringify(Array.from(updated)));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+  }, [readIds]);
+
+  const handleDismissItem = (e: React.MouseEvent, notifId: string) => {
     e.stopPropagation();
     setDismissedIds((prev) => {
       const updated = new Set(prev);
@@ -118,34 +131,18 @@ export default function FloatingNotificationDrawer({
       return updated;
     });
     markNotificationsAsRead([notifId]).catch(() => {});
-  }, []);
+  };
 
-  const handleClearRead = useCallback(() => {
-    const readItemIds = items.filter((item) => readIds.has(item.id)).map((item) => item.id);
-    setDismissedIds((prev) => {
-      const updated = new Set(prev);
-      readItemIds.forEach((id) => updated.add(id));
-      try {
-        localStorage.setItem(DISMISSED_NOTIFS_STORAGE_KEY, JSON.stringify(Array.from(updated)));
-      } catch {
-        // ignore
-      }
-      return updated;
-    });
-  }, [items, readIds]);
-
-  // Load Notification Feed
-  const loadNotifications = useCallback(() => {
-    setLoading(true);
-    fetchUserNotifications()
-      .then((data) => {
-        setItems(data || []);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error('Failed to load notifications:', err);
-        setLoading(false);
-      });
+  const loadNotifications = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetchUserNotifications();
+      setItems(res || []);
+    } catch (err) {
+      console.error('Failed to load notifications:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   // Realtime synchronization with Web Push ServiceWorker & Client Events
@@ -190,6 +187,9 @@ export default function FloatingNotificationDrawer({
   const displayItems = activeItems.filter((item) => {
     if (filter === 'ALL') return true;
     if (filter === 'WORKSPACE') return item.category === 'WORKSPACE';
+    if (filter === 'CHAT') return item.category === 'CHAT_WORKSPACE' || item.category === 'CHAT_COMMUNITY';
+    if (filter === 'CHAT_WS') return item.category === 'CHAT_WORKSPACE';
+    if (filter === 'CHAT_COMM') return item.category === 'CHAT_COMMUNITY';
     if (filter === 'REVIEW') return item.category === 'REVIEW';
     if (filter === 'SPARKS') return item.category === 'SPARKS' || item.category === 'ANNOUNCEMENT';
     return true;
@@ -240,9 +240,6 @@ export default function FloatingNotificationDrawer({
                 <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100 mt-1">
                   Workflow Tracker & Instant Jump
                 </h3>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Klik notifikasi untuk menuju ke tugas, tinjauan, atau detail terkait.
-                </p>
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">
@@ -258,15 +255,16 @@ export default function FloatingNotificationDrawer({
                   ⚙️
                 </button>
                 <button
+                  type="button"
                   onClick={() => setIsOpen(false)}
-                  className="w-7 h-7 rounded-full border border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-xs font-bold transition-all shrink-0"
+                  className="w-7 h-7 rounded-full border border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-xs font-bold transition-all"
                 >
                   ✕
                 </button>
               </div>
             </div>
 
-            {/* Subheader Actions & Filter Pills */}
+            {/* Controls & Category Filter Bar */}
             <div className="px-4 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">
@@ -292,10 +290,13 @@ export default function FloatingNotificationDrawer({
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                 {[
                   { id: 'ALL', label: '👥 Semua' },
-                  { id: 'WORKSPACE', label: '⚡ Task & Workspace' },
+                  { id: 'WORKSPACE', label: '⚡ Task & Workflow' },
+                  { id: 'CHAT', label: '💬 Chat (Semua)' },
+                  { id: 'CHAT_WS', label: '💬 Workspace Chat' },
+                  { id: 'CHAT_COMM', label: '🌐 Community Chat' },
                   ...(canReview ? [{ id: 'REVIEW', label: '📋 Reviews' }] : []),
                   { id: 'SPARKS', label: '✨ Sparks & Info' },
                 ].map((f) => (
