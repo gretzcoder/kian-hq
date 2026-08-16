@@ -107,14 +107,14 @@ export async function sendWorkspaceMessage(
             SELECT wm.user_id AS id, u.name
             FROM workspace_members wm
             JOIN users u ON wm.user_id = u.id
-            WHERE wm.workspace_id = ? AND wm.user_id != ?
+            WHERE wm.workspace_id = ? AND wm.user_id != ? AND (u.status IS NULL OR u.status = 'ACTIVE')
 
             UNION
 
             SELECT ws.ojt_coordinator_id AS id, u.name
             FROM workspaces ws
             JOIN users u ON ws.ojt_coordinator_id = u.id
-            WHERE ws.id = ? AND ws.ojt_coordinator_id != ?
+            WHERE ws.id = ? AND ws.ojt_coordinator_id != ? AND (u.status IS NULL OR u.status = 'ACTIVE')
 
             UNION
 
@@ -122,7 +122,7 @@ export async function sendWorkspaceMessage(
             FROM task_assignments ta
             JOIN tasks t ON ta.task_id = t.id
             JOIN users u ON ta.user_id = u.id
-            WHERE t.workspace_id = ? AND ta.user_id != ?
+            WHERE t.workspace_id = ? AND ta.user_id != ? AND (u.status IS NULL OR u.status = 'ACTIVE')
           ) target_users
         `)
         .bind(
@@ -149,7 +149,7 @@ export async function sendWorkspaceMessage(
         const bodySnippet = trimmed.length > 100 ? `${trimmed.slice(0, 97)}...` : trimmed || 'Mengirim lampiran';
 
         if (mentionUserIds.length > 0) {
-          sendPushNotificationToUsers(mentionUserIds, 'MENTION', {
+          await sendPushNotificationToUsers(mentionUserIds, 'MENTION', {
             title: `🏷️ Mention dari ${session.name}`,
             body: bodySnippet,
             url: `/dashboard/workspace/${workspaceId}`,
@@ -159,7 +159,7 @@ export async function sendWorkspaceMessage(
         }
 
         if (regularUserIds.length > 0) {
-          sendPushNotificationToUsers(regularUserIds, 'CHAT', {
+          await sendPushNotificationToUsers(regularUserIds, 'CHAT', {
             title: `💬 Pesan Chat dari ${session.name}`,
             body: bodySnippet,
             url: `/dashboard/workspace/${workspaceId}`,

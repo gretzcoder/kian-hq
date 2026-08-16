@@ -594,7 +594,7 @@ export async function sendCommunityMessage(
 
     // Broadcast COMMUNITY_CHAT push notification to all active platform users (excluding sender and mentioned users)
     const otherUsers = (await db
-      .prepare('SELECT id FROM users WHERE id != ? AND is_active = 1')
+      .prepare("SELECT id FROM users WHERE id != ? AND (status IS NULL OR status = 'ACTIVE')")
       .bind(session.userId)
       .all()) as { results: Array<{ id: string }> };
 
