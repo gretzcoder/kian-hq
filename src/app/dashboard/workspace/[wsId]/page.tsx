@@ -117,7 +117,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
     db.prepare("SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1").bind(projectId).first(),
     db.prepare(`
-      SELECT t.id, t.title, t.description, t.status, t.priority, t.deadline, t.start_at, t.created_at, t.task_type, t.parent_task_id, t.revision_note, t.sparks, t.created_by, u.name as creator_name
+      SELECT t.id, t.title, t.description, t.status, t.priority, t.deadline, t.start_at, t.created_at, t.task_type, t.parent_task_id, t.revision_note, t.sparks, t.sparks_multiplier, t.created_by, u.name as creator_name
       FROM tasks t
       LEFT JOIN users u ON t.created_by = u.id
       WHERE t.workspace_id = ? AND t.status != 'DELETED'
@@ -175,12 +175,14 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   // SECURITY GATE & ACCESS CONTROL:
   // Workspace and its contents can ONLY be accessed by workspace members, designated workspace mentor, or Coordinator/Admin
   const isCoordinatorUser =
-    ctx.userType === 'STAFF' &&
-    (ctx.roles.includes('COORDINATOR') ||
-      ctx.roles.includes('EXECUTIVE') ||
-      ctx.can('MANAGE') ||
-      ctx.can('WORKSPACE_MANAGE') ||
-      ctx.permissions.has('ADMIN_SYSTEM'));
+    (ctx.userType === 'STAFF' &&
+      (ctx.roles.includes('COORDINATOR') ||
+        ctx.roles.includes('EXECUTIVE') ||
+        ctx.can('MANAGE') ||
+        ctx.can('WORKSPACE_MANAGE'))) ||
+    ctx.can('SPARKS_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM');
 
   const isWorkspaceMember = members.some((m) => m.userId === session.userId);
   const isDesignatedMentor = workspace.ojt_coordinator_id === session.userId;

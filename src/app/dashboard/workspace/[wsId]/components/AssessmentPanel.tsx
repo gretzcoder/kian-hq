@@ -23,6 +23,8 @@ import { cleanAppreciationNote } from '@/lib/noteUtils';
 import SendReminderButton from '@/components/SendReminderButton';
 import { safeExecuteAction } from '@/lib/safeAction';
 
+import EditTaskMultiplierModal from '@/modules/tasks/components/EditTaskMultiplierModal';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface ReactionItem {
@@ -41,6 +43,7 @@ interface TaskRow {
   start_at?: number | null;
   revision_note?: string | null;
   sparks?: number | null;
+  sparks_multiplier?: number | null;
   created_by?: string | null;
   creator_name?: string | null;
 }
@@ -1186,6 +1189,7 @@ function MentorTaskCard({
   const [showEditModal,            setShowEditModal]            = useState(false);
   const [showConfirmDelete,        setShowConfirmDelete]        = useState(false);
   const [showAddParticipantModal,  setShowAddParticipantModal]  = useState(false);
+  const [showMultiplierModal,      setShowMultiplierModal]      = useState(false);
   const [pendingApprove,           startApproveTransition]      = useTransition();
   const [pendingDelete,            startDeleteTransition]       = useTransition();
 
@@ -1295,6 +1299,20 @@ function MentorTaskCard({
         />
       )}
 
+      {/* Modal Edit Task Multiplier (Koordinator/Admin) */}
+      {showMultiplierModal && (
+        <EditTaskMultiplierModal
+          taskId={task.id}
+          taskTitle={task.title}
+          currentMultiplier={task.sparks_multiplier || 1.0}
+          isOpen={showMultiplierModal}
+          onClose={() => setShowMultiplierModal(false)}
+          onSuccess={() => {
+            if (typeof window !== 'undefined') window.location.reload();
+          }}
+        />
+      )}
+
       {/* Accordion Task Header */}
       <div
         onClick={() => setIsCardExpanded((prev) => !prev)}
@@ -1307,6 +1325,22 @@ function MentorTaskCard({
                 {execLabel}
               </span>
               <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Assessment</span>
+              {task.sparks_multiplier && task.sparks_multiplier > 1.0 && (
+                <span
+                  onClick={(e) => {
+                    if (isCoordinator) {
+                      e.stopPropagation();
+                      setShowMultiplierModal(true);
+                    }
+                  }}
+                  title={isCoordinator ? "Set Sparks Multiplier Khusus Task" : "Sparks Multiplier Khusus Task"}
+                  className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 flex items-center gap-1 font-mono transition-all ${
+                    isCoordinator ? 'cursor-pointer hover:scale-105' : 'cursor-default'
+                  }`}
+                >
+                  ⚡ {task.sparks_multiplier}x
+                </span>
+              )}
               {task.creator_name && (
                 <span className="text-[9px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1" title="Mentor Pembuat Assessment">
                   <span>🎓</span>
@@ -1350,7 +1384,7 @@ function MentorTaskCard({
             <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug">{task.title}</h3>
           </div>
 
-          {/* Progress ring summary + Edit / Delete buttons + Accordion Chevron */}
+          {/* Progress ring summary + Edit / Delete / Multiplier buttons + Accordion Chevron */}
           <div className="flex items-center gap-2 shrink-0">
             <div className="text-right mr-1">
               <p className="text-[10px] font-black text-zinc-500">
@@ -1362,6 +1396,19 @@ function MentorTaskCard({
                 </p>
               )}
             </div>
+            {isCoordinator && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMultiplierModal(true);
+                }}
+                title="Set Sparks Multiplier Khusus Task (Koordinator/Admin)"
+                className="w-8 h-8 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition-all flex items-center justify-center text-xs font-black shrink-0 cursor-pointer"
+              >
+                ⚡
+              </button>
+            )}
             {canEditOrDelete && (
               <>
                 <button

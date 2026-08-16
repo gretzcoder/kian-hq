@@ -17,6 +17,7 @@ export interface PollTaskRow {
   parent_task_id: string | null;
   revision_note?: string | null;
   sparks?: number | null;
+  sparks_multiplier?: number | null;
 }
 
 export interface PollAssignmentRow {
@@ -55,7 +56,7 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
 
   const { results: tasksRaw } = await db
     .prepare(
-      `SELECT id, title, description, status, priority, deadline, start_at, created_at, task_type, parent_task_id, revision_note, sparks
+      `SELECT id, title, description, status, priority, deadline, start_at, created_at, task_type, parent_task_id, revision_note, sparks, sparks_multiplier
        FROM tasks
        WHERE workspace_id = ? AND status != 'DELETED'
        ORDER BY
