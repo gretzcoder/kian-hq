@@ -24,10 +24,23 @@ export interface UserSparksSummary {
 export async function getUserSparksSummary(targetUserId: string): Promise<UserSparksSummary> {
   const db = await getDB();
 
+  // 0. Fetch category multipliers
+  const { results: settingsRows } = await db
+    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
+    .all();
+
+  let designMultiplier = 1.0;
+  let videoMultiplier = 1.0;
+  for (const row of (settingsRows || []) as any[]) {
+    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
+    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
+  }
+
   // 1. Task Assignments
   const { results: taRows } = await db
     .prepare(`
       SELECT ta.id, ta.sparks, ta.assignment_role AS role,
+             t.output_type, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
              CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev,
              CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
       FROM task_assignments ta
@@ -80,12 +93,19 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
   for (const r of taRows as any[]) {
     tasksCompleted += 1;
     const raw = Number(r.sparks) || 8;
+    const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
+    const isDesign = r.role === 'DESIGNER' || r.output_type === 'DESIGN';
+    const isVideo = r.role === 'VIDEO_EDITOR' || r.output_type === 'VIDEO';
+
+    const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
+    const effectiveTaskMult = customTaskMult > 1.0 ? customTaskMult : catMult;
+
     const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
     let qualMult = 1.0;
     if (r.isZeroRev && r.isOnTime) qualMult = 1.21;
     else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;
 
-    const weighted = Math.round(raw * roleMult * qualMult);
+    const weighted = Math.round(raw * roleMult * qualMult * effectiveTaskMult);
     taskSparks += weighted;
     const roleKey = r.role || 'CREATOR';
     roleSparksMap[roleKey] = (roleSparksMap[roleKey] || 0) + weighted;

@@ -59,6 +59,19 @@ export async function ensureSchemaMigrations(db: any) {
       )
     `).run();
   } catch {}
+  try {
+    await db.prepare('ALTER TABLE tasks ADD COLUMN sparks_multiplier REAL DEFAULT 1.0').run();
+  } catch {}
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_by TEXT,
+        updated_at INTEGER
+      )
+    `).run();
+  } catch {}
   migrationDone = true;
 }
 

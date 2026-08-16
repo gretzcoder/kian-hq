@@ -18,6 +18,8 @@ import {
 } from '@/modules/roles/viewAsRoleActions';
 import { getAvailableUsersForImpersonation } from '@/modules/users/impersonationActions';
 
+import { SparksMultiplierFloatingBadge } from '@/components/SparksMultiplierFloatingBadge';
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -149,6 +151,9 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col transition-colors duration-350 overflow-x-hidden w-full relative">
       <AutoRegisterPushListener />
+      {/* Floating Sparks Multiplier Live Badge for all users */}
+      <SparksMultiplierFloatingBadge />
+
       {/* User Impersonation Banner */}
       {session.isImpersonating && (
         <ImpersonationBanner

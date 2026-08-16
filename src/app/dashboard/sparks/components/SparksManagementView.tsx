@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -10,6 +10,7 @@ import {
   resetUserSparksAction,
   restoreUserSparksAction,
 } from '@/modules/sparks/sparksActions';
+import { updateCategoryMultiplierAction } from '@/modules/sparks/multiplierActions';
 import SparksHistoryModal from '@/modules/leaderboard/components/SparksHistoryModal';
 
 interface SparksManagementViewProps {
@@ -23,6 +24,39 @@ export default function SparksManagementView({ overview, period }: SparksManagem
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [pending, startTransition] = useTransition();
+
+  // Multiplier States
+  const [designMult, setDesignMult] = useState<number>(1.0);
+  const [videoMult, setVideoMult] = useState<number>(1.0);
+  const [savingCat, setSavingCat] = useState<'DESIGN' | 'VIDEO' | null>(null);
+
+  useEffect(() => {
+    fetch('/api/sparks/multipliers')
+      .then((res) => res.json())
+      .then((data: any) => {
+        if (data && data.success) {
+          setDesignMult(data.designMultiplier || 1.0);
+          setVideoMult(data.videoMultiplier || 1.0);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveCategoryMultiplier = (cat: 'DESIGN' | 'VIDEO', val: number) => {
+    setSavingCat(cat);
+    startTransition(async () => {
+      const res = await updateCategoryMultiplierAction(cat, val);
+      if (res.success) {
+        setMsg({ type: 'success', text: res.message || `Multiplier ${cat} berhasil diperbarui!` });
+        if (cat === 'DESIGN') setDesignMult(val);
+        if (cat === 'VIDEO') setVideoMult(val);
+        router.refresh();
+      } else {
+        setMsg({ type: 'error', text: res.error || 'Gagal menyimpan multiplier' });
+      }
+      setSavingCat(null);
+    });
+  };
 
   // Modals state
   const [appreciationModalUser, setAppreciationModalUser] = useState<UserSparksRankItem | null>(null);
@@ -247,6 +281,86 @@ export default function SparksManagementView({ overview, period }: SparksManagem
               {overview.stats.appreciationSparks.toLocaleString()}
             </span>
             <span className="text-xs text-pink-500 font-bold">✨</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Category Multipliers Control Panel (Design & Video) ── */}
+      <div className="bg-gradient-to-r from-purple-950/40 via-zinc-900/60 to-indigo-950/40 border border-purple-500/20 rounded-3xl p-5 sm:p-6 space-y-4 shadow-md backdrop-blur-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-500/15 pb-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center font-black text-sm shadow-xs">
+              ⚡
+            </span>
+            <div>
+              <h2 className="text-sm font-black text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <span>Sparks Multiplier Management</span>
+                <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                  Koordinator & Admin
+                </span>
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Atur pengali poin Sparks secara global berdasarkan kategori tugas (Design / Video).
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Design Multiplier Box */}
+          <div className="bg-white/80 dark:bg-zinc-900/80 border border-purple-500/20 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-purple-600 dark:text-purple-400 flex items-center gap-1.5 uppercase tracking-wider">
+                <span>🎨</span> Kategori Design Tasks
+              </span>
+              <span className="font-mono text-xs font-black bg-purple-500/10 text-purple-600 dark:text-purple-300 px-2.5 py-0.5 rounded-full border border-purple-500/20">
+                Current: {designMult}x
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[1.0, 1.25, 1.5, 2.0, 2.5, 3.0].map((m) => (
+                <button
+                  key={m}
+                  onClick={() => handleSaveCategoryMultiplier('DESIGN', m)}
+                  disabled={savingCat !== null}
+                  className={`text-xs font-black px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                    designMult === m
+                      ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-500/20 scale-105'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-purple-400'
+                  }`}
+                >
+                  {m}x
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Video Multiplier Box */}
+          <div className="bg-white/80 dark:bg-zinc-900/80 border border-amber-500/20 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                <span>🎬</span> Kategori Video Tasks
+              </span>
+              <span className="font-mono text-xs font-black bg-amber-500/10 text-amber-600 dark:text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                Current: {videoMult}x
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[1.0, 1.25, 1.5, 2.0, 2.5, 3.0].map((m) => (
+                <button
+                  key={m}
+                  onClick={() => handleSaveCategoryMultiplier('VIDEO', m)}
+                  disabled={savingCat !== null}
+                  className={`text-xs font-black px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                    videoMult === m
+                      ? 'bg-amber-600 text-white border-amber-400 shadow-md shadow-amber-500/20 scale-105'
+                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-amber-400'
+                  }`}
+                >
+                  {m}x
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

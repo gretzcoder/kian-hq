@@ -7,6 +7,8 @@ import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
 import { updateTask, deleteTask } from '@/modules/tasks/actions';
 
+import EditTaskMultiplierModal from '@/modules/tasks/components/EditTaskMultiplierModal';
+
 interface TaskAssignment {
   id: string;
   task_id: string;
@@ -35,6 +37,7 @@ interface TaskRow {
   created_at: number;
   task_type: string;
   parent_task_id: string | null;
+  sparks_multiplier?: number;
 }
 
 interface Member {
@@ -160,6 +163,7 @@ export default function TaskAccordion({
   const [openTaskId, setOpenTaskId] = useState<string | null>(targetTaskId || null);
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
+  const [multiplierTask, setMultiplierTask] = useState<TaskRow | null>(null);
 
   useEffect(() => {
     if (targetTaskId) {
@@ -268,12 +272,37 @@ export default function TaskAccordion({
                 )}
               </div>
 
-              {/* Far right side: Task Deadline Badge + Edit/Delete Buttons + chevron */}
+              {/* Far right side: Task Deadline Badge + Multiplier Badge + Edit/Delete Buttons + chevron */}
               <div className="flex items-center gap-2 shrink-0 self-center">
+                {task.sparks_multiplier && task.sparks_multiplier > 1.0 && (
+                  <span
+                    onClick={(e) => {
+                      if (isCoordinator || isMentor) {
+                        e.stopPropagation();
+                        setMultiplierTask(task);
+                      }
+                    }}
+                    title="Sparks Multiplier Khusus Task"
+                    className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 flex items-center gap-1 font-mono cursor-pointer hover:scale-105 transition-all"
+                  >
+                    ⚡ {task.sparks_multiplier}x
+                  </span>
+                )}
+
                 {getTaskDeadlineBadge(task.deadline, task.status)}
 
                 {(workspaceType === 'MENTOR' ? isCoordinator : (canDeleteTask || isLeader || isMentor || isCoordinator)) && (
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    {(isCoordinator || isMentor) && (
+                      <button
+                        type="button"
+                        onClick={() => setMultiplierTask(task)}
+                        title="Set Sparks Multiplier Khusus Task"
+                        className="w-7 h-7 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition-all flex items-center justify-center text-xs font-black"
+                      >
+                        ⚡
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setEditingTask(task)}
@@ -363,6 +392,20 @@ export default function TaskAccordion({
         <EditTaskModal
           task={editingTask}
           onClose={() => setEditingTask(null)}
+        />
+      )}
+
+      {/* Edit Task Multiplier Modal */}
+      {multiplierTask && (
+        <EditTaskMultiplierModal
+          taskId={multiplierTask.id}
+          taskTitle={multiplierTask.title}
+          currentMultiplier={multiplierTask.sparks_multiplier || 1.0}
+          isOpen={!!multiplierTask}
+          onClose={() => setMultiplierTask(null)}
+          onSuccess={() => {
+            if (typeof window !== 'undefined') window.location.reload();
+          }}
         />
       )}
 
