@@ -45,13 +45,13 @@ export async function getSparksMultipliersData(): Promise<SparksMultipliersState
 
   // Fetch tasks with custom multipliers (> 1.0)
   const { results: taskRows } = await db
-    .prepare("SELECT id, title, output_type, sparks_multiplier FROM tasks WHERE sparks_multiplier > 1.0 AND status != 'DELETED'")
+    .prepare("SELECT id, title, task_type, sparks_multiplier FROM tasks WHERE sparks_multiplier > 1.0 AND status != 'DELETED'")
     .all();
 
   const activeMultiplierTasks = ((taskRows || []) as any[]).map((t) => ({
     id: t.id,
     title: t.title,
-    outputType: t.output_type || 'GENERAL',
+    outputType: t.task_type || 'GENERAL',
     multiplier: Number(t.sparks_multiplier) || 1.0,
   }));
 

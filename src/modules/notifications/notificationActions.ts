@@ -173,7 +173,7 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
   const { results: myAssignments } = await db
     .prepare(
       `SELECT ta.id, ta.status, ta.assignment_role AS role, ta.sparks, ta.revision_note,
-              t.output_type, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
+              t.task_type, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
               COALESCE(ta.reviewed_at, ta.submitted_at, ta.created_at) AS ts,
               t.id AS taskId, t.title AS taskTitle, t.workspace_id AS wsId,
               ws.name AS wsName, p.name AS pName
@@ -196,8 +196,8 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     const baseFormulaSparks = Math.round(rawSparks * roleMult * 1.1);
 
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
-    const isDesign = r.role === 'DESIGNER' || r.output_type === 'DESIGN';
-    const isVideo = r.role === 'VIDEO_EDITOR' || r.output_type === 'VIDEO';
+    const isDesign = r.role === 'DESIGNER' || r.task_type === 'DESIGN' || (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN'));
+    const isVideo = r.role === 'VIDEO_EDITOR' || r.task_type === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
     const effectiveTaskMult = customTaskMult !== 1.0 ? customTaskMult : catMult;

@@ -195,8 +195,8 @@ export async function getLeaderboardData(
             ROUND( (COALESCE(ta.sparks, 8) * ${roleWeight('ta')}) * ${disciplineMultiplier('ta')} ) *
             CASE
               WHEN t.sparks_multiplier IS NOT NULL AND t.sparks_multiplier != 1.0 THEN t.sparks_multiplier
-              WHEN ta.assignment_role = 'DESIGNER' OR t.output_type = 'DESIGN' THEN ${designMultiplier}
-              WHEN ta.assignment_role = 'VIDEO_EDITOR' OR t.output_type = 'VIDEO' THEN ${videoMultiplier}
+              WHEN ta.assignment_role = 'DESIGNER' OR t.task_type = 'DESIGN' OR UPPER(t.title) LIKE '%DESIGN%' THEN ${designMultiplier}
+              WHEN ta.assignment_role = 'VIDEO_EDITOR' OR t.task_type = 'VIDEO' OR UPPER(t.title) LIKE '%VIDEO%' THEN ${videoMultiplier}
               ELSE 1.0
             END
           ) AS weightedSparks,
@@ -533,7 +533,7 @@ export async function getSparksHistory(
       SELECT
         ta.id   AS assignmentId,
         t.title AS taskTitle,
-        t.output_type AS outputType,
+        t.task_type AS taskType,
         COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
         ta.assignment_role                                                              AS assignmentRole,
         ws.name                                                                         AS workspaceName,
@@ -612,8 +612,8 @@ export async function getSparksHistory(
     const baseFormulaSparks = Math.round(rawSparks * roleMultiplier * qualityMultiplier);
 
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
-    const isDesign = r.assignmentRole === 'DESIGNER' || r.outputType === 'DESIGN';
-    const isVideo = r.assignmentRole === 'VIDEO_EDITOR' || r.outputType === 'VIDEO';
+    const isDesign = r.assignmentRole === 'DESIGNER' || r.taskType === 'DESIGN' || (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN'));
+    const isVideo = r.assignmentRole === 'VIDEO_EDITOR' || r.taskType === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
     const coordinatorMultiplier = customTaskMult !== 1.0 ? customTaskMult : catMult;
