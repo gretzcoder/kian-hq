@@ -78,6 +78,12 @@ export async function ensureSchemaMigrations(db: any) {
   try {
     await db.prepare('ALTER TABLE user_notification_settings ADD COLUMN notify_community_chat INTEGER DEFAULT 1').run();
   } catch {}
+  try {
+    await db.prepare('UPDATE user_notification_settings SET notify_community_chat = 1 WHERE notify_community_chat IS NULL').run();
+  } catch {}
+  try {
+    await db.prepare('UPDATE user_notification_settings SET notify_chat = 1 WHERE notify_chat IS NULL').run();
+  } catch {}
   migrationDone = true;
 }
 

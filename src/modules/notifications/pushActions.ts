@@ -59,12 +59,12 @@ export async function getUserNotificationSettings(
   }
 
   return {
-    notify_chat: Boolean(row.notify_chat),
-    notify_community_chat: row.notify_community_chat !== undefined ? Boolean(row.notify_community_chat) : true,
-    notify_mention: Boolean(row.notify_mention),
-    notify_task: Boolean(row.notify_task),
-    notify_deadline: Boolean(row.notify_deadline),
-    notify_announcement: Boolean(row.notify_announcement),
+    notify_chat: row.notify_chat !== 0 && (row as any).notify_chat !== false,
+    notify_community_chat: row.notify_community_chat !== 0 && (row as any).notify_community_chat !== false,
+    notify_mention: row.notify_mention !== 0 && (row as any).notify_mention !== false,
+    notify_task: row.notify_task !== 0 && (row as any).notify_task !== false,
+    notify_deadline: row.notify_deadline !== 0 && (row as any).notify_deadline !== false,
+    notify_announcement: row.notify_announcement !== 0 && (row as any).notify_announcement !== false,
   };
 }
 
@@ -192,12 +192,12 @@ export async function sendPushNotificationToUser(
     const settings = await getUserNotificationSettings(userId);
 
     // Check user preference toggle for this notification category
-    if (category === 'CHAT' && !settings.notify_chat) return;
-    if (category === 'COMMUNITY_CHAT' && !settings.notify_community_chat) return;
-    if (category === 'MENTION' && !settings.notify_mention) return;
-    if (category === 'TASK' && !settings.notify_task) return;
-    if (category === 'DEADLINE' && !settings.notify_deadline) return;
-    if (category === 'ANNOUNCEMENT' && !settings.notify_announcement) return;
+    if (category === 'CHAT' && settings.notify_chat === false) return;
+    if (category === 'COMMUNITY_CHAT' && settings.notify_community_chat === false) return;
+    if (category === 'MENTION' && settings.notify_mention === false) return;
+    if (category === 'TASK' && settings.notify_task === false) return;
+    if (category === 'DEADLINE' && settings.notify_deadline === false) return;
+    if (category === 'ANNOUNCEMENT' && settings.notify_announcement === false) return;
 
     const db = await getDB();
     const { results } = await db

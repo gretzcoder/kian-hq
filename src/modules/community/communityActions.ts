@@ -604,10 +604,12 @@ export async function sendCommunityMessage(
 
     if (targetUserIds.length > 0) {
       const cleanMessageText = message.slice(0, 90) + (message.length > 90 ? '...' : '');
-      sendPushNotificationToUsers(targetUserIds, 'COMMUNITY_CHAT', {
+      await sendPushNotificationToUsers(targetUserIds, 'COMMUNITY_CHAT', {
         title: `🌐 Community Chat (#${channelName})`,
         body: `${session.name}: "${cleanMessageText}"`,
         url: `/dashboard/community?channelId=${channelId}`,
+        category: 'COMMUNITY_CHAT',
+        tag: `comm_${channelId}`,
       }).catch((err) => console.error('Community chat push notification error:', err));
     }
   } catch (err) {
