@@ -3,7 +3,7 @@
 import { getSession } from '@/modules/auth/session';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
-import { sendPushNotificationToUser } from '@/modules/notifications/pushActions';
+import { sendPushNotificationToUser, sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
 import { getActiveSimulatedRole } from '@/modules/roles/viewAsRoleActions';
 import { revalidatePath } from 'next/cache';
 
@@ -548,7 +548,15 @@ export async function sendCommunityMessage(
     .run();
 
   try {
+    const channelRow = (await db
+      .prepare('SELECT name FROM community_channels WHERE id = ?')
+      .bind(channelId)
+      .first()) as { name: string } | null;
+    const channelName = channelRow?.name || 'community';
+
+    const mentionedUserIds: string[] = [];
     const mentionMatches = message.match(/@[\w.-]+/g);
+
     if (mentionMatches && mentionMatches.length > 0) {
       const allUsers = (await db.prepare('SELECT id, name, email FROM users').all()) as {
         results: Array<{ id: string; name: string; email: string }>;
@@ -570,6 +578,7 @@ export async function sendCommunityMessage(
         });
 
         if (targetUser && targetUser.id !== session.userId) {
+          mentionedUserIds.push(targetUser.id);
           await sendPushNotificationToUser(
             targetUser.id,
             'MENTION',
@@ -582,8 +591,27 @@ export async function sendCommunityMessage(
         }
       }
     }
+
+    // Broadcast COMMUNITY_CHAT push notification to all active platform users (excluding sender and mentioned users)
+    const otherUsers = (await db
+      .prepare('SELECT id FROM users WHERE id != ? AND is_active = 1')
+      .bind(session.userId)
+      .all()) as { results: Array<{ id: string }> };
+
+    const targetUserIds = (otherUsers.results || [])
+      .map((u) => u.id)
+      .filter((uid) => !mentionedUserIds.includes(uid));
+
+    if (targetUserIds.length > 0) {
+      const cleanMessageText = message.slice(0, 90) + (message.length > 90 ? '...' : '');
+      sendPushNotificationToUsers(targetUserIds, 'COMMUNITY_CHAT', {
+        title: `🌐 Community Chat (#${channelName})`,
+        body: `${session.name}: "${cleanMessageText}"`,
+        url: `/dashboard/community?channelId=${channelId}`,
+      }).catch((err) => console.error('Community chat push notification error:', err));
+    }
   } catch (err) {
-    console.error('Mention push notification error:', err);
+    console.error('Community chat push notification error:', err);
   }
 
   return { success: true, messageId: id };

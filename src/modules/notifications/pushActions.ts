@@ -6,6 +6,7 @@ import { sendWebPushNotification, PushPayload, StoredSubscription } from './webP
 
 export interface UserNotificationSettings {
   notify_chat: boolean;
+  notify_community_chat: boolean;
   notify_mention: boolean;
   notify_task: boolean;
   notify_deadline: boolean;
@@ -23,6 +24,7 @@ export async function getUserNotificationSettings(
   if (!userId) {
     return {
       notify_chat: true,
+      notify_community_chat: true,
       notify_mention: true,
       notify_task: true,
       notify_deadline: true,
@@ -33,11 +35,12 @@ export async function getUserNotificationSettings(
   const db = await getDB();
   const row = (await db
     .prepare(
-      'SELECT notify_chat, notify_mention, notify_task, notify_deadline, notify_announcement FROM user_notification_settings WHERE user_id = ?'
+      'SELECT notify_chat, notify_community_chat, notify_mention, notify_task, notify_deadline, notify_announcement FROM user_notification_settings WHERE user_id = ?'
     )
     .bind(userId)
     .first()) as {
     notify_chat: number;
+    notify_community_chat?: number;
     notify_mention: number;
     notify_task: number;
     notify_deadline: number;
@@ -47,6 +50,7 @@ export async function getUserNotificationSettings(
   if (!row) {
     return {
       notify_chat: true,
+      notify_community_chat: true,
       notify_mention: true,
       notify_task: true,
       notify_deadline: true,
@@ -56,6 +60,7 @@ export async function getUserNotificationSettings(
 
   return {
     notify_chat: Boolean(row.notify_chat),
+    notify_community_chat: row.notify_community_chat !== undefined ? Boolean(row.notify_community_chat) : true,
     notify_mention: Boolean(row.notify_mention),
     notify_task: Boolean(row.notify_task),
     notify_deadline: Boolean(row.notify_deadline),
@@ -79,6 +84,7 @@ export async function updateUserNotificationSettings(
 
   const updated: UserNotificationSettings = {
     notify_chat: settings.notify_chat ?? current.notify_chat,
+    notify_community_chat: settings.notify_community_chat ?? current.notify_community_chat,
     notify_mention: settings.notify_mention ?? current.notify_mention,
     notify_task: settings.notify_task ?? current.notify_task,
     notify_deadline: settings.notify_deadline ?? current.notify_deadline,
@@ -90,10 +96,11 @@ export async function updateUserNotificationSettings(
   await db
     .prepare(
       `INSERT INTO user_notification_settings
-       (user_id, notify_chat, notify_mention, notify_task, notify_deadline, notify_announcement, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+       (user_id, notify_chat, notify_community_chat, notify_mention, notify_task, notify_deadline, notify_announcement, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET
          notify_chat = excluded.notify_chat,
+         notify_community_chat = excluded.notify_community_chat,
          notify_mention = excluded.notify_mention,
          notify_task = excluded.notify_task,
          notify_deadline = excluded.notify_deadline,
@@ -103,6 +110,7 @@ export async function updateUserNotificationSettings(
     .bind(
       session.userId,
       updated.notify_chat ? 1 : 0,
+      updated.notify_community_chat ? 1 : 0,
       updated.notify_mention ? 1 : 0,
       updated.notify_task ? 1 : 0,
       updated.notify_deadline ? 1 : 0,
@@ -132,7 +140,7 @@ export async function savePushSubscription(subscriptionData: {
 
   const db = await getDB();
   const now = Math.floor(Date.now() / 1000);
-  const id = `sub_${session.userId.slice(0, 8)}_${Math.random().toString(36).substring(2, 9)}`;
+  const id = `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
   await db
     .prepare(
@@ -175,7 +183,7 @@ export async function deletePushSubscription(
  */
 export async function sendPushNotificationToUser(
   userId: string,
-  category: 'CHAT' | 'MENTION' | 'TASK' | 'DEADLINE' | 'ANNOUNCEMENT',
+  category: 'CHAT' | 'COMMUNITY_CHAT' | 'MENTION' | 'TASK' | 'DEADLINE' | 'ANNOUNCEMENT',
   payload: PushPayload
 ): Promise<void> {
   if (!userId) return;
@@ -185,6 +193,7 @@ export async function sendPushNotificationToUser(
 
     // Check user preference toggle for this notification category
     if (category === 'CHAT' && !settings.notify_chat) return;
+    if (category === 'COMMUNITY_CHAT' && !settings.notify_community_chat) return;
     if (category === 'MENTION' && !settings.notify_mention) return;
     if (category === 'TASK' && !settings.notify_task) return;
     if (category === 'DEADLINE' && !settings.notify_deadline) return;
@@ -217,7 +226,7 @@ export async function sendPushNotificationToUser(
  */
 export async function sendPushNotificationToUsers(
   userIds: string[],
-  category: 'CHAT' | 'MENTION' | 'TASK' | 'DEADLINE' | 'ANNOUNCEMENT',
+  category: 'CHAT' | 'COMMUNITY_CHAT' | 'MENTION' | 'TASK' | 'DEADLINE' | 'ANNOUNCEMENT',
   payload: PushPayload
 ): Promise<void> {
   const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));

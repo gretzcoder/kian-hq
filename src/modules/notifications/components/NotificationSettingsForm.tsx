@@ -246,6 +246,34 @@ export default function NotificationSettingsForm({ initialSettings }: Notificati
             </button>
           </div>
 
+          {/* 2. Community Chat */}
+          <div className="py-4 flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <span>🌐</span> Pesan Community Chat Platform
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Terima notifikasi saat ada pesan baru dikirim di channel Community Chat platform.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleToggleSetting('notify_community_chat')}
+              disabled={isPending}
+              className={`w-12 h-6 rounded-full transition-colors relative border shrink-0 ${
+                settings.notify_community_chat
+                  ? 'bg-purple-600 border-purple-500'
+                  : 'bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  settings.notify_community_chat ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
           {/* 2. Mention */}
           <div className="py-4 flex items-center justify-between gap-4">
             <div className="space-y-0.5">

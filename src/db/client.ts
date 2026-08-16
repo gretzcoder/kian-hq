@@ -75,6 +75,9 @@ export async function ensureSchemaMigrations(db: any) {
   try {
     await db.prepare('ALTER TABLE users ADD COLUMN feature_tour_completed INTEGER DEFAULT 0').run();
   } catch {}
+  try {
+    await db.prepare('ALTER TABLE user_notification_settings ADD COLUMN notify_community_chat INTEGER DEFAULT 1').run();
+  } catch {}
   migrationDone = true;
 }
 
