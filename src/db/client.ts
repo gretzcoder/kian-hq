@@ -72,6 +72,9 @@ export async function ensureSchemaMigrations(db: any) {
       )
     `).run();
   } catch {}
+  try {
+    await db.prepare('ALTER TABLE users ADD COLUMN feature_tour_completed INTEGER DEFAULT 0').run();
+  } catch {}
   migrationDone = true;
 }
 

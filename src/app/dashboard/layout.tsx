@@ -6,6 +6,7 @@ import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import DashboardSidebar from './components/DashboardSidebar';
 import TimeGreeting from './components/TimeGreeting';
 import OnboardingModal from '@/modules/profile/components/OnboardingModal';
+import { FeatureTourModal } from '@/modules/profile/components/FeatureTourModal';
 import ViewAsRoleBanner from '@/modules/roles/components/ViewAsRoleBanner';
 import ImpersonationBanner from '@/modules/users/components/ImpersonationBanner';
 import FloatingNotificationDrawer from '@/modules/notifications/components/FloatingNotificationDrawer';
@@ -40,7 +41,7 @@ export default async function DashboardLayout({
   const isCoordinator =
     ctx.userType === 'STAFF' &&
     (ctx.can('MANAGE') || ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE'));
-  const canManageSparks = ctx.can('SPARKS_MANAGE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
+  const canManageSparks = ctx.can('SPARKS_MANAGAE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
 
   // Resolve View As Role & Impersonation simulation options
   const isAuthorizedForViewAsRole = await isAuthorizedForViewAs();
@@ -51,9 +52,9 @@ export default async function DashboardLayout({
   // Fetch onboarding status, avatar, and all badge seed data in one parallel batch
   const [userRow, annRaw, wsDataRaw, reviewCountRaw] = await Promise.all([
     db
-      .prepare('SELECT onboarding_completed, avatar_url FROM users WHERE id = ?')
+      .prepare('SELECT onboarding_completed, feature_tour_completed, avatar_url FROM users WHERE id = ?')
       .bind(session.userId)
-      .first() as Promise<{ onboarding_completed: number; avatar_url: string | null } | null>,
+      .first() as Promise<{ onboarding_completed: number; feature_tour_completed?: number; avatar_url: string | null } | null>,
 
     // All announcement timestamps — no LIMIT (accurate badge count)
     db
@@ -123,7 +124,10 @@ export default async function DashboardLayout({
       : Promise.resolve(null),
   ]);
 
-  const showOnboarding    = userRow ? userRow.onboarding_completed === 0 : false;
+  const showProfileOnboarding = userRow ? userRow.onboarding_completed === 0 : false;
+  const showFeatureTour       = userRow ? userRow.onboarding_completed === 1 && (userRow.feature_tour_completed === 0 || !userRow.feature_tour_completed) : false;
+  const isDashboardLocked     = showProfileOnboarding || showFeatureTour;
+
   const userAvatar        = userRow?.avatar_url || session.avatar || null;
   const announcementTimestamps = (annRaw.results || []).map((r) => r.created_at);
   const workspaceData     = (wsDataRaw.results || []).map((r) => ({ wsId: r.wsId, latestTs: r.latestTs }));
@@ -173,12 +177,23 @@ export default async function DashboardLayout({
       />
 
       <div className="flex-1 w-full flex flex-col lg:flex-row min-w-0 overflow-x-hidden">
-        {/* Onboarding Modal Overlay */}
-        {showOnboarding && (
+        {/* Step 1: Initial Profile Onboarding Modal Overlay */}
+        {showProfileOnboarding && (
           <OnboardingModal
             initialName={session.name}
             isStaff={ctx.userType === 'STAFF'}
             isImpersonating={session.isImpersonating}
+          />
+        )}
+
+        {/* Step 2: Feature Tour Onboarding Modal Overlay (Mandatory 1x, Non-skippable) */}
+        {!showProfileOnboarding && showFeatureTour && (
+          <FeatureTourModal
+            userName={session.name}
+            userType={ctx.userType}
+            roles={ctx.roles}
+            permissions={Array.from(ctx.permissions)}
+            isMentor={isMentor}
           />
         )}
 
@@ -194,7 +209,7 @@ export default async function DashboardLayout({
           canManageSparks={canManageSparks}
           isOJT={isOJT}
           isMentor={isMentor}
-          isLocked={showOnboarding}
+          isLocked={isDashboardLocked}
           announcementTimestamps={announcementTimestamps}
           workspaceData={workspaceData}
           pendingReviewCount={pendingReviewCount}

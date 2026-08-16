@@ -315,3 +315,17 @@ export async function changePassword(currentPassword: string, newPassword: strin
   revalidatePath('/dashboard/profile');
   return { success: true };
 }
+
+/**
+ * Mark feature tour onboarding as completed (1x per account, mandatory).
+ */
+export async function completeFeatureTourAction() {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Tidak terautentikasi.' };
+
+  const db = await getDB();
+  await db.prepare('UPDATE users SET feature_tour_completed = 1 WHERE id = ?').bind(session.userId).run();
+
+  revalidatePath('/dashboard');
+  return { success: true };
+}
