@@ -8,6 +8,7 @@ export interface LeaderboardUser {
   userId: string;
   userName: string;
   userEmail: string;
+  userAvatar?: string | null;
   totalSparks: number;
   tasksCompleted: number;
   zeroRevisionCount: number;
@@ -31,6 +32,7 @@ export interface CoordinatorLeaderboardItem {
   userId: string;
   userName: string;
   userEmail: string;
+  userAvatar?: string | null;
   reviewsProcessed: number;
   avgSparksAwarded: number;
   totalSparksGiven: number;
@@ -241,6 +243,7 @@ export async function getLeaderboardData(
         u.id    AS userId,
         u.name  AS userName,
         u.email AS userEmail,
+        u.avatar_url AS userAvatar,
         u.user_type AS userType,
         (
           SELECT GROUP_CONCAT(r.name)
@@ -303,6 +306,7 @@ export async function getLeaderboardData(
         userId: r.userId,
         userName: r.userName || 'Anonymous',
         userEmail: r.userEmail,
+        userAvatar: r.userAvatar || null,
         totalSparks: Math.round(Number(r.totalSparksVal) || 0),
         tasksCompleted: completed,
         zeroRevisionCount: zeroRev,
@@ -366,6 +370,7 @@ export async function getLeaderboardData(
         u.id    AS userId,
         u.name  AS userName,
         u.email AS userEmail,
+        u.avatar_url AS userAvatar,
         COALESCE(SUM(ps.personalTasks),      0) AS tasksCompleted,
         COALESCE(SUM(ps.zeroRevisionCount),  0) AS zeroRevisionCount,
         COALESCE(SUM(ps.onTimeCount),        0) AS onTimeCount,
@@ -388,6 +393,7 @@ export async function getLeaderboardData(
         userId: r.userId,
         userName: r.userName || 'Anonymous',
         userEmail: r.userEmail,
+        userAvatar: r.userAvatar || null,
         totalSparks: Math.round(Number(r.totalSparks) || 0),
         tasksCompleted: Number(r.tasksCompleted) || 0,
         zeroRevisionCount: Number(r.zeroRevisionCount) || 0,

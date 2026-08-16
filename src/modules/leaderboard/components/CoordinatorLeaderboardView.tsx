@@ -9,11 +9,25 @@ interface CoordinatorItem {
   userId: string;
   userName: string;
   userEmail: string;
+  userAvatar?: string | null;
   reviewsProcessed: number;
   avgSparksAwarded: number;
   totalSparksGiven: number;
   speedBonusCount: number;
   coordinatorScore: number;
+}
+
+function getCleanAvatarUrl(url: string | null | undefined): string | null {
+  if (!url || !url.trim()) return null;
+  let clean = url.trim();
+  const gdriveMatch = clean.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (gdriveMatch && gdriveMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${gdriveMatch[1]}`;
+  }
+  if (clean.includes('dropbox.com')) {
+    clean = clean.replace('?dl=0', '?dl=1').replace('dl=0', 'dl=1');
+  }
+  return clean;
 }
 
 export function CoordinatorLeaderboardView({
@@ -70,6 +84,7 @@ export function CoordinatorLeaderboardView({
         <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
           {data.map((c) => {
             const isMe = c.userId === currentUserId;
+            const avatarUrl = getCleanAvatarUrl(c.userAvatar);
             return (
               <div
                 key={c.userId}
@@ -81,6 +96,17 @@ export function CoordinatorLeaderboardView({
                   <span className="w-8 text-center text-sm font-black font-mono text-zinc-400">
                     #{c.rank}
                   </span>
+                  <Link
+                    href={`/dashboard/profile?userId=${c.userId}`}
+                    className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center font-bold text-sm text-zinc-700 dark:text-zinc-300 hover:ring-2 hover:ring-amber-500 transition-all shrink-0 overflow-hidden shadow-xs"
+                    title="Kunjungi Profil Pengguna"
+                  >
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={c.userName} className="w-full h-full object-cover" />
+                    ) : (
+                      c.userName.charAt(0).toUpperCase()
+                    )}
+                  </Link>
                   <div>
                     <h4 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
                       <Link

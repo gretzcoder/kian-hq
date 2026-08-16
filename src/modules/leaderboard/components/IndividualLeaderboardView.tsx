@@ -4,6 +4,19 @@ import { useState } from 'react';
 import Link from 'next/link';
 import SparksHistoryModal from '@/modules/leaderboard/components/SparksHistoryModal';
 
+function getCleanAvatarUrl(url: string | null | undefined): string | null {
+  if (!url || !url.trim()) return null;
+  let clean = url.trim();
+  const gdriveMatch = clean.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if (gdriveMatch && gdriveMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${gdriveMatch[1]}`;
+  }
+  if (clean.includes('dropbox.com')) {
+    clean = clean.replace('?dl=0', '?dl=1').replace('dl=0', 'dl=1');
+  }
+  return clean;
+}
+
 export function IndividualLeaderboardView({
   data,
   currentUserId,
@@ -103,6 +116,7 @@ export function IndividualLeaderboardView({
           <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
             {rest.map((user) => {
               const isMe = user.userId === currentUserId;
+              const avatarUrl = getCleanAvatarUrl(user.userAvatar);
               return (
                 <div
                   key={user.userId}
@@ -116,10 +130,14 @@ export function IndividualLeaderboardView({
                     </span>
                     <Link
                       href={`/dashboard/profile?userId=${user.userId}`}
-                      className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center font-bold text-sm text-zinc-700 dark:text-zinc-300 hover:ring-2 hover:ring-purple-500 transition-all shrink-0"
+                      className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center font-bold text-sm text-zinc-700 dark:text-zinc-300 hover:ring-2 hover:ring-purple-500 transition-all shrink-0 overflow-hidden shadow-xs"
                       title="Kunjungi Profil Pengguna"
                     >
-                      {user.userName.charAt(0).toUpperCase()}
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt={user.userName} className="w-full h-full object-cover" />
+                      ) : (
+                        user.userName.charAt(0).toUpperCase()
+                      )}
                     </Link>
                     <div>
                       <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
@@ -182,15 +200,20 @@ function PodiumCard({
   color: string;
   onOpenHistory: (userId: string, userName: string, userData?: any) => void;
 }) {
+  const avatarUrl = getCleanAvatarUrl(user.userAvatar);
   return (
     <div className={`border rounded-3xl p-6 text-center space-y-3 relative overflow-hidden ${color}`}>
       <div className="text-4xl">{medal}</div>
       <Link
         href={`/dashboard/profile?userId=${user.userId}`}
-        className="w-16 h-16 rounded-full bg-zinc-200 dark:bg-zinc-800 border-2 border-purple-500/30 hover:border-purple-500 flex items-center justify-center mx-auto text-xl font-bold text-zinc-800 dark:text-zinc-200 transition-all hover:scale-105"
+        className="w-16 h-16 rounded-full bg-zinc-200 dark:bg-zinc-800 border-2 border-purple-500/30 hover:border-purple-500 flex items-center justify-center mx-auto text-xl font-bold text-zinc-800 dark:text-zinc-200 transition-all hover:scale-105 overflow-hidden shadow-md"
         title="Kunjungi Profil Pengguna"
       >
-        {user.userName.charAt(0).toUpperCase()}
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={user.userName} className="w-full h-full object-cover" />
+        ) : (
+          user.userName.charAt(0).toUpperCase()
+        )}
       </Link>
       <div>
         <Link
