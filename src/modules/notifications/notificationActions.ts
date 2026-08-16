@@ -371,51 +371,83 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     });
   }
 
-  // 5. Fetch live chat mentions (@UserName or @FirstName) for this user
+  // 5. Fetch Workspace Chats (both mentions and room chat messages in user's workspaces)
   try {
-    const userRow = (await db
-      .prepare('SELECT name FROM users WHERE id = ?')
-      .bind(session.userId)
-      .first()) as { name: string } | null;
+    const { results: wsChats } = await db
+      .prepare(
+        `SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.created_at,
+                u.name AS senderName, ws.name AS wsName
+         FROM workspace_chats wc
+         JOIN users u ON wc.user_id = u.id
+         JOIN workspaces ws ON wc.workspace_id = ws.id
+         WHERE wc.user_id != ?
+           AND ws.deleted_at IS NULL
+           AND (
+             ws.ojt_coordinator_id = ?
+             OR EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
+             OR EXISTS (SELECT 1 FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id AND ta.user_id = ?)
+           )
+         ORDER BY wc.created_at DESC
+         LIMIT 10`
+      )
+      .bind(session.userId, session.userId, session.userId, session.userId)
+      .all();
 
-    if (userRow && userRow.name) {
-      const fullName = userRow.name;
-      const firstName = fullName.split(' ')[0];
-
-      const { results: chatMentions } = await db
-        .prepare(
-          `SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.created_at,
-                  u.name AS senderName, ws.name AS wsName
-           FROM workspace_chats wc
-           JOIN users u ON wc.user_id = u.id
-           LEFT JOIN workspaces ws ON wc.workspace_id = ws.id
-           WHERE wc.user_id != ? AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-             AND (
-               LOWER(wc.message) LIKE '%' || LOWER('@' || ?) || '%'
-               OR LOWER(wc.message) LIKE '%' || LOWER('@' || ?) || '%'
-             )
-           ORDER BY wc.created_at DESC
-           LIMIT 5`
-        )
-        .bind(session.userId, fullName, firstName)
-        .all();
-
-      for (const r of chatMentions as any[]) {
-        feedItems.push({
-          id: `notif_cm_${r.id}`,
-          category: 'WORKSPACE',
-          typeLabel: 'Sebutan Chat Tim',
-          icon: '💬',
-          title: `Sebutan Chat dari ${r.senderName}`,
-          subtitle: `"${r.message}" • Workspace: ${r.wsName || 'Workspace'}`,
-          targetUrl: `/dashboard/workspace/${r.workspace_id}?tab=chat`,
-          createdAt: Number(r.created_at) || 0,
-          color: 'border-purple-500/20 bg-purple-500/5',
-        });
-      }
+    for (const r of wsChats as any[]) {
+      const isMention = (r.message || '').toLowerCase().includes('@');
+      feedItems.push({
+        id: `notif_wc_${r.id}`,
+        category: 'WORKSPACE',
+        typeLabel: isMention ? 'Sebutan Chat Tim' : 'Pesan Chat Workspace',
+        icon: '💬',
+        title: isMention ? `Sebutan Chat dari ${r.senderName}` : `Pesan Chat dari ${r.senderName}`,
+        subtitle: `"${r.message}" • Workspace: ${r.wsName || 'Workspace'}`,
+        targetUrl: `/dashboard/workspace/${r.workspace_id}?tab=chat`,
+        createdAt: Number(r.created_at) || 0,
+        color: isMention ? 'border-purple-500/20 bg-purple-500/5' : 'border-blue-500/20 bg-blue-500/5',
+      });
     }
   } catch (err) {
-    console.error('fetchUserNotifications mention query error:', err);
+    console.error('fetchUserNotifications workspace chat query error:', err);
+  }
+
+  // 5b. Fetch Community Chat Messages
+  try {
+    const { results: commChats } = await db
+      .prepare(
+        `SELECT cm.id, cm.channel_id, cm.user_id, cm.message, cm.created_at,
+                u.name AS senderName, cc.name AS channelName
+         FROM community_messages cm
+         JOIN users u ON cm.user_id = u.id
+         JOIN community_channels cc ON cm.channel_id = cc.id
+         WHERE cm.user_id != ?
+         ORDER BY cm.created_at DESC
+         LIMIT 10`
+      )
+      .bind(session.userId)
+      .all();
+
+    for (const r of commChats as any[]) {
+      const isMention = (r.message || '').toLowerCase().includes('@');
+      let createdTs = Number(r.created_at);
+      if (isNaN(createdTs) || createdTs <= 0) {
+        createdTs = Math.floor(new Date(r.created_at).getTime() / 1000) || 0;
+      }
+
+      feedItems.push({
+        id: `notif_comm_${r.id}`,
+        category: 'WORKSPACE',
+        typeLabel: isMention ? 'Sebutan Community Chat' : 'Pesan Community Chat',
+        icon: '🌐',
+        title: `Community Chat (#${r.channelName})`,
+        subtitle: `${r.senderName}: "${r.message}"`,
+        targetUrl: `/dashboard/community?channelId=${r.channel_id}`,
+        createdAt: createdTs,
+        color: 'border-emerald-500/20 bg-emerald-500/5',
+      });
+    }
+  } catch (err) {
+    console.error('fetchUserNotifications community chat query error:', err);
   }
 
   // 6. Fetch reminder workflow events for this user (where user is target assignee of task_assignment or creator of task)

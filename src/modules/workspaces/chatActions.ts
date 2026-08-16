@@ -141,10 +141,10 @@ export async function sendWorkspaceMessage(
           trimmed.toLowerCase().includes(`@${(m.name || '').split(' ')[0].toLowerCase()}`)
         );
 
-        const mentionUserIds = mentions.map((m) => m.user_id as string);
+        const mentionUserIds = mentions.map((m) => (m.user_id || m.id) as string).filter(Boolean);
         const regularUserIds = members
-          .map((m) => m.user_id as string)
-          .filter((id) => !mentionUserIds.includes(id));
+          .map((m) => (m.user_id || m.id) as string)
+          .filter((id) => Boolean(id) && !mentionUserIds.includes(id));
 
         const bodySnippet = trimmed.length > 100 ? `${trimmed.slice(0, 97)}...` : trimmed || 'Mengirim lampiran';
 
