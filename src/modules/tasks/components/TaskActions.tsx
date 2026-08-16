@@ -540,7 +540,23 @@ export default function TaskActions({
                     ) : (
                       visibleAssignments.map((assign) => {
                         const isMe = assign.user_id === currentUserId;
-                        const assignStatusBadge = statusColors[assign.status] ?? 'bg-zinc-100 text-zinc-500';
+                        const nowMs = Date.now();
+                        const isApprovedState = assign.status === 'APPROVED';
+                        const isPastDeadline = Boolean(assign.deadline && assign.deadline < nowMs && !['APPROVED', 'WAITING_REVIEW', 'RESUBMITTED'].includes(assign.status));
+                        const isNotStarted = Boolean((assign as any).start_at && (assign as any).start_at > nowMs);
+
+                        const displayStatusLabel = isApprovedState ? '✅ Disetujui'
+                          : isNotStarted ? '⏳ Belum Dimulai'
+                          : isPastDeadline ? (assign.status === 'REVISION_REQUESTED' ? '🚨 Revisi Terlambat' : '🚨 Melewati Deadline')
+                          : assign.status === 'REVISION_REQUESTED' ? '↩ Revisi'
+                          : assign.status === 'WAITING_REVIEW' ? '📤 Menunggu Review'
+                          : assign.status === 'IN_PROGRESS' ? '⚙️ Sedang Dikerjakan'
+                          : '📋 Belum Mulai';
+
+                        const assignStatusBadge = isApprovedState ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold'
+                          : isNotStarted ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 font-bold'
+                          : isPastDeadline ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 font-black animate-pulse'
+                          : statusColors[assign.status] ?? 'bg-zinc-100 text-zinc-500';
 
                         return (
                           <div key={assign.id} className="text-[11px] space-y-2 pt-3 border-t border-zinc-200/60 dark:border-zinc-800/60 first:border-t-0 first:pt-0">
@@ -552,7 +568,7 @@ export default function TaskActions({
                                 {isMe && <span className="text-[9px] text-purple-600 dark:text-purple-400 font-black">(you)</span>}
                               </div>
                               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${assignStatusBadge}`}>
-                                {assign.status.replace('_', ' ')}
+                                {displayStatusLabel}
                               </span>
                             </div>
 
@@ -729,6 +745,11 @@ export default function TaskActions({
                                                 </div>
                                               )}
                                             </form>
+                                          ) : isPastDeadline ? (
+                                            <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-[11px] font-bold flex items-center gap-2">
+                                              <span>⏰</span>
+                                              <span>Tenggat waktu (deadline) tugas ini telah berakhir. Pengumpulan ditutup.</span>
+                                            </div>
                                           ) : (
                                             <div className="flex items-center gap-2 flex-wrap">
                                               {assign.status === 'ASSIGNED' && !assign.result_url && (

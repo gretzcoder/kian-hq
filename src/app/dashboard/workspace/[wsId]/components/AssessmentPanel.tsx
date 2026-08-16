@@ -86,21 +86,84 @@ interface AssessmentPanelProps {
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 
-const STATUS_BADGE: Record<string, string> = {
-  ASSIGNED:            'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700',
-  IN_PROGRESS:         'bg-indigo-500/8 text-indigo-600 dark:text-indigo-400 border-indigo-500/15',
-  WAITING_REVIEW:      'bg-yellow-500/8 text-yellow-700 dark:text-yellow-400 border-yellow-500/15',
-  REVISION_REQUESTED:  'bg-red-500/8 text-red-600 dark:text-red-400 border-red-500/15',
-  APPROVED:            'bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 border-emerald-500/15',
-};
+export function getTaskAssignmentStatusMeta(
+  status: string,
+  startAt?: number | null,
+  deadline?: number | null
+): { label: string; badgeClass: string; isPastDeadline: boolean; isNotStarted: boolean } {
+  const now = Date.now();
+  const isNotStarted = Boolean(startAt && startAt > now);
+  const isPastDeadline = Boolean(deadline && deadline < now);
 
-const STATUS_LABEL: Record<string, string> = {
-  ASSIGNED:            '📋 Belum Mulai',
-  IN_PROGRESS:         '⚙️ Sedang Dikerjakan',
-  WAITING_REVIEW:      '📤 Menunggu Review',
-  REVISION_REQUESTED:  '↩ Revisi',
-  APPROVED:            '✅ Disetujui',
-};
+  if (status === 'APPROVED') {
+    return {
+      label: '✅ Disetujui',
+      badgeClass: 'bg-emerald-500/8 text-emerald-600 dark:text-emerald-400 border-emerald-500/15 font-bold',
+      isPastDeadline: false,
+      isNotStarted: false,
+    };
+  }
+
+  if (status === 'WAITING_REVIEW' || status === 'RESUBMITTED') {
+    return {
+      label: '📤 Menunggu Review',
+      badgeClass: 'bg-yellow-500/8 text-yellow-700 dark:text-yellow-400 border-yellow-500/15 font-bold',
+      isPastDeadline: false,
+      isNotStarted: false,
+    };
+  }
+
+  if (isNotStarted) {
+    return {
+      label: '⏳ Belum Dimulai',
+      badgeClass: 'bg-indigo-500/8 text-indigo-600 dark:text-indigo-400 border-indigo-500/15 font-bold',
+      isPastDeadline: false,
+      isNotStarted: true,
+    };
+  }
+
+  if (isPastDeadline) {
+    if (status === 'REVISION_REQUESTED') {
+      return {
+        label: '🚨 Revisi Terlambat',
+        badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 font-black animate-pulse',
+        isPastDeadline: true,
+        isNotStarted: false,
+      };
+    }
+    return {
+      label: '🚨 Melewati Deadline',
+      badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 font-black animate-pulse',
+      isPastDeadline: true,
+      isNotStarted: false,
+    };
+  }
+
+  if (status === 'REVISION_REQUESTED') {
+    return {
+      label: '↩ Revisi Diminta',
+      badgeClass: 'bg-red-500/8 text-red-600 dark:text-red-400 border-red-500/15 font-bold',
+      isPastDeadline: false,
+      isNotStarted: false,
+    };
+  }
+
+  if (status === 'IN_PROGRESS') {
+    return {
+      label: '⚙️ Sedang Dikerjakan',
+      badgeClass: 'bg-indigo-500/8 text-indigo-600 dark:text-indigo-400 border-indigo-500/15 font-bold',
+      isPastDeadline: false,
+      isNotStarted: false,
+    };
+  }
+
+  return {
+    label: '📋 Belum Mulai',
+    badgeClass: 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-zinc-200 dark:border-zinc-700 font-bold',
+    isPastDeadline: false,
+    isNotStarted: false,
+  };
+}
 
 const EXEC_TYPE_LABEL: Record<string, string> = {
   DESIGNER:     '🎨 Design',
@@ -309,19 +372,23 @@ function CreateAssessmentTaskForm({
 
 function OJTSubmitForm({
   assignment,
+  task,
   workspaceId,
 }: {
   assignment: AssignmentRow;
+  task: TaskRow;
   workspaceId: string;
 }) {
   const [url,     setUrl]     = useState(assignment.result_url ?? '');
   const [error,   setError]   = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const isLocked = assignment.status === 'APPROVED';
+  const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline);
+  const isLocked = assignment.status === 'APPROVED' || meta.isPastDeadline || meta.isNotStarted;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLocked) return;
     setError(null);
     startTransition(async () => {
       const res = await submitAssessmentWork(assignment.id, url, workspaceId);
@@ -331,6 +398,20 @@ function OJTSubmitForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {meta.isPastDeadline && (
+        <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center gap-2">
+          <span>⏰</span>
+          <span>Tenggat waktu (deadline) assessment ini telah berakhir. Pengumpulan tugas ditutup.</span>
+        </div>
+      )}
+
+      {meta.isNotStarted && (
+        <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-bold flex items-center gap-2">
+          <span>⏳</span>
+          <span>Assessment ini dijadwalkan mulai pada tanggal & jam yang ditentukan. Pengumpulan belum dibuka.</span>
+        </div>
+      )}
+
       <div>
         <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">
           Link Hasil Kerja (Google Drive / URL) <span className="text-red-500">*</span>
@@ -341,13 +422,13 @@ function OJTSubmitForm({
           onChange={(e) => setUrl(e.target.value)}
           required
           disabled={isLocked}
-          placeholder="https://drive.google.com/..."
+          placeholder={isLocked ? "Pengumpulan ditutup" : "https://drive.google.com/..."}
           className="w-full bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm rounded-xl px-4 py-2.5 focus:outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed text-zinc-900 dark:text-zinc-100"
         />
       </div>
 
       {error && (
-        <p className="text-xs text-red-500">{error}</p>
+        <p className="text-xs text-red-500 font-bold">{error}</p>
       )}
 
       {assignment.revision_note && (
@@ -362,7 +443,7 @@ function OJTSubmitForm({
         <button
           type="submit"
           disabled={pending || !url.trim()}
-          className="w-full py-2.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all disabled:opacity-50"
+          className="w-full py-2.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all disabled:opacity-50 cursor-pointer"
         >
           {pending ? 'Mengumpulkan...' : assignment.status === 'WAITING_REVIEW' ? '🔄 Update Submission' : '📤 Kumpulkan'}
         </button>
@@ -391,6 +472,8 @@ function MentorSubmissionCard({
   canManage = true,
   currentUserId,
   taskCreatedBy,
+  taskStartAt,
+  taskDeadline,
 }: {
   assignment: AssignmentRow;
   workspaceId: string;
@@ -399,6 +482,8 @@ function MentorSubmissionCard({
   canManage?: boolean;
   currentUserId: string;
   taskCreatedBy?: string | null;
+  taskStartAt?: number | null;
+  taskDeadline?: number | null;
 }) {
   const [expanded,          setExpanded]          = useState(false);
   const [showSparkModal,    setShowSparkModal]    = useState(false);
@@ -414,8 +499,9 @@ function MentorSubmissionCard({
   const isSubmitted   = ['WAITING_REVIEW', 'RESUBMITTED'].includes(assignment.status);
   const isApproved    = assignment.status === 'APPROVED';
   const hasSubmission = !!assignment.result_url || isSubmitted || isApproved;
-  const statusBadge   = STATUS_BADGE[assignment.status] ?? STATUS_BADGE.ASSIGNED;
-  const statusLabel   = STATUS_LABEL[assignment.status] ?? assignment.status;
+  const meta          = getTaskAssignmentStatusMeta(assignment.status, taskStartAt, taskDeadline);
+  const statusBadge   = meta.badgeClass;
+  const statusLabel   = meta.label;
   const currentSparkMeta = getSparkMeta(sparks);
 
   const handleRemoveParticipant = () => {
@@ -1645,6 +1731,8 @@ function MentorTaskCard({
                 canManage={canManage}
                 currentUserId={currentUserId}
                 taskCreatedBy={task.created_by}
+                taskStartAt={task.start_at}
+                taskDeadline={task.deadline}
               />
             ))
           )}
@@ -1670,8 +1758,9 @@ function OJTTaskCard({
   const [isCardExpanded, setIsCardExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
   const execLabel = EXEC_TYPE_LABEL[assignment.assignment_role] ?? assignment.assignment_role;
-  const statusBadge = STATUS_BADGE[assignment.status] ?? STATUS_BADGE.ASSIGNED;
-  const statusLabel = STATUS_LABEL[assignment.status] ?? assignment.status;
+  const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline);
+  const statusBadge = meta.badgeClass;
+  const statusLabel = meta.label;
 
   const handleReaction = (emoji: string) => {
     startTransition(async () => {
@@ -1752,7 +1841,7 @@ function OJTTaskCard({
 
           {/* Submit form */}
           {assignment.status !== 'APPROVED' && (
-            <OJTSubmitForm assignment={assignment} workspaceId={workspaceId} />
+            <OJTSubmitForm assignment={assignment} task={task} workspaceId={workspaceId} />
           )}
 
           {/* Already submitted link & Reactions */}

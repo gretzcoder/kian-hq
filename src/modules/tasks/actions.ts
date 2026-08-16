@@ -565,9 +565,18 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
 
   try {
     const task = await db
-      .prepare('SELECT id, project_id, workspace_id, status, task_type, parent_task_id FROM tasks WHERE id = ?')
+      .prepare('SELECT id, project_id, workspace_id, status, task_type, parent_task_id, start_at, deadline FROM tasks WHERE id = ?')
       .bind(assignment.task_id)
-      .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; parent_task_id: string | null } | null;
+      .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; parent_task_id: string | null; start_at: number | null; deadline: number | null } | null;
+
+    const nowMs = Date.now();
+    if (task?.start_at && task.start_at > nowMs) {
+      return { success: false, error: 'Tugas ini belum dimulai.' };
+    }
+
+    if (task?.deadline && task.deadline < nowMs) {
+      return { success: false, error: 'Tenggat waktu (deadline) tugas ini telah berakhir. Pengumpulan tidak dapat dilakukan.' };
+    }
 
     if (task?.parent_task_id) {
       const parent = await db
