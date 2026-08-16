@@ -104,7 +104,7 @@ export default function ChangelogPage() {
             <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
               <span className="text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl border border-emerald-500/20 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                <span>{isLiveSync ? '🟢 GitHub Live Track' : 'Production Live'}</span>
+                <span>{isLiveSync ? '🟢 System Live Track' : 'Production Live'}</span>
               </span>
             </div>
           </div>
@@ -184,7 +184,7 @@ export default function ChangelogPage() {
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-xl">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>GitHub Live Repository Updates</span>
+              <span>Realtime System Updates</span>
             </span>
           </div>
         )}
