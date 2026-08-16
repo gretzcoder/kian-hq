@@ -175,16 +175,18 @@ export async function getLeaderboardData(
     const includeMentorBriefs = !['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
     const isRoleCategory = ['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
 
-    const { results: settingsRows } = await db
-      .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-      .all();
-
     let designMultiplier = 1.0;
     let videoMultiplier = 1.0;
-    for (const row of (settingsRows || []) as any[]) {
-      if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-      if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-    }
+    try {
+      const { results: settingsRows } = await db
+        .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
+        .all();
+
+      for (const row of (settingsRows || []) as any[]) {
+        if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
+        if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
+      }
+    } catch {}
 
     const query = `
       WITH user_task_sparks AS (
@@ -492,16 +494,18 @@ export async function getSparksHistory(
   const now = Math.floor(Date.now() / 1000);
 
   // Fetch category multipliers
-  const { results: settingsRows } = await db
-    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-    .all();
-
   let designMultiplier = 1.0;
   let videoMultiplier = 1.0;
-  for (const row of (settingsRows || []) as any[]) {
-    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-  }
+  try {
+    const { results: settingsRows } = await db
+      .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
+      .all();
+
+    for (const row of (settingsRows || []) as any[]) {
+      if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
+      if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
+    }
+  } catch {}
 
   let timeClause = '';
   if (period === 'week') {
@@ -527,32 +531,64 @@ export async function getSparksHistory(
     // role_leader: show personal task history (idClause stays as user_id)
   }
 
-  const { results: assignmentResults } = await db
-    .prepare(
+  let assignmentResults: any[] = [];
+  try {
+    const { results } = await db
+      .prepare(
+        `
+        SELECT
+          ta.id   AS assignmentId,
+          t.title AS taskTitle,
+          t.output_type AS outputType,
+          COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
+          ta.assignment_role                                                              AS assignmentRole,
+          ws.name                                                                         AS workspaceName,
+          p.name                                                                          AS projectName,
+          COALESCE(ta.sparks, 8)                                                          AS rawSparks,
+          COALESCE(ta.reviewed_at, ta.submitted_at)                                       AS reviewedAt,
+          ta.revision_note                                                                AS revisionNote,
+          CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRevision,
+          CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
+        FROM task_assignments ta
+        JOIN tasks    t  ON ta.task_id    = t.id
+        JOIN projects p  ON t.project_id  = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        WHERE ${idClause} AND ta.status = 'APPROVED' ${timeClause} ${roleFilter}
+        ORDER BY COALESCE(ta.reviewed_at, ta.submitted_at) DESC
       `
-      SELECT
-        ta.id   AS assignmentId,
-        t.title AS taskTitle,
-        t.output_type AS outputType,
-        COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
-        ta.assignment_role                                                              AS assignmentRole,
-        ws.name                                                                         AS workspaceName,
-        p.name                                                                          AS projectName,
-        COALESCE(ta.sparks, 8)                                                          AS rawSparks,
-        COALESCE(ta.reviewed_at, ta.submitted_at)                                       AS reviewedAt,
-        ta.revision_note                                                                AS revisionNote,
-        CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRevision,
-        CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
-      FROM task_assignments ta
-      JOIN tasks    t  ON ta.task_id    = t.id
-      JOIN projects p  ON t.project_id  = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      WHERE ${idClause} AND ta.status = 'APPROVED' ${timeClause} ${roleFilter}
-      ORDER BY COALESCE(ta.reviewed_at, ta.submitted_at) DESC
-    `
-    )
-    .bind(targetId)
-    .all();
+      )
+      .bind(targetId)
+      .all();
+    assignmentResults = results || [];
+  } catch {
+    const { results } = await db
+      .prepare(
+        `
+        SELECT
+          ta.id   AS assignmentId,
+          t.title AS taskTitle,
+          t.output_type AS outputType,
+          1.0 AS customTaskMultiplier,
+          ta.assignment_role                                                              AS assignmentRole,
+          ws.name                                                                         AS workspaceName,
+          p.name                                                                          AS projectName,
+          COALESCE(ta.sparks, 8)                                                          AS rawSparks,
+          COALESCE(ta.reviewed_at, ta.submitted_at)                                       AS reviewedAt,
+          ta.revision_note                                                                AS revisionNote,
+          CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRevision,
+          CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
+        FROM task_assignments ta
+        JOIN tasks    t  ON ta.task_id    = t.id
+        JOIN projects p  ON t.project_id  = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        WHERE ${idClause} AND ta.status = 'APPROVED' ${timeClause} ${roleFilter}
+        ORDER BY COALESCE(ta.reviewed_at, ta.submitted_at) DESC
+      `
+      )
+      .bind(targetId)
+      .all();
+    assignmentResults = results || [];
+  }
 
   let mentorBriefItems: SparksHistoryItem[] = [];
   if (category !== 'workspace' && category !== 'coordinator') {

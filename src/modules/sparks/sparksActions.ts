@@ -64,28 +64,46 @@ export async function getSparksManagementOverview(
   const timeClauseSA = minTs > 0 ? `AND sa.created_at >= ${minTs}` : '';
 
   // 0. Fetch category multipliers
-  const { results: settingsRows } = await db
-    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-    .all();
-
   let designMultiplier = 1.0;
   let videoMultiplier = 1.0;
-  for (const row of (settingsRows || []) as any[]) {
-    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-  }
+  try {
+    const { results: settingsRows } = await db
+      .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
+      .all();
+
+    for (const row of (settingsRows || []) as any[]) {
+      if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
+      if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
+    }
+  } catch {}
 
   // 1. Fetch task assignment sparks
-  const { results: taRows } = await db.prepare(`
-    SELECT ta.user_id AS userId, ta.sparks, ta.assignment_role AS role,
-           t.output_type, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
-           CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev,
-           CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
-    FROM task_assignments ta
-    JOIN tasks t ON ta.task_id = t.id
-    LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-    WHERE ta.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${timeClauseTA}
-  `).all();
+  let taRows: any[] = [];
+  try {
+    const { results } = await db.prepare(`
+      SELECT ta.user_id AS userId, ta.sparks, ta.assignment_role AS role,
+             t.output_type, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
+             CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev,
+             CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${timeClauseTA}
+    `).all();
+    taRows = results || [];
+  } catch {
+    const { results } = await db.prepare(`
+      SELECT ta.user_id AS userId, ta.sparks, ta.assignment_role AS role,
+             t.output_type, 1.0 AS customTaskMultiplier,
+             CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev,
+             CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${timeClauseTA}
+    `).all();
+    taRows = results || [];
+  }
 
   // 2. Fetch mentor assessment sparks
   const { results: tRows } = await db.prepare(`
