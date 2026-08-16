@@ -1737,17 +1737,18 @@ export async function extendTaskDeadline(
 
   if (!task) return { success: false, error: 'Task tidak ditemukan.' };
 
-  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
   const isCreator = task.created_by != null && task.created_by === session.userId;
   const isAdmin = ctx.permissions.has('ADMIN_SYSTEM') || (ctx.userType as string) === 'ADMIN';
+  const isMentor = ctx.roles.includes('MENTOR') || ctx.can('TASK_REVIEW') || ctx.can('SPARKS_MANAGE');
 
-  if (!isCoordinator && !isCreator && !isAdmin) {
-    return { success: false, error: 'Hanya Admin, Koordinator, atau Pembuat Task yang dapat memperpanjang deadline.' };
+  if (!isCoordinator && !isCreator && !isAdmin && !isMentor) {
+    return { success: false, error: 'Hanya Admin, Koordinator, Mentor, atau Pembuat Task yang dapat memperpanjang deadline.' };
   }
 
-  const effectiveCurrentDeadline = task.extended_deadline || task.deadline || Date.now();
-  if (newDeadline <= effectiveCurrentDeadline) {
-    return { success: false, error: 'Deadline perpanjangan harus lebih lama dari deadline saat ini.' };
+  const baseDeadline = task.deadline || 0;
+  if (newDeadline <= baseDeadline) {
+    return { success: false, error: 'Deadline perpanjangan harus lebih lama dari deadline awal.' };
   }
 
   try {
@@ -1755,6 +1756,13 @@ export async function extendTaskDeadline(
       .prepare('UPDATE tasks SET extended_deadline = ? WHERE id = ?')
       .bind(newDeadline, taskId)
       .run();
+
+    try {
+      await db
+        .prepare('UPDATE task_assignments SET deadline = ? WHERE task_id = ?')
+        .bind(newDeadline, taskId)
+        .run();
+    } catch (_e) {}
 
     await logWorkflowEvent({
       entityType: 'task',

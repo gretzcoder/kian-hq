@@ -51,13 +51,15 @@ export function ExtendDeadlineModal({
   const originalTs = currentDeadline || Date.now();
 
   let daysExtended = 0;
-  if (newDeadlineMs > originalTs) {
-    daysExtended = Math.ceil((newDeadlineMs - originalTs) / (24 * 3600 * 1000));
+  if (currentDeadline && newDeadlineMs > currentDeadline) {
+    daysExtended = Math.ceil((newDeadlineMs - currentDeadline) / (24 * 3600 * 1000));
+  } else if (!currentDeadline && newDeadlineMs > Date.now()) {
+    daysExtended = Math.ceil((newDeadlineMs - Date.now()) / (24 * 3600 * 1000));
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newDeadlineMs || newDeadlineMs <= originalTs) {
+    if (!newDeadlineMs || (currentDeadline && newDeadlineMs <= currentDeadline)) {
       setError('Deadline perpanjangan harus lebih lama dari deadline awal.');
       return;
     }

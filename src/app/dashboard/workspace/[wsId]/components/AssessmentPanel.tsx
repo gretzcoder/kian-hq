@@ -424,7 +424,7 @@ function OJTSubmitForm({
   const [error,   setError]   = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline);
+  const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline, task.extended_deadline);
   const isLocked = assignment.status === 'APPROVED' || meta.isPastDeadline || meta.isNotStarted;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -515,6 +515,7 @@ function MentorSubmissionCard({
   taskCreatedBy,
   taskStartAt,
   taskDeadline,
+  taskExtendedDeadline,
 }: {
   assignment: AssignmentRow;
   workspaceId: string;
@@ -525,6 +526,7 @@ function MentorSubmissionCard({
   taskCreatedBy?: string | null;
   taskStartAt?: number | null;
   taskDeadline?: number | null;
+  taskExtendedDeadline?: number | null;
 }) {
   const [expanded,          setExpanded]          = useState(false);
   const [showSparkModal,    setShowSparkModal]    = useState(false);
@@ -540,7 +542,7 @@ function MentorSubmissionCard({
   const isSubmitted   = ['WAITING_REVIEW', 'RESUBMITTED'].includes(assignment.status);
   const isApproved    = assignment.status === 'APPROVED';
   const hasSubmission = !!assignment.result_url || isSubmitted || isApproved;
-  const meta          = getTaskAssignmentStatusMeta(assignment.status, taskStartAt, taskDeadline);
+  const meta          = getTaskAssignmentStatusMeta(assignment.status, taskStartAt, taskDeadline, taskExtendedDeadline);
   const statusBadge   = meta.badgeClass;
   const statusLabel   = meta.label;
   const currentSparkMeta = getSparkMeta(sparks);
@@ -1515,18 +1517,23 @@ function MentorTaskCard({
                   {isScheduled && <span className="text-[8px] bg-indigo-500 text-white px-1.5 py-0.2 rounded-full">Dijadwalkan</span>}
                 </span>
               )}
-              {task.deadline && (
+              {task.extended_deadline && task.extended_deadline > (task.deadline || 0) ? (() => {
+                const now = Date.now();
+                const daysLate = task.deadline && now > task.deadline ? Math.ceil((now - task.deadline) / (24 * 3600 * 1000)) : 0;
+                const penalty = Math.min(100, daysLate * 10);
+                const hText = daysLate > 0 ? `H+${daysLate} • Sparks -${penalty}%` : 'Extended';
+                return (
+                  <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1 font-mono">
+                    <span>⏳ Extended ({hText}):</span>
+                    <span>{new Date(task.extended_deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  </span>
+                );
+              })() : task.deadline ? (
                 <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2 py-0.5 rounded-full flex items-center gap-1">
                   <span>⏰</span>
                   <span>{new Date(task.deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
                 </span>
-              )}
-              {task.extended_deadline && (
-                <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <span>⏳ Extend:</span>
-                  <span>{new Date(task.extended_deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
-                </span>
-              )}
+              ) : null}
             </div>
             <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug">{task.title}</h3>
           </div>
@@ -1807,6 +1814,7 @@ function MentorTaskCard({
                 taskCreatedBy={task.created_by}
                 taskStartAt={task.start_at}
                 taskDeadline={task.deadline}
+                taskExtendedDeadline={task.extended_deadline}
               />
             ))
           )}
@@ -1832,7 +1840,7 @@ function OJTTaskCard({
   const [isCardExpanded, setIsCardExpanded] = useState(false);
   const [pending, startTransition] = useTransition();
   const execLabel = EXEC_TYPE_LABEL[assignment.assignment_role] ?? assignment.assignment_role;
-  const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline);
+  const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline, task.extended_deadline);
   const statusBadge = meta.badgeClass;
   const statusLabel = meta.label;
 
@@ -1843,7 +1851,7 @@ function OJTTaskCard({
   };
 
   return (
-    <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+    <div className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl overflow-hidden shadow-xs hover:shadow-md transition-all">
       {/* Accordion Task Header */}
       <div
         onClick={() => setIsCardExpanded((prev) => !prev)}
