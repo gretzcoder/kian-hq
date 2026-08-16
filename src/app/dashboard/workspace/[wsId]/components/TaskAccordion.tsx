@@ -277,13 +277,15 @@ export default function TaskAccordion({
                 {task.sparks_multiplier && task.sparks_multiplier > 1.0 && (
                   <span
                     onClick={(e) => {
-                      if (isCoordinator || isMentor) {
+                      if (isCoordinator) {
                         e.stopPropagation();
                         setMultiplierTask(task);
                       }
                     }}
-                    title="Sparks Multiplier Khusus Task"
-                    className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 flex items-center gap-1 font-mono cursor-pointer hover:scale-105 transition-all"
+                    title={isCoordinator ? "Set Sparks Multiplier Khusus Task" : "Sparks Multiplier Khusus Task"}
+                    className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 flex items-center gap-1 font-mono transition-all ${
+                      isCoordinator ? 'cursor-pointer hover:scale-105' : 'cursor-default'
+                    }`}
                   >
                     ⚡ {task.sparks_multiplier}x
                   </span>
@@ -293,11 +295,11 @@ export default function TaskAccordion({
 
                 {(workspaceType === 'MENTOR' ? isCoordinator : (canDeleteTask || isLeader || isMentor || isCoordinator)) && (
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                    {(isCoordinator || isMentor) && (
+                    {isCoordinator && (
                       <button
                         type="button"
                         onClick={() => setMultiplierTask(task)}
-                        title="Set Sparks Multiplier Khusus Task"
+                        title="Set Sparks Multiplier Khusus Task (Koordinator/Admin)"
                         className="w-7 h-7 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/20 transition-all flex items-center justify-center text-xs font-black"
                       >
                         ⚡
