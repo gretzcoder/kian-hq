@@ -5,13 +5,7 @@ export async function GET() {
   try {
     const data = await getSparksMultipliersData();
     return NextResponse.json({ success: true, ...data });
-  } catch {
-    return NextResponse.json({
-      success: true,
-      designMultiplier: 1.0,
-      videoMultiplier: 1.0,
-      customTaskMultipliersCount: 0,
-      activeMultiplierTasks: [],
-    });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

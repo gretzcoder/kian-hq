@@ -30,37 +30,30 @@ async function canManageMultipliers(sessionUserId: string): Promise<boolean> {
 export async function getSparksMultipliersData(): Promise<SparksMultipliersState> {
   const db = await getDB();
 
+  // Fetch category multipliers from system_settings
+  const { results: settingsRows } = await db
+    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
+    .all();
+
   let designMultiplier = 1.0;
   let videoMultiplier = 1.0;
 
-  try {
-    const { results: settingsRows } = await db
-      .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-      .all();
-
-    for (const row of (settingsRows || []) as any[]) {
-      if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-      if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-    }
-  } catch {
-    // Migration fallback
+  for (const row of (settingsRows || []) as any[]) {
+    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
+    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
   }
 
-  let activeMultiplierTasks: any[] = [];
-  try {
-    const { results: taskRows } = await db
-      .prepare("SELECT id, title, output_type, sparks_multiplier FROM tasks WHERE sparks_multiplier > 1.0 AND status != 'DELETED'")
-      .all();
+  // Fetch tasks with custom multipliers (> 1.0)
+  const { results: taskRows } = await db
+    .prepare("SELECT id, title, output_type, sparks_multiplier FROM tasks WHERE sparks_multiplier > 1.0 AND status != 'DELETED'")
+    .all();
 
-    activeMultiplierTasks = ((taskRows || []) as any[]).map((t) => ({
-      id: t.id,
-      title: t.title,
-      outputType: t.output_type || 'GENERAL',
-      multiplier: Number(t.sparks_multiplier) || 1.0,
-    }));
-  } catch {
-    // Migration fallback
-  }
+  const activeMultiplierTasks = ((taskRows || []) as any[]).map((t) => ({
+    id: t.id,
+    title: t.title,
+    outputType: t.output_type || 'GENERAL',
+    multiplier: Number(t.sparks_multiplier) || 1.0,
+  }));
 
   return {
     designMultiplier,

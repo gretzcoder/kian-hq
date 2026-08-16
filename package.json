@@ -10,7 +10,9 @@
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local",
+    "db:seed:local": "wrangler d1 execute DB --local --file=./migrations/0041_sync_all_permissions_and_seed_data.sql && wrangler d1 execute DB --local --file=./migrations/0051_sparks_multiplier_and_system_settings.sql"
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.14.9",

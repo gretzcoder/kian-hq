@@ -81,7 +81,7 @@ export async function ensureSchemaMigrations(db: any) {
 export async function getDB() {
   const { env } = getCloudflareContext();
   const db = env.DB;
-  await ensureSchemaMigrations(db);
+  ensureSchemaMigrations(db).catch(() => {});
   return db;
 }
 
