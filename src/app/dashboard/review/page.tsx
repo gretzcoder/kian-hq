@@ -21,6 +21,7 @@ interface ReviewRow {
   task_priority:   string;
   task_type:       string | null;
   task_created_by: string | null;
+  task_creator_name?: string | null;
   workspace_id:    string | null;
   workspace_name:  string | null;
   workspace_type:  string | null;
@@ -61,6 +62,7 @@ export default async function ReviewPage() {
       t.priority       AS task_priority,
       t.task_type       AS task_type,
       t.created_by      AS task_created_by,
+      tu.name          AS task_creator_name,
       t.workspace_id,
       ws.name          AS workspace_name,
       ws.workspace_type AS workspace_type,
@@ -73,6 +75,7 @@ export default async function ReviewPage() {
     JOIN projects p    ON t.project_id = p.id
     LEFT JOIN workspaces ws ON t.workspace_id = ws.id
     LEFT JOIN users u  ON ta.user_id = u.id
+    LEFT JOIN users tu ON t.created_by = tu.id
     WHERE ta.status = 'WAITING_REVIEW'
       AND ta.result_url IS NOT NULL
       AND TRIM(ta.result_url) != ''
@@ -200,14 +203,40 @@ export default async function ReviewPage() {
                 </div>
               </div>
 
-              {/* Creator & timestamp */}
-              <div className="flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
-                <span>👤 {r.creator_name ?? 'Unknown'}</span>
-                {r.submitted_at && (
-                  <span className="font-mono">
-                    Submitted: {new Date(r.submitted_at * 1000).toLocaleDateString()}
+              {/* Creator, Task Owner Mentor, Shortcut Link & timestamp */}
+              <div className="space-y-2 bg-zinc-50 dark:bg-zinc-900/40 p-3 rounded-2xl border border-zinc-100 dark:border-zinc-800/60 text-[11px] text-zinc-500 dark:text-zinc-400">
+                <div className="flex items-center justify-between gap-2 flex-wrap font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <span>👤 Peserta:</span>
+                    <strong className="text-zinc-900 dark:text-zinc-200 font-semibold">{r.creator_name ?? 'Unknown'}</strong>
                   </span>
-                )}
+                  {r.submitted_at && (
+                    <span className="font-mono text-zinc-400 text-[10px]">
+                      Submitted: {new Date(r.submitted_at * 1000).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50">
+                  <span className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                    <span>🎯 Mentor Pembuat Task:</span>
+                    <strong className="text-zinc-900 dark:text-zinc-200 font-black">
+                      {r.task_created_by === session.userId ? 'Anda (Pemilik Task)' : (r.task_creator_name ?? 'Mentor')}
+                    </strong>
+                  </span>
+
+                  {r.workspace_id && (
+                    <Link
+                      href={`/dashboard/workspace/${r.workspace_id}?taskId=${r.task_id}`}
+                      target="_blank"
+                      className="inline-flex items-center gap-1.5 text-[11px] font-black text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20 px-3 py-1 rounded-xl hover:bg-purple-500/20 transition-all active:scale-95 shadow-xs"
+                      title="Buka sumber informasi task ini langsung di Workspace"
+                    >
+                      <span>🔗 Buka Task di Workspace</span>
+                      <span>↗</span>
+                    </Link>
+                  )}
+                </div>
               </div>
 
               {/* Result link / Text report */}
