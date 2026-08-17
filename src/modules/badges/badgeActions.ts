@@ -24,7 +24,7 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
   const db = await getDB();
   const now = Date.now();
 
-  // 0. Clean up any legacy automatic badge sparks adjustments (ensure ONLY manual claims exist)
+  // 0a. Clean up any legacy automatic badge sparks adjustments (ensure ONLY manual claims exist)
   try {
     await db.prepare(`
       DELETE FROM sparks_adjustments
@@ -34,6 +34,49 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
     `).run();
   } catch (e) {
     console.error('Failed to cleanup automatic badge sparks adjustments:', e);
+  }
+
+  // 0b. Clean up duplicate manual claim entries in sparks_adjustments (keep only 1 claim per user per badge)
+  try {
+    await db.prepare(`
+      DELETE FROM sparks_adjustments
+      WHERE category = 'BADGE_REWARD'
+        AND id NOT IN (
+          SELECT MIN(id)
+          FROM sparks_adjustments
+          WHERE category = 'BADGE_REWARD'
+          GROUP BY user_id, note
+        )
+    `).run();
+  } catch (e) {
+    console.error('Failed to deduplicate badge sparks adjustments:', e);
+  }
+
+  // 0c. Auto-sync user_badges.claimed_at from sparks_adjustments if claimed_at is null
+  try {
+    await db.prepare(`
+      UPDATE user_badges
+      SET claimed_at = (
+        SELECT COALESCE(sa.created_at * 1000, strftime('%s', 'now') * 1000)
+        FROM sparks_adjustments sa
+        JOIN badges b ON user_badges.badge_id = b.id
+        WHERE sa.user_id = user_badges.user_id
+          AND sa.category = 'BADGE_REWARD'
+          AND sa.note LIKE '%' || b.name || '%'
+        LIMIT 1
+      )
+      WHERE user_badges.claimed_at IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM sparks_adjustments sa
+          JOIN badges b ON user_badges.badge_id = b.id
+          WHERE sa.user_id = user_badges.user_id
+            AND sa.category = 'BADGE_REWARD'
+            AND sa.note LIKE '%' || b.name || '%'
+        )
+    `).run();
+  } catch (e) {
+    console.error('Failed to sync claimed_at in user_badges:', e);
   }
 
   // 1. Fetch all active badges with requirements
@@ -242,15 +285,22 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       .prepare('SELECT * FROM badges ORDER BY created_at DESC')
       .all();
 
-    // 2. Fetch user's earned badges
-    const { results: userEarned } = await db
-      .prepare('SELECT badge_id, awarded_at, claimed_at FROM user_badges WHERE user_id = ?')
-      .bind(session.userId)
-      .all();
+    // 2. Fetch user's earned badges & claimed sparks history
+    const [userEarnedRes, claimedSparksRes] = await Promise.all([
+      db.prepare('SELECT badge_id, awarded_at, claimed_at FROM user_badges WHERE user_id = ?')
+        .bind(session.userId).all(),
+      db.prepare("SELECT note FROM sparks_adjustments WHERE user_id = ? AND category = 'BADGE_REWARD'")
+        .bind(session.userId).all(),
+    ]);
 
     const userEarnedMap = new Map<string, { awardedAt: number; claimedAt: number | null }>();
-    (userEarned as any[]).forEach((ub) => {
+    (userEarnedRes.results as any[]).forEach((ub) => {
       userEarnedMap.set(ub.badge_id, { awardedAt: ub.awarded_at, claimedAt: ub.claimed_at || null });
+    });
+
+    const claimedBadgeNotesSet = new Set<string>();
+    (claimedSparksRes.results as any[]).forEach((row) => {
+      if (row.note) claimedBadgeNotesSet.add(row.note.toLowerCase());
     });
 
     // 3. Fetch all owners for all badges to show badge earners
@@ -338,7 +388,9 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       let isOwned = Boolean(userBadgeInfo);
       let awardedAt = userBadgeInfo?.awardedAt || null;
       let claimedAt = userBadgeInfo?.claimedAt || null;
-      let isSparksClaimed = Boolean(claimedAt);
+      let isSparksClaimed =
+        Boolean(claimedAt) ||
+        Array.from(claimedBadgeNotesSet).some((note) => note.includes(b.name.toLowerCase()));
 
       let reqIds: string[] = [];
       if (b.requirement_data) {
@@ -824,10 +876,31 @@ export async function claimBadgeSparksAction(
     return { success: false, error: 'Badge ini tidak memiliki reward Sparks.' };
   }
 
-  // Mark user_badges as claimed
+  // Check if a claim adjustment already exists in sparks_adjustments
+  const existingClaim = await db
+    .prepare(`
+      SELECT id FROM sparks_adjustments
+      WHERE user_id = ?
+        AND category = 'BADGE_REWARD'
+        AND note LIKE '%' || ? || '%'
+    `)
+    .bind(session.userId, badge.name)
+    .first();
+
+  if (existingClaim) {
+    // Backfill claimed_at in user_badges
+    await db
+      .prepare('UPDATE user_badges SET claimed_at = ? WHERE user_id = ? AND badge_id = ?')
+      .bind(now, session.userId, badgeId)
+      .run();
+
+    return { success: false, error: 'Sparks dari badge ini sudah pernah Anda claim.' };
+  }
+
+  // Mark all user_badges rows for this user & badge as claimed
   await db
-    .prepare('UPDATE user_badges SET claimed_at = ? WHERE id = ?')
-    .bind(now, userBadge.id)
+    .prepare('UPDATE user_badges SET claimed_at = ? WHERE user_id = ? AND badge_id = ?')
+    .bind(now, session.userId, badgeId)
     .run();
 
   // Credit Sparks in sparks_adjustments
