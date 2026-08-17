@@ -15,33 +15,7 @@ import {
   RequirementType,
 } from './badgeTypes';
 
-async function awardBadgeSparksReward(
-  db: any,
-  userId: string,
-  badgeId: string,
-  badgeName: string,
-  sparksReward: number,
-  triggeredBy: string
-) {
-  if (!sparksReward || sparksReward <= 0) return;
-  const saId = `sa_${crypto.randomUUID().replace(/-/g, '')}`;
-  try {
-    await db
-      .prepare(`
-        INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at)
-        VALUES (?, ?, 'APPRECIATION', ?, 'BADGE_REWARD', ?, ?, strftime('%s', 'now'))
-      `)
-      .bind(saId, userId, sparksReward, `Reward Badge: ${badgeName}`, triggeredBy)
-      .run();
 
-    revalidatePath('/dashboard/sparks');
-    revalidatePath('/dashboard/profile');
-    revalidatePath('/dashboard/leaderboard');
-    revalidatePath('/dashboard/badges');
-  } catch (e) {
-    console.error('Failed to credit badge sparks reward:', e);
-  }
-}
 
 /**
  * Global Evaluator: Auto-awards badges to ALL users who satisfy task/workspace requirements
@@ -49,6 +23,18 @@ async function awardBadgeSparksReward(
 export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise<number> {
   const db = await getDB();
   const now = Date.now();
+
+  // 0. Clean up any legacy automatic badge sparks adjustments (ensure ONLY manual claims exist)
+  try {
+    await db.prepare(`
+      DELETE FROM sparks_adjustments
+      WHERE category = 'BADGE_REWARD'
+        AND note LIKE 'Reward Badge: %'
+        AND note NOT LIKE 'Claim Reward Badge: %'
+    `).run();
+  } catch (e) {
+    console.error('Failed to cleanup automatic badge sparks adjustments:', e);
+  }
 
   // 1. Fetch all active badges with requirements
   const { results: rawBadges } = await db
@@ -731,8 +717,6 @@ export async function awardBadgeToUsersAction(
 
       if (res.meta.changes > 0) {
         grantedCount++;
-        // Award Sparks bonus for getting the badge
-        await awardBadgeSparksReward(db, uId, badgeId, badge.name, badge.sparks_reward || 0, session.userId);
       }
     } catch (_e) {}
   }
