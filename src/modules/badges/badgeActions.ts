@@ -63,11 +63,11 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
 
   const { results: approvedAssignments } = await db
     .prepare(`
-      SELECT ta.user_id, ta.task_id, ta.status AS assignment_status, t.status AS task_status, t.workspace_id
+      SELECT ta.user_id, ta.task_id, ta.status AS assignment_status, t.workspace_id
       FROM task_assignments ta
       JOIN tasks t ON ta.task_id = t.id
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      WHERE (ta.status = 'APPROVED' OR t.status IN ('APPROVED', 'PUBLISHED', 'LOCKED'))
+      WHERE ta.status IN ('APPROVED', 'DONE', 'PUBLISHED')
         AND t.status != 'DELETED'
         AND (ws.id IS NULL OR ws.deleted_at IS NULL)
         ${userClause}
@@ -104,7 +104,47 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
     }
   });
 
-  // 3. Fetch existing user_badges to avoid duplicate awards
+  // 3. Cleanup invalid SYSTEM_AUTO user_badges where requirements are NOT satisfied
+  for (const b of rawBadges as any[]) {
+    const badgeId = b.id;
+    let reqIds: string[] = [];
+    if (b.requirement_data) {
+      try { reqIds = JSON.parse(b.requirement_data); } catch {}
+    }
+    if (reqIds.length === 0) continue;
+
+    const reqType = b.requirement_type;
+
+    const { results: autoAwards } = await db
+      .prepare("SELECT id, user_id FROM user_badges WHERE badge_id = ? AND awarded_by = 'SYSTEM_AUTO'")
+      .bind(badgeId)
+      .all();
+
+    for (const ub of (autoAwards as any[] || [])) {
+      const uId = ub.user_id;
+      const uCompleted = userTaskMap.get(uId) || new Set<string>();
+      let stillValid = false;
+
+      if (reqType === 'TASK') {
+        stillValid = reqIds.every((tId) => uCompleted.has(tId));
+      } else if (reqType === 'WORKSPACE') {
+        stillValid = reqIds.every((wsId) => {
+          const wsTasks = workspaceTasksMap.get(wsId) || [];
+          return wsTasks.length > 0 && wsTasks.every((tId) => uCompleted.has(tId));
+        });
+      }
+
+      if (!stillValid) {
+        // Delete invalid auto-award and invalid sparks reward
+        await db.prepare("DELETE FROM user_badges WHERE id = ?").bind(ub.id).run();
+        await db.prepare("DELETE FROM sparks_adjustments WHERE user_id = ? AND category = 'BADGE_REWARD' AND created_by = 'SYSTEM_AUTO' AND note LIKE ?")
+          .bind(uId, `%${b.name}%`)
+          .run();
+      }
+    }
+  }
+
+  // 4. Fetch existing user_badges to avoid duplicate awards
   const { results: existingUserBadges } = await db
     .prepare("SELECT user_id, badge_id FROM user_badges")
     .all();
@@ -116,7 +156,7 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
 
   let newAwardCount = 0;
 
-  // 4. Evaluate each user against each badge
+  // 5. Evaluate each user against each badge
   for (const [userId, completedTasks] of userTaskMap.entries()) {
     for (const b of rawBadges as any[]) {
       const badgeId = b.id;
@@ -274,7 +314,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
 
     const userCompletedTaskIds = new Set<string>();
     (userAssignments as any[]).forEach((row) => {
-      if (row.assignment_status === 'APPROVED' || ['APPROVED', 'PUBLISHED', 'LOCKED'].includes(row.task_status)) {
+      if (['APPROVED', 'DONE', 'PUBLISHED'].includes(row.assignment_status)) {
         userCompletedTaskIds.add(row.task_id);
       }
     });
