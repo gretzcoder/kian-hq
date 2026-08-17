@@ -292,11 +292,8 @@ export default function FloatingNotificationDrawer({
 
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                 {[
-                  { id: 'ALL', label: '👥 Semua' },
+                  { id: 'ALL', label: '⚡ Semua Workflow' },
                   { id: 'WORKSPACE', label: '⚡ Task & Workflow' },
-                  { id: 'CHAT', label: '💬 Chat (Semua)' },
-                  { id: 'CHAT_WS', label: '💬 Workspace Chat' },
-                  { id: 'CHAT_COMM', label: '🌐 Community Chat' },
                   ...(canReview ? [{ id: 'REVIEW', label: '📋 Reviews' }] : []),
                   { id: 'SPARKS', label: '✨ Sparks & Info' },
                 ].map((f) => (

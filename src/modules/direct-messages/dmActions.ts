@@ -29,6 +29,8 @@ export interface DirectMessage {
 }
 
 export interface ConversationItem {
+  id: string;
+  category: 'PERSONAL' | 'WORKSPACE' | 'COMMUNITY' | 'REQUESTS';
   partnerId: string;
   partnerName: string;
   partnerEmail: string;
@@ -38,8 +40,9 @@ export interface ConversationItem {
   lastMessageTime: number;
   lastMessageSenderId: string;
   unreadCount: number;
-  isRequest: boolean;
-  isFriend: boolean;
+  isRequest?: boolean;
+  isFriend?: boolean;
+  targetUrl?: string;
 }
 
 /**
@@ -237,9 +240,11 @@ export async function getDirectMessagesAction(partnerUserId: string): Promise<{
 }
 
 /**
- * Fetch all recent DM conversations for top navbar dropdown & messenger widget
+ * Fetch all recent chat conversations & notifications for top navbar messenger (Personal, Workspace, Community, Requests)
  */
-export async function getRecentConversationsAction(filter: 'ALL' | 'UNREAD' | 'REQUESTS' | 'FRIENDS' = 'ALL'): Promise<{
+export async function getRecentConversationsAction(
+  filter: 'ALL' | 'PERSONAL' | 'WORKSPACE' | 'COMMUNITY' | 'REQUESTS' | 'UNREAD' = 'ALL'
+): Promise<{
   success: boolean;
   conversations?: ConversationItem[];
   totalUnread?: number;
@@ -249,84 +254,193 @@ export async function getRecentConversationsAction(filter: 'ALL' | 'UNREAD' | 'R
   if (!session) return { success: false, error: 'Unauthorized' };
 
   const db = await getDB();
-
-  // Fetch all DM rows where user is sender or receiver
-  const { results: rawRows } = await db
-    .prepare(
-      `SELECT dm.*,
-              u.id AS partner_id, u.name AS partner_name, u.email AS partner_email,
-              u.avatar_url AS partner_avatar, u.user_type AS partner_user_type
-       FROM direct_messages dm
-       JOIN users u ON (CASE WHEN dm.sender_id = ? THEN dm.receiver_id ELSE dm.sender_id END) = u.id
-       WHERE dm.sender_id = ? OR dm.receiver_id = ?
-       ORDER BY dm.created_at DESC`
-    )
-    .bind(session.userId, session.userId, session.userId)
-    .all();
-
-  // Fetch all accepted friend IDs
-  const { results: friendshipRows } = await db
-    .prepare(
-      `SELECT user_id, friend_id FROM friendships
-       WHERE (user_id = ? OR friend_id = ?) AND status = 'ACCEPTED'`
-    )
-    .bind(session.userId, session.userId)
-    .all();
-
-  const friendIdSet = new Set<string>();
-  (friendshipRows as any[]).forEach((f) => {
-    friendIdSet.add(f.user_id === session.userId ? f.friend_id : f.user_id);
-  });
-
-  const map = new Map<string, ConversationItem>();
+  const list: ConversationItem[] = [];
   let totalUnread = 0;
 
-  (rawRows as any[]).forEach((row) => {
-    const partnerId = row.partner_id;
-    const isIncomingUnread = row.receiver_id === session.userId && row.status !== 'READ';
-    if (isIncomingUnread) totalUnread++;
+  // 1. Fetch Personal DMs & Requests
+  try {
+    const { results: rawRows } = await db
+      .prepare(
+        `SELECT dm.*,
+                u.id AS partner_id, u.name AS partner_name, u.email AS partner_email,
+                u.avatar_url AS partner_avatar, u.user_type AS partner_user_type
+         FROM direct_messages dm
+         JOIN users u ON (CASE WHEN dm.sender_id = ? THEN dm.receiver_id ELSE dm.sender_id END) = u.id
+         WHERE dm.sender_id = ? OR dm.receiver_id = ?
+         ORDER BY dm.created_at DESC`
+      )
+      .bind(session.userId, session.userId, session.userId)
+      .all();
 
-    if (!map.has(partnerId)) {
-      const isFriend = friendIdSet.has(partnerId);
-      const isRequest = Boolean(row.is_request) && row.receiver_id === session.userId && !isFriend;
+    const { results: friendshipRows } = await db
+      .prepare(
+        `SELECT user_id, friend_id FROM friendships
+         WHERE (user_id = ? OR friend_id = ?) AND status = 'ACCEPTED'`
+      )
+      .bind(session.userId, session.userId)
+      .all();
 
-      map.set(partnerId, {
-        partnerId,
-        partnerName: row.partner_name || row.partner_email,
-        partnerEmail: row.partner_email,
-        partnerAvatar: row.partner_avatar,
-        partnerUserType: row.partner_user_type,
-        lastMessage: row.message,
-        lastMessageTime: row.created_at,
-        lastMessageSenderId: row.sender_id,
-        unreadCount: isIncomingUnread ? 1 : 0,
-        isRequest,
-        isFriend,
-      });
-    } else {
-      const existing = map.get(partnerId)!;
-      if (isIncomingUnread) {
-        existing.unreadCount++;
+    const friendIdSet = new Set<string>();
+    (friendshipRows as any[]).forEach((f) => {
+      friendIdSet.add(f.user_id === session.userId ? f.friend_id : f.user_id);
+    });
+
+    const dmMap = new Map<string, ConversationItem>();
+
+    (rawRows as any[]).forEach((row) => {
+      const partnerId = row.partner_id;
+      const isIncomingUnread = row.receiver_id === session.userId && row.status !== 'READ';
+      if (isIncomingUnread) totalUnread++;
+
+      if (!dmMap.has(partnerId)) {
+        const isFriend = friendIdSet.has(partnerId);
+        const isRequest = Boolean(row.is_request) && row.receiver_id === session.userId && !isFriend;
+
+        dmMap.set(partnerId, {
+          id: `dm_conv_${partnerId}`,
+          category: isRequest ? 'REQUESTS' : 'PERSONAL',
+          partnerId,
+          partnerName: row.partner_name || row.partner_email,
+          partnerEmail: row.partner_email,
+          partnerAvatar: row.partner_avatar,
+          partnerUserType: row.partner_user_type,
+          lastMessage: row.message,
+          lastMessageTime: row.created_at,
+          lastMessageSenderId: row.sender_id,
+          unreadCount: isIncomingUnread ? 1 : 0,
+          isRequest,
+          isFriend,
+        });
+      } else {
+        const existing = dmMap.get(partnerId)!;
+        if (isIncomingUnread) {
+          existing.unreadCount++;
+        }
       }
-    }
-  });
+    });
 
-  let conversations = Array.from(map.values());
+    list.push(...Array.from(dmMap.values()));
+  } catch (err) {
+    console.error('Error fetching DM conversations:', err);
+  }
 
-  if (filter === 'UNREAD') {
-    conversations = conversations.filter((c) => c.unreadCount > 0);
+  // 2. Fetch Workspace Chats
+  try {
+    const { results: wsChats } = await db
+      .prepare(
+        `SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.created_at,
+                u.name AS senderName, ws.name AS wsName
+         FROM workspace_chats wc
+         JOIN users u ON wc.user_id = u.id
+         JOIN workspaces ws ON wc.workspace_id = ws.id
+         WHERE wc.user_id != ?
+           AND ws.deleted_at IS NULL
+           AND (
+             ws.ojt_coordinator_id = ?
+             OR EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
+             OR EXISTS (SELECT 1 FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id AND ta.user_id = ?)
+           )
+         ORDER BY wc.created_at DESC
+         LIMIT 20`
+      )
+      .bind(session.userId, session.userId, session.userId, session.userId)
+      .all();
+
+    const wsMap = new Map<string, ConversationItem>();
+    (wsChats as any[]).forEach((r) => {
+      const wsId = r.workspace_id;
+      if (!wsMap.has(wsId)) {
+        wsMap.set(wsId, {
+          id: `ws_conv_${wsId}`,
+          category: 'WORKSPACE',
+          partnerId: wsId,
+          partnerName: `⚡ Workspace: ${r.wsName || 'Team'}`,
+          partnerEmail: 'Workspace Team Chat',
+          partnerAvatar: null,
+          partnerUserType: 'WORKSPACE',
+          lastMessage: `${r.senderName}: "${r.message}"`,
+          lastMessageTime: Number(r.created_at) || 0,
+          lastMessageSenderId: r.user_id,
+          unreadCount: 1,
+          targetUrl: `/dashboard/workspace/${wsId}?tab=chat`,
+        });
+      }
+    });
+
+    list.push(...Array.from(wsMap.values()));
+  } catch (err) {
+    console.error('Error fetching Workspace Chats for Messenger:', err);
+  }
+
+  // 3. Fetch Community Chats
+  try {
+    const { results: commChats } = await db
+      .prepare(
+        `SELECT cm.id, cm.channel_id, cm.user_id, cm.message, cm.created_at,
+                u.name AS senderName, cc.name AS channelName
+         FROM community_messages cm
+         JOIN users u ON cm.user_id = u.id
+         JOIN community_channels cc ON cm.channel_id = cc.id
+         WHERE cm.user_id != ?
+         ORDER BY cm.created_at DESC
+         LIMIT 20`
+      )
+      .bind(session.userId)
+      .all();
+
+    const commMap = new Map<string, ConversationItem>();
+    (commChats as any[]).forEach((r) => {
+      const chId = r.channel_id;
+      if (!commMap.has(chId)) {
+        let createdTs = Number(r.created_at);
+        if (isNaN(createdTs) || createdTs <= 0) {
+          createdTs = Math.floor(new Date(r.created_at).getTime() / 1000) || 0;
+        }
+
+        commMap.set(chId, {
+          id: `comm_conv_${chId}`,
+          category: 'COMMUNITY',
+          partnerId: chId,
+          partnerName: `🌐 #${r.channelName}`,
+          partnerEmail: 'Community Channel Chat',
+          partnerAvatar: null,
+          partnerUserType: 'COMMUNITY',
+          lastMessage: `${r.senderName}: "${r.message}"`,
+          lastMessageTime: createdTs,
+          lastMessageSenderId: r.user_id,
+          unreadCount: 1,
+          targetUrl: `/dashboard/community?channelId=${chId}`,
+        });
+      }
+    });
+
+    list.push(...Array.from(commMap.values()));
+  } catch (err) {
+    console.error('Error fetching Community Chats for Messenger:', err);
+  }
+
+  // Sort overall list by lastMessageTime DESC
+  list.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+
+  let filtered = list;
+  if (filter === 'PERSONAL') {
+    filtered = list.filter((c) => c.category === 'PERSONAL');
+  } else if (filter === 'WORKSPACE') {
+    filtered = list.filter((c) => c.category === 'WORKSPACE');
+  } else if (filter === 'COMMUNITY') {
+    filtered = list.filter((c) => c.category === 'COMMUNITY');
   } else if (filter === 'REQUESTS') {
-    conversations = conversations.filter((c) => c.isRequest);
-  } else if (filter === 'FRIENDS') {
-    conversations = conversations.filter((c) => c.isFriend);
+    filtered = list.filter((c) => c.category === 'REQUESTS' || c.isRequest);
+  } else if (filter === 'UNREAD') {
+    filtered = list.filter((c) => c.unreadCount > 0);
   }
 
   return {
     success: true,
-    conversations,
+    conversations: filtered,
     totalUnread,
   };
-}
+};
 
 /**
  * Toggle emoji reaction on a direct message
