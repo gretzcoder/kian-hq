@@ -118,6 +118,9 @@ export async function ensureSchemaMigrations(db: any) {
       )
     `).run();
   } catch {}
+  try {
+    await db.prepare('ALTER TABLE user_badges ADD COLUMN claimed_at INTEGER').run();
+  } catch {}
   migrationDone = true;
 }
 

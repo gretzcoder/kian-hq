@@ -1,8 +1,7 @@
-'use client';
-
 import { useState, useTransition } from 'react';
 import { BadgeItem, CATEGORY_META } from '@/modules/badges/badgeTypes';
-import { deleteBadgeAction } from '@/modules/badges/badgeActions';
+import { deleteBadgeAction, claimBadgeSparksAction } from '@/modules/badges/badgeActions';
+import { useUI } from '@/components/ui/UIProvider';
 import Image from 'next/image';
 
 interface BadgeDetailModalProps {
@@ -24,14 +23,36 @@ export function BadgeDetailModal({
   onAward,
   onSuccess,
 }: BadgeDetailModalProps) {
+  const { toast } = useUI();
   const [activeTab, setActiveTab] = useState<'REQUIREMENTS' | 'OWNERS'>('REQUIREMENTS');
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [pendingDelete, startDeleteTransition] = useTransition();
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [isClaiming, setIsClaiming] = useState(false);
+  const [localClaimed, setLocalClaimed] = useState<boolean | null>(null);
 
   if (!isOpen) return null;
 
   const catMeta = CATEGORY_META[badge.category] || CATEGORY_META.TROOPER;
+  const isClaimed = localClaimed !== null ? localClaimed : badge.isSparksClaimed;
+
+  const handleClaimSparks = async () => {
+    setIsClaiming(true);
+    try {
+      const res = await claimBadgeSparksAction(badge.id);
+      if (res.success) {
+        setLocalClaimed(true);
+        toast(`✓ Berhasil claim +${res.claimedSparks || badge.sparksReward} Sparks dari badge ${badge.name}!`, 'success');
+        if (onSuccess) onSuccess();
+      } else {
+        toast(res.error || 'Gagal claim Sparks', 'error');
+      }
+    } catch (e: any) {
+      toast(e?.message || 'Gagal claim Sparks', 'error');
+    } finally {
+      setIsClaiming(false);
+    }
+  };
 
   const handleDelete = () => {
     setDeleteError(null);
@@ -139,6 +160,40 @@ export function BadgeDetailModal({
               </p>
             </div>
           </div>
+
+          {/* Claim Sparks Action Section */}
+          {badge.isOwned && badge.sparksReward > 0 && (
+            <div className="w-full max-w-md mt-3">
+              {isClaimed ? (
+                <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-between text-xs font-extrabold shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">✅</span>
+                    <span>Status Sparks: Sudah Di-claim</span>
+                  </div>
+                  <span className="font-mono text-emerald-500 font-black">+{badge.sparksReward} ✨</span>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 flex items-center justify-between gap-3 text-xs shadow-sm">
+                  <div className="text-left">
+                    <p className="font-black text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                      <span>✨</span> Reward Sparks Tersedia!
+                    </p>
+                    <p className="text-[10px] text-amber-800/80 dark:text-amber-300/80 font-bold mt-0.5">
+                      Klaim bonus +{badge.sparksReward} Sparks dari badge ini.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClaimSparks}
+                    disabled={isClaiming}
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 active:scale-95 text-white font-black text-xs shadow-md shadow-amber-500/20 transition-all flex items-center gap-1.5 shrink-0 disabled:opacity-50 cursor-pointer"
+                  >
+                    <span>{isClaiming ? '⏳ Claiming...' : `✨ Claim +${badge.sparksReward} Sparks`}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Tab Navigation */}

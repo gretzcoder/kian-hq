@@ -32,6 +32,8 @@ export interface BadgeItem {
   createdAt: number;
   isOwned: boolean;
   awardedAt: number | null;
+  claimedAt: number | null;
+  isSparksClaimed: boolean;
   progressPercent: number;
   requirements: RequirementItemProgress[];
   owners: BadgeOwner[];

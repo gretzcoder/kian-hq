@@ -50,37 +50,6 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
   const db = await getDB();
   const now = Date.now();
 
-  // 0. Retroactively credit missing Sparks rewards for any user who owns a badge but hasn't received its Sparks reward
-  try {
-    const { results: uncreditedOwners } = await db
-      .prepare(`
-        SELECT ub.user_id, ub.badge_id, b.name AS badge_name, b.sparks_reward, ub.awarded_by
-        FROM user_badges ub
-        JOIN badges b ON ub.badge_id = b.id
-        WHERE b.sparks_reward > 0
-          AND NOT EXISTS (
-            SELECT 1 FROM sparks_adjustments sa
-            WHERE sa.user_id = ub.user_id
-              AND sa.category = 'BADGE_REWARD'
-              AND sa.note LIKE '%' || b.name || '%'
-          )
-      `)
-      .all();
-
-    for (const row of (uncreditedOwners as any[] || [])) {
-      await awardBadgeSparksReward(
-        db,
-        row.user_id,
-        row.badge_id,
-        row.badge_name,
-        row.sparks_reward,
-        row.awarded_by || 'SYSTEM_AUTO'
-      );
-    }
-  } catch (e) {
-    console.error('Failed to sync uncredited badge sparks rewards:', e);
-  }
-
   // 1. Fetch all active badges with requirements
   const { results: rawBadges } = await db
     .prepare("SELECT * FROM badges WHERE requirement_type IN ('TASK', 'WORKSPACE')")
@@ -226,8 +195,6 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
           if (res.meta.changes > 0) {
             newAwardCount++;
             userBadgeSet.add(key);
-            // Award Reward Sparks to User!
-            await awardBadgeSparksReward(db, userId, badgeId, b.name, b.sparks_reward || 0, 'SYSTEM_AUTO');
           }
         } catch (_e) {}
       }
@@ -291,13 +258,13 @@ export async function getAllBadgesWithUserProgress(): Promise<{
 
     // 2. Fetch user's earned badges
     const { results: userEarned } = await db
-      .prepare('SELECT badge_id, awarded_at FROM user_badges WHERE user_id = ?')
+      .prepare('SELECT badge_id, awarded_at, claimed_at FROM user_badges WHERE user_id = ?')
       .bind(session.userId)
       .all();
 
-    const userEarnedMap = new Map<string, number>();
+    const userEarnedMap = new Map<string, { awardedAt: number; claimedAt: number | null }>();
     (userEarned as any[]).forEach((ub) => {
-      userEarnedMap.set(ub.badge_id, ub.awarded_at);
+      userEarnedMap.set(ub.badge_id, { awardedAt: ub.awarded_at, claimedAt: ub.claimed_at || null });
     });
 
     // 3. Fetch all owners for all badges to show badge earners
@@ -381,8 +348,11 @@ export async function getAllBadgesWithUserProgress(): Promise<{
 
     for (const b of rawBadges as any[]) {
       const badgeId = b.id;
-      let isOwned = userEarnedMap.has(badgeId);
-      let awardedAt = userEarnedMap.get(badgeId) || null;
+      const userBadgeInfo = userEarnedMap.get(badgeId);
+      let isOwned = Boolean(userBadgeInfo);
+      let awardedAt = userBadgeInfo?.awardedAt || null;
+      let claimedAt = userBadgeInfo?.claimedAt || null;
+      let isSparksClaimed = Boolean(claimedAt);
 
       let reqIds: string[] = [];
       if (b.requirement_data) {
@@ -452,11 +422,10 @@ export async function getAllBadgesWithUserProgress(): Promise<{
             .bind(userBadgeId, session.userId, badgeId, now)
             .run();
 
-          // Award Sparks reward for completing badge requirements
-          await awardBadgeSparksReward(db, session.userId, badgeId, b.name, b.sparks_reward || 0, 'SYSTEM_AUTO');
-
           isOwned = true;
           awardedAt = now;
+          claimedAt = null;
+          isSparksClaimed = false;
           progressPercent = 100;
 
           // Add to owners list
@@ -491,6 +460,8 @@ export async function getAllBadgesWithUserProgress(): Promise<{
         createdAt: b.created_at,
         isOwned,
         awardedAt,
+        claimedAt,
+        isSparksClaimed,
         progressPercent,
         requirements,
         owners,
@@ -831,13 +802,76 @@ export async function getBadgeRequirementOptions(): Promise<{
 }
 
 /**
+ * Server Action: Manually claim Sparks reward for an earned badge
+ */
+export async function claimBadgeSparksAction(
+  badgeId: string
+): Promise<{ success: boolean; claimedSparks?: number; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const now = Date.now();
+
+  const userBadge = (await db
+    .prepare('SELECT id, claimed_at FROM user_badges WHERE user_id = ? AND badge_id = ?')
+    .bind(session.userId, badgeId)
+    .first()) as { id: string; claimed_at: number | null } | null;
+
+  if (!userBadge) {
+    return { success: false, error: 'Anda belum memiliki badge ini.' };
+  }
+
+  if (userBadge.claimed_at) {
+    return { success: false, error: 'Sparks dari badge ini sudah pernah Anda claim.' };
+  }
+
+  const badge = (await db
+    .prepare('SELECT name, sparks_reward FROM badges WHERE id = ?')
+    .bind(badgeId)
+    .first()) as { name: string; sparks_reward: number } | null;
+
+  if (!badge) {
+    return { success: false, error: 'Badge tidak ditemukan.' };
+  }
+
+  const sparksReward = badge.sparks_reward || 0;
+  if (sparksReward <= 0) {
+    return { success: false, error: 'Badge ini tidak memiliki reward Sparks.' };
+  }
+
+  // Mark user_badges as claimed
+  await db
+    .prepare('UPDATE user_badges SET claimed_at = ? WHERE id = ?')
+    .bind(now, userBadge.id)
+    .run();
+
+  // Credit Sparks in sparks_adjustments
+  const saId = `sa_${crypto.randomUUID().replace(/-/g, '')}`;
+  await db
+    .prepare(`
+      INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at)
+      VALUES (?, ?, 'APPRECIATION', ?, 'BADGE_REWARD', ?, ?, strftime('%s', 'now'))
+    `)
+    .bind(saId, session.userId, sparksReward, `Claim Reward Badge: ${badge.name}`, session.userId)
+    .run();
+
+  revalidatePath('/dashboard/badges');
+  revalidatePath('/dashboard/sparks');
+  revalidatePath('/dashboard/profile');
+  revalidatePath('/dashboard/leaderboard');
+
+  return { success: true, claimedSparks: sparksReward };
+}
+
+/**
  * Fetch all earned badges for a specific user (for Profile & User Popovers)
  */
 export async function getUserBadgesAction(targetUserId: string): Promise<BadgeItem[]> {
   const db = await getDB();
   const { results } = await db
     .prepare(`
-      SELECT b.*, ub.awarded_at
+      SELECT b.*, ub.awarded_at, ub.claimed_at
       FROM user_badges ub
       JOIN badges b ON ub.badge_id = b.id
       WHERE ub.user_id = ?
@@ -859,6 +893,8 @@ export async function getUserBadgesAction(targetUserId: string): Promise<BadgeIt
     createdAt: b.created_at,
     isOwned: true,
     awardedAt: b.awarded_at,
+    claimedAt: b.claimed_at || null,
+    isSparksClaimed: Boolean(b.claimed_at),
     progressPercent: 100,
     requirements: [],
     owners: [],
