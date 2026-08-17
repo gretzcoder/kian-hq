@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFloatingMessenger, ActiveChatSession } from './FloatingMessengerContext';
 import {
@@ -21,6 +20,160 @@ const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 const COMMON_EMOJIS = ['👍', '❤️', '🔥', '😂', '🎉', '👏', '🙌'];
 const STICKERS = ['🚀', '💯', '✨', '⚡', '🏆', '🎉', '💪', '🎯', '⭐', '🎈'];
 
+interface DraggableChatHeadProps {
+  partnerId: string;
+  name: string;
+  avatar: string | null;
+  index: number;
+  onOpen: () => void;
+  onClose: () => void;
+}
+
+function DraggableChatHead({ partnerId, name, avatar, index, onOpen, onClose }: DraggableChatHeadProps) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
+  const dragRef = useRef<{ startX: number; startY: number; initialX: number; initialY: number; moved: boolean }>({
+    startX: 0,
+    startY: 0,
+    initialX: 0,
+    initialY: 0,
+    moved: false,
+  });
+
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // Default initial position (80px + index * 64px from bottom, right-4 = window.innerWidth - 72px)
+  const defaultBottomPx = 80 + index * 64;
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: pos ? pos.x : window.innerWidth - 72,
+      initialY: pos ? pos.y : window.innerHeight - defaultBottomPx - 56,
+      moved: false,
+    };
+
+    // Press & Hold (Long-press) timer for mobile quick action menu
+    longPressTimer.current = setTimeout(() => {
+      if (!dragRef.current.moved) {
+        setShowMenu(true);
+      }
+    }, 380);
+
+    const handlePointerMove = (moveEv: PointerEvent) => {
+      const dx = moveEv.clientX - dragRef.current.startX;
+      const dy = moveEv.clientY - dragRef.current.startY;
+
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+        dragRef.current.moved = true;
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+
+        const newX = Math.max(10, Math.min(window.innerWidth - 65, dragRef.current.initialX + dx));
+        const newY = Math.max(10, Math.min(window.innerHeight - 65, dragRef.current.initialY + dy));
+        setPos({ x: newX, y: newY });
+        setIsDragging(true);
+      }
+    };
+
+    const handlePointerUp = () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+
+      setTimeout(() => setIsDragging(false), 50);
+
+      // If user tapped without dragging, toggle chat
+      if (!dragRef.current.moved && !showMenu) {
+        onOpen();
+      }
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  };
+
+  const currentStyle: React.CSSProperties = pos
+    ? { left: `${pos.x}px`, top: `${pos.y}px` }
+    : { bottom: `${defaultBottomPx}px`, right: '1rem' };
+
+  return (
+    <div
+      style={currentStyle}
+      className={`fixed z-[95] flex items-center gap-2 group touch-none select-none ${
+        isDragging ? 'cursor-grabbing scale-105 transition-none' : 'cursor-grab transition-all duration-200'
+      }`}
+    >
+      {/* Circle Chat Head Avatar */}
+      <div
+        onPointerDown={handlePointerDown}
+        className="relative w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 p-0.5 shadow-2xl transition-transform hover:scale-110 active:scale-95 cursor-grab"
+        title={`Geser/Tekan & tahan untuk menu: ${name}`}
+      >
+        <UserAvatar
+          src={avatar}
+          name={name}
+          size="lg"
+          square
+          className="w-full h-full rounded-full border-2 border-white dark:border-zinc-900 object-cover pointer-events-none"
+        />
+        <span className="absolute bottom-0 right-0 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900 ring-2 ring-emerald-400 pointer-events-none" />
+      </div>
+
+      {/* Desktop Close Button on Hover */}
+      <button
+        type="button"
+        onClick={onClose}
+        className="w-6 h-6 rounded-full bg-black/80 hover:bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+        title="Tutup Chat"
+      >
+        ✕
+      </button>
+
+      {/* Mobile Long-Press Quick Action Popup Menu */}
+      {showMenu && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute -top-24 right-0 w-44 bg-zinc-900 border border-zinc-700 text-white rounded-2xl p-2 shadow-2xl z-50 text-xs animate-in zoom-in-95 duration-150 space-y-1"
+        >
+          <div className="px-2.5 py-1 border-b border-zinc-800 flex items-center justify-between">
+            <span className="font-bold truncate text-[10px] text-zinc-400">{name}</span>
+            <button
+              type="button"
+              onClick={() => setShowMenu(false)}
+              className="text-zinc-400 hover:text-white font-bold text-[10px]"
+            >
+              ✕
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setShowMenu(false);
+              onOpen();
+            }}
+            className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-purple-600 font-bold flex items-center gap-2 cursor-pointer transition-colors text-[11px]"
+          >
+            <span>💬</span> Buka Chat
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowMenu(false);
+              onClose();
+            }}
+            className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-rose-600 font-bold text-rose-300 hover:text-white flex items-center gap-2 cursor-pointer transition-colors text-[11px]"
+          >
+            <span>✕</span> Tutup Chat
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface SingleChatBoxProps {
   chat: ActiveChatSession;
   index: number;
@@ -29,7 +182,7 @@ interface SingleChatBoxProps {
 
 function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
   const router = useRouter();
-  const { closeChat, toggleMinimize, openChat } = useFloatingMessenger();
+  const { closeChat, toggleMinimize } = useFloatingMessenger();
   const { partnerId, partnerName: activePartnerName, partnerAvatar: activePartnerAvatar, isMinimized } = chat;
 
   const [messages, setMessages] = useState<DirectMessage[]>([]);
@@ -97,12 +250,12 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
   const name = partnerInfo?.name || activePartnerName || 'User';
   const avatar = partnerInfo?.avatarUrl || activePartnerAvatar || null;
 
-  // ── PRESS & HOLD (LONG PRESS) HANDLERS FOR MOBILE & DESKTOP ──
+  // ── PRESS & HOLD (LONG PRESS) HANDLERS FOR MESSAGES ──
   const handleTouchStart = (msgId: string) => {
     if (touchTimer.current) clearTimeout(touchTimer.current);
     touchTimer.current = setTimeout(() => {
       setActiveActionMsgId((prev) => (prev === msgId ? null : msgId));
-    }, 350); // 350ms long press threshold
+    }, 350);
   };
 
   const handleTouchEnd = () => {
@@ -112,40 +265,17 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
     }
   };
 
-  // ── MINIMIZED CHAT HEAD CIRCLE ICON STATE ──
+  // ── MINIMIZED CHAT HEAD CIRCLE ICON STATE (DRAGGABLE & LONG-PRESS ACTION) ──
   if (isMinimized) {
-    // Offset each minimized chat head vertically (80px bottom start to float above BOOST badge)
-    const bottomOffsetPx = 80 + index * 64;
-
     return (
-      <div
-        style={{ bottom: `${bottomOffsetPx}px` }}
-        className="fixed right-4 z-[95] flex items-center gap-2 group animate-in zoom-in-95 duration-200"
-      >
-        <div
-          onClick={() => toggleMinimize(partnerId, false)}
-          className="relative w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 p-0.5 shadow-2xl cursor-pointer hover:scale-110 active:scale-95 transition-all duration-200"
-          title={`Buka chat dengan ${name}`}
-        >
-          <UserAvatar
-            src={avatar}
-            name={name}
-            size="lg"
-            square
-            className="w-full h-full rounded-full border-2 border-white dark:border-zinc-900 object-cover"
-          />
-          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900 ring-2 ring-emerald-400" />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => closeChat(partnerId)}
-          className="w-6 h-6 rounded-full bg-black/70 hover:bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-          title="Tutup Chat"
-        >
-          ✕
-        </button>
-      </div>
+      <DraggableChatHead
+        partnerId={partnerId}
+        name={name}
+        avatar={avatar}
+        index={index}
+        onOpen={() => toggleMinimize(partnerId, false)}
+        onClose={() => closeChat(partnerId)}
+      />
     );
   }
 
