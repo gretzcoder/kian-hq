@@ -2,6 +2,7 @@ import { useState, useTransition } from 'react';
 import { BadgeItem, CATEGORY_META } from '@/modules/badges/badgeTypes';
 import { deleteBadgeAction, claimBadgeSparksAction } from '@/modules/badges/badgeActions';
 import { useUI } from '@/components/ui/UIProvider';
+import { UserProfileModal, UserProfileData } from '@/components/UserProfileModal';
 import Image from 'next/image';
 
 interface BadgeDetailModalProps {
@@ -30,6 +31,7 @@ export function BadgeDetailModal({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isClaiming, setIsClaiming] = useState(false);
   const [localClaimed, setLocalClaimed] = useState<boolean | null>(null);
+  const [selectedOwnerForProfile, setSelectedOwnerForProfile] = useState<UserProfileData | null>(null);
 
   if (!isOpen) return null;
 
@@ -277,11 +279,23 @@ export function BadgeDetailModal({
                   <p className="text-[10px] opacity-70">Jadilah yang pertama untuk mendapatkan badge {badge.name}!</p>
                 </div>
               ) : (
-                <div className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+                <div className="space-y-1.5">
                   {badge.owners.map((owner) => (
-                    <div key={owner.userId} className="py-2.5 flex items-center justify-between gap-3 first:pt-0 last:pb-0">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden">
+                    <div
+                      key={owner.userId}
+                      onClick={() =>
+                        setSelectedOwnerForProfile({
+                          id: owner.userId,
+                          name: owner.userName,
+                          email: owner.userEmail,
+                          avatar_url: owner.avatarUrl,
+                          userType: owner.userType,
+                        })
+                      }
+                      className="py-2.5 px-3 rounded-2xl flex items-center justify-between gap-3 cursor-pointer hover:bg-purple-500/10 dark:hover:bg-purple-950/30 border border-transparent hover:border-purple-500/20 transition-all group select-none"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden group-hover:scale-105 transition-transform shadow-xs">
                           {owner.avatarUrl ? (
                             <img src={owner.avatarUrl} alt={owner.userName} className="w-full h-full object-cover" />
                           ) : (
@@ -289,17 +303,23 @@ export function BadgeDetailModal({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                            {owner.userName}
+                          <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors flex items-center gap-1.5">
+                            <span>{owner.userName}</span>
+                            <span className="text-[9px] opacity-0 group-hover:opacity-100 text-purple-500 transition-opacity font-normal">👤 Popover</span>
                           </p>
-                          <p className="text-[10px] text-zinc-400 truncate">
+                          <p className="text-[10px] text-zinc-400 truncate mt-0.5">
                             {owner.userType || 'Trooper'} • {owner.userEmail}
                           </p>
                         </div>
                       </div>
-                      <span className="text-[10px] font-mono text-zinc-400 shrink-0">
-                        {new Date(owner.awardedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
+                      <div className="text-right shrink-0">
+                        <span className="text-[10px] font-mono text-zinc-400 block">
+                          {new Date(owner.awardedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                        <span className="text-[9px] font-bold text-purple-500 opacity-80 group-hover:opacity-100">
+                          Lihat Profil ➔
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -382,6 +402,14 @@ export function BadgeDetailModal({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Floating User Profile Modal */}
+      {selectedOwnerForProfile && (
+        <UserProfileModal
+          user={selectedOwnerForProfile}
+          onClose={() => setSelectedOwnerForProfile(null)}
+        />
       )}
     </div>
   );
