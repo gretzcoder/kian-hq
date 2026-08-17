@@ -627,3 +627,39 @@ export async function getBadgeRequirementOptions(): Promise<{
     })),
   };
 }
+
+/**
+ * Fetch all earned badges for a specific user (for Profile & User Popovers)
+ */
+export async function getUserBadgesAction(targetUserId: string): Promise<BadgeItem[]> {
+  const db = await getDB();
+  const { results } = await db
+    .prepare(`
+      SELECT b.*, ub.awarded_at
+      FROM user_badges ub
+      JOIN badges b ON ub.badge_id = b.id
+      WHERE ub.user_id = ?
+      ORDER BY ub.awarded_at DESC
+    `)
+    .bind(targetUserId)
+    .all();
+
+  return (results as any[]).map((b) => ({
+    id: b.id,
+    name: b.name,
+    category: b.category as BadgeCategory,
+    iconUrl: b.icon_url,
+    description: b.description,
+    requirementType: b.requirement_type || 'NONE',
+    requirementData: b.requirement_data ? JSON.parse(b.requirement_data) : [],
+    sparksReward: b.sparks_reward || 0,
+    createdBy: b.created_by,
+    createdAt: b.created_at,
+    isOwned: true,
+    awardedAt: b.awarded_at,
+    progressPercent: 100,
+    requirements: [],
+    owners: [],
+    totalOwners: 1,
+  }));
+}

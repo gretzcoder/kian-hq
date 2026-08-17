@@ -7,6 +7,8 @@ import { normalizeWhatsappNumber } from '@/modules/profile/actions';
 import ProfileSparksActions from '@/modules/profile/components/ProfileSparksActions';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { getUserSparksSummary } from '@/modules/sparks/calculator';
+import { getUserBadgesAction } from '@/modules/badges/badgeActions';
+import { CATEGORY_META } from '@/modules/badges/badgeTypes';
 
 interface UserProfile {
   id: string;
@@ -181,6 +183,7 @@ export default async function ProfilePage({
   const sparksSummary = await getUserSparksSummary(targetUserId);
   const totalSparks = sparksSummary.totalSparks;
   const roleSparksMap = sparksSummary.roleSparksMap;
+  const userEarnedBadges = await getUserBadgesAction(targetUserId);
 
   // Determine Dynamic Title Badges (Standardized Order: Researcher -> Planner -> Designer -> Video Editor)
   const titleBadges: { title: string; emoji: string; desc: string; color: string }[] = [];
@@ -541,6 +544,77 @@ export default async function ProfilePage({
           </div>
         </div>
       )}
+
+      {/* ── BADGES & ACHIEVEMENTS SHOWCASE ── */}
+      <div className={`${card} p-5 space-y-4`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🏅</span>
+            <div>
+              <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+                Pencapaian & Badge Prestasi
+              </h3>
+              <p className="text-[10px] text-zinc-500 font-bold dark:text-zinc-400">
+                Koleksi badge kehormatan ({userEarnedBadges.length} Badge Dimiliki)
+              </p>
+            </div>
+          </div>
+          <a
+            href="/dashboard/badges"
+            className="px-3 py-1.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-xs font-bold transition-all"
+          >
+            Lihat Semua Badge ➔
+          </a>
+        </div>
+
+        {userEarnedBadges.length === 0 ? (
+          <div className="p-6 text-center bg-zinc-50 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200/60 dark:border-zinc-800 space-y-2">
+            <span className="text-2xl opacity-60">🛡️</span>
+            <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400">
+              Belum ada badge yang dimiliki oleh {isSelf ? 'Anda' : profile?.name || 'user ini'}.
+            </p>
+            <p className="text-[10px] text-zinc-400">
+              Selesaikan tugas & ikuti event untuk mendapatkan badge kehormatan pertamamu!
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {userEarnedBadges.map((badge) => {
+              const meta = CATEGORY_META[badge.category] || CATEGORY_META.TROOPER;
+              return (
+                <div
+                  key={badge.id}
+                  className={`p-3.5 rounded-2xl border ${meta.border} bg-gradient-to-br ${meta.bgGradient} flex items-center gap-3 transition-all hover:scale-[1.02] shadow-xs`}
+                >
+                  <div className="w-11 h-11 rounded-xl bg-white/20 dark:bg-black/30 backdrop-blur-md border border-white/30 dark:border-white/10 flex items-center justify-center p-1.5 shrink-0 overflow-hidden">
+                    {badge.iconUrl ? (
+                      <img src={badge.iconUrl} alt={badge.name} className="w-full h-full object-contain" />
+                    ) : (
+                      <span className="text-2xl">{meta.icon}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-white/40 dark:bg-black/40 ${meta.border} ${meta.textGradient}`}>
+                      {meta.label}
+                    </span>
+                    <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100 truncate mt-1">
+                      {badge.name}
+                    </h4>
+                    <p className="text-[9px] font-mono text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Didapatkan: {badge.awardedAt ? new Date(badge.awardedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Selesai'}
+                    </p>
+                  </div>
+                  {badge.sparksReward > 0 && (
+                    <span className="text-[9px] font-black text-amber-500 font-mono shrink-0">
+                      +{badge.sparksReward} ✨
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* ── BREAKDOWN GRID (Only for OJT) ── */}
       {profile?.user_type !== 'STAFF' && (roleStats.length > 0 || totalAssignments > 0) && (

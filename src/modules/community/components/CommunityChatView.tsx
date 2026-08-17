@@ -28,6 +28,8 @@ import {
   reorderCommunityChannel,
   setDefaultCommunityChannel,
 } from '../communityActions';
+import { getUserBadgesAction } from '@/modules/badges/badgeActions';
+import { BadgeItem, CATEGORY_META } from '@/modules/badges/badgeTypes';
 import type { EmojiClickData } from 'emoji-picker-react';
 
 // Dynamic import for emoji-picker-react to ensure smooth SSR rendering
@@ -391,6 +393,20 @@ export default function CommunityChatView({
 
   // Selected Member for Profile Highlight Card Modal
   const [selectedMemberCard, setSelectedMemberCard] = useState<CommunityMember | null>(null);
+  const [memberBadges, setMemberBadges] = useState<BadgeItem[]>([]);
+  const [loadingMemberBadges, setLoadingMemberBadges] = useState(false);
+
+  useEffect(() => {
+    if (selectedMemberCard?.id) {
+      setLoadingMemberBadges(true);
+      getUserBadgesAction(selectedMemberCard.id).then((b) => {
+        setMemberBadges(b);
+        setLoadingMemberBadges(false);
+      });
+    } else {
+      setMemberBadges([]);
+    }
+  }, [selectedMemberCard?.id]);
 
   const [messages, setMessages] = useState<CommunityMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(true);
@@ -2007,6 +2023,52 @@ export default function CommunityChatView({
                       : 'Offline / Tidak Aktif'}
                   </span>
                 </div>
+              </div>
+
+              {/* Badges Section */}
+              <div className="mt-3 p-3 rounded-2xl bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/15 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                    <span>🏅</span> Pencapaian Badge ({memberBadges.length})
+                  </p>
+                  <Link
+                    href={`/dashboard/badges`}
+                    onClick={() => setSelectedMemberCard(null)}
+                    className="text-[9px] font-bold text-purple-500 hover:underline"
+                  >
+                    Lihat Galeri ➔
+                  </Link>
+                </div>
+
+                {loadingMemberBadges ? (
+                  <p className="text-[10px] text-zinc-400 font-bold animate-pulse">Memuat badge...</p>
+                ) : memberBadges.length === 0 ? (
+                  <p className="text-[10px] text-zinc-400">Belum ada badge yang dimiliki.</p>
+                ) : (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
+                    {memberBadges.map((badge) => {
+                      const meta = CATEGORY_META[badge.category] || CATEGORY_META.TROOPER;
+                      return (
+                        <div
+                          key={badge.id}
+                          title={`${badge.name} (${meta.label})`}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border ${meta.border} bg-gradient-to-r ${meta.bgGradient} shrink-0 text-xs shadow-2xs`}
+                        >
+                          <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                            {badge.iconUrl ? (
+                              <img src={badge.iconUrl} alt={badge.name} className="w-full h-full object-contain" />
+                            ) : (
+                              <span>{meta.icon}</span>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-black text-zinc-900 dark:text-zinc-100 max-w-[90px] truncate">
+                            {badge.name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Quick Action Buttons */}
