@@ -114,8 +114,8 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
 
   // ── MINIMIZED CHAT HEAD CIRCLE ICON STATE ──
   if (isMinimized) {
-    // Offset each minimized chat head vertically (5rem per avatar head)
-    const bottomOffsetPx = 20 + index * 64;
+    // Offset each minimized chat head vertically (80px bottom start to float above BOOST badge)
+    const bottomOffsetPx = 80 + index * 64;
 
     return (
       <div

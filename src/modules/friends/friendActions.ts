@@ -112,7 +112,7 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<{
   sendPushNotificationToUser(targetUserId, 'DM', {
     title: '👥 Permintaan Pertemanan Baru',
     body: `${session.name} mengirimkan permintaan pertemanan.`,
-    url: '/dashboard/friends',
+    url: `/dashboard/friends?chatUserId=${session.userId}`,
   }).catch((err) => console.error('Friend push error:', err));
 
   return { success: true };
@@ -143,7 +143,7 @@ export async function respondFriendRequestAction(
     sendPushNotificationToUser(targetUserId, 'DM', {
       title: '✅ Permintaan Pertemanan Diterima',
       body: `${session.name} telah menerima permintaan pertemanan Anda.`,
-      url: '/dashboard/friends',
+      url: `/dashboard/friends?chatUserId=${session.userId}`,
     }).catch((err) => console.error('Friend accept push error:', err));
   } else if (action === 'REJECT') {
     await db

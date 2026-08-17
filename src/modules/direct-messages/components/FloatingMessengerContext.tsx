@@ -1,6 +1,7 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getRecentConversationsAction } from '../dmActions';
 
 export interface ActiveChatSession {
@@ -30,6 +31,19 @@ const FloatingMessengerContext = createContext<FloatingMessengerContextType>({
   refreshUnread: () => {},
 });
 
+function ChatUrlParamListener({ openChat }: { openChat: (id: string) => void }) {
+  const searchParams = useSearchParams();
+  const chatUserId = searchParams.get('chatUserId');
+
+  useEffect(() => {
+    if (chatUserId) {
+      openChat(chatUserId);
+    }
+  }, [chatUserId, openChat]);
+
+  return null;
+}
+
 export function FloatingMessengerProvider({ children }: { children: React.ReactNode }) {
   const [activeChats, setActiveChats] = useState<ActiveChatSession[]>([]);
   const [focusedChatId, setFocusedChatId] = useState<string | null>(null);
@@ -50,11 +64,11 @@ export function FloatingMessengerProvider({ children }: { children: React.ReactN
     return () => clearInterval(interval);
   }, []);
 
-  const openChat = (partnerUserId: string, partnerName?: string, partnerAvatar?: string | null) => {
+  const openChat = useCallback((partnerUserId: string, partnerName?: string, partnerAvatar?: string | null) => {
+    if (!partnerUserId) return;
     setActiveChats((prev) => {
       const existingIndex = prev.findIndex((c) => c.partnerId === partnerUserId);
       if (existingIndex !== -1) {
-        // Chat already exists, un-minimize & bring to front
         const updated = [...prev];
         updated[existingIndex] = {
           ...updated[existingIndex],
@@ -65,12 +79,9 @@ export function FloatingMessengerProvider({ children }: { children: React.ReactN
         return updated;
       }
 
-      // Limit active floating chats to max 3 items
       let updatedList = [...prev];
       if (updatedList.length >= 3) {
-        // Auto-minimize older open chats if adding a 4th
         updatedList = updatedList.map((c) => ({ ...c, isMinimized: true }));
-        // If still > 3, remove the oldest minimized one
         if (updatedList.length >= 4) {
           updatedList.shift();
         }
@@ -88,7 +99,7 @@ export function FloatingMessengerProvider({ children }: { children: React.ReactN
     });
 
     setFocusedChatId(partnerUserId);
-  };
+  }, []);
 
   const closeChat = (partnerUserId: string) => {
     setActiveChats((prev) => prev.filter((c) => c.partnerId !== partnerUserId));
@@ -122,6 +133,9 @@ export function FloatingMessengerProvider({ children }: { children: React.ReactN
         refreshUnread,
       }}
     >
+      <Suspense fallback={null}>
+        <ChatUrlParamListener openChat={openChat} />
+      </Suspense>
       {children}
     </FloatingMessengerContext.Provider>
   );

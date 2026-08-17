@@ -103,7 +103,7 @@ export async function sendDirectMessageAction(input: {
   sendPushNotificationToUser(receiverId, 'DM', {
     title: `💬 Pesan Personal dari ${session.name}`,
     body: message.trim(),
-    url: '/dashboard/friends',
+    url: `/dashboard/friends?chatUserId=${session.userId}`,
   }).catch((err) => console.error('DM Push notification error:', err));
 
   return {
