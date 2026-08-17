@@ -133,7 +133,10 @@ export async function getAllBadgesWithUserProgress(): Promise<{
         SELECT ta.task_id, ta.status AS assignment_status, t.status AS task_status, t.workspace_id
         FROM task_assignments ta
         JOIN tasks t ON ta.task_id = t.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
         WHERE ta.user_id = ?
+          AND t.status != 'DELETED'
+          AND (ws.id IS NULL OR ws.deleted_at IS NULL)
       `)
       .bind(session.userId)
       .all();
@@ -147,7 +150,13 @@ export async function getAllBadgesWithUserProgress(): Promise<{
 
     // 5. Fetch all tasks and workspaces for requirement title lookups & workspace completion
     const { results: allTasksRaw } = await db
-      .prepare("SELECT id, title, workspace_id, status FROM tasks WHERE status != 'DELETED'")
+      .prepare(`
+        SELECT t.id, t.title, t.workspace_id, t.status
+        FROM tasks t
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        WHERE t.status != 'DELETED'
+          AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+      `)
       .all();
 
     const taskMap = new Map<string, { title: string; workspace_id: string | null; status: string }>();
@@ -571,12 +580,13 @@ export async function getBadgeRequirementOptions(): Promise<{
 
   const [{ results: tasksRaw }, { results: workspacesRaw }, { results: usersRaw }] = await Promise.all([
     db.prepare(`
-      SELECT t.id, t.title, COALESCE(ws.name, 'No Workspace') AS workspace_name
+      SELECT t.id, t.title, ws.name AS workspace_name
       FROM tasks t
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      JOIN workspaces ws ON t.workspace_id = ws.id
       WHERE t.status != 'DELETED'
+        AND ws.deleted_at IS NULL
       ORDER BY t.created_at DESC
-      LIMIT 150
+      LIMIT 200
     `).all(),
 
     db.prepare(`
