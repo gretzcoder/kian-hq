@@ -87,6 +87,33 @@ export async function ensureSchemaMigrations(db: any) {
   try {
     await db.prepare('ALTER TABLE tasks ADD COLUMN extended_deadline INTEGER').run();
   } catch {}
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS badges (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'TROOPER',
+        icon_url TEXT,
+        description TEXT,
+        requirement_type TEXT NOT NULL DEFAULT 'NONE',
+        requirement_data TEXT,
+        created_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `).run();
+  } catch {}
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS user_badges (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        badge_id TEXT NOT NULL,
+        awarded_by TEXT,
+        awarded_at INTEGER NOT NULL,
+        UNIQUE(user_id, badge_id)
+      )
+    `).run();
+  } catch {}
   migrationDone = true;
 }
 
