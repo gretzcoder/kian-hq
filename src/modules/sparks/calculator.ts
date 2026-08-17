@@ -1,4 +1,5 @@
 import { getDB } from '@/db/client';
+import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
 
 export interface UserSparksSummary {
   userId: string;
@@ -23,6 +24,10 @@ export interface UserSparksSummary {
  */
 export async function getUserSparksSummary(targetUserId: string): Promise<UserSparksSummary> {
   const db = await getDB();
+
+  try {
+    await evaluateAndAutoAwardBadges(targetUserId);
+  } catch (_e) {}
 
   // 0. Fetch category multipliers
   const { results: settingsRows } = await db

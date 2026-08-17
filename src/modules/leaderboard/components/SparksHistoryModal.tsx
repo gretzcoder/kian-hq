@@ -469,15 +469,18 @@ export default function SparksHistoryModal({
                         <span className={`text-sm font-black font-mono ${item.sparks >= 0 ? 'text-purple-600 dark:text-purple-400' : 'text-red-500'}`}>
                           {item.sparks >= 0 ? `+${item.sparks}` : item.sparks} ✨
                         </span>
-                        {item.reviewedAt > 0 && (
-                          <p className="text-[9px] text-zinc-400 font-mono">
-                            {new Date(item.reviewedAt * 1000).toLocaleDateString('id-ID', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric',
-                            })}
-                          </p>
-                        )}
+                        {item.reviewedAt > 0 && (() => {
+                          const ms = item.reviewedAt > 100000000000 ? item.reviewedAt : item.reviewedAt * 1000;
+                          return (
+                            <p className="text-[9px] text-zinc-400 font-mono">
+                              {new Date(ms).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </p>
+                          );
+                        })()}
                       </div>
 
                       {canManageSparks && isAdjustment && (

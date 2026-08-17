@@ -2,6 +2,7 @@
 
 import { getDB } from '@/db/client';
 import { getSession } from '@/modules/auth/session';
+import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
 
 export interface LeaderboardUser {
   rank: number;
@@ -495,6 +496,10 @@ export async function getSparksHistory(
   period: 'month' | 'week' | 'all' = 'month'
 ): Promise<SparksHistoryItem[]> {
   const db = await getDB();
+  try {
+    await evaluateAndAutoAwardBadges(targetId);
+  } catch (_e) {}
+
   const now = Math.floor(Date.now() / 1000);
 
   // Fetch category multipliers
