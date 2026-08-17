@@ -33,7 +33,7 @@ export interface PushPayload {
   icon?: string;
   badge?: string;
   url?: string;
-  category?: 'CHAT' | 'COMMUNITY_CHAT' | 'MENTION' | 'TASK' | 'DEADLINE' | 'ANNOUNCEMENT' | 'GENERAL';
+  category?: 'CHAT' | 'COMMUNITY_CHAT' | 'DM' | 'MENTION' | 'TASK' | 'DEADLINE' | 'ANNOUNCEMENT' | 'GENERAL';
   tag?: string;
 }
 

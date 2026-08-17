@@ -218,11 +218,39 @@ export default function NotificationSettingsForm({ initialSettings }: Notificati
         </div>
 
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
-          {/* 1. Chat Workspace */}
+          {/* 1. Pesan Personal / DM */}
           <div className="py-4 flex items-center justify-between gap-4">
             <div className="space-y-0.5">
               <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <span>💬</span> Pesan Room Chat Workspace
+                <span>💬</span> Pesan Personal & Messenger Chat (DM)
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Terima notifikasi Web Push saat ada pesan personal baru atau permintaan pertemanan dari pengguna lain.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleToggleSetting('notify_dm')}
+              disabled={isPending}
+              className={`w-12 h-6 rounded-full transition-colors relative border shrink-0 cursor-pointer ${
+                settings.notify_dm
+                  ? 'bg-purple-600 border-purple-500'
+                  : 'bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  settings.notify_dm ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* 2. Chat Workspace */}
+          <div className="py-4 flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <p className="text-xs font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <span>⚡</span> Pesan Room Chat Workspace
               </p>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
                 Terima notifikasi saat ada pesan baru dikirim di room chat workspace tempat Anda bergabung.
@@ -232,7 +260,7 @@ export default function NotificationSettingsForm({ initialSettings }: Notificati
               type="button"
               onClick={() => handleToggleSetting('notify_chat')}
               disabled={isPending}
-              className={`w-12 h-6 rounded-full transition-colors relative border shrink-0 ${
+              className={`w-12 h-6 rounded-full transition-colors relative border shrink-0 cursor-pointer ${
                 settings.notify_chat
                   ? 'bg-purple-600 border-purple-500'
                   : 'bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700'

@@ -100,7 +100,7 @@ export async function sendDirectMessageAction(input: {
   revalidatePath('/dashboard');
 
   // Trigger Web Push Notification to receiver
-  sendPushNotificationToUser(receiverId, 'CHAT', {
+  sendPushNotificationToUser(receiverId, 'DM', {
     title: `💬 Pesan Personal dari ${session.name}`,
     body: message.trim(),
     url: '/dashboard/friends',

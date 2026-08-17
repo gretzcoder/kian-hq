@@ -109,7 +109,7 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<{
   revalidatePath('/dashboard/profile');
 
   // Trigger Web Push Notification
-  sendPushNotificationToUser(targetUserId, 'CHAT', {
+  sendPushNotificationToUser(targetUserId, 'DM', {
     title: '👥 Permintaan Pertemanan Baru',
     body: `${session.name} mengirimkan permintaan pertemanan.`,
     url: '/dashboard/friends',
@@ -140,7 +140,7 @@ export async function respondFriendRequestAction(
       .bind(now, session.userId, targetUserId)
       .run();
 
-    sendPushNotificationToUser(targetUserId, 'CHAT', {
+    sendPushNotificationToUser(targetUserId, 'DM', {
       title: '✅ Permintaan Pertemanan Diterima',
       body: `${session.name} telah menerima permintaan pertemanan Anda.`,
       url: '/dashboard/friends',

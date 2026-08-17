@@ -7,6 +7,7 @@ import { sendWebPushNotification, PushPayload, StoredSubscription } from './webP
 export interface UserNotificationSettings {
   notify_chat: boolean;
   notify_community_chat: boolean;
+  notify_dm: boolean;
   notify_mention: boolean;
   notify_task: boolean;
   notify_deadline: boolean;
@@ -25,6 +26,7 @@ export async function getUserNotificationSettings(
     return {
       notify_chat: true,
       notify_community_chat: true,
+      notify_dm: true,
       notify_mention: true,
       notify_task: true,
       notify_deadline: true,
@@ -41,6 +43,7 @@ export async function getUserNotificationSettings(
     .first()) as {
     notify_chat: number;
     notify_community_chat?: number;
+    notify_dm?: number;
     notify_mention: number;
     notify_task: number;
     notify_deadline: number;
@@ -51,6 +54,7 @@ export async function getUserNotificationSettings(
     return {
       notify_chat: true,
       notify_community_chat: true,
+      notify_dm: true,
       notify_mention: true,
       notify_task: true,
       notify_deadline: true,
@@ -61,6 +65,7 @@ export async function getUserNotificationSettings(
   return {
     notify_chat: row.notify_chat !== 0 && (row as any).notify_chat !== false,
     notify_community_chat: row.notify_community_chat !== 0 && (row as any).notify_community_chat !== false,
+    notify_dm: (row as any).notify_dm !== 0 && (row as any).notify_dm !== false,
     notify_mention: row.notify_mention !== 0 && (row as any).notify_mention !== false,
     notify_task: row.notify_task !== 0 && (row as any).notify_task !== false,
     notify_deadline: row.notify_deadline !== 0 && (row as any).notify_deadline !== false,
@@ -85,6 +90,7 @@ export async function updateUserNotificationSettings(
   const updated: UserNotificationSettings = {
     notify_chat: settings.notify_chat ?? current.notify_chat,
     notify_community_chat: settings.notify_community_chat ?? current.notify_community_chat,
+    notify_dm: settings.notify_dm ?? current.notify_dm,
     notify_mention: settings.notify_mention ?? current.notify_mention,
     notify_task: settings.notify_task ?? current.notify_task,
     notify_deadline: settings.notify_deadline ?? current.notify_deadline,
@@ -183,7 +189,7 @@ export async function deletePushSubscription(
  */
 export async function sendPushNotificationToUser(
   userId: string,
-  category: 'CHAT' | 'COMMUNITY_CHAT' | 'MENTION' | 'TASK' | 'DEADLINE' | 'ANNOUNCEMENT',
+  category: 'CHAT' | 'COMMUNITY_CHAT' | 'DM' | 'MENTION' | 'TASK' | 'DEADLINE' | 'ANNOUNCEMENT',
   payload: PushPayload
 ): Promise<void> {
   if (!userId) return;
@@ -194,6 +200,7 @@ export async function sendPushNotificationToUser(
     // Check user preference toggle for this notification category
     if (category === 'CHAT' && settings.notify_chat === false) return;
     if (category === 'COMMUNITY_CHAT' && settings.notify_community_chat === false) return;
+    if (category === 'DM' && settings.notify_dm === false) return;
     if (category === 'MENTION' && settings.notify_mention === false) return;
     if (category === 'TASK' && settings.notify_task === false) return;
     if (category === 'DEADLINE' && settings.notify_deadline === false) return;
