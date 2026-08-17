@@ -376,7 +376,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
           </div>
 
           {/* Workspace controls: Edit & Status */}
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-wrap items-center sm:flex-col sm:items-end gap-2 w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800">
             {canUpdateWs && (
               <EditWorkspaceModal
                 workspaceId={wsId}

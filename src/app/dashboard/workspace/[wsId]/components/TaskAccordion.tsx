@@ -238,19 +238,19 @@ export default function TaskAccordion({
               <button
                 type="button"
                 onClick={() => toggle(task.id)}
-                className="w-full text-left p-5 flex items-start justify-between gap-3 group hover:bg-zinc-50/60 dark:hover:bg-white/[0.02] transition-colors"
+                className="w-full text-left p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3 group hover:bg-zinc-50/60 dark:hover:bg-white/[0.02] transition-colors"
               >
                 <div className="min-w-0 flex-1">
                   {/* Badges row */}
                   <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border ${cfg.color}`}>
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-xl border ${cfg.color}`}>
                       {cfg.label}
                     </span>
                     <span className={`text-[9px] font-black uppercase tracking-widest ${pCfg.color}`}>
                       {pCfg.label}
                     </span>
                     {/* Output Type Badge (Design vs Video) */}
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border flex items-center gap-1 ${
+                    <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border flex items-center gap-1 ${
                       task.task_type === 'VIDEO'
                         ? 'text-pink-600 dark:text-pink-400 bg-pink-500/10 border-pink-500/20'
                         : 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20'
@@ -258,17 +258,17 @@ export default function TaskAccordion({
                       {task.task_type === 'VIDEO' ? '🎬 Video Task' : '🎨 Design Task'}
                     </span>
                     {(task.task_type === 'DIRECT_BRIEF' || (task.description && task.description.includes('[DIRECT_BRIEF]'))) && (
-                      <span className="text-[9px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
                         <span>⚡</span> Brief Direct Koordinator
                       </span>
                     )}
                     {totalTaskSparks > 0 && (
-                      <span className="text-[10px] font-black bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                      <span className="text-[10px] font-black bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
                         <span>✨</span> {totalTaskSparks} Total Sparks
                       </span>
                     )}
                     {task.start_at && (
-                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border flex items-center gap-1 ${
+                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-xl border flex items-center gap-1 ${
                         task.start_at > Date.now()
                           ? 'text-indigo-600 dark:text-indigo-300 bg-indigo-500/10 border-indigo-500/20 font-bold'
                           : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
@@ -286,7 +286,7 @@ export default function TaskAccordion({
                   </div>
 
                 {/* Title */}
-                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors">
+                <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors break-words">
                   {task.title}
                 </h3>
 
@@ -299,7 +299,7 @@ export default function TaskAccordion({
               </div>
 
               {/* Far right side: Task Deadline Badge + Multiplier Badge + Edit/Delete Buttons + chevron */}
-              <div className="flex items-center gap-2 shrink-0 self-center">
+              <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800/50 shrink-0">
                 {task.sparks_multiplier && task.sparks_multiplier > 1.0 && (
                   <span
                     onClick={(e) => {

@@ -1461,10 +1461,10 @@ function MentorTaskCard({
         onClick={() => setIsCardExpanded((prev) => !prev)}
         className="p-5 cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30 transition-all select-none"
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2 py-0.5 rounded-full">
+              <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2.5 py-1 rounded-xl">
                 {execLabel}
               </span>
               <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Assessment</span>
@@ -1477,7 +1477,7 @@ function MentorTaskCard({
                     }
                   }}
                   title={isCoordinator ? "Set Sparks Multiplier Khusus Task" : "Sparks Multiplier Khusus Task"}
-                  className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 flex items-center gap-1 font-mono transition-all ${
+                  className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-xl border bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 flex items-center gap-1 font-mono transition-all ${
                     isCoordinator ? 'cursor-pointer hover:scale-105' : 'cursor-default'
                   }`}
                 >
@@ -1485,29 +1485,29 @@ function MentorTaskCard({
                 </span>
               )}
               {task.creator_name && (
-                <span className="text-[9px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1" title="Mentor Pembuat Assessment">
+                <span className="text-[9px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1 max-w-full truncate" title="Mentor Pembuat Assessment">
                   <span>🎓</span>
-                  <span>Mentor: {task.creator_name}</span>
+                  <span className="truncate">Mentor: {task.creator_name}</span>
                 </span>
               )}
               {task.status === 'WAITING_REVIEW' ? (
-                <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
                   <span>⏳</span>
                   <span>Menunggu ACC Brief</span>
                 </span>
               ) : task.status === 'REVISION_REQUESTED' ? (
-                <span className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-[9px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
                   <span>↩</span>
                   <span>Revisi Brief Diminta</span>
                 </span>
               ) : (
-                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
                   <span>✅</span>
                   <span>Brief Di-ACC {task.sparks != null && `(${task.sparks} ✨)`}</span>
                 </span>
               )}
               {task.start_at && (
-                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 border ${
+                <span className={`text-[9px] font-black px-2.5 py-1 rounded-xl flex items-center gap-1 border ${
                   isScheduled
                     ? 'text-indigo-600 dark:text-indigo-300 bg-indigo-500/10 border-indigo-500/20 font-bold'
                     : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
@@ -1523,23 +1523,23 @@ function MentorTaskCard({
                 const penalty = Math.min(100, daysLate * 10);
                 const hText = daysLate > 0 ? `H+${daysLate} • Sparks -${penalty}%` : 'Extended';
                 return (
-                  <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1 font-mono">
+                  <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1 font-mono">
                     <span>⏳ Extended ({hText}):</span>
                     <span>{new Date(task.extended_deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
                   </span>
                 );
               })() : task.deadline ? (
-                <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2.5 py-1 rounded-xl flex items-center gap-1">
                   <span>⏰</span>
                   <span>{new Date(task.deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
                 </span>
               ) : null}
             </div>
-            <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug">{task.title}</h3>
+            <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug break-words">{task.title}</h3>
           </div>
 
           {/* Progress ring summary + Edit / Delete / Multiplier buttons + Accordion Chevron */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800/50 shrink-0">
             <div className="text-right mr-1">
               <p className="text-[10px] font-black text-zinc-500">
                 {submitted}/{total} submit
@@ -1855,24 +1855,24 @@ function OJTTaskCard({
       {/* Accordion Task Header */}
       <div
         onClick={() => setIsCardExpanded((prev) => !prev)}
-        className="p-5 cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30 transition-all select-none flex items-start justify-between gap-3"
+        className="p-5 cursor-pointer hover:bg-zinc-50/70 dark:hover:bg-zinc-800/30 transition-all select-none flex flex-col sm:flex-row sm:items-center justify-between gap-3"
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2 py-0.5 rounded-full">
+            <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2.5 py-1 rounded-xl">
               {execLabel}
             </span>
             {task.deadline && (
-              <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2.5 py-1 rounded-xl flex items-center gap-1">
                 <span>⏰ Deadline:</span>
                 <span>{new Date(task.deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
               </span>
             )}
           </div>
-          <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug">{task.title}</h3>
+          <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm leading-snug break-words">{task.title}</h3>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800/50 shrink-0">
           <span className={`text-[9px] font-black border px-2.5 py-1 rounded-full shrink-0 ${statusBadge}`}>
             {statusLabel}
           </span>
@@ -2015,7 +2015,7 @@ export function AssessmentPanel({
     <div className="space-y-5">
       {/* Header + create button (mentor only) */}
       {canManage && (
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-black text-zinc-800 dark:text-zinc-200">
               Manajemen Assessment

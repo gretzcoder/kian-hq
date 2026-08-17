@@ -28,11 +28,11 @@ export default function WorkspaceTabs({
   return (
     <div className="space-y-6">
       {/* Clean Tab Header */}
-      <div className="flex flex-wrap items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 gap-2">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-2 gap-3">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full no-scrollbar scrollbar-none">
           <button
             onClick={() => setActiveTab('tasks')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 ${
               activeTab === 'tasks'
                 ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
                 : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
@@ -52,7 +52,7 @@ export default function WorkspaceTabs({
 
           <button
             onClick={() => setActiveTab('chat')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 ${
               activeTab === 'chat'
                 ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
                 : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
@@ -72,7 +72,7 @@ export default function WorkspaceTabs({
 
           <button
             onClick={() => setActiveTab('members')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 ${
               activeTab === 'members'
                 ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
                 : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
