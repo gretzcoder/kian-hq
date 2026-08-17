@@ -41,36 +41,6 @@ export default async function DashboardPage() {
 
   const db = await getDB();
 
-  // Auto-cleanup corrupted task_assignments where status = 'WAITING_REVIEW' but result_url IS NULL or empty
-  try {
-    await db
-      .prepare("UPDATE task_assignments SET status = 'ASSIGNED' WHERE status = 'WAITING_REVIEW' AND (result_url IS NULL OR TRIM(result_url) = '')")
-      .run();
-    await db
-      .prepare(`
-        DELETE FROM task_assignments
-        WHERE task_id NOT IN (SELECT id FROM tasks)
-           OR task_id IN (
-             SELECT t.id FROM tasks t
-             LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-             WHERE t.status = 'DELETED' OR ws.deleted_at IS NOT NULL
-           )
-      `)
-      .run();
-    await db
-      .prepare(`
-        UPDATE tasks 
-        SET status = 'APPROVED', revision_note = NULL 
-        WHERE status = 'REVISION_REQUESTED' 
-          AND id IN (
-            SELECT task_id FROM task_assignments WHERE status != 'DRAFT'
-          )
-      `)
-      .run();
-  } catch (e) {
-    console.error('Auto-cleanup task_assignments failed:', e);
-  }
-
   // Batch-fetch permissions + roles in ONE call
   const ctx = await getSessionContext(session.userId);
 

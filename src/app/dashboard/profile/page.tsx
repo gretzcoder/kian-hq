@@ -5,6 +5,7 @@ import EditProfileButton from '@/modules/profile/components/EditProfileButton';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { normalizeWhatsappNumber } from '@/modules/profile/actions';
 import ProfileSparksActions from '@/modules/profile/components/ProfileSparksActions';
+import ProfileActionButtons from '@/modules/profile/components/ProfileActionButtons';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { getUserSparksSummary } from '@/modules/sparks/calculator';
 import { getUserBadgesAction } from '@/modules/badges/badgeActions';
@@ -224,6 +225,10 @@ export default async function ProfilePage({
       })
     : '—';
 
+  const normalizedWhatsapp = profile?.whatsapp_number
+    ? await normalizeWhatsappNumber(profile.whatsapp_number)
+    : null;
+
   const roleColors: Record<string, string> = {
     RESEARCHER: 'text-blue-700   dark:text-blue-400   bg-blue-500/10   border-blue-500/20',
     PLANNER:    'text-amber-700  dark:text-amber-400  bg-amber-500/10  border-amber-500/20',
@@ -314,29 +319,16 @@ export default async function ProfilePage({
               />
             </div>
 
-            {/* Desktop Quick Actions (WA & Portfolio) */}
-            <div className="hidden sm:flex items-center gap-2 flex-wrap">
-              {profile?.whatsapp_number && (
-                <a
-                  href={`https://wa.me/${await normalizeWhatsappNumber(profile.whatsapp_number)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 px-3 py-1.5 rounded-xl transition-all shadow-sm active:scale-95"
-                >
-                  <span>💬</span> WhatsApp
-                </a>
-              )}
-              {profile?.portfolio_url && (
-                <a
-                  href={profile.portfolio_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500/20 px-3 py-1.5 rounded-xl transition-all shadow-sm active:scale-95"
-                >
-                  <span>🔗</span> Portfolio ↗
-                </a>
-              )}
-            </div>
+            {/* Quick Actions (Personal Chat, Add Friend, WA & Portfolio) */}
+            <ProfileActionButtons
+              targetUserId={targetUserId}
+              targetUserName={profile?.name || session.name || 'User'}
+              targetUserAvatar={avatarSrc}
+              isSelf={isSelf}
+              whatsappNumber={profile?.whatsapp_number}
+              normalizedWhatsapp={normalizedWhatsapp}
+              portfolioUrl={profile?.portfolio_url}
+            />
           </div>
 
           {/* User Name & Badges */}

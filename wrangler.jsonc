@@ -7,6 +7,9 @@
 		"nodejs_compat",
 		"global_fetch_strictly_public"
 	],
+	"limits": {
+		"cpu_ms": 30000
+	},
 	"vars": {
 		"NEXTJS_ENV": "production",
 		"NEXT_PUBLIC_APP_URL": "https://hq.kian-eo.workers.dev"

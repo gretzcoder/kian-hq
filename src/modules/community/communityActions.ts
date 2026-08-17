@@ -75,55 +75,6 @@ export interface CommunityMemberGroup {
 }
 
 /**
- * Ensures DB tables for community categories and default channel column exist
- */
-async function initCommunityTables(db: any) {
-  try {
-    await db.prepare(`
-      CREATE TABLE IF NOT EXISTS community_categories (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        icon TEXT DEFAULT '📁',
-        sort_order INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `).run();
-
-    const catCount = (await db.prepare(`SELECT COUNT(*) as count FROM community_categories`).first()) as { count: number } | null;
-    if (!catCount || catCount.count === 0) {
-      await db.prepare(`
-        INSERT OR IGNORE INTO community_categories (id, name, icon, sort_order) VALUES
-        ('cat_work', 'KATEGORI KERJAAN', '💼', 1),
-        ('cat_general', 'GENERAL & SANTAI', '💬', 2)
-      `).run();
-    }
-
-    try {
-      await db.prepare(`ALTER TABLE community_channels ADD COLUMN is_default INTEGER DEFAULT 0`).run();
-    } catch (e) {
-      // Column exists
-    }
-
-    try {
-      await db.prepare(`ALTER TABLE community_channels ADD COLUMN category_id TEXT`).run();
-    } catch (e) {
-      // Column exists
-    }
-
-    const defaultCheck = (await db.prepare(`SELECT id FROM community_channels WHERE is_default = 1 LIMIT 1`).first()) as { id: string } | null;
-    if (!defaultCheck) {
-      await db.prepare(`UPDATE community_channels SET is_default = 1 WHERE slug = 'general-chit-chat' OR id = 'chan_general'`).run();
-      const checkAgain = (await db.prepare(`SELECT id FROM community_channels WHERE is_default = 1 LIMIT 1`).first()) as { id: string } | null;
-      if (!checkAgain) {
-        await db.prepare(`UPDATE community_channels SET is_default = 1 WHERE rowid = (SELECT MIN(rowid) FROM community_channels)`).run();
-      }
-    }
-  } catch (err) {
-    console.error('initCommunityTables error:', err);
-  }
-}
-
-/**
  * Gets all community chat channels grouped by category with unread counts and default channel info
  */
 export async function getCommunityChannels(): Promise<{
@@ -136,7 +87,6 @@ export async function getCommunityChannels(): Promise<{
   const session = await getSession();
   const db = await getDB();
 
-  await initCommunityTables(db);
 
   let canManage = false;
   if (session) {
@@ -764,7 +714,6 @@ export async function createCommunityCategory(data: {
   if (!session) return { success: false, error: 'Unauthorized' };
 
   const db = await getDB();
-  await initCommunityTables(db);
 
   const ctx = await getSessionContext(session.userId);
   const isStaffOrAdmin =
@@ -914,7 +863,6 @@ export async function createCommunityChannel(data: {
   if (!session) return { success: false, error: 'Unauthorized' };
 
   const db = await getDB();
-  await initCommunityTables(db);
 
   const ctx = await getSessionContext(session.userId);
   const isStaffOrAdmin =
@@ -1078,7 +1026,6 @@ export async function setDefaultCommunityChannel(channelId: string): Promise<{ s
   if (!session) return { success: false, error: 'Unauthorized' };
 
   const db = await getDB();
-  await initCommunityTables(db);
 
   const ctx = await getSessionContext(session.userId);
   const isStaffOrAdmin =
