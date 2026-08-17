@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { useFloatingMessenger } from './FloatingMessengerContext';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useFloatingMessenger, ActiveChatSession } from './FloatingMessengerContext';
 import {
   getDirectMessagesAction,
   sendDirectMessageAction,
@@ -19,8 +21,17 @@ const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 const COMMON_EMOJIS = ['👍', '❤️', '🔥', '😂', '🎉', '👏', '🙌'];
 const STICKERS = ['🚀', '💯', '✨', '⚡', '🏆', '🎉', '💪', '🎯', '⭐', '🎈'];
 
-export function FloatingMessengerWidget() {
-  const { activePartnerId, activePartnerName, activePartnerAvatar, closeChat } = useFloatingMessenger();
+interface SingleChatBoxProps {
+  chat: ActiveChatSession;
+  index: number;
+  totalChats: number;
+}
+
+function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
+  const router = useRouter();
+  const { closeChat, toggleMinimize, openChat } = useFloatingMessenger();
+  const { partnerId, partnerName: activePartnerName, partnerAvatar: activePartnerAvatar, isMinimized } = chat;
+
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [partnerInfo, setPartnerInfo] = useState<{
     id: string;
@@ -40,16 +51,18 @@ export function FloatingMessengerWidget() {
   const [replyingTo, setReplyingTo] = useState<DirectMessage | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showStickers, setShowStickers] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
   const [sending, setSending] = useState(false);
+
+  // Active message action popup state (triggered on Press & Hold / Long Press / Click)
+  const [activeActionMsgId, setActiveActionMsgId] = useState<string | null>(null);
+  const touchTimer = useRef<NodeJS.Timeout | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch messages & friendship status
   const fetchMessages = async () => {
-    if (!activePartnerId) return;
+    if (!partnerId) return;
     try {
-      const res = await getDirectMessagesAction(activePartnerId);
+      const res = await getDirectMessagesAction(partnerId);
       if (res.success && res.messages) {
         setMessages(res.messages);
         if (res.partnerInfo) setPartnerInfo(res.partnerInfo);
@@ -58,22 +71,22 @@ export function FloatingMessengerWidget() {
   };
 
   const fetchFriendship = async () => {
-    if (!activePartnerId) return;
+    if (!partnerId) return;
     try {
-      const res = await getFriendshipStatusAction(activePartnerId);
+      const res = await getFriendshipStatusAction(partnerId);
       if (res.success) setFriendshipStatus(res.status);
     } catch {}
   };
 
   useEffect(() => {
-    if (activePartnerId) {
+    if (partnerId) {
       setLoading(true);
       Promise.all([fetchMessages(), fetchFriendship()]).finally(() => setLoading(false));
 
-      const interval = setInterval(fetchMessages, 3000); // 3s polling for DMs
+      const interval = setInterval(fetchMessages, 3000);
       return () => clearInterval(interval);
     }
-  }, [activePartnerId]);
+  }, [partnerId]);
 
   useEffect(() => {
     if (!isMinimized) {
@@ -81,18 +94,37 @@ export function FloatingMessengerWidget() {
     }
   }, [messages.length, isMinimized]);
 
-  if (!activePartnerId) return null;
-
   const name = partnerInfo?.name || activePartnerName || 'User';
   const avatar = partnerInfo?.avatarUrl || activePartnerAvatar || null;
 
+  // ── PRESS & HOLD (LONG PRESS) HANDLERS FOR MOBILE & DESKTOP ──
+  const handleTouchStart = (msgId: string) => {
+    if (touchTimer.current) clearTimeout(touchTimer.current);
+    touchTimer.current = setTimeout(() => {
+      setActiveActionMsgId((prev) => (prev === msgId ? null : msgId));
+    }, 350); // 350ms long press threshold
+  };
+
+  const handleTouchEnd = () => {
+    if (touchTimer.current) {
+      clearTimeout(touchTimer.current);
+      touchTimer.current = null;
+    }
+  };
+
   // ── MINIMIZED CHAT HEAD CIRCLE ICON STATE ──
   if (isMinimized) {
+    // Offset each minimized chat head vertically (5rem per avatar head)
+    const bottomOffsetPx = 20 + index * 64;
+
     return (
-      <div className="fixed bottom-5 right-5 z-[90] flex items-center gap-2 group animate-in zoom-in-95 duration-200">
+      <div
+        style={{ bottom: `${bottomOffsetPx}px` }}
+        className="fixed right-4 z-[95] flex items-center gap-2 group animate-in zoom-in-95 duration-200"
+      >
         <div
-          onClick={() => setIsMinimized(false)}
-          className="relative w-14 h-14 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 p-0.5 shadow-2xl cursor-pointer hover:scale-110 active:scale-95 transition-all duration-200"
+          onClick={() => toggleMinimize(partnerId, false)}
+          className="relative w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 p-0.5 shadow-2xl cursor-pointer hover:scale-110 active:scale-95 transition-all duration-200"
           title={`Buka chat dengan ${name}`}
         >
           <UserAvatar
@@ -102,12 +134,12 @@ export function FloatingMessengerWidget() {
             square
             className="w-full h-full rounded-full border-2 border-white dark:border-zinc-900 object-cover"
           />
-          <span className="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900 ring-2 ring-emerald-400" />
+          <span className="absolute bottom-0 right-0 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900 ring-2 ring-emerald-400" />
         </div>
 
         <button
           type="button"
-          onClick={closeChat}
+          onClick={() => closeChat(partnerId)}
           className="w-6 h-6 rounded-full bg-black/70 hover:bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
           title="Tutup Chat"
         >
@@ -124,7 +156,7 @@ export function FloatingMessengerWidget() {
     setSending(true);
     try {
       const res = await sendDirectMessageAction({
-        receiverId: activePartnerId,
+        receiverId: partnerId,
         message: textToSend,
         attachmentUrl: attachmentUrl.trim() || undefined,
         replyToId: replyingTo?.id || undefined,
@@ -148,6 +180,7 @@ export function FloatingMessengerWidget() {
   };
 
   const handleToggleReaction = async (messageId: string, emoji: string) => {
+    setActiveActionMsgId(null);
     try {
       const res = await toggleDMReactionAction(messageId, emoji);
       if (res.success && res.reactions) {
@@ -159,14 +192,14 @@ export function FloatingMessengerWidget() {
   };
 
   const handleAcceptRequest = async () => {
-    await acceptMessageRequestAction(activePartnerId);
+    await acceptMessageRequestAction(partnerId);
     if (partnerInfo) setPartnerInfo({ ...partnerInfo, isRequest: false });
     fetchMessages();
   };
 
   const handleFriendRequest = async () => {
     if (friendshipStatus === 'NONE') {
-      await respondFriendRequestAction(activePartnerId, 'ACCEPT');
+      await respondFriendRequestAction(partnerId, 'ACCEPT');
       fetchFriendship();
     }
   };
@@ -176,16 +209,21 @@ export function FloatingMessengerWidget() {
   };
 
   return (
-    <div className="fixed bottom-0 right-3 sm:right-6 z-[90] w-[340px] sm:w-[380px] bg-white dark:bg-[#09090b] rounded-t-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200">
+    <div
+      className={`fixed z-[95] bg-white dark:bg-[#09090b] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200 border border-zinc-200 dark:border-zinc-800 shadow-2xl ${
+        /* Full Screen on Mobile View (< sm), Fixed Floating Box on Desktop View (>= sm) */
+        'inset-0 w-full h-full rounded-none sm:inset-auto sm:bottom-0 sm:right-6 sm:w-[380px] sm:h-[500px] sm:rounded-t-3xl'
+      }`}
+    >
       {/* Messenger Header Bar */}
-      <div className="p-3 bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-zinc-900 text-white flex items-center justify-between shadow-sm shrink-0">
+      <div className="p-3.5 sm:p-3 bg-gradient-to-r from-purple-900/95 via-indigo-900/95 to-zinc-900 text-white flex items-center justify-between shadow-sm shrink-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <UserAvatar src={avatar} name={name} size="sm" square className="rounded-xl ring-2 ring-white/20" />
+          <UserAvatar src={avatar} name={name} size="sm" square className="rounded-xl ring-2 ring-white/20 shrink-0" />
           <div className="min-w-0">
-            <h4 className="text-xs font-black truncate leading-tight flex items-center gap-1.5">
+            <h4 className="text-xs sm:text-sm font-black truncate leading-tight flex items-center gap-1.5">
               <span>{name}</span>
               {partnerInfo?.isFriend && (
-                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-normal">Teman</span>
+                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded font-normal shrink-0">Teman</span>
               )}
             </h4>
             <p className="text-[10px] text-zinc-300 truncate">
@@ -195,7 +233,7 @@ export function FloatingMessengerWidget() {
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
-          {/* Add Friend Button if not friends */}
+          {/* Add Friend Button */}
           {friendshipStatus === 'NONE' && (
             <button
               type="button"
@@ -207,10 +245,23 @@ export function FloatingMessengerWidget() {
             </button>
           )}
 
+          {/* Full Messenger Page Jump Button */}
+          <button
+            type="button"
+            onClick={() => {
+              closeChat(partnerId);
+              router.push('/dashboard/friends');
+            }}
+            className="w-7 h-7 rounded-lg hover:bg-white/15 text-white text-xs font-black transition-colors flex items-center justify-center cursor-pointer"
+            title="Buka Halaman Messenger Lengkap"
+          >
+            ↗
+          </button>
+
           {/* Minimize toggle */}
           <button
             type="button"
-            onClick={() => setIsMinimized(true)}
+            onClick={() => toggleMinimize(partnerId, true)}
             className="w-7 h-7 rounded-lg hover:bg-white/15 text-white text-xs font-black transition-colors flex items-center justify-center cursor-pointer"
             title="Minimize Chat"
           >
@@ -220,7 +271,7 @@ export function FloatingMessengerWidget() {
           {/* Close button */}
           <button
             type="button"
-            onClick={closeChat}
+            onClick={() => closeChat(partnerId)}
             className="w-7 h-7 rounded-lg hover:bg-white/15 text-white text-xs font-black transition-colors flex items-center justify-center cursor-pointer"
             title="Tutup Chat"
           >
@@ -249,7 +300,10 @@ export function FloatingMessengerWidget() {
       )}
 
       {/* Message History Stream */}
-      <div className="p-3 overflow-y-auto space-y-2.5 max-h-[320px] min-h-[220px] text-xs bg-zinc-50/50 dark:bg-black/40 flex-1 scrollbar-thin relative">
+      <div
+        onClick={() => setActiveActionMsgId(null)}
+        className="p-3 sm:p-4 overflow-y-auto space-y-3 text-xs bg-zinc-50/50 dark:bg-black/40 flex-1 scrollbar-thin relative"
+      >
         {loading && messages.length === 0 ? (
           <div className="py-8 text-center text-zinc-400 text-xs animate-pulse font-bold">
             Memuat percakapan...
@@ -264,16 +318,18 @@ export function FloatingMessengerWidget() {
           </div>
         ) : (
           messages.map((m) => {
-            const isMe = m.senderId !== activePartnerId;
+            const isMe = m.senderId !== partnerId;
+            const isActionActive = activeActionMsgId === m.id;
+
             return (
               <div
                 key={m.id}
-                className={`flex flex-col group relative ${isMe ? 'items-end' : 'items-start'}`}
+                className={`flex flex-col group relative select-none ${isMe ? 'items-end' : 'items-start'}`}
               >
                 {/* Reply quote snippet */}
                 {m.replyMessage && (
                   <div
-                    className={`text-[10px] p-1.5 rounded-t-xl mb-0.5 border max-w-[80%] opacity-80 ${
+                    className={`text-[10px] p-1.5 rounded-t-xl mb-0.5 border max-w-[85%] opacity-80 ${
                       isMe
                         ? 'bg-purple-900/20 border-purple-500/30 text-purple-300 text-right'
                         : 'bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-400 text-left'
@@ -284,15 +340,23 @@ export function FloatingMessengerWidget() {
                   </div>
                 )}
 
-                <div className="flex items-end gap-1.5 max-w-[85%]">
+                <div className="flex items-end gap-1.5 max-w-[88%] sm:max-w-[85%]">
                   {!isMe && (
                     <UserAvatar src={avatar} name={name} size="xs" square className="rounded-lg mb-1 shrink-0" />
                   )}
 
-                  <div className="group relative">
-                    {/* Message Bubble */}
+                  <div className="relative">
+                    {/* Message Bubble (Supports Press & Hold / Long-press on mobile and Desktop click) */}
                     <div
-                      className={`px-3 py-2 rounded-2xl text-xs leading-relaxed break-words shadow-2xs ${
+                      onTouchStart={() => handleTouchStart(m.id)}
+                      onTouchEnd={handleTouchEnd}
+                      onMouseDown={() => handleTouchStart(m.id)}
+                      onMouseUp={handleTouchEnd}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveActionMsgId((prev) => (prev === m.id ? null : m.id));
+                      }}
+                      className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-2xs cursor-pointer transition-all ${
                         isMe
                           ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs'
                           : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200/80 dark:border-zinc-700/80 rounded-bl-xs'
@@ -300,7 +364,7 @@ export function FloatingMessengerWidget() {
                     >
                       {m.attachmentUrl && (
                         <div className="mb-1.5 rounded-xl overflow-hidden border border-white/20">
-                          <img src={m.attachmentUrl} alt="Attachment" className="max-h-40 w-full object-cover" />
+                          <img src={m.attachmentUrl} alt="Attachment" className="max-h-48 w-full object-cover" />
                         </div>
                       )}
                       <p className="whitespace-pre-wrap">{m.message}</p>
@@ -316,26 +380,34 @@ export function FloatingMessengerWidget() {
                       </div>
                     </div>
 
-                    {/* Quick Reaction Bar on Hover */}
-                    <div className={`absolute -top-7 ${isMe ? 'right-0' : 'left-0'} hidden group-hover:flex items-center gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full px-2 py-0.5 shadow-md z-10 animate-in fade-in duration-150`}>
-                      {COMMON_EMOJIS.slice(0, 5).map((e) => (
-                        <button
-                          key={e}
-                          type="button"
-                          onClick={() => handleToggleReaction(m.id, e)}
-                          className="hover:scale-125 transition-transform text-xs cursor-pointer"
-                        >
-                          {e}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setReplyingTo(m)}
-                        className="text-[10px] text-purple-500 font-bold hover:underline ml-1 cursor-pointer"
+                    {/* Action Bar (Triggered by Press & Hold / Click) */}
+                    {isActionActive && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className={`absolute -top-9 ${isMe ? 'right-0' : 'left-0'} flex items-center gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full px-2.5 py-1 shadow-xl z-20 animate-in zoom-in-95 duration-150`}
                       >
-                        Reply
-                      </button>
-                    </div>
+                        {COMMON_EMOJIS.slice(0, 5).map((e) => (
+                          <button
+                            key={e}
+                            type="button"
+                            onClick={() => handleToggleReaction(m.id, e)}
+                            className="hover:scale-125 transition-transform text-sm cursor-pointer p-0.5"
+                          >
+                            {e}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReplyingTo(m);
+                            setActiveActionMsgId(null);
+                          }}
+                          className="text-[10px] bg-purple-600 text-white font-bold px-2 py-0.5 rounded-full hover:bg-purple-700 ml-1 cursor-pointer"
+                        >
+                          ↩ Reply
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -425,7 +497,7 @@ export function FloatingMessengerWidget() {
       )}
 
       {/* Message Input Box */}
-      <div className="p-2 bg-white dark:bg-[#09090b] border-t border-zinc-200 dark:border-zinc-800 flex items-center gap-1.5">
+      <div className="p-2.5 sm:p-2 bg-white dark:bg-[#09090b] border-t border-zinc-200 dark:border-zinc-800 flex items-center gap-1.5">
         <button
           type="button"
           onClick={() => {
@@ -462,19 +534,33 @@ export function FloatingMessengerWidget() {
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-          placeholder="Ketik pesan (support emoji bawaan/keyboard)..."
-          className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
+          placeholder="Ketik pesan (tekan & tahan bubble untuk reply)..."
+          className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 sm:py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
         />
 
         <button
           type="button"
           onClick={() => handleSendMessage()}
           disabled={sending || (!inputText.trim() && !attachmentUrl.trim())}
-          className="p-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all cursor-pointer shrink-0"
+          className="p-2.5 sm:p-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all cursor-pointer shrink-0"
         >
           🚀
         </button>
       </div>
     </div>
+  );
+}
+
+export function FloatingMessengerWidget() {
+  const { activeChats } = useFloatingMessenger();
+
+  if (!activeChats || activeChats.length === 0) return null;
+
+  return (
+    <>
+      {activeChats.map((chat, idx) => (
+        <SingleChatBox key={chat.partnerId} chat={chat} index={idx} totalChats={activeChats.length} />
+      ))}
+    </>
   );
 }

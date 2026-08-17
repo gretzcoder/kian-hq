@@ -195,7 +195,7 @@ export default function DashboardSidebar({
       title: 'KOLABORASI',
       items: [
         { href: '/dashboard/community', label: 'Community Chat', icon: '💬', exact: false },
-        { href: '/dashboard/friends', label: 'Teman & Kontak', icon: '👥', exact: false },
+        { href: '/dashboard/friends', label: 'Messenger & Kontak', icon: '💬', exact: false },
         ...(canReview
           ? [{
               href: '/dashboard/review',

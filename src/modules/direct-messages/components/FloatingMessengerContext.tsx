@@ -3,28 +3,36 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getRecentConversationsAction } from '../dmActions';
 
+export interface ActiveChatSession {
+  partnerId: string;
+  partnerName?: string;
+  partnerAvatar?: string | null;
+  isMinimized: boolean;
+}
+
 interface FloatingMessengerContextType {
-  activePartnerId: string | null;
-  activePartnerName?: string;
-  activePartnerAvatar?: string | null;
+  activeChats: ActiveChatSession[];
+  focusedChatId: string | null;
   openChat: (partnerUserId: string, partnerName?: string, partnerAvatar?: string | null) => void;
-  closeChat: () => void;
+  closeChat: (partnerUserId: string) => void;
+  toggleMinimize: (partnerUserId: string, minimizeState?: boolean) => void;
   unreadCount: number;
   refreshUnread: () => void;
 }
 
 const FloatingMessengerContext = createContext<FloatingMessengerContextType>({
-  activePartnerId: null,
+  activeChats: [],
+  focusedChatId: null,
   openChat: () => {},
   closeChat: () => {},
+  toggleMinimize: () => {},
   unreadCount: 0,
   refreshUnread: () => {},
 });
 
 export function FloatingMessengerProvider({ children }: { children: React.ReactNode }) {
-  const [activePartnerId, setActivePartnerId] = useState<string | null>(null);
-  const [activePartnerName, setActivePartnerName] = useState<string | undefined>(undefined);
-  const [activePartnerAvatar, setActivePartnerAvatar] = useState<string | null | undefined>(undefined);
+  const [activeChats, setActiveChats] = useState<ActiveChatSession[]>([]);
+  const [focusedChatId, setFocusedChatId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const refreshUnread = async () => {
@@ -38,31 +46,78 @@ export function FloatingMessengerProvider({ children }: { children: React.ReactN
 
   useEffect(() => {
     refreshUnread();
-    const interval = setInterval(refreshUnread, 8000); // 8s polling for unread badge
+    const interval = setInterval(refreshUnread, 8000);
     return () => clearInterval(interval);
   }, []);
 
   const openChat = (partnerUserId: string, partnerName?: string, partnerAvatar?: string | null) => {
-    setActivePartnerId(partnerUserId);
-    if (partnerName) setActivePartnerName(partnerName);
-    if (partnerAvatar !== undefined) setActivePartnerAvatar(partnerAvatar);
+    setActiveChats((prev) => {
+      const existingIndex = prev.findIndex((c) => c.partnerId === partnerUserId);
+      if (existingIndex !== -1) {
+        // Chat already exists, un-minimize & bring to front
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          partnerName: partnerName || updated[existingIndex].partnerName,
+          partnerAvatar: partnerAvatar !== undefined ? partnerAvatar : updated[existingIndex].partnerAvatar,
+          isMinimized: false,
+        };
+        return updated;
+      }
+
+      // Limit active floating chats to max 3 items
+      let updatedList = [...prev];
+      if (updatedList.length >= 3) {
+        // Auto-minimize older open chats if adding a 4th
+        updatedList = updatedList.map((c) => ({ ...c, isMinimized: true }));
+        // If still > 3, remove the oldest minimized one
+        if (updatedList.length >= 4) {
+          updatedList.shift();
+        }
+      }
+
+      return [
+        ...updatedList,
+        {
+          partnerId: partnerUserId,
+          partnerName,
+          partnerAvatar,
+          isMinimized: false,
+        },
+      ];
+    });
+
+    setFocusedChatId(partnerUserId);
   };
 
-  const closeChat = () => {
-    setActivePartnerId(null);
-    setActivePartnerName(undefined);
-    setActivePartnerAvatar(undefined);
+  const closeChat = (partnerUserId: string) => {
+    setActiveChats((prev) => prev.filter((c) => c.partnerId !== partnerUserId));
+    if (focusedChatId === partnerUserId) {
+      setFocusedChatId(null);
+    }
     refreshUnread();
+  };
+
+  const toggleMinimize = (partnerUserId: string, minimizeState?: boolean) => {
+    setActiveChats((prev) =>
+      prev.map((c) => {
+        if (c.partnerId === partnerUserId) {
+          const nextState = minimizeState !== undefined ? minimizeState : !c.isMinimized;
+          return { ...c, isMinimized: nextState };
+        }
+        return c;
+      })
+    );
   };
 
   return (
     <FloatingMessengerContext.Provider
       value={{
-        activePartnerId,
-        activePartnerName,
-        activePartnerAvatar,
+        activeChats,
+        focusedChatId,
         openChat,
         closeChat,
+        toggleMinimize,
         unreadCount,
         refreshUnread,
       }}
