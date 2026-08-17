@@ -79,7 +79,7 @@ export default function HeaderMessengerButton() {
 
       {/* Facebook Messenger Dropdown Panel */}
       {isOpen && (
-        <div className="absolute right-0 top-12 w-[340px] sm:w-[400px] bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left">
+        <div className="fixed inset-x-2 top-14 sm:absolute sm:inset-auto sm:right-0 sm:top-12 sm:w-[400px] bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl z-[60] overflow-hidden animate-in fade-in zoom-in-95 duration-150 text-left flex flex-col max-h-[85vh] sm:max-h-[520px]">
           {/* Header */}
           <div className="p-4 border-b border-zinc-200/80 dark:border-zinc-800/80 space-y-3">
             <div className="flex items-center justify-between">

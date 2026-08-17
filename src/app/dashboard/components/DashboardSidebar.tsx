@@ -7,6 +7,7 @@ import ThemeToggle from '@/modules/theme/components/ThemeToggle';
 import UserAvatar from '@/components/ui/UserAvatar';
 import FloatingNotificationDrawer from '@/modules/notifications/components/FloatingNotificationDrawer';
 import HeaderProfileButton from '@/app/dashboard/components/HeaderProfileButton';
+import HeaderMessengerButton from '@/app/dashboard/components/HeaderMessengerButton';
 import { getUnreadCount } from '@/modules/announcements/announcementReadState';
 import { getUnreadWorkspaceCount } from '@/modules/workspaces/workspaceReadState';
 import { getSidebarCounts, WorkspaceNotifItem } from '@/modules/notifications/notificationActions';
@@ -266,6 +267,7 @@ export default function DashboardSidebar({
           </Link>
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          <HeaderMessengerButton />
           <FloatingNotificationDrawer
             canReview={canReview}
             canManageSparks={canManageSparks}

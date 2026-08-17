@@ -230,8 +230,8 @@ export default async function DashboardLayout({
 
           {/* Main Content Area */}
           <main className="flex-1 w-full min-w-0 flex flex-col overflow-x-hidden">
-            {/* FIXED TOP NAVBAR (Always visible on scroll) */}
-            <header className="sticky top-0 z-40 bg-zinc-50/90 dark:bg-[#030303]/90 backdrop-blur-md px-4 sm:px-6 md:px-10 py-3 border-b border-zinc-200/80 dark:border-zinc-800/80 shadow-2xs flex items-center justify-between">
+            {/* FIXED TOP NAVBAR (Always visible on scroll for Desktop) */}
+            <header className="hidden lg:flex sticky top-0 z-40 bg-zinc-50/90 dark:bg-[#030303]/90 backdrop-blur-md px-4 sm:px-6 md:px-10 py-3 border-b border-zinc-200/80 dark:border-zinc-800/80 shadow-2xs items-center justify-between">
               <TimeGreeting />
               <div className="flex items-center gap-2.5 sm:gap-3">
                 <HeaderMessengerButton />
