@@ -3,6 +3,7 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
+import { sendPushNotificationToUser } from '@/modules/notifications/pushActions';
 
 export interface FriendUser {
   id: string;
@@ -106,6 +107,14 @@ export async function sendFriendRequestAction(targetUserId: string): Promise<{
 
   revalidatePath('/dashboard/friends');
   revalidatePath('/dashboard/profile');
+
+  // Trigger Web Push Notification
+  sendPushNotificationToUser(targetUserId, 'CHAT', {
+    title: '👥 Permintaan Pertemanan Baru',
+    body: `${session.name} mengirimkan permintaan pertemanan.`,
+    url: '/dashboard/friends',
+  }).catch((err) => console.error('Friend push error:', err));
+
   return { success: true };
 }
 
@@ -130,6 +139,12 @@ export async function respondFriendRequestAction(
       )
       .bind(now, session.userId, targetUserId)
       .run();
+
+    sendPushNotificationToUser(targetUserId, 'CHAT', {
+      title: '✅ Permintaan Pertemanan Diterima',
+      body: `${session.name} telah menerima permintaan pertemanan Anda.`,
+      url: '/dashboard/friends',
+    }).catch((err) => console.error('Friend accept push error:', err));
   } else if (action === 'REJECT') {
     await db
       .prepare(

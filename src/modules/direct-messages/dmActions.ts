@@ -3,6 +3,7 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
+import { sendPushNotificationToUser } from '@/modules/notifications/pushActions';
 
 export interface DMReaction {
   emoji: string;
@@ -94,6 +95,13 @@ export async function sendDirectMessageAction(input: {
     .run();
 
   revalidatePath('/dashboard');
+
+  // Trigger Web Push Notification to receiver
+  sendPushNotificationToUser(receiverId, 'CHAT', {
+    title: `💬 Pesan Personal dari ${session.name}`,
+    body: message.trim(),
+    url: '/dashboard/friends',
+  }).catch((err) => console.error('DM Push notification error:', err));
 
   return {
     success: true,
