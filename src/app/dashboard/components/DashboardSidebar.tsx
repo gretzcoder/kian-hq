@@ -194,6 +194,7 @@ export default function DashboardSidebar({
       title: 'KOLABORASI',
       items: [
         { href: '/dashboard/community', label: 'Community Chat', icon: '💬', exact: false },
+        { href: '/dashboard/friends', label: 'Teman & Kontak', icon: '👥', exact: false },
         ...(canReview
           ? [{
               href: '/dashboard/review',
@@ -213,7 +214,7 @@ export default function DashboardSidebar({
           icon: '📢',
           exact: false,
           badge: unreadCount,
-          badgeColor: 'red' as const,
+          badgeColor: 'amber' as const,
         },
         { href: '/dashboard/kb', label: 'Knowledge Base', icon: '📚', exact: false },
       ],

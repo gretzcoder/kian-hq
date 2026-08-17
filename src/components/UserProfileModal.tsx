@@ -5,6 +5,13 @@ import Link from 'next/link';
 import { getUserBadgesAction } from '@/modules/badges/badgeActions';
 import { BadgeItem, CATEGORY_META } from '@/modules/badges/badgeTypes';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { useFloatingMessenger } from '@/modules/direct-messages/components/FloatingMessengerContext';
+import {
+  getFriendshipStatusAction,
+  sendFriendRequestAction,
+  respondFriendRequestAction,
+  FriendshipStatus,
+} from '@/modules/friends/friendActions';
 
 export interface UserProfileData {
   id: string;
@@ -24,8 +31,11 @@ interface UserProfileModalProps {
 }
 
 export function UserProfileModal({ user, onClose, onMention }: UserProfileModalProps) {
+  const { openChat } = useFloatingMessenger();
   const [memberBadges, setMemberBadges] = useState<BadgeItem[]>([]);
   const [loadingBadges, setLoadingBadges] = useState(false);
+  const [friendshipStatus, setFriendshipStatus] = useState<FriendshipStatus>('NONE');
+  const [friendActionLoading, setFriendActionLoading] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -34,10 +44,37 @@ export function UserProfileModal({ user, onClose, onMention }: UserProfileModalP
         .then((b) => setMemberBadges(b))
         .catch(() => setMemberBadges([]))
         .finally(() => setLoadingBadges(false));
+
+      getFriendshipStatusAction(user.id).then((res) => {
+        if (res.success) setFriendshipStatus(res.status);
+      });
     } else {
       setMemberBadges([]);
     }
   }, [user?.id]);
+
+  const handleFriendAction = async () => {
+    if (!user?.id) return;
+    setFriendActionLoading(true);
+    try {
+      if (friendshipStatus === 'NONE') {
+        const res = await sendFriendRequestAction(user.id);
+        if (res.success) setFriendshipStatus('PENDING_SENT');
+      } else if (friendshipStatus === 'PENDING_RECEIVED') {
+        const res = await respondFriendRequestAction(user.id, 'ACCEPT');
+        if (res.success) setFriendshipStatus('FRIENDS');
+      } else if (friendshipStatus === 'PENDING_SENT') {
+        const res = await respondFriendRequestAction(user.id, 'CANCEL');
+        if (res.success) setFriendshipStatus('NONE');
+      } else if (friendshipStatus === 'FRIENDS') {
+        if (confirm(`Hapus pertemanan dengan ${user.name}?`)) {
+          const res = await respondFriendRequestAction(user.id, 'UNFRIEND');
+          if (res.success) setFriendshipStatus('NONE');
+        }
+      }
+    } catch {}
+    setFriendActionLoading(false);
+  };
 
   if (!user) return null;
 
@@ -184,29 +221,64 @@ export function UserProfileModal({ user, onClose, onMention }: UserProfileModalP
 
           {/* Quick Action Buttons */}
           <div className="mt-4 pt-3 border-t border-zinc-200/60 dark:border-zinc-800 flex flex-col gap-2">
-            <div className={`grid ${onMention ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
-              {onMention && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const firstName = user.name.split(' ')[0];
-                    onMention(firstName);
-                    onClose();
-                  }}
-                  className="px-3 py-2.5 rounded-2xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-                >
-                  <span>💬</span>
-                  <span>Mention @{user.name.split(' ')[0]}</span>
-                </button>
-              )}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Personal DM Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  openChat(user.id, user.name, user.avatar_url);
+                  onClose();
+                }}
+                className="px-3 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-purple-500/20 transition-all active:scale-95 cursor-pointer"
+              >
+                <span>💬</span>
+                <span>Personal Chat</span>
+              </button>
 
+              {/* Add / Manage Friend Button */}
+              <button
+                type="button"
+                onClick={handleFriendAction}
+                disabled={friendActionLoading}
+                className={`px-3 py-2.5 rounded-2xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:opacity-50 ${
+                  friendshipStatus === 'FRIENDS'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20'
+                    : friendshipStatus === 'PENDING_SENT'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 hover:bg-amber-500/20'
+                    : friendshipStatus === 'PENDING_RECEIVED'
+                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 hover:bg-indigo-500/20'
+                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                }`}
+              >
+                <span>
+                  {friendshipStatus === 'FRIENDS'
+                    ? '✓'
+                    : friendshipStatus === 'PENDING_SENT'
+                    ? '⏳'
+                    : friendshipStatus === 'PENDING_RECEIVED'
+                    ? '📩'
+                    : '👥'}
+                </span>
+                <span>
+                  {friendshipStatus === 'FRIENDS'
+                    ? 'Teman'
+                    : friendshipStatus === 'PENDING_SENT'
+                    ? 'Menunggu'
+                    : friendshipStatus === 'PENDING_RECEIVED'
+                    ? 'Terima'
+                    : '+ Teman'}
+                </span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
               <Link
                 href={`/dashboard/profile?userId=${user.id}`}
                 onClick={onClose}
-                className="px-3 py-2.5 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-purple-500/20 transition-all text-center active:scale-95"
+                className="px-3 py-2 rounded-2xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all text-center"
               >
                 <span>👤</span>
-                <span>Lihat Profil Lengkap</span>
+                <span>Lihat Halaman Profil</span>
               </Link>
             </div>
           </div>

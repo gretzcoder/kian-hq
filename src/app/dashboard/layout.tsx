@@ -12,6 +12,9 @@ import ImpersonationBanner from '@/modules/users/components/ImpersonationBanner'
 import FloatingNotificationDrawer from '@/modules/notifications/components/FloatingNotificationDrawer';
 import AutoRegisterPushListener from '@/modules/notifications/components/AutoRegisterPushListener';
 import HeaderProfileButton from './components/HeaderProfileButton';
+import HeaderMessengerButton from './components/HeaderMessengerButton';
+import { FloatingMessengerProvider } from '@/modules/direct-messages/components/FloatingMessengerContext';
+import { FloatingMessengerWidget } from '@/modules/direct-messages/components/FloatingMessengerWidget';
 import {
   isAuthorizedForViewAs,
   getAvailableRolesForViewAs,
@@ -153,95 +156,104 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col transition-colors duration-350 overflow-x-hidden w-full relative">
-      <AutoRegisterPushListener />
-      {/* Floating Sparks Multiplier Live Badge for all users */}
-      <SparksMultiplierFloatingBadge />
+    <FloatingMessengerProvider>
+      <div className="min-h-screen bg-zinc-50 dark:bg-[#030303] text-zinc-900 dark:text-zinc-100 font-sans flex flex-col transition-colors duration-350 overflow-x-hidden w-full relative">
+        <AutoRegisterPushListener />
+        {/* Floating Sparks Multiplier Live Badge for all users */}
+        <SparksMultiplierFloatingBadge />
 
-      {/* User Impersonation Banner */}
-      {session.isImpersonating && (
-        <ImpersonationBanner
-          impersonatedName={session.name}
-          impersonatedEmail={session.email}
-          realAdminName={session.realUserName}
-          currentUserId={session.userId}
-          availableUsers={availableUsers}
-        />
-      )}
-
-      {/* View As Role Top Simulation Banner */}
-      <ViewAsRoleBanner
-        activeSimulatedRole={activeSimulatedRole}
-        availableRoles={availableRoles}
-        isAuthorized={isAuthorizedForViewAsRole}
-      />
-
-      <div className="flex-1 w-full flex flex-col lg:flex-row min-w-0 overflow-x-hidden">
-        {/* Step 1: Initial Profile Onboarding Modal Overlay */}
-        {showProfileOnboarding && (
-          <OnboardingModal
-            initialName={session.name}
-            isStaff={ctx.userType === 'STAFF'}
-            isImpersonating={session.isImpersonating}
+        {/* User Impersonation Banner */}
+        {session.isImpersonating && (
+          <ImpersonationBanner
+            impersonatedName={session.name}
+            impersonatedEmail={session.email}
+            realAdminName={session.realUserName}
+            currentUserId={session.userId}
+            availableUsers={availableUsers}
           />
         )}
 
-        {/* Step 2: Feature Tour Onboarding Modal Overlay (Mandatory 1x, Non-skippable) */}
-        {!showProfileOnboarding && showFeatureTour && (
-          <FeatureTourModal
-            userName={session.name}
-            userType={ctx.userType}
-            roles={ctx.roles}
-            permissions={Array.from(ctx.permissions)}
-            isMentor={isMentor}
-          />
-        )}
-
-        {/* Left Sidebar Navigation */}
-        <DashboardSidebar
-          canManageUsers={canManageUsers}
-          canManageRoles={canManageRoles}
-          canViewOJT={canViewOJT}
-          canViewProjects={canViewProjects}
-          canReview={canReview}
-          canCreateBrief={canCreateBrief}
-          canUseAI={canUseAI}
-          canManageSparks={canManageSparks}
-          isOJT={isOJT}
-          isMentor={isMentor}
-          isLocked={isDashboardLocked}
-          announcementTimestamps={announcementTimestamps}
-          workspaceData={workspaceData}
-          pendingReviewCount={pendingReviewCount}
-          availableRoles={availableRoles}
-          availableUsers={availableUsers}
+        {/* View As Role Top Simulation Banner */}
+        <ViewAsRoleBanner
           activeSimulatedRole={activeSimulatedRole}
-          isImpersonating={session.isImpersonating}
-          session={{
-            name: session.name,
-            email: session.email,
-            avatar: userAvatar,
-          }}
+          availableRoles={availableRoles}
+          isAuthorized={isAuthorizedForViewAsRole}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 w-full px-1 sm:px-6 md:px-10 py-2 sm:py-6 min-w-0 flex flex-col overflow-x-hidden">
-          {/* Top Floating Control Bar */}
-          <div className="hidden lg:flex items-center justify-between pb-3 mb-4 border-b border-zinc-200/50 dark:border-zinc-800/50">
-            <TimeGreeting />
-            <div className="flex items-center gap-3">
-              <FloatingNotificationDrawer
-                canReview={canReview}
-                canManageSparks={canManageSparks}
-                canCreateBrief={canCreateBrief}
-              />
-              <ThemeToggle />
-              <HeaderProfileButton name={session.name} email={session.email} avatar={userAvatar} />
+        <div className="flex-1 w-full flex flex-col lg:flex-row min-w-0 overflow-x-hidden">
+          {/* Step 1: Initial Profile Onboarding Modal Overlay */}
+          {showProfileOnboarding && (
+            <OnboardingModal
+              initialName={session.name}
+              isStaff={ctx.userType === 'STAFF'}
+              isImpersonating={session.isImpersonating}
+            />
+          )}
+
+          {/* Step 2: Feature Tour Onboarding Modal Overlay (Mandatory 1x, Non-skippable) */}
+          {!showProfileOnboarding && showFeatureTour && (
+            <FeatureTourModal
+              userName={session.name}
+              userType={ctx.userType}
+              roles={ctx.roles}
+              permissions={Array.from(ctx.permissions)}
+              isMentor={isMentor}
+            />
+          )}
+
+          {/* Left Sidebar Navigation */}
+          <DashboardSidebar
+            canManageUsers={canManageUsers}
+            canManageRoles={canManageRoles}
+            canViewOJT={canViewOJT}
+            canViewProjects={canViewProjects}
+            canReview={canReview}
+            canCreateBrief={canCreateBrief}
+            canUseAI={canUseAI}
+            canManageSparks={canManageSparks}
+            isOJT={isOJT}
+            isMentor={isMentor}
+            isLocked={isDashboardLocked}
+            announcementTimestamps={announcementTimestamps}
+            workspaceData={workspaceData}
+            pendingReviewCount={pendingReviewCount}
+            availableRoles={availableRoles}
+            availableUsers={availableUsers}
+            activeSimulatedRole={activeSimulatedRole}
+            isImpersonating={session.isImpersonating}
+            session={{
+              name: session.name,
+              email: session.email,
+              avatar: userAvatar,
+            }}
+          />
+
+          {/* Main Content Area */}
+          <main className="flex-1 w-full min-w-0 flex flex-col overflow-x-hidden">
+            {/* FIXED TOP NAVBAR (Always visible on scroll) */}
+            <header className="sticky top-0 z-40 bg-zinc-50/90 dark:bg-[#030303]/90 backdrop-blur-md px-4 sm:px-6 md:px-10 py-3 border-b border-zinc-200/80 dark:border-zinc-800/80 shadow-2xs flex items-center justify-between">
+              <TimeGreeting />
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <HeaderMessengerButton />
+                <FloatingNotificationDrawer
+                  canReview={canReview}
+                  canManageSparks={canManageSparks}
+                  canCreateBrief={canCreateBrief}
+                />
+                <ThemeToggle />
+                <HeaderProfileButton name={session.name} email={session.email} avatar={userAvatar} />
+              </div>
+            </header>
+
+            <div className="px-1 sm:px-6 md:px-10 py-4 flex-1">
+              {children}
             </div>
-          </div>
-          {children}
-        </main>
+          </main>
+        </div>
+
+        {/* Realtime Floating Messenger Chat Widget */}
+        <FloatingMessengerWidget />
       </div>
-    </div>
+    </FloatingMessengerProvider>
   );
 }
