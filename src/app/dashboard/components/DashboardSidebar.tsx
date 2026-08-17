@@ -249,8 +249,8 @@ export default function DashboardSidebar({
 
   return (
     <>
-      {/* Mobile Top Header */}
-      <header className="lg:hidden sticky top-0 z-40 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-md px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2 w-full max-w-full">
+      {/* Mobile Top Header (Fixed to top of viewport) */}
+      <header className="lg:hidden fixed top-0 inset-x-0 z-40 border-b border-zinc-200 dark:border-zinc-800 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-md px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2 w-full max-w-full h-14">
         <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={() => setMobileOpen((p) => !p)}

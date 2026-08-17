@@ -180,7 +180,7 @@ export default async function DashboardLayout({
           isAuthorized={isAuthorizedForViewAsRole}
         />
 
-        <div className="flex-1 w-full flex flex-col lg:flex-row min-w-0 overflow-x-hidden">
+        <div className="flex-1 w-full flex flex-col lg:flex-row min-w-0 pt-14 lg:pt-0">
           {/* Step 1: Initial Profile Onboarding Modal Overlay */}
           {showProfileOnboarding && (
             <OnboardingModal
