@@ -49,19 +49,19 @@ export default function BadgeGalleryView({
       <div className="relative p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-purple-900/40 via-indigo-900/30 to-zinc-900 border border-purple-500/20 shadow-2xl overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-xl">
-            <span className="text-[10px] font-black uppercase tracking-widest text-purple-400 bg-purple-500/10 border border-purple-500/20 px-3 py-1 rounded-full">
+            <span className="text-[10px] font-black uppercase tracking-widest text-purple-400 bg-purple-500/10 border border-purple-500/20 px-3 py-1 rounded-full inline-block">
               🏅 Hall of Badges & Achievements
             </span>
             <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
               Pencapaian Badge
             </h1>
-            <p className="text-sm text-zinc-300 leading-relaxed">
+            <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
               Kumpulkan badge kehormatan melalui penyelesaian tugas, keikutsertaan event, kontribusi client, serta prestasi luar biasa di KIAN HQ.
             </p>
           </div>
 
           {/* Stats Progress Card */}
-          <div className="bg-white/10 dark:bg-black/40 backdrop-blur-md border border-white/20 dark:border-white/10 rounded-3xl p-5 shrink-0 space-y-3 min-w-[260px]">
+          <div className="bg-white/10 dark:bg-black/40 backdrop-blur-md border border-white/20 dark:border-white/10 rounded-3xl p-5 shrink-0 space-y-3 w-full md:w-auto min-w-0 md:min-w-[260px]">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold text-zinc-300">Pencapaian Anda</span>
               <span className="text-xs font-black text-purple-400 font-mono">{percentOwned}%</span>
@@ -91,13 +91,13 @@ export default function BadgeGalleryView({
 
       {/* Filter Controls & Search */}
       <div className="space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Category Filter Pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+          {/* Category Filter Pills — horizontal scrollable on mobile */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full no-scrollbar scrollbar-none">
             <button
               type="button"
               onClick={() => setSelectedCategory('ALL')}
-              className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all ${
+              className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 ${
                 selectedCategory === 'ALL'
                   ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
                   : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
@@ -113,7 +113,7 @@ export default function BadgeGalleryView({
                   key={cat}
                   type="button"
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 ${
                     isSelected
                       ? `bg-gradient-to-r ${meta.bgGradient} ${meta.border} text-zinc-900 dark:text-zinc-100 ring-2 ring-purple-500/40 shadow-sm`
                       : 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
@@ -127,33 +127,33 @@ export default function BadgeGalleryView({
           </div>
 
           {/* Search & Ownership Filter */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 w-full xl:w-auto">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari nama badge..."
-              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
+              placeholder="🔍 Cari nama badge..."
+              className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500 flex-1 sm:w-60"
             />
-            <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-xs font-bold">
+            <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-xs font-bold shrink-0">
               <button
                 type="button"
                 onClick={() => setOwnershipFilter('ALL')}
-                className={`px-3 py-1 rounded-xl transition-all ${ownershipFilter === 'ALL' ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-xs' : 'text-zinc-400'}`}
+                className={`flex-1 sm:flex-none px-3 py-1 rounded-xl transition-all ${ownershipFilter === 'ALL' ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-xs' : 'text-zinc-400'}`}
               >
                 Semua
               </button>
               <button
                 type="button"
                 onClick={() => setOwnershipFilter('OWNED')}
-                className={`px-3 py-1 rounded-xl transition-all ${ownershipFilter === 'OWNED' ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-xs' : 'text-zinc-400'}`}
+                className={`flex-1 sm:flex-none px-3 py-1 rounded-xl transition-all ${ownershipFilter === 'OWNED' ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-xs' : 'text-zinc-400'}`}
               >
                 ✅ Dimiliki
               </button>
               <button
                 type="button"
                 onClick={() => setOwnershipFilter('UNOWNED')}
-                className={`px-3 py-1 rounded-xl transition-all ${ownershipFilter === 'UNOWNED' ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-xs' : 'text-zinc-400'}`}
+                className={`flex-1 sm:flex-none px-3 py-1 rounded-xl transition-all ${ownershipFilter === 'UNOWNED' ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-xs' : 'text-zinc-400'}`}
               >
                 🔒 Belum
               </button>
@@ -202,31 +202,28 @@ export default function BadgeGalleryView({
                 <div>
                   {/* Top Header Row */}
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-1">
-                      <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border bg-white/50 dark:bg-black/50 ${meta.border} ${meta.textGradient}`}>
-                        {meta.label}
-                      </span>
-                      {badge.sparksReward > 0 && (
-                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
-                          ✨ +{badge.sparksReward}
-                        </span>
-                      )}
-                    </div>
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                    <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border bg-white/50 dark:bg-black/50 ${meta.border} ${meta.textGradient} shrink-0`}>
+                      {meta.label}
+                    </span>
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-xl border shrink-0 transition-all ${
                       badge.isOwned
                         ? badge.sparksReward > 0
                           ? badge.isSparksClaimed
                             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                            : 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30 animate-pulse font-mono'
+                            : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white border-amber-400/40 shadow-xs animate-pulse font-mono'
                           : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                        : badge.sparksReward > 0
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 font-mono'
                         : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-zinc-700'
                     }`}>
                       {badge.isOwned
                         ? badge.sparksReward > 0
                           ? badge.isSparksClaimed
-                            ? '✅ Claimed'
-                            : '✨ Claim Sparks!'
+                            ? `✅ Claimed (+${badge.sparksReward} ✨)`
+                            : `✨ Claim +${badge.sparksReward} Sparks`
                           : '✅ Dimiliki'
+                        : badge.sparksReward > 0
+                        ? `+${badge.sparksReward} ✨`
                         : '🔒 Belum'}
                     </span>
                   </div>
