@@ -27,6 +27,7 @@ export interface BadgeItem {
   description: string | null;
   requirementType: RequirementType;
   requirementData: string[] | null; // Array of Task IDs or Workspace IDs
+  sparksReward: number;
   createdBy: string;
   createdAt: number;
   isOwned: boolean;
@@ -36,6 +37,14 @@ export interface BadgeItem {
   owners: BadgeOwner[];
   totalOwners: number;
 }
+
+export const RECOMMENDED_CATEGORY_SPARKS: Record<BadgeCategory, number> = {
+  TROOPER: 10,
+  EVENT: 15,
+  CLIENT: 20,
+  EPIC: 35,
+  LEGENDARY: 50,
+};
 
 // ── Default Eye-Catching Category Icons ─────────────────────────────────────
 

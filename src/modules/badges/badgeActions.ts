@@ -10,9 +10,33 @@ import {
   BadgeItem,
   BadgeOwner,
   CATEGORY_META,
+  RECOMMENDED_CATEGORY_SPARKS,
   RequirementItemProgress,
   RequirementType,
 } from './badgeTypes';
+
+async function awardBadgeSparksReward(
+  db: any,
+  userId: string,
+  badgeId: string,
+  badgeName: string,
+  sparksReward: number,
+  triggeredBy: string
+) {
+  if (!sparksReward || sparksReward <= 0) return;
+  const saId = `sa_${crypto.randomUUID().replace(/-/g, '')}`;
+  try {
+    await db
+      .prepare(`
+        INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at)
+        VALUES (?, ?, 'BONUS', ?, 'BADGE_REWARD', ?, ?, strftime('%s', 'now'))
+      `)
+      .bind(saId, userId, sparksReward, `Reward Badge: ${badgeName}`, triggeredBy)
+      .run();
+  } catch (e) {
+    console.error('Failed to credit badge sparks reward:', e);
+  }
+}
 
 /**
  * Helper to process image file to Base64 Data URI if direct file upload
@@ -217,6 +241,9 @@ export async function getAllBadgesWithUserProgress(): Promise<{
             .bind(userBadgeId, session.userId, badgeId, now)
             .run();
 
+          // Award Sparks reward for completing badge requirements
+          await awardBadgeSparksReward(db, session.userId, badgeId, b.name, b.sparks_reward || 0, 'SYSTEM_AUTO');
+
           isOwned = true;
           awardedAt = now;
           progressPercent = 100;
@@ -248,6 +275,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
         description: b.description,
         requirementType: reqType,
         requirementData: reqIds,
+        sparksReward: b.sparks_reward || 0,
         createdBy: b.created_by,
         createdAt: b.created_at,
         isOwned,
@@ -321,16 +349,23 @@ export async function createBadgeAction(formData: FormData): Promise<{ success: 
     } catch {}
   }
 
+  const sparksRewardRaw = formData.get('sparks_reward');
+  let sparksReward = RECOMMENDED_CATEGORY_SPARKS[category] || 10;
+  if (sparksRewardRaw !== null && sparksRewardRaw !== undefined && sparksRewardRaw !== '') {
+    const parsed = parseInt(sparksRewardRaw as string, 10);
+    if (!isNaN(parsed) && parsed >= 0) sparksReward = parsed;
+  }
+
   const badgeId = `badge_${crypto.randomUUID().replace(/-/g, '')}`;
   const now = Date.now();
 
   try {
     await db
       .prepare(`
-        INSERT INTO badges (id, name, category, icon_url, description, requirement_type, requirement_data, created_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO badges (id, name, category, icon_url, description, requirement_type, requirement_data, sparks_reward, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
-      .bind(badgeId, name, category, iconUrl, description, requirementType, requirementData, session.userId, now)
+      .bind(badgeId, name, category, iconUrl, description, requirementType, requirementData, sparksReward, session.userId, now)
       .run();
 
     await logWorkflowEvent({
@@ -409,14 +444,21 @@ export async function updateBadgeAction(badgeId: string, formData: FormData): Pr
     } catch {}
   }
 
+  const sparksRewardRaw = formData.get('sparks_reward');
+  let sparksReward = RECOMMENDED_CATEGORY_SPARKS[category] || 10;
+  if (sparksRewardRaw !== null && sparksRewardRaw !== undefined && sparksRewardRaw !== '') {
+    const parsed = parseInt(sparksRewardRaw as string, 10);
+    if (!isNaN(parsed) && parsed >= 0) sparksReward = parsed;
+  }
+
   try {
     await db
       .prepare(`
         UPDATE badges
-        SET name = ?, category = ?, icon_url = ?, description = ?, requirement_type = ?, requirement_data = ?
+        SET name = ?, category = ?, icon_url = ?, description = ?, requirement_type = ?, requirement_data = ?, sparks_reward = ?
         WHERE id = ?
       `)
-      .bind(name, category, iconUrl, description, requirementType, requirementData, badgeId)
+      .bind(name, category, iconUrl, description, requirementType, requirementData, sparksReward, badgeId)
       .run();
 
     revalidatePath('/dashboard/badges');
@@ -488,7 +530,7 @@ export async function awardBadgeToUsersAction(
     return { success: false, error: 'Pilih setidaknya satu user penerima badge.' };
   }
 
-  const badge = await db.prepare('SELECT name FROM badges WHERE id = ?').bind(badgeId).first() as { name: string } | null;
+  const badge = await db.prepare('SELECT name, sparks_reward FROM badges WHERE id = ?').bind(badgeId).first() as { name: string; sparks_reward: number } | null;
   if (!badge) return { success: false, error: 'Badge tidak ditemukan.' };
 
   let grantedCount = 0;
@@ -505,7 +547,11 @@ export async function awardBadgeToUsersAction(
         .bind(userBadgeId, uId, badgeId, session.userId, now)
         .run();
 
-      if (res.meta.changes > 0) grantedCount++;
+      if (res.meta.changes > 0) {
+        grantedCount++;
+        // Award Sparks bonus for getting the badge
+        await awardBadgeSparksReward(db, uId, badgeId, badge.name, badge.sparks_reward || 0, session.userId);
+      }
     } catch (_e) {}
   }
 

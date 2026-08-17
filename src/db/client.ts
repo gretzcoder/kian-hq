@@ -97,10 +97,14 @@ export async function ensureSchemaMigrations(db: any) {
         description TEXT,
         requirement_type TEXT NOT NULL DEFAULT 'NONE',
         requirement_data TEXT,
+        sparks_reward INTEGER DEFAULT 0,
         created_by TEXT NOT NULL,
         created_at INTEGER NOT NULL
       )
     `).run();
+  } catch {}
+  try {
+    await db.prepare('ALTER TABLE badges ADD COLUMN sparks_reward INTEGER DEFAULT 0').run();
   } catch {}
   try {
     await db.prepare(`

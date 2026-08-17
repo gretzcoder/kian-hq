@@ -99,9 +99,16 @@ export function BadgeDetailModal({
             )}
           </div>
 
-          <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border bg-white/40 dark:bg-black/40 ${catMeta.border} ${catMeta.textGradient} mb-2`}>
-            {catMeta.label}
-          </span>
+          <div className="flex items-center gap-2 mb-2">
+            <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border bg-white/40 dark:bg-black/40 ${catMeta.border} ${catMeta.textGradient}`}>
+              {catMeta.label}
+            </span>
+            {badge.sparksReward > 0 && (
+              <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+                ✨ +{badge.sparksReward} Sparks
+              </span>
+            )}
+          </div>
 
           <h2 className="text-xl font-black text-zinc-900 dark:text-zinc-100 tracking-tight leading-snug">
             {badge.name}

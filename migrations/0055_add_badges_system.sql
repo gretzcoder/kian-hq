@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS badges (
   description TEXT,
   requirement_type TEXT NOT NULL DEFAULT 'NONE', -- TASK | WORKSPACE | NONE
   requirement_data TEXT, -- JSON array of task IDs or workspace IDs
+  sparks_reward INTEGER DEFAULT 0,
   created_by TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );

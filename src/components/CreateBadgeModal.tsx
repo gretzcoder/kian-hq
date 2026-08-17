@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
-import { BadgeCategory, BadgeItem, CATEGORY_META, RequirementType } from '@/modules/badges/badgeTypes';
+import { BadgeCategory, BadgeItem, CATEGORY_META, RECOMMENDED_CATEGORY_SPARKS, RequirementType } from '@/modules/badges/badgeTypes';
 import { createBadgeAction, updateBadgeAction, getBadgeRequirementOptions } from '@/modules/badges/badgeActions';
 
 interface CreateBadgeModalProps {
@@ -27,6 +27,8 @@ export function CreateBadgeModal({
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [requirementType, setRequirementType] = useState<RequirementType>(editBadge?.requirementType || 'NONE');
   const [selectedReqIds, setSelectedReqIds] = useState<string[]>(editBadge?.requirementData || []);
+  const [sparksReward, setSparksReward] = useState<number>(editBadge ? editBadge.sparksReward : RECOMMENDED_CATEGORY_SPARKS.TROOPER);
+  const [isCustomSparks, setIsCustomSparks] = useState<boolean>(Boolean(editBadge));
 
   const [options, setOptions] = useState<{
     tasks: { id: string; title: string; workspaceName: string }[];
@@ -56,8 +58,17 @@ export function CreateBadgeModal({
       setIconUrl(editBadge.iconUrl || '');
       setRequirementType(editBadge.requirementType);
       setSelectedReqIds(editBadge.requirementData || []);
+      setSparksReward(editBadge.sparksReward);
+      setIsCustomSparks(true);
     }
   }, [editBadge]);
+
+  const handleCategorySelect = (cat: BadgeCategory) => {
+    setCategory(cat);
+    if (!isCustomSparks) {
+      setSparksReward(RECOMMENDED_CATEGORY_SPARKS[cat] || 10);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -81,6 +92,7 @@ export function CreateBadgeModal({
     formData.append('description', description.trim());
     formData.append('requirement_type', requirementType);
     formData.append('requirement_data', JSON.stringify(selectedReqIds));
+    formData.append('sparks_reward', String(sparksReward));
 
     if (iconMode === 'URL' && iconUrl.trim()) {
       formData.append('icon_url', iconUrl.trim());
@@ -172,7 +184,7 @@ export function CreateBadgeModal({
                   <button
                     key={cat}
                     type="button"
-                    onClick={() => setCategory(cat)}
+                    onClick={() => handleCategorySelect(cat)}
                     className={`p-2.5 rounded-2xl border text-left flex items-center gap-2 transition-all ${
                       isSelected
                         ? `bg-gradient-to-r ${meta.bgGradient} ${meta.border} text-zinc-900 dark:text-zinc-100 font-black shadow-sm ring-2 ring-purple-500/30`
@@ -184,6 +196,56 @@ export function CreateBadgeModal({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Reward Sparks (Bonus) */}
+          <div className="space-y-2 bg-purple-500/5 dark:bg-purple-950/20 p-3.5 rounded-2xl border border-purple-500/20">
+            <div className="flex items-center justify-between">
+              <label className="block text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">
+                ✨ Reward Creative Sparks (Bonus User)
+              </label>
+              <span className="text-[10px] font-bold text-amber-500 font-mono">
+                💡 Rekomendasi: +{RECOMMENDED_CATEGORY_SPARKS[category] || 10} Sparks
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={0}
+                max={10000}
+                value={sparksReward}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10);
+                  setSparksReward(isNaN(val) ? 0 : Math.max(0, val));
+                  setIsCustomSparks(true);
+                }}
+                className="w-32 bg-white dark:bg-zinc-900 border border-purple-500/30 rounded-xl px-3 py-2 text-zinc-900 dark:text-zinc-100 font-black text-sm focus:outline-none focus:border-purple-500 font-mono"
+              />
+              <span className="text-xs font-bold text-zinc-500">Creative Sparks ✨</span>
+            </div>
+
+            {/* Quick recommendation buttons */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              <span className="text-[10px] text-zinc-400 font-bold">Pilih Cepat:</span>
+              {[0, 10, 15, 20, 35, 50].map((amount) => (
+                <button
+                  key={amount}
+                  type="button"
+                  onClick={() => {
+                    setSparksReward(amount);
+                    setIsCustomSparks(true);
+                  }}
+                  className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold transition-all ${
+                    sparksReward === amount
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500/40'
+                  }`}
+                >
+                  {amount === 0 ? '0 ✨' : `+${amount} ✨`}
+                </button>
+              ))}
             </div>
           </div>
 

@@ -202,9 +202,16 @@ export default function BadgeGalleryView({
                 <div>
                   {/* Top Header Row */}
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border bg-white/50 dark:bg-black/50 ${meta.border} ${meta.textGradient}`}>
-                      {meta.label}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border bg-white/50 dark:bg-black/50 ${meta.border} ${meta.textGradient}`}>
+                        {meta.label}
+                      </span>
+                      {badge.sparksReward > 0 && (
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
+                          ✨ +{badge.sparksReward}
+                        </span>
+                      )}
+                    </div>
                     <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
                       badge.isOwned
                         ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
