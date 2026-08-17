@@ -1,15 +1,8 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
-import {
-  BadgeCategory,
-  BadgeItem,
-  CATEGORY_META,
-  createBadgeAction,
-  getBadgeRequirementOptions,
-  RequirementType,
-  updateBadgeAction,
-} from '@/modules/badges/badgeActions';
+import { BadgeCategory, BadgeItem, CATEGORY_META, RequirementType } from '@/modules/badges/badgeTypes';
+import { createBadgeAction, updateBadgeAction, getBadgeRequirementOptions } from '@/modules/badges/badgeActions';
 
 interface CreateBadgeModalProps {
   editBadge?: BadgeItem | null;

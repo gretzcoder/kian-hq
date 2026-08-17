@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
-import { awardBadgeToUsersAction, BadgeItem, getBadgeRequirementOptions } from '@/modules/badges/badgeActions';
+import { BadgeItem } from '@/modules/badges/badgeTypes';
+import { awardBadgeToUsersAction, getBadgeRequirementOptions } from '@/modules/badges/badgeActions';
 
 interface AwardBadgeModalProps {
   badge: BadgeItem;

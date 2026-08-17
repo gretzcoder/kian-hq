@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { BadgeCategory, BadgeItem, CATEGORY_META } from '@/modules/badges/badgeActions';
+import { BadgeCategory, BadgeItem, CATEGORY_META } from '@/modules/badges/badgeTypes';
 import { BadgeDetailModal } from '@/components/BadgeDetailModal';
 import { CreateBadgeModal } from '@/components/CreateBadgeModal';
 import { AwardBadgeModal } from '@/components/AwardBadgeModal';

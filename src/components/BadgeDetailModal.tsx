@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { BadgeItem, CATEGORY_META, deleteBadgeAction } from '@/modules/badges/badgeActions';
+import { BadgeItem, CATEGORY_META } from '@/modules/badges/badgeTypes';
+import { deleteBadgeAction } from '@/modules/badges/badgeActions';
 import Image from 'next/image';
 
 interface BadgeDetailModalProps {
