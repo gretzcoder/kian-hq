@@ -665,8 +665,11 @@ export async function getSparksHistory(
       .all();
 
     adjustmentItems = (saResults as any[]).map((r) => {
+      const isBadgeReward = r.category === 'BADGE_REWARD';
       const typeLabel =
-        r.type === 'APPRECIATION'
+        isBadgeReward
+          ? '🏅 Reward Badge'
+          : r.type === 'APPRECIATION'
           ? '✨ Apresiasi Personal'
           : r.type === 'RESET'
           ? '🔄 Reset Sparks'

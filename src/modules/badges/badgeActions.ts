@@ -50,6 +50,37 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
   const db = await getDB();
   const now = Date.now();
 
+  // 0. Retroactively credit missing Sparks rewards for any user who owns a badge but hasn't received its Sparks reward
+  try {
+    const { results: uncreditedOwners } = await db
+      .prepare(`
+        SELECT ub.user_id, ub.badge_id, b.name AS badge_name, b.sparks_reward, ub.awarded_by
+        FROM user_badges ub
+        JOIN badges b ON ub.badge_id = b.id
+        WHERE b.sparks_reward > 0
+          AND NOT EXISTS (
+            SELECT 1 FROM sparks_adjustments sa
+            WHERE sa.user_id = ub.user_id
+              AND sa.category = 'BADGE_REWARD'
+              AND sa.note LIKE '%' || b.name || '%'
+          )
+      `)
+      .all();
+
+    for (const row of (uncreditedOwners as any[] || [])) {
+      await awardBadgeSparksReward(
+        db,
+        row.user_id,
+        row.badge_id,
+        row.badge_name,
+        row.sparks_reward,
+        row.awarded_by || 'SYSTEM_AUTO'
+      );
+    }
+  } catch (e) {
+    console.error('Failed to sync uncredited badge sparks rewards:', e);
+  }
+
   // 1. Fetch all active badges with requirements
   const { results: rawBadges } = await db
     .prepare("SELECT * FROM badges WHERE requirement_type IN ('TASK', 'WORKSPACE')")
