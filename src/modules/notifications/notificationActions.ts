@@ -105,11 +105,11 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
              JOIN tasks t ON ta.task_id = t.id
              JOIN projects p ON t.project_id = p.id
              LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-             WHERE ta.status = 'WAITING_REVIEW'
-               AND ta.result_url IS NOT NULL
-               AND TRIM(ta.result_url) != ''
-               AND t.status = 'APPROVED'
-               AND (ws.deleted_at IS NULL OR ws.id IS NULL)`
+             WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
+                AND ta.result_url IS NOT NULL
+                AND TRIM(ta.result_url) != ''
+                AND t.status != 'DELETED'
+                AND (ws.deleted_at IS NULL OR ws.id IS NULL)`
           )
           .bind(session.userId, session.userId, session.userId, session.userId)
           .all()
@@ -226,7 +226,7 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
         statusBadge: 'AKTIF',
         color: 'border-blue-500/20 bg-blue-500/5',
       });
-    } else if (r.status === 'WAITING_REVIEW') {
+    } else if (r.status === 'WAITING_REVIEW' || r.status === 'SUBMITTED' || r.status === 'RESUBMITTED') {
       feedItems.push({
         id: `notif_ta_${r.id}`,
         category: 'REVIEW',
@@ -283,12 +283,12 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
          JOIN projects p ON t.project_id = p.id
          JOIN users u ON ta.user_id = u.id
          LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-         WHERE ta.status = 'WAITING_REVIEW'
-           AND ta.result_url IS NOT NULL
-           AND TRIM(ta.result_url) != ''
-           AND t.status = 'APPROVED'
-           AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-         ORDER BY ta.submitted_at DESC
+          WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
+            AND ta.result_url IS NOT NULL
+            AND TRIM(ta.result_url) != ''
+            AND t.status != 'DELETED'
+            AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+          ORDER BY ta.submitted_at DESC
          LIMIT 30`
       )
       .bind(session.userId)

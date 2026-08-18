@@ -45,7 +45,7 @@ export default async function DashboardPage() {
   const ctx = await getSessionContext(session.userId);
 
   const [pendingQCCount, inProgressTasksCount, totalOjtCount, announcementsRaw, leaderboardResult] = await Promise.all([
-    db.prepare("SELECT COUNT(ta.id) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.status = 'WAITING_REVIEW' AND ta.result_url IS NOT NULL AND TRIM(ta.result_url) != '' AND t.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)").first() as Promise<{ count: number }>,
+    db.prepare("SELECT COUNT(ta.id) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED') AND ta.result_url IS NOT NULL AND TRIM(ta.result_url) != '' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)").first() as Promise<{ count: number }>,
     db.prepare("SELECT COUNT(*) as count FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status IN ('TODO', 'IN_PROGRESS', 'REVISION') AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)").first() as Promise<{ count: number }>,
     db.prepare("SELECT COUNT(*) as count FROM users WHERE user_type = 'OJT'").first() as Promise<{ count: number }>,
     db.prepare(`
@@ -539,10 +539,10 @@ export default async function DashboardPage() {
     JOIN projects p    ON t.project_id = p.id
     LEFT JOIN workspaces ws ON t.workspace_id = ws.id
     LEFT JOIN users u  ON ta.user_id = u.id
-    WHERE ta.status = 'WAITING_REVIEW'
+    WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
       AND ta.result_url IS NOT NULL
       AND TRIM(ta.result_url) != ''
-      AND t.status = 'APPROVED'
+      AND t.status != 'DELETED'
       AND (ws.deleted_at IS NULL OR ws.id IS NULL)
       AND (
         (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ? AND team_role = 'LEADER') AND ta.lead_approved = 0)

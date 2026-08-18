@@ -112,10 +112,10 @@ export default async function DashboardLayout({
              FROM task_assignments ta
              JOIN tasks t ON ta.task_id = t.id
              LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-             WHERE ta.status = 'WAITING_REVIEW'
+             WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
                AND ta.result_url IS NOT NULL
                AND TRIM(ta.result_url) != ''
-               AND t.status = 'APPROVED'
+               AND t.status != 'DELETED'
                AND (ws.deleted_at IS NULL OR ws.id IS NULL)
                AND ta.user_id != ?
                AND (

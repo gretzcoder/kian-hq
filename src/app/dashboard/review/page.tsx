@@ -89,10 +89,9 @@ export default async function ReviewPage() {
     LEFT JOIN workspaces ws ON t.workspace_id = ws.id
     LEFT JOIN users u  ON ta.user_id = u.id
     LEFT JOIN users tu ON t.created_by = tu.id
-    WHERE ta.status = 'WAITING_REVIEW'
+    WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
       AND ta.result_url IS NOT NULL
       AND TRIM(ta.result_url) != ''
-      AND t.status = 'APPROVED'
       AND t.status != 'DELETED'
       AND (ws.id IS NULL OR ws.deleted_at IS NULL)
     ORDER BY ta.submitted_at ASC
