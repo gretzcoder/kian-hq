@@ -9,10 +9,12 @@ import {
   sendDirectMessageAction,
   toggleDMReactionAction,
   acceptMessageRequestAction,
+  deleteDirectMessagePOVAction,
   DirectMessage,
 } from '../dmActions';
 import { respondFriendRequestAction, getFriendshipStatusAction, FriendshipStatus } from '@/modules/friends/friendActions';
 import UserAvatar from '@/components/ui/UserAvatar';
+import { DeletePOVModal } from '@/components/DeletePOVModal';
 import type { EmojiClickData } from 'emoji-picker-react';
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
@@ -202,12 +204,13 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
   const [attachmentUrl, setAttachmentUrl] = useState('');
   const [showAttachmentInput, setShowAttachmentInput] = useState(false);
   const [replyingTo, setReplyingTo] = useState<DirectMessage | null>(null);
+  const [activeActionMsgId, setActiveActionMsgId] = useState<string | null>(null);
+  const [deleteTargetMsgId, setDeleteTargetMsgId] = useState<string | null>(null);
+  const [submittingDeleteMsg, setSubmittingDeleteMsg] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showStickers, setShowStickers] = useState(false);
   const [sending, setSending] = useState(false);
 
-  // Active message action popup state (triggered on Press & Hold / Long Press / Click)
-  const [activeActionMsgId, setActiveActionMsgId] = useState<string | null>(null);
   const touchTimer = useRef<NodeJS.Timeout | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -536,6 +539,17 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
                         >
                           ↩ Reply
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeleteTargetMsgId(m.id);
+                            setActiveActionMsgId(null);
+                          }}
+                          className="text-[10px] bg-red-600/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold px-2 py-0.5 rounded-full hover:bg-red-600 hover:text-white ml-1 cursor-pointer transition-colors"
+                          title="Hapus pesan ini dari tampilan Anda (POV)"
+                        >
+                          🗑️ Hapus
+                        </button>
                       </div>
                     )}
                   </div>
@@ -677,6 +691,28 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
           🚀
         </button>
       </div>
+
+      {/* POV Delete Message Modal */}
+      <DeletePOVModal
+        isOpen={Boolean(deleteTargetMsgId)}
+        onClose={() => setDeleteTargetMsgId(null)}
+        onConfirm={async () => {
+          if (!deleteTargetMsgId) return;
+          setSubmittingDeleteMsg(true);
+          try {
+            await deleteDirectMessagePOVAction(deleteTargetMsgId);
+            setDeleteTargetMsgId(null);
+            await fetchMessages();
+          } catch (err) {
+            console.error('Failed to delete POV message:', err);
+          } finally {
+            setSubmittingDeleteMsg(false);
+          }
+        }}
+        submitting={submittingDeleteMsg}
+        title="⚠️ Hapus Pesan ini untuk Saya?"
+        message="Apakah Anda yakin ingin menghapus pesan ini? Pesan ini HANYA akan dihapus dari tampilan Anda (POV). Lawan bicara Anda tetap dapat melihat pesan ini."
+      />
     </div>
   );
 }

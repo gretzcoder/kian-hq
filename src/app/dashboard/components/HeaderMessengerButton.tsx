@@ -3,8 +3,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFloatingMessenger } from '@/modules/direct-messages/components/FloatingMessengerContext';
-import { getRecentConversationsAction, ConversationItem } from '@/modules/direct-messages/dmActions';
+import {
+  getRecentConversationsAction,
+  deleteConversationPOVAction,
+  markCommunityChannelReadAction,
+  markWorkspaceChatReadAction,
+  ConversationItem,
+} from '@/modules/direct-messages/dmActions';
 import UserAvatar from '@/components/ui/UserAvatar';
+import { SwipeToDeleteWrapper } from '@/components/SwipeToDeleteWrapper';
+import { DeletePOVModal } from '@/components/DeletePOVModal';
 
 export default function HeaderMessengerButton() {
   const router = useRouter();
@@ -14,7 +22,8 @@ export default function HeaderMessengerButton() {
   const [filter, setFilter] = useState<'ALL' | 'PERSONAL' | 'WORKSPACE' | 'COMMUNITY' | 'REQUESTS' | 'UNREAD'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
-
+  const [deleteTarget, setDeleteTarget] = useState<ConversationItem | null>(null);
+  const [submittingDelete, setSubmittingDelete] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchConversations = async () => {
@@ -51,12 +60,32 @@ export default function HeaderMessengerButton() {
     c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleConversationClick = (c: ConversationItem) => {
+  const handleConversationClick = async (c: ConversationItem) => {
     setIsOpen(false);
+    if (c.category === 'COMMUNITY') {
+      await markCommunityChannelReadAction(c.partnerId);
+    } else if (c.category === 'WORKSPACE') {
+      await markWorkspaceChatReadAction(c.partnerId);
+    }
+
     if (c.targetUrl) {
       router.push(c.targetUrl);
     } else {
       openChat(c.partnerId, c.partnerName, c.partnerAvatar);
+    }
+  };
+
+  const handleConfirmDeletePOV = async () => {
+    if (!deleteTarget) return;
+    setSubmittingDelete(true);
+    try {
+      await deleteConversationPOVAction(deleteTarget.partnerId);
+      setDeleteTarget(null);
+      await fetchConversations();
+    } catch (err) {
+      console.error('Failed to delete conversation POV:', err);
+    } finally {
+      setSubmittingDelete(false);
     }
   };
 
@@ -146,52 +175,67 @@ export default function HeaderMessengerButton() {
               </div>
             ) : (
               filteredList.map((c) => (
-                <div
+                <SwipeToDeleteWrapper
                   key={c.id}
-                  onClick={() => handleConversationClick(c)}
-                  className={`p-3 flex items-center justify-between gap-3 hover:bg-purple-500/5 dark:hover:bg-purple-950/20 cursor-pointer transition-colors group ${
-                    c.unreadCount > 0 ? 'bg-purple-500/10 dark:bg-purple-900/20' : ''
-                  }`}
+                  onDelete={() => setDeleteTarget(c)}
+                  deleteLabel="Hapus"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <UserAvatar
-                      src={c.partnerAvatar}
-                      name={c.partnerName}
-                      size="md"
-                      square
-                      className="rounded-2xl shrink-0 ring-2 ring-purple-500/20 group-hover:scale-105 transition-transform"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                          {c.partnerName}
-                        </h4>
-                        {c.isRequest && (
-                          <span className="text-[8px] font-black bg-amber-500/20 text-amber-500 px-1.5 py-0.2 rounded uppercase">
-                            Request
-                          </span>
-                        )}
+                  <div
+                    onClick={() => handleConversationClick(c)}
+                    className={`p-3 flex items-center justify-between gap-3 hover:bg-purple-500/5 dark:hover:bg-purple-950/20 cursor-pointer transition-colors group ${
+                      c.unreadCount > 0 ? 'bg-purple-500/10 dark:bg-purple-900/20' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <UserAvatar
+                        src={c.partnerAvatar}
+                        name={c.partnerName}
+                        size="md"
+                        square
+                        className="rounded-2xl shrink-0 ring-2 ring-purple-500/20 group-hover:scale-105 transition-transform"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                            {c.partnerName}
+                          </h4>
+                          {c.isRequest && (
+                            <span className="text-[8px] font-black bg-amber-500/20 text-amber-500 px-1.5 py-0.2 rounded uppercase">
+                              Request
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-[11px] truncate mt-0.5 ${c.unreadCount > 0 ? 'font-bold text-zinc-900 dark:text-zinc-100' : 'text-zinc-400'}`}>
+                          {c.lastMessage}
+                        </p>
                       </div>
-                      <p className={`text-[11px] truncate mt-0.5 ${c.unreadCount > 0 ? 'font-bold text-zinc-900 dark:text-zinc-100' : 'text-zinc-400'}`}>
-                        {c.lastMessage}
-                      </p>
+                    </div>
+
+                    <div className="text-right shrink-0 flex flex-col items-end gap-1">
+                      <span className="text-[9px] font-mono text-zinc-400">
+                        {new Date(c.lastMessageTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {c.unreadCount > 0 && (
+                        <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse inline-block" />
+                      )}
                     </div>
                   </div>
-
-                  <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                    <span className="text-[9px] font-mono text-zinc-400">
-                      {new Date(c.lastMessageTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                    {c.unreadCount > 0 && (
-                      <span className="w-2.5 h-2.5 rounded-full bg-purple-600 animate-pulse inline-block" />
-                    )}
-                  </div>
-                </div>
+                </SwipeToDeleteWrapper>
               ))
             )}
           </div>
         </div>
       )}
+
+      {/* POV Delete Warning Confirmation Modal */}
+      <DeletePOVModal
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDeletePOV}
+        submitting={submittingDelete}
+        title={`⚠️ Hapus Percakapan dengan ${deleteTarget?.partnerName}?`}
+        message="Apakah Anda yakin ingin menghapus percakapan ini? Percakapan ini HANYA akan dihapus dari tampilan Anda (POV). Lawan bicara Anda tetap dapat melihat seluruh isi percakapan."
+      />
     </div>
   );
 }

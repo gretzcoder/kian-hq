@@ -9,9 +9,17 @@ import {
   FriendsSummary,
   FriendUser,
 } from '@/modules/friends/friendActions';
-import { getRecentConversationsAction, ConversationItem } from '@/modules/direct-messages/dmActions';
+import {
+  getRecentConversationsAction,
+  deleteConversationPOVAction,
+  markCommunityChannelReadAction,
+  markWorkspaceChatReadAction,
+  ConversationItem,
+} from '@/modules/direct-messages/dmActions';
 import { useFloatingMessenger } from '@/modules/direct-messages/components/FloatingMessengerContext';
 import UserAvatar from '@/components/ui/UserAvatar';
+import { SwipeToDeleteWrapper } from '@/components/SwipeToDeleteWrapper';
+import { DeletePOVModal } from '@/components/DeletePOVModal';
 
 export function FriendsView() {
   const router = useRouter();
@@ -26,6 +34,8 @@ export function FriendsView() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'MESSENGER' | 'FRIENDS' | 'REQUESTS' | 'SUGGESTIONS'>('MESSENGER');
   const [searchQuery, setSearchQuery] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<ConversationItem | null>(null);
+  const [submittingDelete, setSubmittingDelete] = useState(false);
 
   const fetchFriends = async () => {
     setLoading(true);
@@ -171,47 +181,57 @@ export function FriendsView() {
               </div>
             ) : (
               filteredConversations.map((c) => (
-                <div
+                <SwipeToDeleteWrapper
                   key={c.id}
-                  className="p-4 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs flex flex-col justify-between hover:border-purple-500/40 transition-all group"
+                  onDelete={() => setDeleteTarget(c)}
+                  deleteLabel="Hapus"
+                  className="rounded-3xl"
                 >
-                  <div className="flex items-start gap-3">
-                    <UserAvatar src={c.partnerAvatar} name={c.partnerName} size="md" square className="rounded-2xl shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-purple-500 transition-colors">
-                          {c.partnerName}
-                        </h4>
-                        <span className="text-[9px] font-mono text-zinc-400 shrink-0">
-                          {new Date(c.lastMessageTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+                  <div className="p-4 bg-white dark:bg-zinc-900 rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 shadow-xs flex flex-col justify-between hover:border-purple-500/40 transition-all group h-full">
+                    <div className="flex items-start gap-3">
+                      <UserAvatar src={c.partnerAvatar} name={c.partnerName} size="md" square className="rounded-2xl shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate group-hover:text-purple-500 transition-colors">
+                            {c.partnerName}
+                          </h4>
+                          <span className="text-[9px] font-mono text-zinc-400 shrink-0">
+                            {new Date(c.lastMessageTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-zinc-400 truncate mt-0.5">{c.partnerEmail}</p>
+                        <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300 line-clamp-2 mt-2 bg-zinc-50 dark:bg-zinc-800/50 p-2 rounded-xl border border-zinc-100 dark:border-zinc-800/50">
+                          {c.lastMessage}
+                        </p>
                       </div>
-                      <p className="text-[10px] text-zinc-400 truncate mt-0.5">{c.partnerEmail}</p>
-                      <p className="text-xs font-medium text-zinc-600 dark:text-zinc-300 line-clamp-2 mt-2 bg-zinc-50 dark:bg-zinc-800/50 p-2 rounded-xl border border-zinc-100 dark:border-zinc-800/50">
-                        {c.lastMessage}
-                      </p>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full">
+                        {c.category}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (c.category === 'COMMUNITY') {
+                            await markCommunityChannelReadAction(c.partnerId);
+                          } else if (c.category === 'WORKSPACE') {
+                            await markWorkspaceChatReadAction(c.partnerId);
+                          }
+
+                          if (c.targetUrl) {
+                            router.push(c.targetUrl);
+                          } else {
+                            openChat(c.partnerId, c.partnerName, c.partnerAvatar);
+                          }
+                        }}
+                        className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs rounded-xl shadow-xs hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        <span>💬</span> Buka Chat
+                      </button>
                     </div>
                   </div>
-
-                  <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800/60 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full">
-                      {c.category}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (c.targetUrl) {
-                          router.push(c.targetUrl);
-                        } else {
-                          openChat(c.partnerId, c.partnerName, c.partnerAvatar);
-                        }
-                      }}
-                      className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs rounded-xl shadow-xs hover:opacity-95 active:scale-95 transition-all cursor-pointer flex items-center gap-1"
-                    >
-                      <span>💬</span> Buka Chat
-                    </button>
-                  </div>
-                </div>
+                </SwipeToDeleteWrapper>
               ))
             )}
           </div>
@@ -386,6 +406,27 @@ export function FriendsView() {
           )}
         </div>
       )}
+      {/* Delete POV Confirmation Modal */}
+      <DeletePOVModal
+        isOpen={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={async () => {
+          if (!deleteTarget) return;
+          setSubmittingDelete(true);
+          try {
+            await deleteConversationPOVAction(deleteTarget.partnerId);
+            setDeleteTarget(null);
+            await fetchFriends();
+          } catch (err) {
+            console.error('Failed to delete POV conversation:', err);
+          } finally {
+            setSubmittingDelete(false);
+          }
+        }}
+        submitting={submittingDelete}
+        title={`⚠️ Hapus Percakapan dengan ${deleteTarget?.partnerName}?`}
+        message="Apakah Anda yakin ingin menghapus percakapan ini? Percakapan ini HANYA akan dihapus dari tampilan Anda (POV). Lawan bicara Anda tetap dapat melihat seluruh isi percakapan."
+      />
     </div>
   );
 }

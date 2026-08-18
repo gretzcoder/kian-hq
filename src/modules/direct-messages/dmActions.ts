@@ -144,6 +144,7 @@ export async function getDirectMessagesAction(partnerUserId: string): Promise<{
   if (!session) return { success: false, error: 'Unauthorized' };
 
   const db = await getDB();
+  await ensureDMDeletedForColumn(db);
 
   // 1. Fetch partner info
   const partner = (await db
@@ -254,10 +255,11 @@ export async function getRecentConversationsAction(
   if (!session) return { success: false, error: 'Unauthorized' };
 
   const db = await getDB();
+  await ensureDMDeletedForColumn(db);
   const list: ConversationItem[] = [];
   let totalUnread = 0;
 
-  // 1. Fetch Personal DMs & Requests
+  // 1. Fetch Personal DMs & Requests (Excluding messages deleted by session.userId)
   try {
     const { results: rawRows } = await db
       .prepare(
@@ -266,10 +268,11 @@ export async function getRecentConversationsAction(
                 u.avatar_url AS partner_avatar, u.user_type AS partner_user_type
          FROM direct_messages dm
          JOIN users u ON (CASE WHEN dm.sender_id = ? THEN dm.receiver_id ELSE dm.sender_id END) = u.id
-         WHERE dm.sender_id = ? OR dm.receiver_id = ?
+         WHERE (dm.sender_id = ? OR dm.receiver_id = ?)
+           AND (dm.deleted_for IS NULL OR dm.deleted_for NOT LIKE ?)
          ORDER BY dm.created_at DESC`
       )
-      .bind(session.userId, session.userId, session.userId)
+      .bind(session.userId, session.userId, session.userId, `%"${session.userId}"%`)
       .all();
 
     const { results: friendshipRows } = await db
@@ -324,7 +327,7 @@ export async function getRecentConversationsAction(
     console.error('Error fetching DM conversations:', err);
   }
 
-  // 2. Fetch Workspace Chats
+  // 2. Fetch Workspace Chats (Only UNREAD / new notifications; disappears when read)
   try {
     const { results: wsChats } = await db
       .prepare(
@@ -333,8 +336,10 @@ export async function getRecentConversationsAction(
          FROM workspace_chats wc
          JOIN users u ON wc.user_id = u.id
          JOIN workspaces ws ON wc.workspace_id = ws.id
+         LEFT JOIN workspace_chat_reads wcr ON wcr.workspace_id = ws.id AND wcr.user_id = ?
          WHERE wc.user_id != ?
            AND ws.deleted_at IS NULL
+           AND (wcr.last_read_at IS NULL OR wcr.last_read_at < wc.created_at)
            AND (
              ws.ojt_coordinator_id = ?
              OR EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
@@ -343,7 +348,7 @@ export async function getRecentConversationsAction(
          ORDER BY wc.created_at DESC
          LIMIT 20`
       )
-      .bind(session.userId, session.userId, session.userId, session.userId)
+      .bind(session.userId, session.userId, session.userId, session.userId, session.userId)
       .all();
 
     const wsMap = new Map<string, ConversationItem>();
@@ -372,7 +377,7 @@ export async function getRecentConversationsAction(
     console.error('Error fetching Workspace Chats for Messenger:', err);
   }
 
-  // 3. Fetch Community Chats
+  // 3. Fetch Community Chats (Only UNREAD / new notifications; disappears when read)
   try {
     const { results: commChats } = await db
       .prepare(
@@ -381,11 +386,13 @@ export async function getRecentConversationsAction(
          FROM community_messages cm
          JOIN users u ON cm.user_id = u.id
          JOIN community_channels cc ON cm.channel_id = cc.id
+         LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cc.id AND ccr.user_id = ?
          WHERE cm.user_id != ?
+           AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm.created_at)
          ORDER BY cm.created_at DESC
          LIMIT 20`
       )
-      .bind(session.userId)
+      .bind(session.userId, session.userId)
       .all();
 
     const commMap = new Map<string, ConversationItem>();
@@ -505,6 +512,133 @@ export async function acceptMessageRequestAction(partnerUserId: string): Promise
     )
     .bind(session.userId, partnerUserId, partnerUserId, session.userId)
     .run();
+
+  return { success: true };
+}
+
+/**
+ * Helper to ensure deleted_for column exists in direct_messages
+ */
+async function ensureDMDeletedForColumn(db: any) {
+  try {
+    await db.prepare("ALTER TABLE direct_messages ADD COLUMN deleted_for TEXT DEFAULT '[]'").run();
+  } catch {}
+}
+
+/**
+ * Delete a single direct message ONLY for the current user (POV deletion).
+ * The recipient/partner will still retain the message intact.
+ */
+export async function deleteDirectMessagePOVAction(messageId: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  await ensureDMDeletedForColumn(db);
+
+  const row = (await db
+    .prepare('SELECT id, deleted_for FROM direct_messages WHERE id = ? AND (sender_id = ? OR receiver_id = ?)')
+    .bind(messageId, session.userId, session.userId)
+    .first()) as { id: string; deleted_for?: string } | null;
+
+  if (!row) return { success: false, error: 'Pesan tidak ditemukan.' };
+
+  let deletedList: string[] = [];
+  try {
+    deletedList = JSON.parse(row.deleted_for || '[]');
+  } catch {}
+
+  if (!deletedList.includes(session.userId)) {
+    deletedList.push(session.userId);
+  }
+
+  await db
+    .prepare('UPDATE direct_messages SET deleted_for = ? WHERE id = ?')
+    .bind(JSON.stringify(deletedList), messageId)
+    .run();
+
+  revalidatePath('/dashboard');
+  return { success: true };
+}
+
+/**
+ * Delete an entire direct message conversation with partnerUserId ONLY for current user (POV deletion).
+ */
+export async function deleteConversationPOVAction(partnerId: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  await ensureDMDeletedForColumn(db);
+
+  const messages = (await db
+    .prepare(
+      `SELECT id, deleted_for FROM direct_messages
+       WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)`
+    )
+    .bind(session.userId, partnerId, partnerId, session.userId)
+    .all()) as any;
+
+  const rows = messages.results || [];
+  for (const r of rows) {
+    let deletedList: string[] = [];
+    try {
+      deletedList = JSON.parse(r.deleted_for || '[]');
+    } catch {}
+
+    if (!deletedList.includes(session.userId)) {
+      deletedList.push(session.userId);
+      await db
+        .prepare('UPDATE direct_messages SET deleted_for = ? WHERE id = ?')
+        .bind(JSON.stringify(deletedList), r.id)
+        .run();
+    }
+  }
+
+  revalidatePath('/dashboard');
+  return { success: true };
+}
+
+/**
+ * Mark a community channel as read for the current user so notifications disappear from Messenger Hub
+ */
+export async function markCommunityChannelReadAction(channelId: string): Promise<{ success: boolean }> {
+  const session = await getSession();
+  if (!session) return { success: false };
+
+  const db = await getDB();
+  try {
+    await db
+      .prepare(
+        `INSERT INTO community_channel_reads (channel_id, user_id, last_read_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT (channel_id, user_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`
+      )
+      .bind(channelId, session.userId)
+      .run();
+  } catch {}
+
+  return { success: true };
+}
+
+/**
+ * Mark a workspace chat as read for the current user so notifications disappear from Messenger Hub
+ */
+export async function markWorkspaceChatReadAction(workspaceId: string): Promise<{ success: boolean }> {
+  const session = await getSession();
+  if (!session) return { success: false };
+
+  const db = await getDB();
+  try {
+    await db
+      .prepare(
+        `INSERT INTO workspace_chat_reads (workspace_id, user_id, last_read_at)
+         VALUES (?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT (workspace_id, user_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`
+      )
+      .bind(workspaceId, session.userId)
+      .run();
+  } catch {}
 
   return { success: true };
 }
