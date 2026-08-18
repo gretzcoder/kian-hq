@@ -15,6 +15,10 @@ import {
 import { respondFriendRequestAction, getFriendshipStatusAction, FriendshipStatus } from '@/modules/friends/friendActions';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { DeletePOVModal } from '@/components/DeletePOVModal';
+import { parseRichMessageContent } from '@/lib/menuTagging';
+import { MenuHashtagAutocompletePopover } from '@/components/MenuHashtagAutocompletePopover';
+import { MenuTagModal } from '@/components/MenuTagModal';
+import { MenuTagOption } from '@/modules/menu/menuTagActions';
 import type { EmojiClickData } from 'emoji-picker-react';
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
@@ -207,6 +211,7 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
   const [activeActionMsgId, setActiveActionMsgId] = useState<string | null>(null);
   const [deleteTargetMsgId, setDeleteTargetMsgId] = useState<string | null>(null);
   const [submittingDeleteMsg, setSubmittingDeleteMsg] = useState(false);
+  const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showStickers, setShowStickers] = useState(false);
   const [sending, setSending] = useState(false);
@@ -500,7 +505,7 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
                           <img src={m.attachmentUrl} alt="Attachment" className="max-h-48 w-full object-cover" />
                         </div>
                       )}
-                      <p className="whitespace-pre-wrap">{m.message}</p>
+                      <div className="whitespace-pre-wrap">{parseRichMessageContent(m.message)}</div>
 
                       {/* Timestamp & Delivery Indicator */}
                       <div className={`mt-1 flex items-center gap-1 text-[9px] ${isMe ? 'justify-end text-purple-200/80' : 'justify-start text-zinc-400'}`}>
@@ -672,15 +677,34 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
         >
           🖼️
         </button>
+        <button
+          type="button"
+          onClick={() => setIsMenuModalOpen(true)}
+          className="p-1.5 rounded-xl hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold transition-colors cursor-pointer"
+          title="Tag Menu & Sub-Menu Sistem"
+        >
+          📌
+        </button>
 
-        <input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
-          placeholder="Ketik pesan (tekan & tahan bubble untuk reply)..."
-          className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 sm:py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
-        />
+        <div className="flex-1 relative">
+          <MenuHashtagAutocompletePopover
+            inputText={inputText}
+            onSelectTag={(formattedTag) => {
+              setInputText((prev) => {
+                const updated = prev.replace(/#([a-zA-Z0-9_\-\s>]*)$/, formattedTag + ' ');
+                return updated;
+              });
+            }}
+          />
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+            placeholder="Ketik pesan / ketik # untuk tag menu..."
+            className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 sm:py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
+          />
+        </div>
 
         <button
           type="button"
@@ -712,6 +736,15 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
         submitting={submittingDeleteMsg}
         title="⚠️ Hapus Pesan ini untuk Saya?"
         message="Apakah Anda yakin ingin menghapus pesan ini? Pesan ini HANYA akan dihapus dari tampilan Anda (POV). Lawan bicara Anda tetap dapat melihat pesan ini."
+      />
+
+      {/* Menu Tag Picker Modal */}
+      <MenuTagModal
+        isOpen={isMenuModalOpen}
+        onClose={() => setIsMenuModalOpen(false)}
+        onSelectMenu={(menu: MenuTagOption) => {
+          setInputText((prev) => `${prev} #[${menu.label}](${menu.path}) `.trimStart());
+        }}
       />
     </div>
   );

@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { useUI } from '@/components/ui/UIProvider';
 import { parseRichMessageContent } from '@/lib/menuTagging';
+import { MenuHashtagAutocompletePopover } from '@/components/MenuHashtagAutocompletePopover';
 import {
   CommunityMessage,
   ThreadDetails,
@@ -296,13 +297,19 @@ export function ThreadSidePanel({
       {/* ── Thread Reply Input Box ── */}
       <form
         onSubmit={handleSend}
-        className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] flex items-center gap-2 shrink-0"
+        className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] flex items-center gap-2 shrink-0 relative"
       >
+        <MenuHashtagAutocompletePopover
+          inputText={inputMessage}
+          onSelectTag={(formattedTag) => {
+            setInputMessage((prev) => prev.replace(/#([a-zA-Z0-9_\-\s>]*)$/, formattedTag + ' '));
+          }}
+        />
         <input
           type="text"
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
-          placeholder={`Balas di "${threadName}"...`}
+          placeholder={`Balas di "${threadName}" (ketik # untuk tag menu)...`}
           className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500/50"
         />
         <button

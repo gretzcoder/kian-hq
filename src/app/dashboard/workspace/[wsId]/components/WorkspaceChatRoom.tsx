@@ -29,6 +29,7 @@ import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreview
 import { parseRichMessageContent } from '@/lib/menuTagging';
 import { MenuTagModal } from '@/components/MenuTagModal';
 import { MenuTagOption } from '@/modules/menu/menuTagActions';
+import { MenuHashtagAutocompletePopover } from '@/components/MenuHashtagAutocompletePopover';
 
 function isImageUrl(url?: string): boolean {
   if (!url) return false;
@@ -1100,14 +1101,23 @@ export function WorkspaceChatRoom({
           <span className="hidden sm:inline">Tag Menu</span>
         </button>
 
-        <input
-          ref={inputRef}
-          type="text"
-          value={inputMessage}
-          onChange={handleInputChange}
-          placeholder="Ketik pesan tim (gunakan @ nama anggota)..."
-          className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 shadow-xs transition-all"
-        />
+        <div className="flex-1 relative">
+          <MenuHashtagAutocompletePopover
+            inputText={inputMessage}
+            onSelectTag={(formattedTag) => {
+              setInputMessage((prev) => prev.replace(/#([a-zA-Z0-9_\-\s>]*)$/, formattedTag + ' '));
+              if (inputRef.current) inputRef.current.focus();
+            }}
+          />
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputMessage}
+            onChange={handleInputChange}
+            placeholder="Ketik pesan tim (ketik # untuk tag menu)..."
+            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 shadow-xs transition-all"
+          />
+        </div>
 
         <button
           type="submit"

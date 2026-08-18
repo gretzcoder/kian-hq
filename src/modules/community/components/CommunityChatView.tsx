@@ -38,6 +38,7 @@ import { MenuTagOption } from '@/modules/menu/menuTagActions';
 import { ThreadSidePanel } from './ThreadSidePanel';
 import { NewThreadModal } from './NewThreadModal';
 import { ThreadListModal } from './ThreadListModal';
+import { MenuHashtagAutocompletePopover } from '@/components/MenuHashtagAutocompletePopover';
 import type { EmojiClickData } from 'emoji-picker-react';
 
 // Dynamic import for emoji-picker-react to ensure smooth SSR rendering
@@ -1804,8 +1805,15 @@ export default function CommunityChatView({
               <span className="hidden sm:inline">Tag Menu</span>
             </button>
 
-            {/* Input Text Box with @mention listener */}
-            <div className="flex-1 min-w-0 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus-within:border-purple-500 rounded-2xl px-3 sm:px-3.5 py-2 flex items-center gap-2 transition-all shadow-xs">
+            {/* Input Text Box with @mention listener and # hashtag menu popover */}
+            <div className="flex-1 min-w-0 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus-within:border-purple-500 rounded-2xl px-3 sm:px-3.5 py-2 flex items-center gap-2 transition-all shadow-xs relative">
+              <MenuHashtagAutocompletePopover
+                inputText={inputMessage}
+                onSelectTag={(formattedTag) => {
+                  setInputMessage((prev) => prev.replace(/#([a-zA-Z0-9_\-\s>]*)$/, formattedTag + ' '));
+                  if (textareaRef.current) textareaRef.current.focus();
+                }}
+              />
               <textarea
                 ref={textareaRef}
                 rows={1}
@@ -1815,7 +1823,7 @@ export default function CommunityChatView({
                 placeholder={
                   replyingTo
                     ? `Balas @${replyingTo.user_name}...`
-                    : `Tulis pesan di #${activeChannel.name}`
+                    : `Tulis pesan di #${activeChannel.name} (ketik # untuk tag menu)...`
                 }
                 className="w-full bg-transparent text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 outline-none resize-none max-h-24"
               />
