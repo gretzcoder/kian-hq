@@ -1137,6 +1137,16 @@ export async function createThreadFromMessage(
   const db = await getDB();
   await ensureCommunityThreadColumns(db);
 
+  const ctx = await getSessionContext(session.userId);
+  const isAuthorized =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isAuthorized) {
+    return { success: false, error: 'Hanya Admin atau Koordinator yang dapat membuat Thread baru.' };
+  }
+
   const msg = (await db
     .prepare('SELECT id, channel_id, message, thread_name FROM community_messages WHERE id = ?')
     .bind(messageId)
@@ -1171,6 +1181,16 @@ export async function createDirectThread(
 ): Promise<{ success: boolean; threadRootId?: string; threadName?: string; error?: string }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'Unauthorized' };
+
+  const ctx = await getSessionContext(session.userId);
+  const isAuthorized =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isAuthorized) {
+    return { success: false, error: 'Hanya Admin atau Koordinator yang dapat membuat Thread baru.' };
+  }
 
   if (!threadName.trim() || !initialMessage.trim()) {
     return { success: false, error: 'Judul thread dan pesan awal wajib diisi.' };
@@ -1411,4 +1431,56 @@ export async function togglePinThreadAnswer(
     console.error('togglePinThreadAnswer error:', err);
     return { success: false, error: err.message || 'Gagal menyematkan jawaban.' };
   }
+}
+
+export interface ThreadListItem {
+  id: string;
+  channel_id: string;
+  thread_name: string;
+  message_snippet: string;
+  author_name: string;
+  author_avatar?: string;
+  reply_count: number;
+  has_pinned_answer: boolean;
+  created_at: string;
+  last_activity_at: string;
+}
+
+/**
+ * Gets a list of all existing threads in a community channel.
+ */
+export async function getChannelThreads(channelId: string): Promise<ThreadListItem[]> {
+  const session = await getSession();
+  if (!session) return [];
+
+  const db = await getDB();
+  await ensureCommunityThreadColumns(db);
+
+  const rawThreads = (await db
+    .prepare(
+      `SELECT m.id, m.channel_id, m.message, m.thread_name, m.pinned_answer_id, m.created_at,
+              u.name as author_name, u.avatar_url as author_avatar,
+              (SELECT COUNT(*) FROM community_messages WHERE thread_root_id = m.id) as reply_count,
+              (SELECT created_at FROM community_messages WHERE thread_root_id = m.id ORDER BY created_at DESC LIMIT 1) as last_reply_at
+       FROM community_messages m
+       LEFT JOIN users u ON m.user_id = u.id
+       WHERE m.channel_id = ? AND (m.is_thread_root = 1 OR (m.thread_name IS NOT NULL AND m.thread_name != ''))
+       ORDER BY COALESCE(last_reply_at, m.created_at) DESC`
+    )
+    .bind(channelId)
+    .all()) as any;
+
+  const results = rawThreads.results || [];
+  return results.map((t: any) => ({
+    id: t.id,
+    channel_id: t.channel_id,
+    thread_name: t.thread_name || (t.message.length > 35 ? t.message.substring(0, 35) + '...' : t.message),
+    message_snippet: t.message ? (t.message.length > 60 ? t.message.substring(0, 60) + '...' : t.message) : '',
+    author_name: t.author_name || 'Pengguna',
+    author_avatar: t.author_avatar || undefined,
+    reply_count: Number(t.reply_count) || 0,
+    has_pinned_answer: Boolean(t.pinned_answer_id),
+    created_at: t.created_at,
+    last_activity_at: t.last_reply_at || t.created_at,
+  }));
 }

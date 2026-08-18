@@ -37,6 +37,7 @@ import { MenuTagModal } from '@/components/MenuTagModal';
 import { MenuTagOption } from '@/modules/menu/menuTagActions';
 import { ThreadSidePanel } from './ThreadSidePanel';
 import { NewThreadModal } from './NewThreadModal';
+import { ThreadListModal } from './ThreadListModal';
 import type { EmojiClickData } from 'emoji-picker-react';
 
 // Dynamic import for emoji-picker-react to ensure smooth SSR rendering
@@ -218,6 +219,7 @@ export default function CommunityChatView({
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isNewThreadModalOpen, setIsNewThreadModalOpen] = useState(false);
+  const [isThreadListModalOpen, setIsThreadListModalOpen] = useState(false);
   const [sourceThreadMessage, setSourceThreadMessage] = useState<CommunityMessage | null>(null);
   const [editingCategory, setEditingCategory] = useState<CommunityCategory | null>(null);
   const [categoryForm, setCategoryForm] = useState({
@@ -1227,8 +1229,18 @@ export default function CommunityChatView({
             </div>
           </div>
 
-          {/* Desktop Right Member Toggle, New Thread & Clear Chat Buttons */}
+          {/* Desktop Right Member Toggle, Threads Shortcut & Clear Chat Buttons */}
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsThreadListModalOpen(true)}
+              className="flex items-center gap-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 px-3 py-1.5 rounded-2xl text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95"
+              title={`Lihat daftar thread di #${activeChannel.name}`}
+            >
+              <span>🧵</span>
+              <span>Daftar Thread</span>
+            </button>
+
             {canManageCommunity && (
               <button
                 type="button"
@@ -1236,11 +1248,11 @@ export default function CommunityChatView({
                   setSourceThreadMessage(null);
                   setIsNewThreadModalOpen(true);
                 }}
-                className="flex items-center gap-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 px-3 py-1.5 rounded-2xl text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white border border-purple-500/30 px-3 py-1.5 rounded-2xl text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95"
                 title="Buat Thread Diskusi Baru di Saluran Ini"
               >
-                <span>🧵</span>
-                <span>+ Thread Baru</span>
+                <span>➕</span>
+                <span>Thread Baru</span>
               </button>
             )}
 
@@ -1539,21 +1551,23 @@ export default function CommunityChatView({
                         >
                           <span className="text-sm">↩️</span>
                         </button>
-                        <button
-                          onClick={() => {
-                            if (msg.is_thread_root) {
-                              setActiveThreadId(msg.id);
-                            } else {
-                              setSourceThreadMessage(msg);
-                              setIsNewThreadModalOpen(true);
-                            }
-                            dismissLongPress();
-                          }}
-                          className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 active:bg-zinc-200 dark:active:bg-zinc-600 rounded-md transition-colors text-purple-600 dark:text-purple-400 font-bold"
-                          title="Thread"
-                        >
-                          <span className="text-sm">🧵</span>
-                        </button>
+                        {(canManageCommunity || msg.is_thread_root) && (
+                          <button
+                            onClick={() => {
+                              if (msg.is_thread_root) {
+                                setActiveThreadId(msg.id);
+                              } else {
+                                setSourceThreadMessage(msg);
+                                setIsNewThreadModalOpen(true);
+                              }
+                              dismissLongPress();
+                            }}
+                            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 active:bg-zinc-200 dark:active:bg-zinc-600 rounded-md transition-colors text-purple-600 dark:text-purple-400 font-bold"
+                            title={msg.is_thread_root ? 'Buka Thread' : 'Buat Thread dari pesan ini'}
+                          >
+                            <span className="text-sm">🧵</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2228,6 +2242,17 @@ export default function CommunityChatView({
           setActiveThreadId(threadId);
           fetchMessages(activeChannel.id, false);
         }}
+      />
+
+      {/* Thread List Modal */}
+      <ThreadListModal
+        isOpen={isThreadListModalOpen}
+        onClose={() => setIsThreadListModalOpen(false)}
+        channelId={activeChannel.id}
+        channelName={activeChannel.name}
+        onSelectThread={(threadId) => setActiveThreadId(threadId)}
+        canCreateThread={canManageCommunity}
+        onOpenNewThreadModal={() => setIsNewThreadModalOpen(true)}
       />
     </div>
   );
