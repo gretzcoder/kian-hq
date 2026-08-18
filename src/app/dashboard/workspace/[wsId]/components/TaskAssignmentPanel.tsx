@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { assignMultipleCreatorsToTask, removeTaskAssignment } from '@/modules/tasks/actions';
+import { parseIndonesiaDate, formatDatetimeLocalInput } from '@/lib/dateUtils';
 
 interface ExistingAssignment {
   id: string;
@@ -74,14 +75,7 @@ export default function TaskAssignmentPanel({
   });
 
   // Calculate maxDate string for datetime-local input HTML attribute
-  const maxDateStr = taskDeadline
-    ? (() => {
-        const d = new Date(taskDeadline);
-        if (isNaN(d.getTime())) return undefined;
-        const pad = (n: number) => String(n).padStart(2, '0');
-        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      })()
-    : undefined;
+  const maxDateStr = taskDeadline ? formatDatetimeLocalInput(taskDeadline) : undefined;
 
   const handleBatchAssign = async () => {
     setError(null);
@@ -91,7 +85,7 @@ export default function TaskAssignmentPanel({
       const isAssigned = existingAssignments.some((a) => a.assignment_role === role);
       const selectedUserId = roleUserMap[role];
       const deadlineStr = roleDeadlineMap[role];
-      const deadline = deadlineStr ? new Date(deadlineStr).getTime() : null;
+      const deadline = parseIndonesiaDate(deadlineStr);
 
       // Validation: step deadline cannot be later than task overall deadline
       if (deadline && taskDeadline && deadline > taskDeadline) {

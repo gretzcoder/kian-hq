@@ -9,6 +9,7 @@ import { updateTask, deleteTask } from '@/modules/tasks/actions';
 
 import EditTaskMultiplierModal from '@/modules/tasks/components/EditTaskMultiplierModal';
 import { ExtendDeadlineModal } from '@/components/ExtendDeadlineModal';
+import { formatDatetimeLocalInput } from '@/lib/dateUtils';
 
 interface TaskAssignment {
   id: string;
@@ -108,7 +109,7 @@ function getTaskDeadlineBadge(deadline: number | null, status: string, extendedD
   const isFinished = ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(status);
   const now = Date.now();
   const diffDays = Math.ceil((activeDeadline - now) / (1000 * 60 * 60 * 24));
-  const dateStr = new Date(activeDeadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const dateStr = new Date(activeDeadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' });
 
   if (isFinished) {
     return (
@@ -274,7 +275,7 @@ export default function TaskAccordion({
                           : 'text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
                       }`}>
                         <span>📅</span>
-                        <span>Mulai: {new Date(task.start_at).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                        <span>Mulai: {new Date(task.start_at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' })}</span>
                         {task.start_at > Date.now() && <span className="text-[8px] bg-indigo-500 text-white px-1.5 py-0.2 rounded-full">Dijadwalkan</span>}
                       </span>
                     )}
@@ -509,19 +510,6 @@ function EditTaskModal({
   const [outputType, setOutputType] = useState(task.task_type || 'DESIGN');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const formatDatetimeLocalInput = (ts: number | null | undefined): string => {
-    if (!ts) return '';
-    const date = new Date(ts);
-    if (isNaN(date.getTime())) return '';
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const yyyy = date.getFullYear();
-    const mm = pad(date.getMonth() + 1);
-    const dd = pad(date.getDate());
-    const hh = pad(date.getHours());
-    const min = pad(date.getMinutes());
-    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-  };
 
   const defaultStartAt = formatDatetimeLocalInput(task.start_at);
   const defaultDeadline = formatDatetimeLocalInput(task.deadline);

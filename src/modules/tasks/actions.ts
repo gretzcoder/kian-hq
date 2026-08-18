@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { validateTransition } from '@/modules/workflow/engine';
 import { logWorkflowEvent } from '@/modules/workflow/events';
 import { sendPushNotificationToUser, sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
+import { parseIndonesiaDate } from '@/lib/dateUtils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -132,13 +133,8 @@ export async function createTask(workspaceId: string, formData: FormData) {
   }
 
   const taskId = `task_${crypto.randomUUID().replace(/-/g, '')}`;
-  const deadline = new Date(deadlineStr).getTime();
-
-  let startAt: number | null = null;
-  if (startAtStr?.trim()) {
-    startAt = new Date(startAtStr).getTime();
-    if (isNaN(startAt)) startAt = null;
-  }
+  const deadline = parseIndonesiaDate(deadlineStr) ?? new Date(deadlineStr).getTime();
+  const startAt = parseIndonesiaDate(startAtStr);
 
   const taskTypeValue = isDirectBrief ? 'DIRECT_BRIEF' : outputType;
   const initialStatus = 'DRAFT';
@@ -1110,16 +1106,8 @@ export async function updateTask(taskId: string, formData: FormData) {
     return { success: false, error: 'Judul tugas wajib diisi.' };
   }
 
-  let deadline: number | null = null;
-  if (deadlineStr) {
-    deadline = new Date(deadlineStr).getTime();
-  }
-
-  let startAt: number | null = null;
-  if (startAtStr?.trim()) {
-    startAt = new Date(startAtStr).getTime();
-    if (isNaN(startAt)) startAt = null;
-  }
+  const deadline = parseIndonesiaDate(deadlineStr);
+  const startAt = parseIndonesiaDate(startAtStr);
 
   try {
     await db

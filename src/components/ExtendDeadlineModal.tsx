@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { extendTaskDeadline } from '@/modules/tasks/actions';
+import { parseIndonesiaDate, formatDatetimeLocalInput } from '@/lib/dateUtils';
 
 interface ExtendDeadlineModalProps {
   taskId: string;
@@ -27,27 +28,13 @@ export function ExtendDeadlineModal({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Format timestamp for datetime-local input (Asia/Jakarta local time)
-  const formatForInput = (ts: number | null) => {
-    if (!ts) return '';
-    const date = new Date(ts);
-    // Pad numbers
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const yyyy = date.getFullYear();
-    const mm = pad(date.getMonth() + 1);
-    const dd = pad(date.getDate());
-    const hh = pad(date.getHours());
-    const min = pad(date.getMinutes());
-    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-  };
-
   const activeDeadline = currentExtendedDeadline || currentDeadline;
-  const initialValue = formatForInput(activeDeadline || (Date.now() + 24 * 3600 * 1000));
+  const initialValue = formatDatetimeLocalInput(activeDeadline || (Date.now() + 24 * 3600 * 1000));
   const [newDeadlineStr, setNewDeadlineStr] = useState(initialValue);
 
   if (!isOpen) return null;
 
-  const newDeadlineMs = newDeadlineStr ? new Date(newDeadlineStr).getTime() : 0;
+  const newDeadlineMs = parseIndonesiaDate(newDeadlineStr) || 0;
   const originalTs = currentDeadline || Date.now();
 
   let daysExtended = 0;
