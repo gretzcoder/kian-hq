@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   createAssessmentTask,
   updateAssessmentTask,
@@ -1303,6 +1304,7 @@ function MentorTaskCard({
   canManage = true,
   currentUserId,
   allWorkspaceMembers = [],
+  isTarget = false,
 }: {
   task: TaskRow;
   assignments: AssignmentRow[];
@@ -1312,9 +1314,10 @@ function MentorTaskCard({
   canManage?: boolean;
   currentUserId: string;
   allWorkspaceMembers?: WorkspaceMemberSimple[];
+  isTarget?: boolean;
 }) {
-  const [isCardExpanded,           setIsCardExpanded]           = useState(false);
-  const [showSubmissions,          setShowSubmissions]          = useState(false);
+  const [isCardExpanded,           setIsCardExpanded]           = useState(isTarget);
+  const [showSubmissions,          setShowSubmissions]          = useState(isTarget);
   const [showEditModal,            setShowEditModal]            = useState(false);
   const [showConfirmDelete,        setShowConfirmDelete]        = useState(false);
   const [showAddParticipantModal,  setShowAddParticipantModal]  = useState(false);
@@ -1371,7 +1374,12 @@ function MentorTaskCard({
   const isScheduled = task.start_at && task.start_at > Date.now();
 
   return (
-    <div className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+    <div
+      id={`task_card_${task.id}`}
+      className={`border bg-white dark:bg-zinc-900/30 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all ${
+        isTarget ? 'border-purple-500 ring-2 ring-purple-500 shadow-xl shadow-purple-500/20' : 'border-zinc-200/80 dark:border-zinc-800/80'
+      }`}
+    >
       {/* Modal Edit Assessment (rendered at root level so it works even when collapsed) */}
       {showEditModal && (
         <EditAssessmentTaskModal
@@ -1831,13 +1839,15 @@ function OJTTaskCard({
   assignment,
   reactions = [],
   workspaceId,
+  isTarget = false,
 }: {
   task: TaskRow;
   assignment: AssignmentRow;
   reactions?: ReactionItem[];
   workspaceId: string;
+  isTarget?: boolean;
 }) {
-  const [isCardExpanded, setIsCardExpanded] = useState(false);
+  const [isCardExpanded, setIsCardExpanded] = useState(isTarget);
   const [pending, startTransition] = useTransition();
   const execLabel = EXEC_TYPE_LABEL[assignment.assignment_role] ?? assignment.assignment_role;
   const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline, task.extended_deadline);
@@ -1851,7 +1861,12 @@ function OJTTaskCard({
   };
 
   return (
-    <div className="bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl overflow-hidden shadow-xs hover:shadow-md transition-all">
+    <div
+      id={`task_card_${task.id}`}
+      className={`bg-white dark:bg-[#09090b] border rounded-3xl overflow-hidden shadow-xs hover:shadow-md transition-all ${
+        isTarget ? 'border-purple-500 ring-2 ring-purple-500 shadow-xl shadow-purple-500/20' : 'border-zinc-200 dark:border-zinc-800'
+      }`}
+    >
       {/* Accordion Task Header */}
       <div
         onClick={() => setIsCardExpanded((prev) => !prev)}
@@ -1991,6 +2006,21 @@ export function AssessmentPanel({
   isOJT,
   allWorkspaceMembers = [],
 }: AssessmentPanelProps) {
+  const searchParams = useSearchParams();
+  const targetTaskId = searchParams ? searchParams.get('taskId') : null;
+
+  useEffect(() => {
+    if (targetTaskId) {
+      const timer = setTimeout(() => {
+        const el = document.getElementById(`task_card_${targetTaskId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [targetTaskId]);
+
   // Determine viewing role
   const canManage = isLeader || isCoordinator;
   const isOJTTrooper = isOJT && !isLeader;
@@ -2052,6 +2082,7 @@ export function AssessmentPanel({
           return a.deadline - b.deadline;
         }).map((task) => {
           const allAssignments = assignmentsByTask[task.id] ?? [];
+          const isTarget = targetTaskId === task.id;
 
           if (canManage) {
             return (
@@ -2065,6 +2096,7 @@ export function AssessmentPanel({
                 canManage={canManage}
                 currentUserId={currentUserId}
                 allWorkspaceMembers={allWorkspaceMembers}
+                isTarget={isTarget}
               />
             );
           }
@@ -2080,6 +2112,7 @@ export function AssessmentPanel({
               assignment={myAssignment}
               reactions={reactionsMap?.[myAssignment.id] ?? []}
               workspaceId={workspaceId}
+              isTarget={isTarget}
             />
           );
         })}

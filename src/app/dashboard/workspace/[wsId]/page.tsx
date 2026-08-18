@@ -37,6 +37,7 @@ interface TaskRow {
   deadline: number | null;
   start_at?: number | null;
   created_at: number;
+  created_by?: string | null;
   task_type: string;
   parent_task_id: string | null;
   revision_note?: string | null;
@@ -113,6 +114,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     ctx,
     { results: mentorsRaw },
     { results: memberAccountRolesRaw },
+    projMentorCheck,
   ] = await Promise.all([
     db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
     db.prepare("SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1").bind(projectId).first(),
@@ -164,6 +166,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         SELECT user_id FROM workspace_members WHERE workspace_id = ?
       )
     `).bind(wsId).all(),
+    db.prepare('SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ? LIMIT 1').bind(projectId, session.userId).first(),
   ]);
 
   const isOjtWorkspace = ojtCheck !== null || workspace.ojt_coordinator_id !== null;
@@ -173,7 +176,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
 
   // SECURITY GATE & ACCESS CONTROL:
-  // Workspace and its contents can ONLY be accessed by workspace members, designated workspace mentor, or Coordinator/Admin
+  // Workspace and its contents can ONLY be accessed by workspace members, designated workspace mentor, project mentor, task creator, or Coordinator/Admin
   const isCoordinatorUser =
     (ctx.userType === 'STAFF' &&
       (ctx.roles.includes('COORDINATOR') ||
@@ -185,7 +188,15 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     ctx.permissions.has('ADMIN_SYSTEM');
 
   const isWorkspaceMember = members.some((m) => m.userId === session.userId);
-  const isDesignatedMentor = workspace.ojt_coordinator_id === session.userId;
+  const isProjectCoordinator = projMentorCheck !== null;
+  const hasMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isTaskCreatorInWs = (tasksRaw as unknown as TaskRow[]).some((t) => t.created_by === session.userId);
+
+  const isDesignatedMentor =
+    workspace.ojt_coordinator_id === session.userId ||
+    hasMentorRole ||
+    isProjectCoordinator ||
+    isTaskCreatorInWs;
 
   if (!isWorkspaceMember && !isDesignatedMentor && !isCoordinatorUser) {
     redirect('/dashboard/workspace');
@@ -306,7 +317,6 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   // Compute roles for the current user
   const currentUserRoles: string[] = membersList.find((m) => m.userId === session.userId)?.teamRoles ?? [];
-  const hasMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
   const isMentor = isDesignatedMentor || hasMentorRole;
   const isLeader = currentUserRoles.includes('LEADER') || isMentor;
   const isCoordinator = isCoordinatorUser;
@@ -314,7 +324,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   // Batch-resolve all permissions in ONE synchronous call (no extra DB/KV round-trips)
   const { canCreateTask, canAssignTask, canDeleteTask, canUpdateWs, canManageMembers } =
-    resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId, workspace.workspace_type);
+    resolveWorkspacePermissions(ctx, workspace.ojt_coordinator_id, currentUserRoles, session.userId, workspace.workspace_type, isProjectCoordinator, isTaskCreatorInWs);
 
   const wsCfg = wsStatusConfig[workspace.status] ?? wsStatusConfig.ACTIVE;
 
