@@ -514,6 +514,7 @@ export default async function DashboardPage() {
       `
     SELECT DISTINCT
       ta.id            AS assignment_id,
+      ta.user_id       AS user_id,
       ta.assignment_role,
       ta.result_url,
       ta.submitted_at,
@@ -556,11 +557,20 @@ export default async function DashboardPage() {
     .all();
 
   const allQCReviews = rawPendingQCReviews as unknown as (QCReviewItem & {
+    user_id?: string;
     task_created_by?: string | null;
     task_type?: string | null;
   })[];
 
   const pendingQCReviews = allQCReviews.filter((r) => {
+    // ── Exclude own submissions ──
+    if (r.user_id === session.userId) return false;
+
+    // ── Mentor Workspaces: ONLY Coordinators/Admins evaluate submissions ──
+    if (r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR' || (r.project_name ? r.project_name.toUpperCase().includes('MENTOR') : false)) {
+      if (!isStaffCoordinator) return false;
+    }
+
     if (r.task_type === 'ASSESSMENT') {
       const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
       if (isTaskCreator && r.mentor_approved === 0) return true;

@@ -758,6 +758,10 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
 
   const workspaceId = task.workspace_id || '';
 
+  if (assignment.user_id === session.userId) {
+    return { success: false, error: 'Forbidden: Anda tidak dapat menilai atau menyetujui hasil karya milik Anda sendiri.' };
+  }
+
   const ctx = await getSessionContext(session.userId);
   const isLeader = (await db
     .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
@@ -769,7 +773,15 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     .bind(workspaceId, session.userId)
     .first()) !== null;
 
-  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+  const isCoordinator =
+    (ctx.userType === 'STAFF' &&
+      (ctx.roles.includes('COORDINATOR') ||
+        ctx.roles.includes('EXECUTIVE') ||
+        ctx.can('MANAGE') ||
+        ctx.can('WORKSPACE_MANAGE'))) ||
+    ctx.can('SPARKS_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM');
 
   const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assignment.assignment_role);
   const isMentorWs = task.task_type === 'MENTOR' || (await db.prepare('SELECT workspace_type FROM workspaces WHERE id = ?').bind(workspaceId).first() as any)?.workspace_type === 'MENTOR';
@@ -974,6 +986,10 @@ export async function requestRevision(assignmentId: string, note: string) {
     .first() as { id: string; user_id: string; task_id: string; status: string; assignment_role: string } | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
+
+  if (assignment.user_id === session.userId) {
+    return { success: false, error: 'Forbidden: Anda tidak dapat meminta revisi untuk hasil karya milik Anda sendiri.' };
+  }
 
   if (['APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(assignment.status)) {
     return { success: false, error: 'Penugasan yang sudah disetujui (Approved) tidak dapat diminta revisi kembali.' };

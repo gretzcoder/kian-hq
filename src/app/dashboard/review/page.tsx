@@ -49,6 +49,7 @@ export default async function ReviewPage() {
   const { results: rawReviews } = await db.prepare(`
     SELECT
       ta.id            AS assignment_id,
+      ta.user_id       AS creator_id,
       ta.assignment_role,
       ta.result_url,
       ta.submitted_at,
@@ -97,6 +98,14 @@ export default async function ReviewPage() {
 
   // Filter reviews based on role-specific visibility rules
   const reviews = allReviews.filter((r) => {
+    // ── Exclude own submissions ──
+    if (r.creator_id === session.userId) return false;
+
+    // ── Mentor Workspaces: ONLY Coordinators/Admins evaluate submissions ──
+    if (r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR' || (r.project_name ? r.project_name.toUpperCase().includes('MENTOR') : false)) {
+      if (!isCoordinator) return false;
+    }
+
     // ── Assessment 2-step flow ──
     if (r.task_type === 'ASSESSMENT') {
       const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;

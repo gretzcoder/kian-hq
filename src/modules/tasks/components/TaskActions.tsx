@@ -810,16 +810,18 @@ export default function TaskActions({
                                 </>
                               )}
 
-                              {/* QC Approver Actions */}
-                              {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(assign.status) && (
+                              {/* QC Approver Actions: Only non-submitter, and for MENTOR workspace ONLY Coordinator */}
+                              {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(assign.status) &&
+                                assign.user_id !== currentUserId &&
+                                (isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)) && (
                                 <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
                                   <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                                     Persetujuan QC & Pemberian Sparks
                                   </p>
                                   <ReviewActions
                                     assignmentId={assign.id}
-                                    canRequestRevision={isLeader || isMentor || isCoordinator}
-                                    canAwardBadge={isMentor || isCoordinator}
+                                    canRequestRevision={isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)}
+                                    canAwardBadge={isMentorWs ? isCoordinator : (isMentor || isCoordinator)}
                                     isStaffOrCoord={isCoordinator}
                                     mentorApproved={assign.mentor_approved ?? 0}
                                     coordinatorApproved={assign.coordinator_approved ?? 0}
@@ -1044,15 +1046,18 @@ export default function TaskActions({
                   )}
                 </div>
               )}
-              {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status) && (
+              {/* QC Approver Actions: Only non-submitter, and for MENTOR workspace ONLY Coordinator */}
+              {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status) &&
+                a.user_id !== currentUserId &&
+                (isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)) && (
                 <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
                   <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                     Persetujuan QC & Pemberian Sparks
                   </p>
                   <ReviewActions
                     assignmentId={a.id}
-                    canRequestRevision={isLeader || isMentor || isCoordinator}
-                    canAwardBadge={isMentor || isCoordinator}
+                    canRequestRevision={isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)}
+                    canAwardBadge={isMentorWs ? isCoordinator : (isMentor || isCoordinator)}
                     isStaffOrCoord={isCoordinator}
                     mentorApproved={a.mentor_approved ?? 0}
                     coordinatorApproved={a.coordinator_approved ?? 0}
