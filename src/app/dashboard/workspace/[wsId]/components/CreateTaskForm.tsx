@@ -210,13 +210,12 @@ export default function CreateTaskForm({
 
             <div>
               <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                Deadline <span className="text-red-500">*</span>
+                Tenggat Waktu (Deadline) <span className="text-red-500">*</span>
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 name="deadline"
                 required
-                min={new Date().toISOString().split('T')[0]}
                 onClick={(e) => {
                   try { e.currentTarget.showPicker?.(); } catch {}
                 }}

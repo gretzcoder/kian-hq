@@ -73,9 +73,14 @@ export default function TaskAssignmentPanel({
     return members.some((m) => m.userId === u.id);
   });
 
-  // Calculate maxDate string for date input HTML attribute (YYYY-MM-DD)
+  // Calculate maxDate string for datetime-local input HTML attribute
   const maxDateStr = taskDeadline
-    ? new Date(taskDeadline).toISOString().split('T')[0]
+    ? (() => {
+        const d = new Date(taskDeadline);
+        if (isNaN(d.getTime())) return undefined;
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      })()
     : undefined;
 
   const handleBatchAssign = async () => {
@@ -209,8 +214,7 @@ export default function TaskAssignmentPanel({
                       </select>
 
                       <input
-                        type="date"
-                        min={new Date().toISOString().split('T')[0]}
+                        type="datetime-local"
                         max={maxDateStr}
                         value={roleDeadlineMap[role] || ''}
                         onChange={(e) =>

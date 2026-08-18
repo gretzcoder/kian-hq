@@ -510,13 +510,21 @@ function EditTaskModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const defaultStartAt = task.start_at
-    ? new Date(task.start_at - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-    : '';
+  const formatDatetimeLocalInput = (ts: number | null | undefined): string => {
+    if (!ts) return '';
+    const date = new Date(ts);
+    if (isNaN(date.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const mm = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  };
 
-  const defaultDeadline = task.deadline
-    ? new Date(task.deadline).toISOString().split('T')[0]
-    : '';
+  const defaultStartAt = formatDatetimeLocalInput(task.start_at);
+  const defaultDeadline = formatDatetimeLocalInput(task.deadline);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -613,11 +621,14 @@ function EditTaskModal({
                 Tenggat Waktu (Deadline) <span className="text-red-500">*</span>
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 name="deadline"
                 defaultValue={defaultDeadline}
                 required
-                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all"
+                onClick={(e) => {
+                  try { e.currentTarget.showPicker?.(); } catch {}
+                }}
+                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
             </div>
           </div>
