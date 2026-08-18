@@ -92,416 +92,377 @@ export default async function DashboardPage() {
     widgetTitle = 'QC & Live Task Control Center';
     widgetDesc = 'Pantau tugas aktif, masukan mentor, dan tinjau persetujuan QC secara real-time.';
 
-    // 1. All Active Tasks (Category 1: All Task for Coordinator)
-    const { results: allActive } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        ta.user_id AS user_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        t.start_at,
-        t.task_type AS task_type,
-        t.created_by AS task_created_by,
-        ws.workspace_type AS workspace_type,
-        u.user_type AS user_type,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE (entity_id = ta.id OR entity_id = t.id) AND (to_status = 'REVISION_REQUESTED' OR to_status = 'REVISION') AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
-        (SELECT u_rev.name FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_name,
-        (SELECT COALESCE(r_rev.name, CASE WHEN u_rev.user_type = 'STAFF' THEN 'Koordinator' ELSE 'Mentor' END) FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id LEFT JOIN user_roles ur_rev ON u_rev.id = ur_rev.user_id LEFT JOIN roles r_rev ON ur_rev.role_id = r_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_role
-      FROM task_assignments ta
-      JOIN tasks t         ON ta.task_id = t.id
-      JOIN projects p      ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u    ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY ta.submitted_at ASC, t.deadline ASC
-      LIMIT 500
-    `
-      )
-      .all();
-    personalTasks = allActive as unknown as PersonalTaskRow[];
+    const [allActiveRes, tActiveRes, mActiveRes, rActiveRes, cResultsRes] = await Promise.all([
+      // 1. All Active Tasks
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          ta.user_id AS user_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          t.start_at,
+          t.task_type AS task_type,
+          t.created_by AS task_created_by,
+          ws.workspace_type AS workspace_type,
+          u.user_type AS user_type,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.revision_note AS revision_note,
+          u_creator.name AS revision_requested_by_name,
+          'Koordinator/Mentor' AS revision_requested_by_role
+        FROM task_assignments ta
+        JOIN tasks t         ON ta.task_id = t.id
+        JOIN projects p      ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u    ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY ta.submitted_at ASC, t.deadline ASC
+        LIMIT 100
+      `).all(),
 
-    // 2. Troopers Task (Category 2: Active Troopers Tasks for Coordinator)
-    const { results: tActive } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        ta.user_id AS user_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        ta.revision_note,
-        t.task_type      AS task_type,
-        t.created_by     AS task_created_by,
-        ws.workspace_type AS workspace_type,
-        (SELECT u_rev.name FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_name,
-        (SELECT COALESCE(r_rev.name, CASE WHEN u_rev.user_type = 'STAFF' THEN 'Koordinator' ELSE 'Mentor' END) FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id LEFT JOIN user_roles ur_rev ON u_rev.id = ur_rev.user_id LEFT JOIN roles r_rev ON ur_rev.role_id = r_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_role
-      FROM task_assignments ta
-      JOIN tasks t         ON ta.task_id = t.id
-      JOIN projects p      ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u    ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
-        AND (ws.workspace_type IS NULL OR ws.workspace_type != 'MENTOR')
-        AND (t.task_type IS NULL OR t.task_type != 'MENTOR')
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY ta.submitted_at ASC, t.deadline ASC
-      LIMIT 100
-    `
-      )
-      .all();
-    trooperTasks = tActive as unknown as PersonalTaskRow[];
+      // 2. Troopers Tasks
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          ta.user_id AS user_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          ta.sparks,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.revision_note,
+          t.task_type      AS task_type,
+          t.created_by     AS task_created_by,
+          ws.workspace_type AS workspace_type,
+          u_creator.name AS revision_requested_by_name,
+          'Koordinator/Mentor' AS revision_requested_by_role
+        FROM task_assignments ta
+        JOIN tasks t         ON ta.task_id = t.id
+        JOIN projects p      ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u    ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
+          AND (ws.workspace_type IS NULL OR ws.workspace_type != 'MENTOR')
+          AND (t.task_type IS NULL OR t.task_type != 'MENTOR')
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY ta.submitted_at ASC, t.deadline ASC
+        LIMIT 100
+      `).all(),
 
-    // 3. Mentor Task (Category 3: Active Mentor Tasks strictly in Mentor Workspaces)
-    const { results: mActive } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        ta.revision_note,
-        t.task_type      AS task_type,
-        t.created_by     AS task_created_by,
-        ws.workspace_type AS workspace_type
-      FROM task_assignments ta
-      JOIN tasks t         ON ta.task_id = t.id
-      JOIN projects p      ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u    ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
-        AND (
-          ws.workspace_type = 'MENTOR'
-          OR UPPER(p.name) LIKE '%MENTOR%'
-          OR t.task_type = 'MENTOR'
-        )
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY ta.submitted_at ASC, t.deadline ASC
-      LIMIT 100
-    `
-      )
-      .all();
-    mentorTasks = mActive as unknown as PersonalTaskRow[];
+      // 3. Mentor Tasks
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          ta.sparks,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.revision_note,
+          t.task_type      AS task_type,
+          t.created_by     AS task_created_by,
+          ws.workspace_type AS workspace_type
+        FROM task_assignments ta
+        JOIN tasks t         ON ta.task_id = t.id
+        JOIN projects p      ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u    ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
+          AND (
+            ws.workspace_type = 'MENTOR'
+            OR UPPER(p.name) LIKE '%MENTOR%'
+            OR t.task_type = 'MENTOR'
+          )
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY ta.submitted_at ASC, t.deadline ASC
+        LIMIT 100
+      `).all(),
 
-    // 4. Perlu Di-Review (Category 4: Tasks Waiting Review by Mentor / Coordinator)
-    const { results: rActive } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        ta.revision_note,
-        ta.mentor_approved,
-        ta.coordinator_approved,
-        t.task_type      AS task_type,
-        t.created_by AS task_created_by,
-        ws.workspace_type AS workspace_type
-      FROM task_assignments ta
-      JOIN tasks t         ON ta.task_id = t.id
-      JOIN projects p      ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u    ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY ta.submitted_at ASC, t.deadline ASC
-      LIMIT 100
-    `
-      )
-      .all();
-    reviewTasks = rActive as unknown as PersonalTaskRow[];
+      // 4. Perlu Di-Review
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          ta.sparks,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.revision_note,
+          ta.mentor_approved,
+          ta.coordinator_approved,
+          t.task_type      AS task_type,
+          t.created_by AS task_created_by,
+          ws.workspace_type AS workspace_type
+        FROM task_assignments ta
+        JOIN tasks t         ON ta.task_id = t.id
+        JOIN projects p      ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u    ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY ta.submitted_at ASC, t.deadline ASC
+        LIMIT 100
+      `).all(),
 
-    // 5. Completed Tasks
-    const { results: cResults } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        ta.reviewed_at
-      FROM task_assignments ta
-      JOIN tasks t         ON ta.task_id = t.id
-      JOIN projects p      ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u    ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
-      LIMIT 50
-    `
-      )
-      .all();
-    completedTasks = cResults as unknown as PersonalTaskRow[];
+      // 5. Completed Tasks
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          ta.sparks,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.reviewed_at
+        FROM task_assignments ta
+        JOIN tasks t         ON ta.task_id = t.id
+        JOIN projects p      ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u    ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
+        LIMIT 50
+      `).all(),
+    ]);
+
+    personalTasks = (allActiveRes.results || []) as unknown as PersonalTaskRow[];
+    trooperTasks = (tActiveRes.results || []) as unknown as PersonalTaskRow[];
+    mentorTasks = (mActiveRes.results || []) as unknown as PersonalTaskRow[];
+    reviewTasks = (rActiveRes.results || []) as unknown as PersonalTaskRow[];
+    completedTasks = (cResultsRes.results || []) as unknown as PersonalTaskRow[];
   } else if (isMentor || ctx.roles.includes('MENTOR') || ctx.userType === 'EXTERNAL' || (ctx.userType as string) === 'CREATOR') {
     // MENTOR: Active mentor tasks, troopers under mentorship, and completed work
     widgetTitle = 'Mentor Workspace & Control';
     widgetDesc = 'Daftar penugasan aktif Anda dan troopers yang berada di bawah bimbingan Anda.';
 
-    // 1. Mentor Active Tasks
-    const { results: mActive } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        ta.user_id AS user_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE (entity_id = ta.id OR entity_id = t.id) AND (to_status = 'REVISION_REQUESTED' OR to_status = 'REVISION') AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
-        (SELECT u_rev.name FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_name,
-        (SELECT COALESCE(r_rev.name, CASE WHEN u_rev.user_type = 'STAFF' THEN 'Koordinator' ELSE 'Mentor' END) FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id LEFT JOIN user_roles ur_rev ON u_rev.id = ur_rev.user_id LEFT JOIN roles r_rev ON ur_rev.role_id = r_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_role
-      FROM task_assignments ta
-      JOIN tasks t      ON ta.task_id = t.id
-      JOIN projects p   ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE (ta.user_id = ? OR t.created_by = ?)
-        AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY t.deadline ASC
-      LIMIT 30
-    `
-      )
-      .bind(session.userId, session.userId)
-      .all();
-    personalTasks = mActive as unknown as PersonalTaskRow[];
+    const [mActiveRes, tActiveRes, cResultsRes] = await Promise.all([
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          ta.user_id AS user_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          ta.sparks,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.revision_note,
+          u_creator.name AS revision_requested_by_name,
+          'Koordinator/Mentor' AS revision_requested_by_role
+        FROM task_assignments ta
+        JOIN tasks t      ON ta.task_id = t.id
+        JOIN projects p   ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE (ta.user_id = ? OR t.created_by = ?)
+          AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY t.deadline ASC
+        LIMIT 30
+      `).bind(session.userId, session.userId).all(),
 
-    // 2. Troopers Tasks under Mentorship
-    const { results: tActive } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        ta.user_id AS user_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE (entity_id = ta.id OR entity_id = t.id) AND (to_status = 'REVISION_REQUESTED' OR to_status = 'REVISION') AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
-        (SELECT u_rev.name FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_name,
-        (SELECT COALESCE(r_rev.name, CASE WHEN u_rev.user_type = 'STAFF' THEN 'Koordinator' ELSE 'Mentor' END) FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id LEFT JOIN user_roles ur_rev ON u_rev.id = ur_rev.user_id LEFT JOIN roles r_rev ON ur_rev.role_id = r_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_role
-      FROM task_assignments ta
-      JOIN tasks t      ON ta.task_id = t.id
-      JOIN projects p   ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE (t.created_by = ? OR ws.created_by = ?) AND ta.user_id != ?
-        AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY t.deadline ASC
-      LIMIT 50
-    `
-      )
-      .bind(session.userId, session.userId, session.userId)
-      .all();
-    trooperTasks = tActive as unknown as PersonalTaskRow[];
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          ta.user_id AS user_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          ta.sparks,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.revision_note,
+          u_creator.name AS revision_requested_by_name,
+          'Koordinator/Mentor' AS revision_requested_by_role
+        FROM task_assignments ta
+        JOIN tasks t      ON ta.task_id = t.id
+        JOIN projects p   ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE (t.created_by = ? OR ws.created_by = ?) AND ta.user_id != ?
+          AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY t.deadline ASC
+        LIMIT 50
+      `).bind(session.userId, session.userId, session.userId).all(),
 
-    // 3. Completed Tasks
-    const { results: cResults } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        ta.reviewed_at
-      FROM task_assignments ta
-      JOIN tasks t      ON ta.task_id = t.id
-      JOIN projects p   ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE (ta.user_id = ? OR t.created_by = ?)
-        AND ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
-      LIMIT 30
-    `
-      )
-      .bind(session.userId, session.userId)
-      .all();
-    completedTasks = cResults as unknown as PersonalTaskRow[];
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          ta.sparks,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.reviewed_at
+        FROM task_assignments ta
+        JOIN tasks t      ON ta.task_id = t.id
+        JOIN projects p   ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE (ta.user_id = ? OR t.created_by = ?)
+          AND ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
+        LIMIT 30
+      `).bind(session.userId, session.userId).all(),
+    ]);
+
+    personalTasks = (mActiveRes.results || []) as unknown as PersonalTaskRow[];
+    trooperTasks = (tActiveRes.results || []) as unknown as PersonalTaskRow[];
+    completedTasks = (cResultsRes.results || []) as unknown as PersonalTaskRow[];
   } else {
     // TROOPERS (OJT): show their own active assignments & completed work
     widgetTitle = 'My Workspace & Tasks';
     widgetDesc = 'Daftar penugasan aktif dan riwayat tugas Anda yang telah disetujui.';
 
-    const { results } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        ta.user_id AS user_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE (entity_id = ta.id OR entity_id = t.id) AND (to_status = 'REVISION_REQUESTED' OR to_status = 'REVISION') AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
-        (SELECT u_rev.name FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_name,
-        (SELECT COALESCE(r_rev.name, CASE WHEN u_rev.user_type = 'STAFF' THEN 'Koordinator' ELSE 'Mentor' END) FROM workflow_events we_rev JOIN users u_rev ON we_rev.triggered_by = u_rev.id LEFT JOIN user_roles ur_rev ON u_rev.id = ur_rev.user_id LEFT JOIN roles r_rev ON ur_rev.role_id = r_rev.id WHERE (we_rev.entity_id = ta.id OR we_rev.entity_id = t.id) AND (we_rev.to_status = 'REVISION_REQUESTED' OR we_rev.to_status = 'REVISION') ORDER BY we_rev.created_at DESC LIMIT 1) AS revision_requested_by_role
-      FROM task_assignments ta
-      JOIN tasks t      ON ta.task_id = t.id
-      JOIN projects p   ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY t.deadline ASC
-      LIMIT 25
-    `
-      )
-      .bind(session.userId)
-      .all();
-    personalTasks = results as unknown as PersonalTaskRow[];
+    const [activeRes, completedRes] = await Promise.all([
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          ta.user_id AS user_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          ta.sparks,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.revision_note,
+          u_creator.name AS revision_requested_by_name,
+          'Koordinator/Mentor' AS revision_requested_by_role
+        FROM task_assignments ta
+        JOIN tasks t      ON ta.task_id = t.id
+        JOIN projects p   ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY t.deadline ASC
+        LIMIT 25
+      `).bind(session.userId).all(),
 
-    const { results: cResults } = await db
-      .prepare(
-        `
-      SELECT
-        ta.task_id AS id,
-        ta.id AS assignment_id,
-        t.project_id,
-        t.workspace_id,
-        t.title,
-        ta.status,
-        t.deadline,
-        p.name AS project_name,
-        u.name AS assigned_name,
-        u_creator.name AS creator_name,
-        ta.assignment_role,
-        ta.sparks,
-        COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
-        ta.result_url,
-        ta.submitted_at,
-        ta.reviewed_at
-      FROM task_assignments ta
-      JOIN tasks t      ON ta.task_id = t.id
-      JOIN projects p   ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users u ON ta.user_id = u.id
-      LEFT JOIN users u_creator ON t.created_by = u_creator.id
-      WHERE ta.user_id = ? AND ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
-        AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
-      LIMIT 25
-    `
-      )
-      .bind(session.userId)
-      .all();
-    completedTasks = cResults as unknown as PersonalTaskRow[];
+      db.prepare(`
+        SELECT
+          ta.task_id AS id,
+          ta.id AS assignment_id,
+          t.project_id,
+          t.workspace_id,
+          t.title,
+          ta.status,
+          t.deadline,
+          p.name AS project_name,
+          u.name AS assigned_name,
+          u_creator.name AS creator_name,
+          ta.assignment_role,
+          ta.sparks,
+          ta.appreciation_note AS appreciation_note,
+          ta.result_url,
+          ta.submitted_at,
+          ta.reviewed_at
+        FROM task_assignments ta
+        JOIN tasks t      ON ta.task_id = t.id
+        JOIN projects p   ON t.project_id = p.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        LEFT JOIN users u ON ta.user_id = u.id
+        LEFT JOIN users u_creator ON t.created_by = u_creator.id
+        WHERE ta.user_id = ? AND ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
+          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
+        LIMIT 25
+      `).bind(session.userId).all(),
+    ]);
+
+    personalTasks = (activeRes.results || []) as unknown as PersonalTaskRow[];
+    completedTasks = (completedRes.results || []) as unknown as PersonalTaskRow[];
   }
 
   // Fetch pending QC reviews waiting for current user's approval
@@ -521,7 +482,7 @@ export default async function DashboardPage() {
       ta.lead_approved,
       ta.mentor_approved,
       ta.coordinator_approved,
-      COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
+      ta.appreciation_note AS appreciation_note,
       ta.revision_note,
       t.id             AS task_id,
       t.title          AS task_title,
