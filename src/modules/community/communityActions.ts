@@ -54,6 +54,24 @@ export interface CommunityMessage {
   };
   created_at: string;
   reactions: CommunityReaction[];
+
+  // Thread fields
+  thread_name?: string;
+  is_thread_root?: boolean;
+  thread_root_id?: string;
+  pinned_answer_id?: string;
+  thread_info?: {
+    reply_count: number;
+    last_reply_at?: string;
+    last_reply_user_name?: string;
+    last_reply_snippet?: string;
+  };
+}
+
+export interface ThreadDetails {
+  rootMessage: CommunityMessage;
+  pinnedAnswer?: CommunityMessage;
+  replies: CommunityMessage[];
 }
 
 export interface CommunityMember {
@@ -201,23 +219,43 @@ export async function getCommunityChannels(): Promise<{
 /**
  * Gets messages for a community channel including user details, parent reply info & reactions
  */
+async function ensureCommunityThreadColumns(db: any) {
+  try {
+    await db.prepare('ALTER TABLE community_messages ADD COLUMN thread_name TEXT').run();
+  } catch {}
+  try {
+    await db.prepare('ALTER TABLE community_messages ADD COLUMN is_thread_root INTEGER DEFAULT 0').run();
+  } catch {}
+  try {
+    await db.prepare('ALTER TABLE community_messages ADD COLUMN thread_root_id TEXT').run();
+  } catch {}
+  try {
+    await db.prepare('ALTER TABLE community_messages ADD COLUMN pinned_answer_id TEXT').run();
+  } catch {}
+}
+
+/**
+ * Gets messages for a community channel including user details, parent reply info & reactions
+ */
 export async function getCommunityMessages(
   channelId: string,
   limit = 100
 ): Promise<CommunityMessage[]> {
   const session = await getSession();
   const db = await getDB();
+  await ensureCommunityThreadColumns(db);
 
   const msgsRaw = (await db
     .prepare(
       `SELECT m.id, m.channel_id, m.user_id, m.message, m.attachment_url, m.parent_id, m.created_at,
+              m.thread_name, m.is_thread_root, m.thread_root_id, m.pinned_answer_id,
               u.name as user_name, u.email as user_email, u.avatar_url as user_avatar,
               r.name as user_role_name, r.description as user_role_color
        FROM community_messages m
        LEFT JOIN users u ON m.user_id = u.id
        LEFT JOIN user_roles ur ON u.id = ur.user_id
        LEFT JOIN roles r ON ur.role_id = r.id
-       WHERE m.channel_id = ?
+       WHERE m.channel_id = ? AND (m.thread_root_id IS NULL OR m.thread_root_id = '')
        ORDER BY m.created_at ASC
        LIMIT ?`
     )
@@ -231,6 +269,10 @@ export async function getCommunityMessages(
       attachment_url?: string;
       parent_id?: string;
       created_at: string;
+      thread_name?: string;
+      is_thread_root?: number;
+      thread_root_id?: string;
+      pinned_answer_id?: string;
       user_name?: string;
       user_email?: string;
       user_avatar?: string;
@@ -316,6 +358,30 @@ export async function getCommunityMessages(
       }
     }
 
+    let threadInfo: CommunityMessage['thread_info'] = undefined;
+    if (m.is_thread_root === 1 || m.thread_name) {
+      const threadRepliesRaw = (await db
+        .prepare(
+          `SELECT m.created_at, m.message, u.name as user_name
+           FROM community_messages m
+           LEFT JOIN users u ON m.user_id = u.id
+           WHERE m.thread_root_id = ?
+           ORDER BY m.created_at DESC`
+        )
+        .bind(m.id)
+        .all()) as { results: Array<{ created_at: string; message: string; user_name?: string }> };
+
+      const repliesList = threadRepliesRaw.results || [];
+      const latest = repliesList[0];
+
+      threadInfo = {
+        reply_count: repliesList.length,
+        last_reply_at: latest?.created_at,
+        last_reply_user_name: latest?.user_name || 'Member',
+        last_reply_snippet: latest?.message ? (latest.message.length > 45 ? latest.message.substring(0, 45) + '...' : latest.message) : undefined,
+      };
+    }
+
     result.push({
       id: m.id,
       channel_id: m.channel_id,
@@ -331,6 +397,11 @@ export async function getCommunityMessages(
       reply_to: replyTo,
       created_at: m.created_at,
       reactions,
+      thread_name: m.thread_name || undefined,
+      is_thread_root: Boolean(m.is_thread_root),
+      thread_root_id: m.thread_root_id || undefined,
+      pinned_answer_id: m.pinned_answer_id || undefined,
+      thread_info: threadInfo,
     });
   }
 
@@ -1046,5 +1117,298 @@ export async function setDefaultCommunityChannel(channelId: string): Promise<{ s
   } catch (err: any) {
     console.error('setDefaultCommunityChannel error:', err);
     return { success: false, error: err.message || 'Gagal mengubah Default Chat Room.' };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// THREAD & PINNED ANSWER SERVER ACTIONS
+// ---------------------------------------------------------------------------
+
+/**
+ * Converts an existing message into a Thread Root or updates its thread name.
+ */
+export async function createThreadFromMessage(
+  messageId: string,
+  threadName?: string
+): Promise<{ success: boolean; threadRootId?: string; threadName?: string; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  await ensureCommunityThreadColumns(db);
+
+  const msg = (await db
+    .prepare('SELECT id, channel_id, message, thread_name FROM community_messages WHERE id = ?')
+    .bind(messageId)
+    .first()) as { id: string; channel_id: string; message: string; thread_name?: string } | null;
+
+  if (!msg) return { success: false, error: 'Pesan tidak ditemukan.' };
+
+  const tName = (threadName && threadName.trim()) || msg.thread_name || (msg.message.length > 40 ? msg.message.substring(0, 40) + '...' : msg.message);
+
+  try {
+    await db
+      .prepare('UPDATE community_messages SET is_thread_root = 1, thread_name = ? WHERE id = ?')
+      .bind(tName, messageId)
+      .run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true, threadRootId: messageId, threadName: tName };
+  } catch (err: any) {
+    console.error('createThreadFromMessage error:', err);
+    return { success: false, error: err.message || 'Gagal membuat thread.' };
+  }
+}
+
+/**
+ * Creates a brand new standalone Thread directly in a channel.
+ */
+export async function createDirectThread(
+  channelId: string,
+  threadName: string,
+  initialMessage: string,
+  attachmentUrl?: string
+): Promise<{ success: boolean; threadRootId?: string; threadName?: string; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  if (!threadName.trim() || !initialMessage.trim()) {
+    return { success: false, error: 'Judul thread dan pesan awal wajib diisi.' };
+  }
+
+  const db = await getDB();
+  await ensureCommunityThreadColumns(db);
+
+  const id = `comm_tr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO community_messages (id, channel_id, user_id, message, attachment_url, is_thread_root, thread_name, created_at)
+         VALUES (?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)`
+      )
+      .bind(id, channelId, session.userId, initialMessage.trim(), attachmentUrl || null, threadName.trim())
+      .run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true, threadRootId: id, threadName: threadName.trim() };
+  } catch (err: any) {
+    console.error('createDirectThread error:', err);
+    return { success: false, error: err.message || 'Gagal membuat thread baru.' };
+  }
+}
+
+/**
+ * Fetches all details for a thread: root message, replies, and pinned answer.
+ */
+export async function getThreadDetails(threadRootId: string): Promise<ThreadDetails | null> {
+  const session = await getSession();
+  const db = await getDB();
+  await ensureCommunityThreadColumns(db);
+
+  const rootRaw = (await db
+    .prepare(
+      `SELECT m.id, m.channel_id, m.user_id, m.message, m.attachment_url, m.parent_id, m.created_at,
+              m.thread_name, m.is_thread_root, m.pinned_answer_id,
+              u.name as user_name, u.email as user_email, u.avatar_url as user_avatar,
+              r.name as user_role_name, r.description as user_role_color
+       FROM community_messages m
+       LEFT JOIN users u ON m.user_id = u.id
+       LEFT JOIN user_roles ur ON u.id = ur.user_id
+       LEFT JOIN roles r ON ur.role_id = r.id
+       WHERE m.id = ?`
+    )
+    .bind(threadRootId)
+    .first()) as any;
+
+  if (!rootRaw) return null;
+
+  const formatMsg = async (raw: any): Promise<CommunityMessage> => {
+    let roleColor = '#7c3aed';
+    if (raw.user_role_color && raw.user_role_color.startsWith('#')) {
+      roleColor = raw.user_role_color;
+    }
+
+    const reactionsRaw = (await db
+      .prepare(`SELECT emoji, user_id FROM community_message_reactions WHERE message_id = ?`)
+      .bind(raw.id)
+      .all()) as any;
+
+    const reactionMap = new Map<string, { count: number; userReacted: boolean }>();
+    for (const r of reactionsRaw.results || []) {
+      const existing = reactionMap.get(r.emoji) || { count: 0, userReacted: false };
+      existing.count += 1;
+      if (session && r.user_id === session.userId) existing.userReacted = true;
+      reactionMap.set(r.emoji, existing);
+    }
+
+    return {
+      id: raw.id,
+      channel_id: raw.channel_id,
+      user_id: raw.user_id,
+      user_name: raw.user_name || 'Pengguna',
+      user_email: raw.user_email || '',
+      user_avatar: raw.user_avatar || undefined,
+      user_role_name: raw.user_role_name || 'Member',
+      user_role_color: roleColor,
+      message: raw.message,
+      attachment_url: raw.attachment_url || undefined,
+      parent_id: raw.parent_id || undefined,
+      created_at: raw.created_at,
+      reactions: Array.from(reactionMap.entries()).map(([emoji, d]) => ({ emoji, count: d.count, userReacted: d.userReacted })),
+      thread_name: raw.thread_name || undefined,
+      is_thread_root: Boolean(raw.is_thread_root),
+      thread_root_id: raw.thread_root_id || undefined,
+      pinned_answer_id: raw.pinned_answer_id || undefined,
+    };
+  };
+
+  const rootMessage = await formatMsg(rootRaw);
+
+  // Fetch thread replies
+  const repliesRaw = (await db
+    .prepare(
+      `SELECT m.id, m.channel_id, m.user_id, m.message, m.attachment_url, m.parent_id, m.created_at,
+              m.thread_name, m.is_thread_root, m.pinned_answer_id,
+              u.name as user_name, u.email as user_email, u.avatar_url as user_avatar,
+              r.name as user_role_name, r.description as user_role_color
+       FROM community_messages m
+       LEFT JOIN users u ON m.user_id = u.id
+       LEFT JOIN user_roles ur ON u.id = ur.user_id
+       LEFT JOIN roles r ON ur.role_id = r.id
+       WHERE m.thread_root_id = ?
+       ORDER BY m.created_at ASC`
+    )
+    .bind(threadRootId)
+    .all()) as any;
+
+  const replies: CommunityMessage[] = [];
+  for (const r of repliesRaw.results || []) {
+    replies.push(await formatMsg(r));
+  }
+
+  // Pinned Answer
+  let pinnedAnswer: CommunityMessage | undefined = undefined;
+  if (rootRaw.pinned_answer_id) {
+    const pinnedRaw = (await db
+      .prepare(
+        `SELECT m.id, m.channel_id, m.user_id, m.message, m.attachment_url, m.parent_id, m.created_at,
+                u.name as user_name, u.email as user_email, u.avatar_url as user_avatar,
+                r.name as user_role_name, r.description as user_role_color
+         FROM community_messages m
+         LEFT JOIN users u ON m.user_id = u.id
+         LEFT JOIN user_roles ur ON u.id = ur.user_id
+         LEFT JOIN roles r ON ur.role_id = r.id
+         WHERE m.id = ?`
+      )
+      .bind(rootRaw.pinned_answer_id)
+      .first()) as any;
+
+    if (pinnedRaw) {
+      pinnedAnswer = await formatMsg(pinnedRaw);
+    }
+  }
+
+  return { rootMessage, pinnedAnswer, replies };
+}
+
+/**
+ * Sends a message reply inside a thread.
+ */
+export async function sendThreadReply(
+  threadRootId: string,
+  message: string,
+  attachmentUrl?: string
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  if (!message.trim() && !attachmentUrl) {
+    return { success: false, error: 'Pesan tidak boleh kosong.' };
+  }
+
+  const db = await getDB();
+  await ensureCommunityThreadColumns(db);
+
+  const root = (await db
+    .prepare('SELECT id, channel_id, user_id, thread_name FROM community_messages WHERE id = ?')
+    .bind(threadRootId)
+    .first()) as { id: string; channel_id: string; user_id: string; thread_name?: string } | null;
+
+  if (!root) return { success: false, error: 'Thread root tidak ditemukan.' };
+
+  const id = `comm_tr_reply_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO community_messages (id, channel_id, user_id, message, attachment_url, thread_root_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
+      )
+      .bind(id, root.channel_id, session.userId, message.trim(), attachmentUrl || null, threadRootId)
+      .run();
+
+    // Push notification to thread root author if different user
+    if (root.user_id && root.user_id !== session.userId) {
+      sendPushNotificationToUser(root.user_id, 'COMMUNITY_CHAT', {
+        title: `🧵 Balasan Baru di Thread: ${root.thread_name || 'Thread Komunitas'}`,
+        body: message.trim().slice(0, 90),
+        url: `/dashboard/community?threadId=${threadRootId}`,
+        category: 'COMMUNITY_CHAT',
+      }).catch(() => {});
+    }
+
+    revalidatePath('/dashboard/community');
+    return { success: true, messageId: id };
+  } catch (err: any) {
+    console.error('sendThreadReply error:', err);
+    return { success: false, error: err.message || 'Gagal mengirim balasan thread.' };
+  }
+}
+
+/**
+ * Pins or unpins a message inside a thread as the official answer (Admin / Coordinator / Staff / Mentor option).
+ */
+export async function togglePinThreadAnswer(
+  threadRootId: string,
+  answerMessageId: string
+): Promise<{ success: boolean; isPinned?: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  await ensureCommunityThreadColumns(db);
+
+  const ctx = await getSessionContext(session.userId);
+  const isAuthorized =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.some((r: any) => ['ADMIN', 'COORDINATOR', 'EXECUTIVE', 'MENTOR', 'LEADER'].includes(String(r).toUpperCase())) ||
+    ctx.can('MANAGE');
+
+  if (!isAuthorized) {
+    return { success: false, error: 'Hanya Admin, Koordinator, atau Mentor yang dapat menyematkan (pin) jawaban di thread.' };
+  }
+
+  const root = (await db
+    .prepare('SELECT id, pinned_answer_id FROM community_messages WHERE id = ?')
+    .bind(threadRootId)
+    .first()) as { id: string; pinned_answer_id?: string } | null;
+
+  if (!root) return { success: false, error: 'Thread tidak ditemukan.' };
+
+  const isAlreadyPinned = root.pinned_answer_id === answerMessageId;
+  const newPinnedId = isAlreadyPinned ? null : answerMessageId;
+
+  try {
+    await db
+      .prepare('UPDATE community_messages SET pinned_answer_id = ? WHERE id = ?')
+      .bind(newPinnedId, threadRootId)
+      .run();
+
+    revalidatePath('/dashboard/community');
+    return { success: true, isPinned: !isAlreadyPinned };
+  } catch (err: any) {
+    console.error('togglePinThreadAnswer error:', err);
+    return { success: false, error: err.message || 'Gagal menyematkan jawaban.' };
   }
 }

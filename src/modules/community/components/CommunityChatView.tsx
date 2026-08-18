@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { motion, AnimatePresence } from 'framer-motion';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { useUI } from '@/components/ui/UIProvider';
 import {
@@ -34,6 +35,8 @@ import { UserProfileModal } from '@/components/UserProfileModal';
 import { parseRichMessageContent } from '@/lib/menuTagging';
 import { MenuTagModal } from '@/components/MenuTagModal';
 import { MenuTagOption } from '@/modules/menu/menuTagActions';
+import { ThreadSidePanel } from './ThreadSidePanel';
+import { NewThreadModal } from './NewThreadModal';
 import type { EmojiClickData } from 'emoji-picker-react';
 
 // Dynamic import for emoji-picker-react to ensure smooth SSR rendering
@@ -213,6 +216,9 @@ export default function CommunityChatView({
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [isNewThreadModalOpen, setIsNewThreadModalOpen] = useState(false);
+  const [sourceThreadMessage, setSourceThreadMessage] = useState<CommunityMessage | null>(null);
   const [editingCategory, setEditingCategory] = useState<CommunityCategory | null>(null);
   const [categoryForm, setCategoryForm] = useState({
     name: '',
@@ -1221,8 +1227,23 @@ export default function CommunityChatView({
             </div>
           </div>
 
-          {/* Desktop Right Member Toggle & Clear Chat Buttons */}
+          {/* Desktop Right Member Toggle, New Thread & Clear Chat Buttons */}
           <div className="flex items-center gap-2">
+            {canManageCommunity && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSourceThreadMessage(null);
+                  setIsNewThreadModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 border border-purple-500/30 px-3 py-1.5 rounded-2xl text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95"
+                title="Buat Thread Diskusi Baru di Saluran Ini"
+              >
+                <span>🧵</span>
+                <span>+ Thread Baru</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => handleClearChannel(activeChannel.id)}
@@ -1230,7 +1251,7 @@ export default function CommunityChatView({
               title={`Bersihkan chat di saluran #${activeChannel.name}`}
             >
               <span>🧹</span>
-              <span>Bersihkan Chat Saluran</span>
+              <span className="hidden sm:inline">Bersihkan Chat Saluran</span>
             </button>
 
             <button
@@ -1446,6 +1467,34 @@ export default function CommunityChatView({
                       </div>
                     )}
 
+                    {/* Thread Preview Bar in Channel Feed */}
+                    {msg.thread_info && (
+                      <div
+                        onClick={() => setActiveThreadId(msg.id)}
+                        className="mt-2 p-2.5 rounded-2xl bg-purple-500/10 dark:bg-purple-500/15 border border-purple-500/30 hover:bg-purple-500/20 cursor-pointer flex items-center justify-between text-xs transition-all shadow-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-purple-600 dark:text-purple-400 text-sm">🧵</span>
+                          <div className="min-w-0">
+                            <span className="font-extrabold text-purple-700 dark:text-purple-300">
+                              {msg.thread_name || 'Thread'}
+                            </span>
+                            <span className="ml-2 text-[10px] font-bold text-zinc-500 dark:text-zinc-400">
+                              ({msg.thread_info.reply_count} Balasan)
+                            </span>
+                            {msg.thread_info.last_reply_snippet && (
+                              <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate mt-0.5 font-medium">
+                                {msg.thread_info.last_reply_user_name}: "{msg.thread_info.last_reply_snippet}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold text-purple-600 dark:text-purple-400 shrink-0">
+                          Buka Thread ➔
+                        </span>
+                      </div>
+                    )}
+
                     {/* ── FLOATING ACTION TOOLBAR ── */}
                     {/* Desktop: hover | Mobile: long-press */}
                     <div className={`absolute -top-3 right-0 transition-all duration-150 ${
@@ -1489,6 +1538,21 @@ export default function CommunityChatView({
                           title="Balas"
                         >
                           <span className="text-sm">↩️</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (msg.is_thread_root) {
+                              setActiveThreadId(msg.id);
+                            } else {
+                              setSourceThreadMessage(msg);
+                              setIsNewThreadModalOpen(true);
+                            }
+                            dismissLongPress();
+                          }}
+                          className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-700 active:bg-zinc-200 dark:active:bg-zinc-600 rounded-md transition-colors text-purple-600 dark:text-purple-400 font-bold"
+                          title="Thread"
+                        >
+                          <span className="text-sm">🧵</span>
                         </button>
                       </div>
                     </div>
@@ -2128,6 +2192,19 @@ export default function CommunityChatView({
         </div>
       )}
 
+      {/* Thread Side Panel Drawer */}
+      <AnimatePresence>
+        {activeThreadId && (
+          <ThreadSidePanel
+            threadRootId={activeThreadId}
+            onClose={() => setActiveThreadId(null)}
+            currentUserId={currentUserId}
+            canManageCommunity={canManageCommunity}
+            onSelectMember={(m) => setSelectedMemberCard(m)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Menu Tag Picker Modal */}
       <MenuTagModal
         isOpen={isMenuModalOpen}
@@ -2135,6 +2212,21 @@ export default function CommunityChatView({
         onSelectMenu={(menu: MenuTagOption) => {
           setInputMessage((prev) => `${prev} #[${menu.label}](${menu.path}) `.trimStart());
           if (textareaRef.current) textareaRef.current.focus();
+        }}
+      />
+
+      {/* New Thread Modal */}
+      <NewThreadModal
+        isOpen={isNewThreadModalOpen}
+        onClose={() => {
+          setIsNewThreadModalOpen(false);
+          setSourceThreadMessage(null);
+        }}
+        channelId={activeChannel.id}
+        sourceMessage={sourceThreadMessage}
+        onThreadCreated={(threadId) => {
+          setActiveThreadId(threadId);
+          fetchMessages(activeChannel.id, false);
         }}
       />
     </div>
