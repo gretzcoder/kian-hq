@@ -33,7 +33,10 @@ export function MenuHashtagAutocompletePopover({
 
   // Detect active hashtag query at the end of input
   const activeHashtagMatch = useMemo(() => {
-    const match = inputText.match(/#([a-zA-Z0-9_\-\s>]*)$/);
+    if (!inputText) return null;
+    if (inputText.endsWith(') ') || inputText.endsWith(')')) return null;
+
+    const match = inputText.match(/(?:^|\s)#([a-zA-Z0-9_\-\s>]*)$/);
     if (!match) return null;
     return match[1].toLowerCase().trim();
   }, [inputText]);
@@ -174,7 +177,7 @@ export function MenuHashtagAutocompletePopover({
         initial={{ opacity: 0, y: 8, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.96 }}
-        className="absolute bottom-full left-0 right-0 sm:right-auto sm:w-[380px] mb-2 bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl p-2.5 z-50 overflow-hidden text-left"
+        className="absolute bottom-[calc(100%+8px)] left-0 right-0 sm:right-auto sm:w-[380px] bg-white dark:bg-[#09090b] border-2 border-purple-500/30 rounded-3xl shadow-2xl p-2.5 z-[9999] text-left overflow-hidden ring-4 ring-purple-500/10"
       >
         {/* Header */}
         <div className="px-3 py-1.5 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 mb-1.5">

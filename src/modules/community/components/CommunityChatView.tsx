@@ -1496,9 +1496,10 @@ export default function CommunityChatView({
                               ({msg.thread_info.reply_count} Balasan)
                             </span>
                             {msg.thread_info.last_reply_snippet && (
-                              <p className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate mt-0.5 font-medium">
-                                {msg.thread_info.last_reply_user_name}: "{msg.thread_info.last_reply_snippet}"
-                              </p>
+                              <div className="text-[11px] text-zinc-600 dark:text-zinc-400 truncate mt-0.5 font-medium flex items-center gap-1">
+                                <span>{msg.thread_info.last_reply_user_name}:</span>
+                                <span>{parseRichMessageContent(msg.thread_info.last_reply_snippet, { onSelectMember: (m) => setSelectedMemberCard(m) })}</span>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -1717,7 +1718,7 @@ export default function CommunityChatView({
         )}
 
         {/* ── MESSAGE INPUT & REPLY FOOTER ── */}
-        <footer className="p-2.5 sm:p-4 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b] shrink-0 max-w-full overflow-hidden">
+        <footer className="p-2.5 sm:p-4 border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#09090b] shrink-0 max-w-full relative z-30">
           {/* Quote Reply Banner Active Bar */}
           {replyingTo && (
             <div className="mb-3 p-2.5 sm:p-3 bg-purple-500/10 border-l-4 border-purple-500 rounded-r-2xl flex items-center justify-between gap-2 animate-in fade-in">
