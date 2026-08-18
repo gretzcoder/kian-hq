@@ -104,7 +104,7 @@ function getBorderColor(status: string): string {
 }
 
 function getTaskDeadlineBadge(deadline: number | null, status: string, extendedDeadline?: number | null) {
-  const activeDeadline = extendedDeadline || deadline;
+  const activeDeadline = Math.max(extendedDeadline || 0, deadline || 0) || null;
   if (!activeDeadline) return null;
   const isFinished = ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(status);
   const now = Date.now();

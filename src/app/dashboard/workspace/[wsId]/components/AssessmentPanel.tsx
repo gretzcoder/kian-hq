@@ -95,7 +95,7 @@ export function getTaskAssignmentStatusMeta(
   extendedDeadline?: number | null
 ): { label: string; badgeClass: string; isPastDeadline: boolean; isNotStarted: boolean; isExtended: boolean; penaltyPercent: number } {
   const now = Date.now();
-  const effectiveDeadline = extendedDeadline || deadline;
+  const effectiveDeadline = Math.max(extendedDeadline || 0, deadline || 0) || null;
   const isNotStarted = Boolean(startAt && startAt > now);
   const isPastDeadline = Boolean(effectiveDeadline && effectiveDeadline < now);
   const isExtended = Boolean(extendedDeadline && extendedDeadline > (deadline || 0));

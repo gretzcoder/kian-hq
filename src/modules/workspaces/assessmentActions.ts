@@ -414,7 +414,7 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
     return { success: false, error: 'Assessment ini belum dimulai.' };
   }
 
-  const effectiveDeadline = parentTask.extended_deadline || parentTask.deadline;
+  const effectiveDeadline = Math.max(parentTask.extended_deadline || 0, parentTask.deadline || 0) || null;
   if (effectiveDeadline && effectiveDeadline < now) {
     return { success: false, error: 'Tenggat waktu (deadline) assessment ini telah berakhir. Pengumpulan tidak dapat dilakukan.' };
   }
@@ -778,6 +778,13 @@ export async function updateAssessmentTask(taskId: string, workspaceId: string, 
       `)
       .bind(title, description, deadline, startAt, newStatus, taskId, workspaceId)
       .run();
+
+    if (deadline) {
+      await db
+        .prepare('UPDATE tasks SET extended_deadline = NULL WHERE id = ? AND (extended_deadline IS NOT NULL AND extended_deadline <= ?)')
+        .bind(taskId, deadline)
+        .run();
+    }
 
     await db
       .prepare(`

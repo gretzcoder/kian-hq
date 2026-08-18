@@ -524,7 +524,7 @@ export default function TaskActions({
                         <span>✨</span> {primaryAssign.sparks} Sparks
                       </span>
                     )}
-                    {primaryAssign && getDeadlineBadge(primaryAssign.deadline, isApproved ?? false)}
+                    {primaryAssign && getDeadlineBadge(Math.max(taskExtendedDeadline || 0, taskDeadline || 0, primaryAssign.deadline || 0) || null, isApproved ?? false)}
                     {primaryAssign ? (
                       <span className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border ${statusBadge}`}>
                         {visibleAssignments.length > 1
@@ -551,7 +551,8 @@ export default function TaskActions({
                         const isMe = assign.user_id === currentUserId;
                         const nowMs = Date.now();
                         const isApprovedState = assign.status === 'APPROVED';
-                        const isPastDeadline = Boolean(assign.deadline && assign.deadline < nowMs && !['APPROVED', 'WAITING_REVIEW', 'RESUBMITTED'].includes(assign.status));
+                        const effectiveAssignDeadline = Math.max(taskExtendedDeadline || 0, taskDeadline || 0, assign.deadline || 0) || null;
+                        const isPastDeadline = Boolean(effectiveAssignDeadline && effectiveAssignDeadline < nowMs && !['APPROVED', 'WAITING_REVIEW', 'RESUBMITTED'].includes(assign.status));
                         const isNotStarted = Boolean((assign as any).start_at && (assign as any).start_at > nowMs);
 
                         const displayStatusLabel = isApprovedState ? '✅ Disetujui'
@@ -991,7 +992,7 @@ export default function TaskActions({
                   )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {getDeadlineBadge(a.deadline, ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status))}
+                  {getDeadlineBadge(Math.max(taskExtendedDeadline || 0, taskDeadline || 0, a.deadline || 0) || null, ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status))}
                   <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${status}`}>
                     {a.status.replace('_', ' ')}
                   </span>
