@@ -31,6 +31,9 @@ import {
 import { getUserBadgesAction } from '@/modules/badges/badgeActions';
 import { BadgeItem, CATEGORY_META } from '@/modules/badges/badgeTypes';
 import { UserProfileModal } from '@/components/UserProfileModal';
+import { parseRichMessageContent } from '@/lib/menuTagging';
+import { MenuTagModal } from '@/components/MenuTagModal';
+import { MenuTagOption } from '@/modules/menu/menuTagActions';
 import type { EmojiClickData } from 'emoji-picker-react';
 
 // Dynamic import for emoji-picker-react to ensure smooth SSR rendering
@@ -209,6 +212,7 @@ export default function CommunityChatView({
   });
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CommunityCategory | null>(null);
   const [categoryForm, setCategoryForm] = useState({
     name: '',
@@ -1379,7 +1383,11 @@ export default function CommunityChatView({
                       </div>
                     ) : (
                       <div className="text-[13px] sm:text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap break-words [overflow-wrap:anywhere] break-all overflow-hidden max-w-full min-w-0">
-                        {renderMessageContent(msg.message, isSelf)}
+                        {parseRichMessageContent(msg.message, {
+                          isSelf,
+                          memberList: allMembersList,
+                          onSelectMember: (m) => setSelectedMemberCard(m),
+                        })}
                       </div>
                     )}
 
@@ -1706,6 +1714,16 @@ export default function CommunityChatView({
             >
               <span className="hidden sm:inline">✨ Emoji & Stiker</span>
               <span className="sm:hidden text-xs">✨</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsMenuModalOpen(true)}
+              className="p-2.5 rounded-2xl border transition-all text-xs shrink-0 bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 active:scale-95 font-black flex items-center gap-1 cursor-pointer"
+              title="Tag Menu atau Sub-Menu Pintasan"
+            >
+              <span>📌</span>
+              <span className="hidden sm:inline">Tag Menu</span>
             </button>
 
             {/* Input Text Box with @mention listener */}
@@ -2109,6 +2127,16 @@ export default function CommunityChatView({
           </div>
         </div>
       )}
+
+      {/* Menu Tag Picker Modal */}
+      <MenuTagModal
+        isOpen={isMenuModalOpen}
+        onClose={() => setIsMenuModalOpen(false)}
+        onSelectMenu={(menu: MenuTagOption) => {
+          setInputMessage((prev) => `${prev} #[${menu.label}](${menu.path}) `.trimStart());
+          if (textareaRef.current) textareaRef.current.focus();
+        }}
+      />
     </div>
   );
 }

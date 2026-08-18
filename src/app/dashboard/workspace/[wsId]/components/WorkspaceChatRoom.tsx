@@ -26,6 +26,9 @@ import { MarkdownViewer } from '@/components/MarkdownViewer';
 import EmojiStickerPicker, { TEAM_STICKERS, TeamSticker } from './EmojiStickerPicker';
 import { SmartLinkMeta } from '@/modules/workspaces/smartLinkParser';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
+import { parseRichMessageContent } from '@/lib/menuTagging';
+import { MenuTagModal } from '@/components/MenuTagModal';
+import { MenuTagOption } from '@/modules/menu/menuTagActions';
 
 function isImageUrl(url?: string): boolean {
   if (!url) return false;
@@ -163,6 +166,7 @@ export function WorkspaceChatRoom({
   const [editingMsg, setEditingMsg] = useState<WorkspaceChatMessage | null>(null);
   const [editText, setEditText] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [showPinnedBanner, setShowPinnedBanner] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -863,7 +867,7 @@ export function WorkspaceChatRoom({
 
                     {/* Message Text Content */}
                     <div className="text-xs leading-relaxed break-words text-inherit font-medium">
-                      {renderWorkspaceMessageContent(msg.message, isMe)}
+                      {parseRichMessageContent(msg.message, { isSelf: isMe, memberList: members })}
                     </div>
 
                     {/* Edited Indicator */}
@@ -1086,6 +1090,16 @@ export function WorkspaceChatRoom({
           ✨
         </button>
 
+        <button
+          type="button"
+          onClick={() => setIsMenuModalOpen(true)}
+          className="h-10 px-3 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 text-xs font-black flex items-center gap-1 transition-all shrink-0 cursor-pointer active:scale-95"
+          title="Tag Menu atau Sub-Menu Pintasan"
+        >
+          <span>📌</span>
+          <span className="hidden sm:inline">Tag Menu</span>
+        </button>
+
         <input
           ref={inputRef}
           type="text"
@@ -1104,6 +1118,15 @@ export function WorkspaceChatRoom({
           <span className="text-sm">🚀</span>
         </button>
       </form>
+
+      {/* Menu Tag Picker Modal */}
+      <MenuTagModal
+        isOpen={isMenuModalOpen}
+        onClose={() => setIsMenuModalOpen(false)}
+        onSelectMenu={(menu: MenuTagOption) => {
+          setInputMessage((prev) => `${prev} #[${menu.label}](${menu.path}) `.trimStart());
+        }}
+      />
     </div>
   );
 }
