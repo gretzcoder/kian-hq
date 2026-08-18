@@ -43,8 +43,18 @@ export default async function ReviewPage() {
   const db = await getDB();
 
   const isLeaderQuery = `EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER')`;
-  const isMentorQuery = `EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?)`;
-  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+  const isMentorQuery = `(EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?) OR EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?) OR t.created_by = ?)`;
+  const isCoordinator =
+    (ctx.userType === 'STAFF' &&
+      (ctx.roles.includes('COORDINATOR') ||
+        ctx.roles.includes('EXECUTIVE') ||
+        ctx.can('MANAGE') ||
+        ctx.can('WORKSPACE_MANAGE'))) ||
+    ctx.can('SPARKS_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.can('WORKSPACE_MANAGE') ||
+    ctx.can('TASK_REVIEW') ||
+    ctx.permissions.has('ADMIN_SYSTEM');
 
   const { results: rawReviews } = await db.prepare(`
     SELECT
@@ -86,7 +96,7 @@ export default async function ReviewPage() {
       AND t.status != 'DELETED'
       AND (ws.id IS NULL OR ws.deleted_at IS NULL)
     ORDER BY ta.submitted_at ASC
-  `).bind(session.userId, session.userId).all();
+  `).bind(session.userId, session.userId, session.userId, session.userId).all();
 
   const allReviews = rawReviews as unknown as (ReviewRow & {
     lead_approved: number;
@@ -101,11 +111,6 @@ export default async function ReviewPage() {
     // ── Exclude own submissions ──
     if (r.creator_id === session.userId) return false;
 
-    // ── Mentor Workspaces: ONLY Coordinators/Admins evaluate submissions ──
-    if (r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR' || (r.project_name ? r.project_name.toUpperCase().includes('MENTOR') : false)) {
-      if (!isCoordinator) return false;
-    }
-
     // ── Assessment 2-step flow ──
     if (r.task_type === 'ASSESSMENT') {
       const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
@@ -117,11 +122,18 @@ export default async function ReviewPage() {
       return false;
     }
 
-    // ── Regular tasks: filter out already-approved steps ──
-    if (r.is_leader && r.lead_approved === 1) return false;
-    if (r.is_mentor && r.mentor_approved === 1) return false;
-    if (isCoordinator && r.coordinator_approved === 1) return false;
-    return true;
+    // ── Mentor Workspaces: ONLY Coordinators/Admins evaluate submissions ──
+    const isMentorWs = r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR';
+    if (isMentorWs) {
+      return isCoordinator && r.coordinator_approved === 0;
+    }
+
+    // ── Regular / Troopers tasks: show if user is Coordinator, Mentor, or Leader and step is pending ──
+    if (isCoordinator && r.coordinator_approved === 0) return true;
+    if (r.is_mentor && r.mentor_approved === 0) return true;
+    if (r.is_leader && r.lead_approved === 0) return true;
+
+    return false;
   });
 
   const canRequestRevision = ctx.can('REQUEST_REVISION');

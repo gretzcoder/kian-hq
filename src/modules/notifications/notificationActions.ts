@@ -43,12 +43,19 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
     ctx.userType === 'STAFF' || ctx.can('WORKSPACE_MANAGE') || ctx.can('MANAGE');
   const canReview = ctx.can('TASK_REVIEW');
   const isCoordinator =
-    ctx.userType === 'STAFF' &&
-    (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+    (ctx.userType === 'STAFF' &&
+      (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'))) ||
+    ctx.can('SPARKS_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.can('WORKSPACE_MANAGE') ||
+    ctx.can('TASK_REVIEW') ||
+    ctx.permissions.has('ADMIN_SYSTEM');
 
   const [annRaw, wsRaw, reviewRaw] = await Promise.all([
     // All announcement timestamps — no LIMIT
-    db.prepare('SELECT created_at FROM announcements ORDER BY created_at DESC').all(),
+    db
+      .prepare('SELECT created_at FROM announcements ORDER BY created_at DESC')
+      .all(),
 
     // Per-workspace latest activity
     (isGlobalManager || ctx.roles.some((r) => r.toUpperCase().includes('MENTOR')))
@@ -82,17 +89,18 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
                  OR ws.workspace_type = 'ASSESSMENT'
                )`
           )
-          .bind(session.userId, session.userId, session.userId)
+          .bind(session.userId, session.userId, session.userId, session.userId)
           .all(),
 
     // Pending review assignments query
     canReview
       ? db
           .prepare(
-            `SELECT ta.id, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
+            `SELECT ta.id, ta.user_id AS creator_id, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
                     t.task_type, t.created_by AS task_created_by, t.workspace_id,
                     ws.workspace_type, p.name AS project_name,
-                    EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AS is_lead
+                    EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AS is_lead,
+                    (EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?) OR EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?) OR t.created_by = ?) AS is_mentor
              FROM task_assignments ta
              JOIN tasks t ON ta.task_id = t.id
              JOIN projects p ON t.project_id = p.id
@@ -103,7 +111,7 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
                AND t.status = 'APPROVED'
                AND (ws.deleted_at IS NULL OR ws.id IS NULL)`
           )
-          .bind(session.userId)
+          .bind(session.userId, session.userId, session.userId, session.userId)
           .all()
       : Promise.resolve({ results: [] }),
   ]);
@@ -111,20 +119,23 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
   let pendingReviewCount = 0;
   if (canReview && reviewRaw?.results) {
     const validReviews = (reviewRaw.results as any[]).filter((r) => {
-      const isMentorWs = r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR' || (r.project_name ? r.project_name.toUpperCase().includes('MENTOR') : false);
+      if (r.creator_id === session.userId) return false;
+
       if (r.task_type === 'ASSESSMENT') {
         const isCreator = r.task_created_by != null && r.task_created_by === session.userId;
         if (isCreator && r.mentor_approved === 0) return true;
         if (isCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
         return false;
       }
+
+      const isMentorWs = r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR';
       if (isMentorWs) {
-        if (isCoordinator && r.coordinator_approved === 0) return true;
-        return false;
+        return isCoordinator && r.coordinator_approved === 0;
       }
+
+      if (isCoordinator && r.coordinator_approved === 0) return true;
+      if (r.is_mentor && r.mentor_approved === 0) return true;
       if (r.is_lead && r.lead_approved === 0) return true;
-      if (r.task_created_by === session.userId && r.mentor_approved === 0) return true;
-      if (isCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
       return false;
     });
     pendingReviewCount = validReviews.length;

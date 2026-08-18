@@ -42,9 +42,14 @@ export default async function DashboardLayout({
     ctx.userType === 'STAFF' || ctx.can('WORKSPACE_MANAGE') || ctx.can('MANAGE');
   const canReview    = ctx.can('TASK_REVIEW');
   const isCoordinator =
-    ctx.userType === 'STAFF' &&
-    (ctx.can('MANAGE') || ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE'));
-  const canManageSparks = ctx.can('SPARKS_MANAGAE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
+    (ctx.userType === 'STAFF' &&
+      (ctx.can('MANAGE') || ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('WORKSPACE_MANAGE'))) ||
+    ctx.can('SPARKS_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.can('WORKSPACE_MANAGE') ||
+    ctx.can('TASK_REVIEW') ||
+    ctx.permissions.has('ADMIN_SYSTEM');
+  const canManageSparks = ctx.can('SPARKS_MANAGE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
 
   // Resolve View As Role & Impersonation simulation options
   const isAuthorizedForViewAsRole = await isAuthorizedForViewAs();
@@ -106,23 +111,22 @@ export default async function DashboardLayout({
             `SELECT COUNT(DISTINCT ta.id) AS cnt
              FROM task_assignments ta
              JOIN tasks t ON ta.task_id = t.id
+             LEFT JOIN workspaces ws ON t.workspace_id = ws.id
              WHERE ta.status = 'WAITING_REVIEW'
                AND ta.result_url IS NOT NULL
                AND TRIM(ta.result_url) != ''
                AND t.status = 'APPROVED'
+               AND (ws.deleted_at IS NULL OR ws.id IS NULL)
+               AND ta.user_id != ?
                AND (
-                 (
-                   EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER')
-                   AND ta.lead_approved = 0
-                 )
-                 OR (
-                   EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?)
-                   AND ta.mentor_approved = 0
-                 )
-                 OR (? AND ta.coordinator_approved = 0)
+                 (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AND ta.lead_approved = 0)
+                 OR (EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?) AND ta.mentor_approved = 0)
+                 OR (EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?) AND ta.mentor_approved = 0)
+                 OR (t.created_by = ? AND ta.mentor_approved = 0)
+                 OR (? = 1 AND ta.coordinator_approved = 0)
                )`
           )
-          .bind(session.userId, session.userId, isCoordinator ? 1 : 0)
+          .bind(session.userId, session.userId, session.userId, session.userId, session.userId, isCoordinator ? 1 : 0)
           .first() as Promise<{ cnt: number } | null>)
       : Promise.resolve(null),
   ]);
