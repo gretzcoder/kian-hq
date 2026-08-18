@@ -174,6 +174,7 @@ export default function CreateTaskForm({
                 Penugasan Langsung ke Trooper (Opsional)
               </label>
               <select
+                name="assigneeUserId"
                 value={assigneeUserId}
                 onChange={(e) => setAssigneeUserId(e.target.value)}
                 className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-700 dark:text-zinc-300 text-xs rounded-xl px-4 py-3 focus:outline-none transition-all cursor-pointer"

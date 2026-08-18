@@ -163,9 +163,13 @@ export async function createTask(workspaceId: string, formData: FormData) {
       .run();
 
     const defaultRole = outputType === 'VIDEO' ? 'VIDEO_EDITOR' : 'DESIGNER';
+    const stepRoles = outputType === 'VIDEO'
+      ? ['RESEARCHER', 'PLANNER', 'VIDEO_EDITOR']
+      : ['RESEARCHER', 'PLANNER', 'DESIGNER'];
 
-    if (isDirectBrief) {
-      if (assigneeUserId && assigneeUserId.trim()) {
+    if (assigneeUserId && assigneeUserId.trim()) {
+      // Direct assignment: assign ONLY the selected Trooper to the task step roles
+      for (const role of stepRoles) {
         const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
         await db
           .prepare(`
@@ -173,49 +177,37 @@ export async function createTask(workspaceId: string, formData: FormData) {
               (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
             VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
           `)
-          .bind(assignId, taskId, assigneeUserId.trim(), defaultRole, session.userId, deadline, startAt)
+          .bind(assignId, taskId, assigneeUserId.trim(), role, session.userId, deadline, startAt)
           .run();
-      } else {
-        // Mass auto-assign all active OJT / Trooper members of workspace
-        const { results: ojtMembers } = await db
-          .prepare(`
-            SELECT DISTINCT u.id AS user_id
-            FROM users u
-            JOIN workspace_members wm ON u.id = wm.user_id
-            WHERE wm.workspace_id = ?
-              AND wm.team_role != 'LEADER'
-              AND (u.user_type IS NULL OR u.user_type != 'STAFF')
-              AND u.status = 'ACTIVE'
-          `)
-          .bind(workspaceId)
-          .all();
-
-        for (const m of (ojtMembers as { user_id: string }[])) {
-          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-          await db
-            .prepare(`
-              INSERT OR IGNORE INTO task_assignments
-                (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
-              VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-            `)
-            .bind(assignId, taskId, m.user_id, defaultRole, session.userId, deadline, startAt)
-            .run();
-        }
       }
-    } else if (assigneeUserId && assigneeUserId.trim()) {
-      const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-      await db
+    } else if (isDirectBrief) {
+      // Mass auto-assign all active OJT / Trooper members of workspace when no specific assignee selected
+      const { results: ojtMembers } = await db
         .prepare(`
-          INSERT OR IGNORE INTO task_assignments
-            (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
-          VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+          SELECT DISTINCT u.id AS user_id
+          FROM users u
+          JOIN workspace_members wm ON u.id = wm.user_id
+          WHERE wm.workspace_id = ?
+            AND wm.team_role != 'LEADER'
+            AND (u.user_type IS NULL OR u.user_type != 'STAFF')
+            AND u.status = 'ACTIVE'
         `)
-        .bind(assignId, taskId, assigneeUserId.trim(), defaultRole, session.userId, deadline, startAt)
-        .run();
-    }
+        .bind(workspaceId)
+        .all();
 
-    // If this is a MENTOR workspace, auto-assign all mentor members to EVERY step of the task
-    if (ws.workspace_type === 'MENTOR') {
+      for (const m of (ojtMembers as { user_id: string }[])) {
+        const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+        await db
+          .prepare(`
+            INSERT OR IGNORE INTO task_assignments
+              (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+            VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+          `)
+          .bind(assignId, taskId, m.user_id, defaultRole, session.userId, deadline, startAt)
+          .run();
+      }
+    } else if (ws.workspace_type === 'MENTOR') {
+      // Auto-assign all mentor members ONLY if no specific assignee was selected
       const { results: mentorMembers } = await db
         .prepare(`
           SELECT DISTINCT u.id AS user_id
@@ -226,10 +218,6 @@ export async function createTask(workspaceId: string, formData: FormData) {
         `)
         .bind(workspaceId)
         .all();
-
-      const stepRoles = outputType === 'VIDEO'
-        ? ['RESEARCHER', 'PLANNER', 'VIDEO_EDITOR']
-        : ['RESEARCHER', 'PLANNER', 'DESIGNER'];
 
       for (const m of (mentorMembers as { user_id: string }[])) {
         for (const role of stepRoles) {
