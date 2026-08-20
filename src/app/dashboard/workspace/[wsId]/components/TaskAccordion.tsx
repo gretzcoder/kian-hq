@@ -389,10 +389,25 @@ export default function TaskAccordion({
                 return (
                   <>
                     <div className="px-5 pb-5">
-                      {/* Description when expanded */}
+                      {/* Description & Brief Card when expanded */}
                       {task.description && (
-                        <div className="mb-4 text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
-                          <MarkdownViewer content={task.description.replace('[DIRECT_BRIEF]', '')} />
+                        <div className="mb-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-zinc-900/30 overflow-hidden shadow-xs">
+                          <div className="bg-zinc-100/80 dark:bg-zinc-900/80 px-4.5 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">📌</span>
+                              <span className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-wide">
+                                {isDirectBriefTask ? 'Brief & Instruksi Koordinator' : 'Deskripsi & Catatan Tugas'}
+                              </span>
+                            </div>
+                            {isDirectBriefTask && (
+                              <span className="text-[9px] font-black uppercase text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full">
+                                ⚡ Brief Direct
+                              </span>
+                            )}
+                          </div>
+                          <div className="p-5 sm:p-6 bg-white dark:bg-zinc-950/40">
+                            <MarkdownViewer content={task.description.replace('[DIRECT_BRIEF]', '')} />
+                          </div>
                         </div>
                       )}
                       {/* Assignments + Actions */}

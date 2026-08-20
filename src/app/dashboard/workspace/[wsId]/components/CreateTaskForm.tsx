@@ -25,7 +25,7 @@ export default function CreateTaskForm({
 }: CreateTaskFormProps) {
   const [loading, setLoading] = useState(false);
   const [outputType, setOutputType] = useState<'DESIGN' | 'VIDEO'>('DESIGN');
-  const [isDirectBrief, setIsDirectBrief] = useState(true);
+  const [isDirectBrief, setIsDirectBrief] = useState(false);
   const [priority, setPriority] = useState<'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
   const [parentTaskId, setParentTaskId] = useState('');
   const [assigneeUserId, setAssigneeUserId] = useState('');
@@ -60,7 +60,7 @@ export default function CreateTaskForm({
       if (res.success) {
         form.reset();
         setOutputType('DESIGN');
-        setIsDirectBrief(true);
+        setIsDirectBrief(false);
         setPriority('NORMAL');
         setParentTaskId('');
         setAssigneeUserId('');
@@ -86,30 +86,45 @@ export default function CreateTaskForm({
       )}
       {success && (
         <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-3 font-bold">
-          ✓ Tugas berhasil dibuat dengan Brief Direct Koordinator!
+          ✓ Tugas berhasil dibuat{isDirectBrief ? ' dengan Brief Direct Koordinator' : ''}!
         </p>
       )}
 
-      {/* Case Indicator & Brief Origin Tag */}
-      <div className="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-xs space-y-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-black text-blue-700 dark:text-blue-300 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
-            <span>⚡ Brief Direct Koordinator</span>
-            <span className="bg-blue-500/20 text-blue-600 dark:text-blue-300 px-2 py-0.2 rounded-full text-[9px]">Bukan Assessment</span>
-          </span>
-          <label className="inline-flex items-center gap-2 cursor-pointer select-none text-[11px] font-bold text-blue-800 dark:text-blue-200">
-            <input
-              type="checkbox"
-              checked={isDirectBrief}
-              onChange={(e) => setIsDirectBrief(e.target.checked)}
-              className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-            />
-            Brief Diberikan Langsung oleh Koordinator
-          </label>
+      {/* Prominent Direct Brief Option Card */}
+      <div
+        onClick={() => setIsDirectBrief((prev) => !prev)}
+        className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-start gap-3.5 ${
+          isDirectBrief
+            ? 'bg-blue-500/10 border-blue-500/40 ring-2 ring-blue-500/20 shadow-xs'
+            : 'bg-zinc-50/50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+        }`}
+      >
+        <input
+          type="checkbox"
+          checked={isDirectBrief}
+          onChange={(e) => setIsDirectBrief(e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+          className="mt-0.5 w-5 h-5 rounded-md text-blue-600 focus:ring-blue-500 cursor-pointer accent-blue-600"
+        />
+        <div className="flex-1 space-y-1">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+              <span>⚡</span> Brief Diberikan Langsung oleh Koordinator
+            </span>
+            {isDirectBrief ? (
+              <span className="bg-blue-500/20 text-blue-700 dark:text-blue-300 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border border-blue-500/30">
+                Direct Brief Aktif
+              </span>
+            ) : (
+              <span className="bg-zinc-200/80 dark:bg-zinc-800 text-zinc-500 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                Opsional / Centang Jika Perlu
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+            Centang opsi ini hanya bila rincian brief tugas ditulis langsung oleh Koordinator di form ini (tanpa alur 3-step OJT / tanpa alur Content Brief terpisah & bukan Ujian Skill/Assessment).
+          </p>
         </div>
-        <p className="text-[11px] text-blue-600/80 dark:text-blue-300/80 leading-relaxed">
-          Instruksi & kebutuhan tugas ditulis langsung oleh Koordinator di form ini (tanpa alur dokumen Content Brief terpisah & bukan Ujian Skill/Assessment).
-        </p>
       </div>
 
       {/* Required Output Type Selector (Design vs Video) */}
