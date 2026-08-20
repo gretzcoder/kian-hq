@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import TaskActions from '@/modules/tasks/components/TaskActions';
+import TaskActions, { getDirectBriefCategories } from '@/modules/tasks/components/TaskActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
@@ -530,7 +530,14 @@ function EditTaskModal({
 
   const rawDesc = task.description ?? '';
   const isDirectBrief = rawDesc.includes('[DIRECT_BRIEF]') || task.task_type === 'DIRECT_BRIEF';
-  const initialHtml = rawDesc.replace(/^\[DIRECT_BRIEF\]\s*/i, '');
+  const initialCategories = getDirectBriefCategories(rawDesc);
+  const [editCategories, setEditCategories] = useState<string[]>(
+    initialCategories.length > 0 ? initialCategories : ['Desain Feed Post 1', 'Desain Feed Post 2']
+  );
+  const initialHtml = rawDesc
+    .replace(/^\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]\s*/i, '')
+    .replace(/^\[DIRECT_BRIEF\]\s*/i, '')
+    .trim();
   const [description, setDescription] = useState(initialHtml);
 
   const defaultStartAt = formatDatetimeLocalInput(task.start_at);
@@ -545,9 +552,15 @@ function EditTaskModal({
     formData.set('priority', priority);
     formData.set('outputType', outputType);
 
-    const finalDescription = isDirectBrief
-      ? `[DIRECT_BRIEF]\n${description}`
-      : description;
+    const cleanCategories = editCategories.map((c) => c.trim()).filter(Boolean);
+    let finalDescription = description;
+    if (isDirectBrief) {
+      if (cleanCategories.length > 0) {
+        finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(cleanCategories)}]\n[DIRECT_BRIEF]\n${description}`;
+      } else {
+        finalDescription = `[DIRECT_BRIEF]\n${description}`;
+      }
+    }
     formData.set('description', finalDescription);
 
     try {
@@ -653,6 +666,65 @@ function EditTaskModal({
                   className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                 />
               </div>
+
+              {/* Dynamic Categories Section for Direct Brief in Edit Modal */}
+              {isDirectBrief && (
+                <div className="p-4 rounded-2xl bg-blue-500/5 dark:bg-blue-500/[0.04] border border-blue-500/20 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">🎯</span>
+                      <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
+                        Kategori Output Karya
+                      </h4>
+                    </div>
+                    <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
+                      {editCategories.filter(c => c.trim()).length} Slot
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 pt-1">
+                    {editCategories.map((cat, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border border-blue-500/20">
+                          #{idx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={cat}
+                          onChange={(e) => {
+                            const updated = [...editCategories];
+                            updated[idx] = e.target.value;
+                            setEditCategories(updated);
+                          }}
+                          placeholder={`Nama Kategori Output #${idx + 1}`}
+                          className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 font-medium text-zinc-900 dark:text-zinc-100"
+                        />
+                        {editCategories.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = editCategories.filter((_, i) => i !== idx);
+                              setEditCategories(updated);
+                            }}
+                            className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
+                            title="Hapus Kategori"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditCategories((prev) => [...prev, ''])}
+                    className="w-full text-xs font-extrabold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-3 py-2 rounded-xl border border-blue-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                  >
+                    <span>➕ Tambah Kategori Output</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Tiptap Editor Column */}

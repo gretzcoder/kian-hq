@@ -404,6 +404,8 @@ export default function TaskActions({
   const [directUrlInput, setDirectUrlInput] = useState('');
   const [selectedDirectCategory, setSelectedDirectCategory] = useState('');
   const [categoryInputs, setCategoryInputs] = useState<Record<string, string>>({});
+  const [slotSubmitMap, setSlotSubmitMap] = useState<Record<string, boolean>>({});
+  const [slotUrlMap, setSlotUrlMap] = useState<Record<string, string>>({});
   const [showDirectForm, setShowDirectForm] = useState(false);
 
   const handleDirectSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1021,74 +1023,249 @@ export default function TaskActions({
 
     const categories = getDirectBriefCategories(taskDescription);
 
-    if (isDirectBriefTask && displayAssignments.length === 0) {
+    if (isDirectBriefTask && categories.length > 0) {
       return (
-        <div className="space-y-3 my-2">
-          {renderDirectBriefSubmitBox()}
-          <div className="p-6 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center space-y-1.5 bg-zinc-50/50 dark:bg-zinc-900/20">
-            <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-center gap-1.5">
-              <span>📌</span> {isMentorWs ? 'Belum Ada Submission dari Mentor' : 'Belum Ada Peserta yang Mengumpulkan Hasil Karya'}
-            </p>
-            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-              {isMentorWs
-                ? 'Daftar hasil karya yang dikirimkan oleh mentor akan otomatis muncul di sini untuk Anda review & berikan Sparks.'
-                : 'Daftar submission akan otomatis muncul di sini begitu peserta menempelkan link hasil karya mereka.'}
-            </p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
+                <span>🎯</span> Slot Output Karya Berdasarkan Kategori ({categories.length} Slot)
+              </h4>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Pilih slot kategori yang masih tersedia untuk mengumpulkan karya Anda. Setiap kategori hanya dapat di-submit 1x oleh 1 peserta.
+              </p>
+            </div>
+            <span className="text-[10px] font-mono text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-700">
+              {assignments.filter(a => a.result_url || a.status !== 'ASSIGNED').length}/{categories.length} Slot Terisi
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {categories.map((cat, idx) => {
+              // Find matching assignment submitted for this category
+              const categoryAss = assignments.find(
+                (a) => (a.result_url || a.status !== 'ASSIGNED') && (
+                  a.assignment_role === cat ||
+                  a.assignment_role === `Kategori: ${cat}` ||
+                  a.assignment_role.includes(cat) ||
+                  cat.includes(a.assignment_role)
+                )
+              );
+
+              const isTaken = Boolean(categoryAss);
+              const isMine = categoryAss?.user_id === currentUserId;
+              const canUserSubmit = !isCoordinator;
+              const hasUserSubmittedAny = assignments.some(a => a.user_id === currentUserId && (a.result_url || a.status !== 'ASSIGNED'));
+
+              return (
+                <div
+                  key={idx}
+                  className={`rounded-2xl border p-4 space-y-3 transition-all ${
+                    isTaken
+                      ? 'bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04] border-emerald-500/25 shadow-xs'
+                      : 'bg-zinc-50/50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-800'
+                  }`}
+                >
+                  {/* Category Slot Header */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${
+                        isTaken ? 'bg-emerald-500 text-white' : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
+                      }`}>
+                        #{idx + 1}
+                      </span>
+                      <span className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
+                        {cat}
+                      </span>
+                    </div>
+
+                    {isTaken && categoryAss ? (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                          ✓ Terisi oleh {categoryAss.user_name || 'Peserta'} {isMine && '(Anda)'}
+                        </span>
+                        <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-full border ${statusColors[categoryAss.status] ?? statusColors.DRAFT}`}>
+                          {categoryAss.status.replace('_', ' ')}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
+                        ⏳ Slot Tersedia
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Content Body */}
+                  {isTaken && categoryAss ? (
+                    <div className="space-y-3 pt-1">
+                      {/* Link Previewer - Visible to EVERYONE! */}
+                      {categoryAss.result_url && (
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block">
+                            Hasil Karya Submitter ({categoryAss.user_name || 'Peserta'}):
+                          </span>
+                          <SubmittedLinkPreviewer url={categoryAss.result_url} autoExpand={true} />
+                        </div>
+                      )}
+
+                      {/* Revision Note if any */}
+                      {categoryAss.revision_note && ['REVISION_REQUESTED', 'DECLINED'].includes(categoryAss.status) && (
+                        <CollapsibleNoteViewer
+                          content={categoryAss.revision_note}
+                          badgeLabel="⚠️ Catatan Revisi"
+                          type="REVISION"
+                        />
+                      )}
+
+                      {/* Appreciation Note if approved */}
+                      {['APPROVED', 'DONE', 'PUBLISHED'].includes(categoryAss.status) && categoryAss.revision_note && (
+                        <CollapsibleNoteViewer
+                          content={categoryAss.revision_note}
+                          badgeLabel="✨ Apresiasi & Catatan Review"
+                          type="APPRECIATION"
+                        />
+                      )}
+
+                      {/* QC Approver Actions for Reviewer */}
+                      {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(categoryAss.status) &&
+                        categoryAss.user_id !== currentUserId &&
+                        (isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)) && (
+                        <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
+                          <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                            Persetujuan QC & Pemberian Sparks
+                          </p>
+                          <ReviewActions
+                            assignmentId={categoryAss.id}
+                            canRequestRevision={isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)}
+                            canAwardBadge={isMentorWs ? isCoordinator : (isMentor || isCoordinator)}
+                            isStaffOrCoord={isCoordinator}
+                            mentorApproved={categoryAss.mentor_approved ?? 0}
+                            coordinatorApproved={categoryAss.coordinator_approved ?? 0}
+                            isMentorWs={isMentorWs}
+                          />
+                        </div>
+                      )}
+
+                      {/* Resubmit button if it's my submission and in revision/assigned status */}
+                      {isMine && ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(categoryAss.status) && (
+                        <div className="pt-1">
+                          {showSubmitMap[categoryAss.id] ? (
+                            <form onSubmit={(e) => handleSubmitResult(e, categoryAss.id)} className="flex gap-2">
+                              <input
+                                type="url"
+                                value={urlInputs[categoryAss.id] ?? ''}
+                                onChange={(e) => setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: e.target.value }))}
+                                placeholder="Paste URL Karya (Google Drive / Canva / Figma / Youtube)..."
+                                required
+                                className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
+                              />
+                              <button
+                                type="submit"
+                                disabled={loading === categoryAss.id}
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer font-bold"
+                              >
+                                {loading === categoryAss.id ? '...' : 'Submit'}
+                              </button>
+                            </form>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowSubmitMap((prev) => ({ ...prev, [categoryAss.id]: true }));
+                                setCategoryInputs((prev) => ({ ...prev, [categoryAss.id]: cat }));
+                              }}
+                              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer"
+                            >
+                              📤 Kirim Ulang (Resubmit) untuk Kategori Ini
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Slot Available Form / Submit Button */
+                    <div className="pt-1">
+                      {canUserSubmit && !hasUserSubmittedAny ? (
+                        <div>
+                          {slotSubmitMap[cat] ? (
+                            <form
+                              onSubmit={async (e) => {
+                                e.preventDefault();
+                                const url = slotUrlMap[cat];
+                                if (!url || !url.trim()) return;
+                                setLoading(`slot_${cat}`);
+                                try {
+                                  const res = await submitDirectTaskResult(taskId, url.trim(), cat);
+                                  if (res.success) {
+                                    setSlotUrlMap((prev) => ({ ...prev, [cat]: '' }));
+                                    setSlotSubmitMap((prev) => ({ ...prev, [cat]: false }));
+                                    toast('Hasil karya berhasil dikirim!', 'success');
+                                  } else {
+                                    toast(res.error || 'Gagal submit.', 'error');
+                                  }
+                                } catch (err: any) {
+                                  toast(err.message || 'Terjadi kesalahan.', 'error');
+                                } finally {
+                                  setLoading(null);
+                                }
+                              }}
+                              className="space-y-2"
+                            >
+                              <p className="text-[11px] font-bold text-purple-700 dark:text-purple-300">
+                                Masukkan Link Hasil Karya untuk Kategori: <span className="underline">{cat}</span>
+                              </p>
+                              <div className="flex gap-2">
+                                <input
+                                  type="url"
+                                  value={slotUrlMap[cat] || ''}
+                                  onChange={(e) => setSlotUrlMap((prev) => ({ ...prev, [cat]: e.target.value }))}
+                                  placeholder="Paste URL Google Drive / Canva / Figma / Youtube..."
+                                  required
+                                  className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100 font-medium"
+                                />
+                                <button
+                                  type="submit"
+                                  disabled={loading === `slot_${cat}`}
+                                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md cursor-pointer shrink-0"
+                                >
+                                  {loading === `slot_${cat}` ? '...' : 'Submit'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setSlotSubmitMap((prev) => ({ ...prev, [cat]: false }))}
+                                  className="px-3 py-2.5 text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 cursor-pointer font-semibold"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+                            </form>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSlotSubmitMap((prev) => ({ ...prev, [cat]: true }))}
+                              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-blue-500/20 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                            >
+                              <span>📤</span>
+                              <span>Submit Karya untuk Kategori Ini</span>
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-zinc-400 italic">
+                          {hasUserSubmittedAny
+                            ? 'Anda telah melakukan submit pada salah satu kategori.'
+                            : 'Slot ini masih tersedia dan belum diambil oleh peserta manapun.'}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       );
     }
-
-    return (
-      <div className="space-y-3">
-        {/* Category Slots Overview Card for Direct Brief */}
-        {isDirectBriefTask && categories.length > 0 && (
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-blue-500/10 border border-blue-500/20 space-y-2.5">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-xs font-black text-blue-900 dark:text-blue-200 flex items-center gap-1.5 uppercase tracking-wide">
-                <span>🎯</span> Slot Kategori Output ({categories.length} Kategori)
-              </span>
-              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-extrabold bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
-                1 Kategori = 1 Submitter (Eksklusif)
-              </span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {categories.map((cat, idx) => {
-                const claimedAss = displayAssignments.find(
-                  (a) => (a.result_url || a.status !== 'ASSIGNED') && (a.assignment_role === cat || a.assignment_role === `Kategori: ${cat}` || a.assignment_role.includes(cat))
-                );
-                return (
-                  <div
-                    key={idx}
-                    className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                      claimedAss
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
-                        : 'bg-white/80 dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <span className={`w-5 h-5 rounded-md text-[10px] font-black flex items-center justify-center shrink-0 ${
-                        claimedAss ? 'bg-emerald-500 text-white' : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
-                      }`}>
-                        #{idx + 1}
-                      </span>
-                      <span className="font-bold truncate">{cat}</span>
-                    </div>
-                    {claimedAss ? (
-                      <span className="text-[9px] font-extrabold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md shrink-0 border border-emerald-500/30">
-                        ✓ {claimedAss.user_name || 'Taken'}
-                      </span>
-                    ) : (
-                      <span className="text-[9px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-md shrink-0">
-                        Tersedia
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {isDirectBriefTask && renderDirectBriefSubmitBox()}
         <div className="flex items-center justify-between">
