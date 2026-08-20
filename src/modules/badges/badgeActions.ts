@@ -199,6 +199,54 @@ export async function getAllBadgesWithUserProgress(): Promise<{
     // 0. Auto-evaluate and award badges for all users with completed requirements
     await evaluateAndAutoAwardBadges();
 
+    // Retroactively sync all past BADGE_REWARD sparks_adjustments to match current badge.sparks_reward
+    await db.prepare(`
+      UPDATE sparks_adjustments
+      SET sparks = (
+        SELECT b.sparks_reward FROM badges b WHERE b.id = sparks_adjustments.badge_id
+      )
+      WHERE category = 'BADGE_REWARD'
+        AND badge_id IS NOT NULL
+        AND badge_id IN (SELECT id FROM badges)
+        AND sparks != (SELECT b.sparks_reward FROM badges b WHERE b.id = sparks_adjustments.badge_id)
+    `).run();
+
+    // Link unlinked BADGE_REWARD adjustments by matching badge title
+    await db.prepare(`
+      UPDATE sparks_adjustments
+      SET badge_id = (
+        SELECT b.id FROM badges b WHERE sparks_adjustments.note LIKE '%' || b.name || '%' LIMIT 1
+      ),
+      sparks = (
+        SELECT b.sparks_reward FROM badges b WHERE sparks_adjustments.note LIKE '%' || b.name || '%' LIMIT 1
+      )
+      WHERE category = 'BADGE_REWARD'
+        AND (badge_id IS NULL OR badge_id = '')
+        AND EXISTS (
+          SELECT 1 FROM badges b WHERE sparks_adjustments.note LIKE '%' || b.name || '%'
+        )
+    `).run();
+
+    // Backfill user_badges.claimed_at for all claimed badge rewards
+    await db.prepare(`
+      UPDATE user_badges
+      SET claimed_at = (
+        SELECT COALESCE(sa.created_at * 1000, strftime('%s', 'now') * 1000)
+        FROM sparks_adjustments sa
+        WHERE sa.user_id = user_badges.user_id
+          AND sa.category = 'BADGE_REWARD'
+          AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%')
+        LIMIT 1
+      )
+      WHERE claimed_at IS NULL
+        AND EXISTS (
+          SELECT 1 FROM sparks_adjustments sa
+          WHERE sa.user_id = user_badges.user_id
+            AND sa.category = 'BADGE_REWARD'
+            AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%')
+        )
+    `).run();
+
     // 1. Fetch raw badges
     const { results: rawBadges } = await db
       .prepare('SELECT * FROM badges ORDER BY created_at DESC')
@@ -603,13 +651,13 @@ export async function updateBadgeAction(badgeId: string, formData: FormData): Pr
       .bind(name, category, iconUrl, description, requirementType, requirementData, sparksReward, badgeId)
       .run();
 
-    // 1. Link badge_id on existing sparks_adjustments matching old or new badge name
+    // 1. Link badge_id and update sparks amount on existing sparks_adjustments to match the new sparks_reward
     await db.prepare(`
       UPDATE sparks_adjustments
-      SET badge_id = ?
+      SET badge_id = ?, sparks = ?
       WHERE category = 'BADGE_REWARD'
-        AND (badge_id = ? OR note LIKE '%' || ? || '%')
-    `).bind(badgeId, badgeId, existing.name).run();
+        AND (badge_id = ? OR note LIKE '%' || ? || '%' OR note LIKE '%' || ? || '%')
+    `).bind(badgeId, sparksReward, badgeId, existing.name, name).run();
 
     // 2. If badge name changed, update the note text in sparks_adjustments so Sparks History logs stay accurate
     if (existing.name !== name) {
@@ -617,8 +665,8 @@ export async function updateBadgeAction(badgeId: string, formData: FormData): Pr
         UPDATE sparks_adjustments
         SET note = 'Claim Reward Badge: ' || ?
         WHERE category = 'BADGE_REWARD'
-          AND (badge_id = ? OR note LIKE '%' || ? || '%')
-      `).bind(name, badgeId, existing.name).run();
+          AND (badge_id = ? OR note LIKE '%' || ? || '%' OR note LIKE '%' || ? || '%')
+      `).bind(name, badgeId, existing.name, name).run();
     }
 
     // 3. Ensure user_badges.claimed_at is populated for all users who already claimed this badge reward
@@ -629,7 +677,7 @@ export async function updateBadgeAction(badgeId: string, formData: FormData): Pr
         FROM sparks_adjustments sa
         WHERE sa.user_id = user_badges.user_id
           AND sa.category = 'BADGE_REWARD'
-          AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || ? || '%')
+          AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || ? || '%' OR sa.note LIKE '%' || ? || '%')
         LIMIT 1
       )
       WHERE badge_id = ?
@@ -638,9 +686,9 @@ export async function updateBadgeAction(badgeId: string, formData: FormData): Pr
           SELECT 1 FROM sparks_adjustments sa
           WHERE sa.user_id = user_badges.user_id
             AND sa.category = 'BADGE_REWARD'
-            AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || ? || '%')
+            AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || ? || '%' OR sa.note LIKE '%' || ? || '%')
         )
-    `).bind(name, badgeId, name).run();
+    `).bind(existing.name, name, badgeId, existing.name, name).run();
 
     revalidatePath('/dashboard/badges');
     revalidatePath('/dashboard/sparks');
