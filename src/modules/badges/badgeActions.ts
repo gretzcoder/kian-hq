@@ -227,7 +227,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
         )
     `).run();
 
-    // Backfill user_badges.claimed_at for all claimed badge rewards
+    // Backfill user_badges.claimed_at and sync awarded_at date with actual claim log timestamp
     await db.prepare(`
       UPDATE user_badges
       SET claimed_at = (
@@ -245,6 +245,27 @@ export async function getAllBadgesWithUserProgress(): Promise<{
             AND sa.category = 'BADGE_REWARD'
             AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%')
         )
+    `).run();
+
+    // Sync awarded_at timestamp to match earliest claim date when awarded_at is newer than claim timestamp
+    await db.prepare(`
+      UPDATE user_badges
+      SET awarded_at = (
+        SELECT sa.created_at * 1000
+        FROM sparks_adjustments sa
+        WHERE sa.user_id = user_badges.user_id
+          AND sa.category = 'BADGE_REWARD'
+          AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%')
+        ORDER BY sa.created_at ASC
+        LIMIT 1
+      )
+      WHERE EXISTS (
+        SELECT 1 FROM sparks_adjustments sa
+        WHERE sa.user_id = user_badges.user_id
+          AND sa.category = 'BADGE_REWARD'
+          AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%')
+          AND (sa.created_at * 1000) < user_badges.awarded_at
+      )
     `).run();
 
     // 1. Fetch raw badges
