@@ -18,219 +18,138 @@ import {
 
 
 /**
- * Global Evaluator: Auto-awards badges to ALL users who satisfy task/workspace requirements
+ * Global Evaluator: Auto-awards badges to users who satisfy task/workspace requirements
  */
 export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise<number> {
   const db = await getDB();
   const now = Date.now();
 
-  // 0a. Clean up any legacy automatic badge sparks adjustments (ensure ONLY manual claims exist)
   try {
-    await db.prepare(`
-      DELETE FROM sparks_adjustments
-      WHERE category = 'BADGE_REWARD'
-        AND note LIKE 'Reward Badge: %'
-        AND note NOT LIKE 'Claim Reward Badge: %'
-    `).run();
-  } catch (e) {
-    console.error('Failed to cleanup automatic badge sparks adjustments:', e);
-  }
-
-  // 0b. Clean up duplicate manual claim entries in sparks_adjustments (keep only 1 claim per user per badge)
-  try {
-    await db.prepare(`
-      DELETE FROM sparks_adjustments
-      WHERE category = 'BADGE_REWARD'
-        AND id NOT IN (
-          SELECT MIN(id)
-          FROM sparks_adjustments
-          WHERE category = 'BADGE_REWARD'
-          GROUP BY user_id, note
-        )
-    `).run();
-  } catch (e) {
-    console.error('Failed to deduplicate badge sparks adjustments:', e);
-  }
-
-  // 0c. Auto-sync user_badges.claimed_at from sparks_adjustments if claimed_at is null
-  try {
-    await db.prepare(`
-      UPDATE user_badges
-      SET claimed_at = (
-        SELECT COALESCE(sa.created_at * 1000, strftime('%s', 'now') * 1000)
-        FROM sparks_adjustments sa
-        JOIN badges b ON user_badges.badge_id = b.id
-        WHERE sa.user_id = user_badges.user_id
-          AND sa.category = 'BADGE_REWARD'
-          AND sa.note LIKE '%' || b.name || '%'
-        LIMIT 1
-      )
-      WHERE user_badges.claimed_at IS NULL
-        AND EXISTS (
-          SELECT 1
-          FROM sparks_adjustments sa
-          JOIN badges b ON user_badges.badge_id = b.id
-          WHERE sa.user_id = user_badges.user_id
-            AND sa.category = 'BADGE_REWARD'
-            AND sa.note LIKE '%' || b.name || '%'
-        )
-    `).run();
-  } catch (e) {
-    console.error('Failed to sync claimed_at in user_badges:', e);
-  }
-
-  // 1. Fetch all active badges with requirements
-  const { results: rawBadges } = await db
-    .prepare("SELECT * FROM badges WHERE requirement_type IN ('TASK', 'WORKSPACE')")
-    .all();
-
-  if (!rawBadges || rawBadges.length === 0) return 0;
-
-  // 2. Fetch approved task assignments for active users
-  const userClause = targetUserId ? 'AND ta.user_id = ?' : '';
-  const queryParams = targetUserId ? [targetUserId] : [];
-
-  const { results: approvedAssignments } = await db
-    .prepare(`
-      SELECT ta.user_id, ta.task_id, ta.status AS assignment_status, t.workspace_id
-      FROM task_assignments ta
-      JOIN tasks t ON ta.task_id = t.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      WHERE ta.status IN ('APPROVED', 'DONE', 'PUBLISHED')
-        AND t.status != 'DELETED'
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-        ${userClause}
-    `)
-    .bind(...queryParams)
-    .all();
-
-  // Build map: userId -> Set of completed task IDs
-  const userTaskMap = new Map<string, Set<string>>();
-  (approvedAssignments as any[]).forEach((row) => {
-    if (!userTaskMap.has(row.user_id)) {
-      userTaskMap.set(row.user_id, new Set());
-    }
-    userTaskMap.get(row.user_id)!.add(row.task_id);
-  });
-
-  // Fetch all tasks per workspace for WORKSPACE type requirement checking
-  const { results: allTasksRaw } = await db
-    .prepare(`
-      SELECT t.id, t.workspace_id
-      FROM tasks t
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      WHERE t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-    `)
-    .all();
-
-  const workspaceTasksMap = new Map<string, string[]>();
-  (allTasksRaw as any[]).forEach((t) => {
-    if (t.workspace_id) {
-      if (!workspaceTasksMap.has(t.workspace_id)) {
-        workspaceTasksMap.set(t.workspace_id, []);
-      }
-      workspaceTasksMap.get(t.workspace_id)!.push(t.id);
-    }
-  });
-
-  // 3. Cleanup invalid SYSTEM_AUTO user_badges where requirements are NOT satisfied
-  for (const b of rawBadges as any[]) {
-    const badgeId = b.id;
-    let reqIds: string[] = [];
-    if (b.requirement_data) {
-      try { reqIds = JSON.parse(b.requirement_data); } catch {}
-    }
-    if (reqIds.length === 0) continue;
-
-    const reqType = b.requirement_type;
-
-    const { results: autoAwards } = await db
-      .prepare("SELECT id, user_id FROM user_badges WHERE badge_id = ? AND awarded_by = 'SYSTEM_AUTO'")
-      .bind(badgeId)
+    // 1. Fetch active badges with requirements
+    const { results: rawBadges } = await db
+      .prepare("SELECT id, name, requirement_type, requirement_data FROM badges WHERE requirement_type IN ('TASK', 'WORKSPACE')")
       .all();
 
-    for (const ub of (autoAwards as any[] || [])) {
-      const uId = ub.user_id;
-      const uCompleted = userTaskMap.get(uId) || new Set<string>();
-      let stillValid = false;
+    if (!rawBadges || rawBadges.length === 0) return 0;
 
-      if (reqType === 'TASK') {
-        stillValid = reqIds.every((tId) => uCompleted.has(tId));
-      } else if (reqType === 'WORKSPACE') {
-        stillValid = reqIds.every((wsId) => {
-          const wsTasks = workspaceTasksMap.get(wsId) || [];
-          return wsTasks.length > 0 && wsTasks.every((tId) => uCompleted.has(tId));
-        });
-      }
+    // 2. Fetch approved task assignments for active users (filtered by targetUserId if provided)
+    const userClause = targetUserId ? 'AND ta.user_id = ?' : '';
+    const queryParams = targetUserId ? [targetUserId] : [];
 
-      if (!stillValid) {
-        // Delete invalid auto-award and invalid sparks reward
-        await db.prepare("DELETE FROM user_badges WHERE id = ?").bind(ub.id).run();
-        await db.prepare("DELETE FROM sparks_adjustments WHERE user_id = ? AND category = 'BADGE_REWARD' AND created_by = 'SYSTEM_AUTO' AND note LIKE ?")
-          .bind(uId, `%${b.name}%`)
-          .run();
+    const { results: approvedAssignments } = await db
+      .prepare(`
+        SELECT ta.user_id, ta.task_id
+        FROM task_assignments ta
+        JOIN tasks t ON ta.task_id = t.id
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        WHERE ta.status IN ('APPROVED', 'DONE', 'PUBLISHED')
+          AND t.status != 'DELETED'
+          AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+          ${userClause}
+      `)
+      .bind(...queryParams)
+      .all();
+
+    if (!approvedAssignments || approvedAssignments.length === 0) return 0;
+
+    // Build map: userId -> Set of completed task IDs
+    const userTaskMap = new Map<string, Set<string>>();
+    (approvedAssignments as any[]).forEach((row) => {
+      if (!userTaskMap.has(row.user_id)) {
+        userTaskMap.set(row.user_id, new Set());
       }
+      userTaskMap.get(row.user_id)!.add(row.task_id);
+    });
+
+    // Fetch workspace tasks ONLY if WORKSPACE requirement type exists
+    const hasWorkspaceReq = (rawBadges as any[]).some((b) => b.requirement_type === 'WORKSPACE');
+    const workspaceTasksMap = new Map<string, string[]>();
+
+    if (hasWorkspaceReq) {
+      const { results: allTasksRaw } = await db
+        .prepare(`
+          SELECT t.id, t.workspace_id
+          FROM tasks t
+          LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+          WHERE t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        `)
+        .all();
+
+      (allTasksRaw as any[] || []).forEach((t) => {
+        if (t.workspace_id) {
+          if (!workspaceTasksMap.has(t.workspace_id)) {
+            workspaceTasksMap.set(t.workspace_id, []);
+          }
+          workspaceTasksMap.get(t.workspace_id)!.push(t.id);
+        }
+      });
     }
-  }
 
-  // 4. Fetch existing user_badges to avoid duplicate awards
-  const { results: existingUserBadges } = await db
-    .prepare("SELECT user_id, badge_id FROM user_badges")
-    .all();
+    // 3. Fetch existing user_badges to avoid duplicate awards
+    const ubClause = targetUserId ? 'WHERE user_id = ?' : '';
+    const ubParams = targetUserId ? [targetUserId] : [];
 
-  const userBadgeSet = new Set<string>();
-  (existingUserBadges as any[]).forEach((ub) => {
-    userBadgeSet.add(`${ub.user_id}::${ub.badge_id}`);
-  });
+    const { results: existingUserBadges } = await db
+      .prepare(`SELECT user_id, badge_id FROM user_badges ${ubClause}`)
+      .bind(...ubParams)
+      .all();
 
-  let newAwardCount = 0;
+    const userBadgeSet = new Set<string>();
+    (existingUserBadges as any[] || []).forEach((ub) => {
+      userBadgeSet.add(`${ub.user_id}::${ub.badge_id}`);
+    });
 
-  // 5. Evaluate each user against each badge
-  for (const [userId, completedTasks] of userTaskMap.entries()) {
-    for (const b of rawBadges as any[]) {
-      const badgeId = b.id;
-      const key = `${userId}::${badgeId}`;
-      if (userBadgeSet.has(key)) continue; // Already owns badge
+    const batchStatements: any[] = [];
+    let newAwardCount = 0;
 
-      let reqIds: string[] = [];
-      if (b.requirement_data) {
-        try { reqIds = JSON.parse(b.requirement_data); } catch {}
-      }
-      if (reqIds.length === 0) continue;
+    // 4. Evaluate each user against each badge
+    for (const [userId, completedTasks] of userTaskMap.entries()) {
+      for (const b of rawBadges as any[]) {
+        const badgeId = b.id;
+        const key = `${userId}::${badgeId}`;
+        if (userBadgeSet.has(key)) continue; // Already owns badge
 
-      const reqType = b.requirement_type;
-      let allSatisfied = false;
+        let reqIds: string[] = [];
+        if (b.requirement_data) {
+          try { reqIds = JSON.parse(b.requirement_data); } catch {}
+        }
+        if (reqIds.length === 0) continue;
 
-      if (reqType === 'TASK') {
-        allSatisfied = reqIds.every((tId) => completedTasks.has(tId));
-      } else if (reqType === 'WORKSPACE') {
-        allSatisfied = reqIds.every((wsId) => {
-          const wsTasks = workspaceTasksMap.get(wsId) || [];
-          return wsTasks.length > 0 && wsTasks.every((tId) => completedTasks.has(tId));
-        });
-      }
+        const reqType = b.requirement_type;
+        let allSatisfied = false;
 
-      if (allSatisfied) {
-        const userBadgeId = `ub_${crypto.randomUUID().replace(/-/g, '')}`;
-        try {
-          const res = await db
-            .prepare(`
+        if (reqType === 'TASK') {
+          allSatisfied = reqIds.every((tId) => completedTasks.has(tId));
+        } else if (reqType === 'WORKSPACE') {
+          allSatisfied = reqIds.every((wsId) => {
+            const wsTasks = workspaceTasksMap.get(wsId) || [];
+            return wsTasks.length > 0 && wsTasks.every((tId) => completedTasks.has(tId));
+          });
+        }
+
+        if (allSatisfied) {
+          const userBadgeId = `ub_${crypto.randomUUID().replace(/-/g, '')}`;
+          batchStatements.push(
+            db.prepare(`
               INSERT OR IGNORE INTO user_badges (id, user_id, badge_id, awarded_by, awarded_at)
               VALUES (?, ?, ?, 'SYSTEM_AUTO', ?)
-            `)
-            .bind(userBadgeId, userId, badgeId, now)
-            .run();
-
-          if (res.meta.changes > 0) {
-            newAwardCount++;
-            userBadgeSet.add(key);
-          }
-        } catch (_e) {}
+            `).bind(userBadgeId, userId, badgeId, now)
+          );
+          newAwardCount++;
+          userBadgeSet.add(key);
+        }
       }
     }
-  }
 
-  return newAwardCount;
+    if (batchStatements.length > 0) {
+      await db.batch(batchStatements);
+    }
+
+    return newAwardCount;
+  } catch (e) {
+    console.error('Error in evaluateAndAutoAwardBadges:', e);
+    return 0;
+  }
 }
 
 /**
