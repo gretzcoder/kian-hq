@@ -102,9 +102,12 @@ export function getTaskAssignmentStatusMeta(
   const isExtended = Boolean(extendedDeadline && extendedDeadline > (deadline || 0));
 
   let penaltyPercent = 0;
-  let daysLate = 0;
-  if (deadline && now > deadline) {
-    daysLate = Math.ceil((now - deadline) / (24 * 3600 * 1000));
+  let daysExtended = 0;
+  if (isExtended && deadline && extendedDeadline) {
+    daysExtended = Math.max(1, Math.ceil((extendedDeadline - deadline) / (24 * 3600 * 1000)));
+    penaltyPercent = Math.min(100, daysExtended * 10);
+  } else if (deadline && now > deadline) {
+    const daysLate = Math.ceil((now - deadline) / (24 * 3600 * 1000));
     penaltyPercent = Math.min(100, Math.max(10, daysLate * 10));
   }
 
@@ -120,7 +123,7 @@ export function getTaskAssignmentStatusMeta(
   }
 
   if (status === 'WAITING_REVIEW' || status === 'RESUBMITTED') {
-    const subLabel = isExtended && daysLate > 0 ? `📤 Menunggu Review (Extend H+${daysLate})` : '📤 Menunggu Review';
+    const subLabel = isExtended && daysExtended > 0 ? `📤 Menunggu Review (Extend H+${daysExtended})` : '📤 Menunggu Review';
     return {
       label: subLabel,
       badgeClass: 'bg-yellow-500/8 text-yellow-700 dark:text-yellow-400 border-yellow-500/15 font-bold',
@@ -164,7 +167,7 @@ export function getTaskAssignmentStatusMeta(
   }
 
   if (isExtended) {
-    const hLabel = daysLate > 0 ? `H+${daysLate}` : 'Extend';
+    const hLabel = daysExtended > 0 ? `H+${daysExtended}` : 'Extend';
     return {
       label: `⏳ Extended (${hLabel} • Sparks -${penaltyPercent}%)`,
       badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 font-black',
@@ -1526,13 +1529,13 @@ function MentorTaskCard({
                 </span>
               )}
               {task.extended_deadline && task.extended_deadline > (task.deadline || 0) ? (() => {
-                const now = Date.now();
-                const daysLate = task.deadline && now > task.deadline ? Math.ceil((now - task.deadline) / (24 * 3600 * 1000)) : 0;
-                const penalty = Math.min(100, daysLate * 10);
-                const hText = daysLate > 0 ? `H+${daysLate} • Sparks -${penalty}%` : 'Extended';
+                const daysExtended = task.deadline ? Math.max(1, Math.ceil((task.extended_deadline - task.deadline) / (24 * 3600 * 1000))) : 1;
+                const penalty = Math.min(100, daysExtended * 10);
+                const hText = `H+${daysExtended} • Sparks -${penalty}%`;
+                const isOverdue = Date.now() > task.extended_deadline;
                 return (
-                  <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1 font-mono">
-                    <span>⏳ Extended ({hText}):</span>
+                  <span className={`text-[9px] font-black ${isOverdue ? 'text-rose-600 dark:text-rose-400 bg-rose-500/10 border-rose-500/20 animate-pulse' : 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20'} px-2.5 py-1 rounded-xl flex items-center gap-1 font-mono border`}>
+                    <span>{isOverdue ? '⚠️ Overdue Extended' : `⏳ Extended (${hText})`}:</span>
                     <span>{new Date(task.extended_deadline).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' })}</span>
                   </span>
                 );

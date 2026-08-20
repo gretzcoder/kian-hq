@@ -121,9 +121,9 @@ function getTaskDeadlineBadge(deadline: number | null, status: string, extendedD
   }
 
   if (extendedDeadline && extendedDeadline > (deadline || 0)) {
-    const daysLate = deadline && now > deadline ? Math.ceil((now - deadline) / (24 * 3600 * 1000)) : 0;
-    const penalty = Math.min(100, daysLate * 10);
-    const hText = daysLate > 0 ? `H+${daysLate}` : 'Extend';
+    const daysExtended = deadline ? Math.max(1, Math.ceil((extendedDeadline - deadline) / (24 * 3600 * 1000))) : 1;
+    const penalty = Math.min(100, daysExtended * 10);
+    const hText = `H+${daysExtended}`;
 
     if (diffDays < 0) {
       return (
