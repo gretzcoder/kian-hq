@@ -573,7 +573,11 @@ export async function acceptMessageRequestAction(partnerUserId: string): Promise
  */
 async function ensureDMDeletedForColumn(db: any) {
   try {
-    await db.prepare("ALTER TABLE direct_messages ADD COLUMN deleted_for TEXT DEFAULT '[]'").run();
+    const tableInfo = await db.prepare("PRAGMA table_info(direct_messages)").all();
+    const existingCols = new Set((tableInfo?.results || []).map((col: any) => col.name));
+    if (!existingCols.has('deleted_for')) {
+      await db.prepare("ALTER TABLE direct_messages ADD COLUMN deleted_for TEXT DEFAULT '[]'").run();
+    }
   } catch {}
 }
 

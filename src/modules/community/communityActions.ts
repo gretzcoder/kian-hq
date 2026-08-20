@@ -221,16 +221,21 @@ export async function getCommunityChannels(): Promise<{
  */
 async function ensureCommunityThreadColumns(db: any) {
   try {
-    await db.prepare('ALTER TABLE community_messages ADD COLUMN thread_name TEXT').run();
-  } catch {}
-  try {
-    await db.prepare('ALTER TABLE community_messages ADD COLUMN is_thread_root INTEGER DEFAULT 0').run();
-  } catch {}
-  try {
-    await db.prepare('ALTER TABLE community_messages ADD COLUMN thread_root_id TEXT').run();
-  } catch {}
-  try {
-    await db.prepare('ALTER TABLE community_messages ADD COLUMN pinned_answer_id TEXT').run();
+    const tableInfo = await db.prepare("PRAGMA table_info(community_messages)").all();
+    const existingCols = new Set((tableInfo?.results || []).map((col: any) => col.name));
+
+    if (!existingCols.has('thread_name')) {
+      await db.prepare('ALTER TABLE community_messages ADD COLUMN thread_name TEXT').run();
+    }
+    if (!existingCols.has('is_thread_root')) {
+      await db.prepare('ALTER TABLE community_messages ADD COLUMN is_thread_root INTEGER DEFAULT 0').run();
+    }
+    if (!existingCols.has('thread_root_id')) {
+      await db.prepare('ALTER TABLE community_messages ADD COLUMN thread_root_id TEXT').run();
+    }
+    if (!existingCols.has('pinned_answer_id')) {
+      await db.prepare('ALTER TABLE community_messages ADD COLUMN pinned_answer_id TEXT').run();
+    }
   } catch {}
 }
 
