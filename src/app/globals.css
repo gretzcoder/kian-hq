@@ -178,6 +178,12 @@ input[type="reset"] {
   display: list-item !important;
 }
 
+.tiptap li p, .prose-editor li p {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  display: inline-block !important;
+}
+
 .tiptap blockquote, .prose-editor blockquote {
   border-left: 4px solid #a855f7 !important;
   padding-left: 0.875rem !important;
