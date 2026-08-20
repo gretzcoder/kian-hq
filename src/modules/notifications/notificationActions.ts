@@ -48,7 +48,6 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
     ctx.can('SPARKS_MANAGE') ||
     ctx.can('MANAGE') ||
     ctx.can('WORKSPACE_MANAGE') ||
-    ctx.can('TASK_REVIEW') ||
     ctx.permissions.has('ADMIN_SYSTEM');
 
   const [annRaw, wsRaw, reviewRaw] = await Promise.all([
@@ -130,7 +129,8 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
 
       const isMentorWs = r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR';
       if (isMentorWs) {
-        return isCoordinator && r.coordinator_approved === 0;
+        const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
+        return (isCoordinator || isTaskCreator) && r.coordinator_approved === 0;
       }
 
       if (isCoordinator && r.coordinator_approved === 0) return true;
@@ -303,7 +303,8 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
         return false;
       }
       if (isMentorWs) {
-        if (isCoordinator && r.coordinator_approved === 0) return true;
+        const isTaskCreator = r.wsType ? (r.taskCreatedBy != null && r.taskCreatedBy === session.userId) : (r.task_created_by != null && r.task_created_by === session.userId);
+        if ((isCoordinator || isTaskCreator) && r.coordinator_approved === 0) return true;
         return false;
       }
       if (r.is_lead && r.lead_approved === 0) return true;

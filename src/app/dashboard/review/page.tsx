@@ -53,7 +53,6 @@ export default async function ReviewPage() {
     ctx.can('SPARKS_MANAGE') ||
     ctx.can('MANAGE') ||
     ctx.can('WORKSPACE_MANAGE') ||
-    ctx.can('TASK_REVIEW') ||
     ctx.permissions.has('ADMIN_SYSTEM');
 
   const { results: rawReviews } = await db.prepare(`

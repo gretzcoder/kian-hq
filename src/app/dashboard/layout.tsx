@@ -47,7 +47,6 @@ export default async function DashboardLayout({
     ctx.can('SPARKS_MANAGE') ||
     ctx.can('MANAGE') ||
     ctx.can('WORKSPACE_MANAGE') ||
-    ctx.can('TASK_REVIEW') ||
     ctx.permissions.has('ADMIN_SYSTEM');
   const canManageSparks = ctx.can('SPARKS_MANAGE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
 
@@ -162,10 +161,13 @@ export default async function DashboardLayout({
                    AND (ws.deleted_at IS NULL OR ws.id IS NULL)
                    AND ta.user_id != ?
                    AND (
-                     (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AND ta.lead_approved = 0)
-                     OR (EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?) AND ta.mentor_approved = 0)
-                     OR (EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?) AND ta.mentor_approved = 0)
-                     OR (t.created_by = ? AND ta.mentor_approved = 0)
+                     ((ws.workspace_type = 'MENTOR' OR t.task_type = 'MENTOR') AND t.created_by = ?)
+                     OR (COALESCE(ws.workspace_type, '') != 'MENTOR' AND COALESCE(t.task_type, '') != 'MENTOR' AND (
+                       (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AND ta.lead_approved = 0)
+                       OR (EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?) AND ta.mentor_approved = 0)
+                       OR (EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?) AND ta.mentor_approved = 0)
+                       OR (t.created_by = ? AND ta.mentor_approved = 0)
+                     ))
                    )`
               )
               .bind(session.userId, session.userId, session.userId, session.userId, session.userId, session.userId)
