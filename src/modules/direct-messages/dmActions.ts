@@ -327,101 +327,153 @@ export async function getRecentConversationsAction(
     console.error('Error fetching DM conversations:', err);
   }
 
-  // 2. Fetch Workspace Chats (Only UNREAD / new notifications; disappears when read)
+  // 2. Fetch Workspace Chats (Shows all accessible workspace chats for current user)
   try {
     const { results: wsChats } = await db
       .prepare(
-        `SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.created_at,
-                u.name AS senderName, ws.name AS wsName
-         FROM workspace_chats wc
-         JOIN users u ON wc.user_id = u.id
-         JOIN workspaces ws ON wc.workspace_id = ws.id
-         LEFT JOIN workspace_chat_reads wcr ON wcr.workspace_id = ws.id AND wcr.user_id = ?
-         WHERE wc.user_id != ?
-           AND ws.deleted_at IS NULL
-           AND (wcr.last_read_at IS NULL OR wcr.last_read_at < wc.created_at)
+        `SELECT ws.id AS workspace_id,
+                ws.name AS ws_name,
+                wc.id AS last_msg_id,
+                wc.user_id AS last_sender_id,
+                wc.message AS last_message,
+                wc.created_at AS last_created_at,
+                u.name AS last_sender_name,
+                (
+                  SELECT COUNT(*)
+                  FROM workspace_chats wc_unread
+                  WHERE wc_unread.workspace_id = ws.id
+                    AND wc_unread.user_id != ?
+                    AND NOT EXISTS (
+                      SELECT 1 FROM workspace_chat_reads wcr
+                      WHERE wcr.chat_id = wc_unread.id AND wcr.user_id = ?
+                    )
+                ) AS unread_count
+         FROM workspaces ws
+         LEFT JOIN workspace_chats wc ON wc.id = (
+           SELECT id FROM workspace_chats WHERE workspace_id = ws.id ORDER BY created_at DESC LIMIT 1
+         )
+         LEFT JOIN users u ON wc.user_id = u.id
+         WHERE ws.deleted_at IS NULL
            AND (
              ws.ojt_coordinator_id = ?
              OR EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
              OR EXISTS (SELECT 1 FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id AND ta.user_id = ?)
+             OR EXISTS (SELECT 1 FROM project_coordinators WHERE project_id = ws.project_id AND user_id = ?)
+             OR EXISTS (
+               SELECT 1 FROM user_roles ur
+               JOIN roles r ON ur.role_id = r.id
+               WHERE ur.user_id = ? AND r.name IN ('ADMIN', 'EXECUTIVE', 'MANAGER', 'STAFF')
+             )
            )
-         ORDER BY wc.created_at DESC
-         LIMIT 20`
+         ORDER BY COALESCE(wc.created_at, ws.created_at) DESC
+         LIMIT 30`
       )
-      .bind(session.userId, session.userId, session.userId, session.userId, session.userId)
+      .bind(
+        session.userId,
+        session.userId,
+        session.userId,
+        session.userId,
+        session.userId,
+        session.userId,
+        session.userId
+      )
       .all();
 
-    const wsMap = new Map<string, ConversationItem>();
     (wsChats as any[]).forEach((r) => {
       const wsId = r.workspace_id;
-      if (!wsMap.has(wsId)) {
-        wsMap.set(wsId, {
-          id: `ws_conv_${wsId}`,
-          category: 'WORKSPACE',
-          partnerId: wsId,
-          partnerName: `⚡ Workspace: ${r.wsName || 'Team'}`,
-          partnerEmail: 'Workspace Team Chat',
-          partnerAvatar: null,
-          partnerUserType: 'WORKSPACE',
-          lastMessage: `${r.senderName}: "${r.message}"`,
-          lastMessageTime: Number(r.created_at) || 0,
-          lastMessageSenderId: r.user_id,
-          unreadCount: 1,
-          targetUrl: `/dashboard/workspace/${wsId}?tab=chat`,
-        });
-      }
-    });
+      const unread = Number(r.unread_count) || 0;
+      totalUnread += unread;
 
-    list.push(...Array.from(wsMap.values()));
+      const rawTs = Number(r.last_created_at) || 0;
+      const timeMs = rawTs > 0 ? (rawTs > 1e11 ? rawTs : rawTs * 1000) : Date.now();
+
+      let lastMsgText = 'Belum ada pesan di room chat';
+      if (r.last_message) {
+        const sender = r.last_sender_name ? `${r.last_sender_name}: ` : '';
+        lastMsgText = `${sender}"${r.last_message}"`;
+      }
+
+      list.push({
+        id: `ws_conv_${wsId}`,
+        category: 'WORKSPACE',
+        partnerId: wsId,
+        partnerName: `⚡ Workspace: ${r.ws_name || 'Team'}`,
+        partnerEmail: 'Workspace Team Chat',
+        partnerAvatar: null,
+        partnerUserType: 'WORKSPACE',
+        lastMessage: lastMsgText,
+        lastMessageTime: timeMs,
+        lastMessageSenderId: r.last_sender_id || '',
+        unreadCount: unread,
+        targetUrl: `/dashboard/workspace/${wsId}?tab=chat`,
+      });
+    });
   } catch (err) {
     console.error('Error fetching Workspace Chats for Messenger:', err);
   }
 
-  // 3. Fetch Community Chats (Only UNREAD / new notifications; disappears when read)
+  // 3. Fetch Community Chats
   try {
     const { results: commChats } = await db
       .prepare(
-        `SELECT cm.id, cm.channel_id, cm.user_id, cm.message, cm.created_at,
-                u.name AS senderName, cc.name AS channelName
-         FROM community_messages cm
-         JOIN users u ON cm.user_id = u.id
-         JOIN community_channels cc ON cm.channel_id = cc.id
-         LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cc.id AND ccr.user_id = ?
-         WHERE cm.user_id != ?
-           AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm.created_at)
-         ORDER BY cm.created_at DESC
+        `SELECT cc.id AS channel_id,
+                cc.name AS channel_name,
+                cm.id AS last_msg_id,
+                cm.user_id AS last_sender_id,
+                cm.message AS last_message,
+                cm.created_at AS last_created_at,
+                u.name AS last_sender_name,
+                (
+                  SELECT COUNT(*)
+                  FROM community_messages cm_unread
+                  LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cc.id AND ccr.user_id = ?
+                  WHERE cm_unread.channel_id = cc.id
+                    AND cm_unread.user_id != ?
+                    AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm_unread.created_at)
+                ) AS unread_count
+         FROM community_channels cc
+         LEFT JOIN community_messages cm ON cm.id = (
+           SELECT id FROM community_messages WHERE channel_id = cc.id ORDER BY created_at DESC LIMIT 1
+         )
+         LEFT JOIN users u ON cm.user_id = u.id
+         ORDER BY COALESCE(cm.created_at, cc.created_at) DESC
          LIMIT 20`
       )
       .bind(session.userId, session.userId)
       .all();
 
-    const commMap = new Map<string, ConversationItem>();
     (commChats as any[]).forEach((r) => {
       const chId = r.channel_id;
-      if (!commMap.has(chId)) {
-        let createdTs = Number(r.created_at);
-        if (isNaN(createdTs) || createdTs <= 0) {
-          createdTs = Math.floor(new Date(r.created_at).getTime() / 1000) || 0;
-        }
+      const unread = Number(r.unread_count) || 0;
+      totalUnread += unread;
 
-        commMap.set(chId, {
-          id: `comm_conv_${chId}`,
-          category: 'COMMUNITY',
-          partnerId: chId,
-          partnerName: `🌐 #${r.channelName}`,
-          partnerEmail: 'Community Channel Chat',
-          partnerAvatar: null,
-          partnerUserType: 'COMMUNITY',
-          lastMessage: `${r.senderName}: "${r.message}"`,
-          lastMessageTime: createdTs,
-          lastMessageSenderId: r.user_id,
-          unreadCount: 1,
-          targetUrl: `/dashboard/community?channelId=${chId}`,
-        });
+      let rawTs = Number(r.last_created_at);
+      if (isNaN(rawTs) || rawTs <= 0) {
+        rawTs = Math.floor(new Date(r.last_created_at).getTime() / 1000) || 0;
       }
-    });
+      const timeMs = rawTs > 0 ? (rawTs > 1e11 ? rawTs : rawTs * 1000) : Date.now();
 
-    list.push(...Array.from(commMap.values()));
+      let lastMsgText = 'Belum ada pesan di channel';
+      if (r.last_message) {
+        const sender = r.last_sender_name ? `${r.last_sender_name}: ` : '';
+        lastMsgText = `${sender}"${r.last_message}"`;
+      }
+
+      list.push({
+        id: `comm_conv_${chId}`,
+        category: 'COMMUNITY',
+        partnerId: chId,
+        partnerName: `🌐 #${r.channel_name}`,
+        partnerEmail: 'Community Channel Chat',
+        partnerAvatar: null,
+        partnerUserType: 'COMMUNITY',
+        lastMessage: lastMsgText,
+        lastMessageTime: timeMs,
+        lastMessageSenderId: r.last_sender_id || '',
+        unreadCount: unread,
+        targetUrl: `/dashboard/community?channelId=${chId}`,
+      });
+    });
   } catch (err) {
     console.error('Error fetching Community Chats for Messenger:', err);
   }
@@ -630,15 +682,22 @@ export async function markWorkspaceChatReadAction(workspaceId: string): Promise<
 
   const db = await getDB();
   try {
-    await db
-      .prepare(
-        `INSERT INTO workspace_chat_reads (workspace_id, user_id, last_read_at)
-         VALUES (?, ?, CURRENT_TIMESTAMP)
-         ON CONFLICT (workspace_id, user_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP`
-      )
-      .bind(workspaceId, session.userId)
-      .run();
-  } catch {}
+    const chats = (await db
+      .prepare('SELECT id FROM workspace_chats WHERE workspace_id = ?')
+      .bind(workspaceId)
+      .all()) as any;
+
+    const rows = chats.results || [];
+    const now = Math.floor(Date.now() / 1000);
+    for (const r of rows) {
+      await db
+        .prepare('INSERT OR REPLACE INTO workspace_chat_reads (chat_id, user_id, read_at) VALUES (?, ?, ?)')
+        .bind(r.id, session.userId, now)
+        .run();
+    }
+  } catch (err) {
+    console.error('Error marking workspace chat as read:', err);
+  }
 
   return { success: true };
 }
