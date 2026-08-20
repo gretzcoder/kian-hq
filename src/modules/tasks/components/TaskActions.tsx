@@ -637,6 +637,19 @@ export default function TaskActions({
                               />
                             )}
 
+                            {/* Collapsible Appreciation Note */}
+                            {['APPROVED', 'DONE', 'PUBLISHED'].includes(assign.status) && (() => {
+                              const note = cleanAppreciationNote((assign as any).appreciation_note);
+                              if (!note) return null;
+                              return (
+                                <CollapsibleNoteViewer
+                                  content={note}
+                                  badgeLabel="✨ Apresiasi"
+                                  type="APPRECIATION"
+                                />
+                              );
+                            })()}
+
                             {/* Clean Consolidated QC Approval Indicator */}
                             {['WAITING_REVIEW', 'APPROVED'].includes(assign.status) && (() => {
                               const isMentorWs = workspaceType === 'MENTOR';
