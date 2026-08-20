@@ -141,6 +141,8 @@ interface TaskActionsProps {
   taskDeadline?: number | null;
   taskExtendedDeadline?: number | null;
   taskType?: string;
+  taskDescription?: string | null;
+  isDirectBrief?: boolean;
   workspaceType?: string;
   assignments: TaskAssignment[];
   currentUserId: string;
@@ -173,6 +175,8 @@ export default function TaskActions({
   taskDeadline,
   taskExtendedDeadline,
   taskType,
+  taskDescription,
+  isDirectBrief = false,
   workspaceType,
   assignments,
   currentUserId,
@@ -367,7 +371,10 @@ export default function TaskActions({
   };
 
   // Identify Direct Brief & OJT assignments
-  const isDirectBriefTask = taskType === 'DIRECT_BRIEF';
+  const isDirectBriefTask =
+    taskType === 'DIRECT_BRIEF' ||
+    isDirectBrief ||
+    Boolean(taskDescription && taskDescription.includes('[DIRECT_BRIEF]'));
   const ojtAssignments = assignments.filter((a) => ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(a.assignment_role));
   const isOjtTask = !isDirectBriefTask && (isOjt || ojtAssignments.length > 0);
 

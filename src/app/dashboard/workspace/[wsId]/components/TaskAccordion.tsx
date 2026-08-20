@@ -383,43 +383,54 @@ export default function TaskAccordion({
                 isOpen ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0'
               }`}
             >
-              <div className="px-5 pb-5">
-                {/* Description when expanded */}
-                {task.description && (
-                  <div className="mb-4 text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
-                    <MarkdownViewer content={task.description.replace('[DIRECT_BRIEF]', '')} />
-                  </div>
-                )}
-                {/* Assignments + Actions */}
-                <TaskActions
-                  taskId={task.id}
-                  taskType={task.task_type}
-                  workspaceType={workspaceType}
-                  assignments={taskAssignments}
-                  currentUserId={currentUserId}
-                  canDelete={canDeleteTask}
-                  isLeader={isLeader}
-                  isMentor={isMentor}
-                  isCoordinator={isCoordinator}
-                  isOjt={isOjtWorkspace}
-                />
-              </div>
+              {(() => {
+                const isDirectBriefTask = task.task_type === 'DIRECT_BRIEF' || Boolean(task.description && task.description.includes('[DIRECT_BRIEF]'));
+                return (
+                  <>
+                    <div className="px-5 pb-5">
+                      {/* Description when expanded */}
+                      {task.description && (
+                        <div className="mb-4 text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
+                          <MarkdownViewer content={task.description.replace('[DIRECT_BRIEF]', '')} />
+                        </div>
+                      )}
+                      {/* Assignments + Actions */}
+                      <TaskActions
+                        taskId={task.id}
+                        taskTitle={task.title}
+                        taskDeadline={task.deadline}
+                        taskExtendedDeadline={task.extended_deadline}
+                        taskType={task.task_type}
+                        taskDescription={task.description}
+                        isDirectBrief={isDirectBriefTask}
+                        workspaceType={workspaceType}
+                        assignments={taskAssignments}
+                        currentUserId={currentUserId}
+                        canDelete={canDeleteTask}
+                        isLeader={isLeader}
+                        isMentor={isMentor}
+                        isCoordinator={isCoordinator}
+                        isOjt={isOjtWorkspace}
+                      />
+                    </div>
 
-              {/* Assignment Panel — Leader/Mentor only (Not needed for Direct Brief Tasks) */}
-              {canAssignTask && task.task_type !== 'DIRECT_BRIEF' && (
-                <div className="border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/20 px-5 py-4">
-                  <TaskAssignmentPanel
-                    taskId={task.id}
-                    taskType={task.task_type}
-                    taskDeadline={task.deadline}
-                    existingAssignments={taskAssignments}
-                    users={users}
-                    members={members}
-                    isOjt={isOjtWorkspace}
-                  />
-                </div>
-              )}
-
+                    {/* Assignment Panel — Leader/Mentor only (Not needed for Direct Brief Tasks) */}
+                    {canAssignTask && !isDirectBriefTask && (
+                      <div className="border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/20 px-5 py-4">
+                        <TaskAssignmentPanel
+                          taskId={task.id}
+                          taskType={task.task_type}
+                          taskDeadline={task.deadline}
+                          existingAssignments={taskAssignments}
+                          users={users}
+                          members={members}
+                          isOjt={isOjtWorkspace}
+                        />
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         );
