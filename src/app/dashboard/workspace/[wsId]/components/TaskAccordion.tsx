@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskActions from '@/modules/tasks/components/TaskActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
+import TiptapEditor from '@/components/editor/TiptapEditor';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
 import { updateTask, deleteTask } from '@/modules/tasks/actions';
 
@@ -522,6 +523,11 @@ function EditTaskModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const rawDesc = task.description ?? '';
+  const isDirectBrief = rawDesc.includes('[DIRECT_BRIEF]') || task.task_type === 'DIRECT_BRIEF';
+  const initialHtml = rawDesc.replace(/^\[DIRECT_BRIEF\]\s*/i, '');
+  const [description, setDescription] = useState(initialHtml);
+
   const defaultStartAt = formatDatetimeLocalInput(task.start_at);
   const defaultDeadline = formatDatetimeLocalInput(task.deadline);
 
@@ -533,6 +539,11 @@ function EditTaskModal({
     const formData = new FormData(e.currentTarget);
     formData.set('priority', priority);
     formData.set('outputType', outputType);
+
+    const finalDescription = isDirectBrief
+      ? `[DIRECT_BRIEF]\n${description}`
+      : description;
+    formData.set('description', finalDescription);
 
     try {
       const res = await updateTask(task.id, formData);
@@ -550,7 +561,7 @@ function EditTaskModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-      <div className="w-full max-w-xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 my-auto text-left" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-2xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 my-auto text-left" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-bold">
@@ -558,7 +569,7 @@ function EditTaskModal({
             </div>
             <div>
               <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">Edit Tugas</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Perbarui judul, instruksi, tenggat waktu, atau tanggal mulai tugas.</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Perbarui judul, instruksi brief, tenggat waktu, atau tanggal mulai tugas.</p>
             </div>
           </div>
           <button
@@ -591,14 +602,15 @@ function EditTaskModal({
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-              Deskripsi & Instruksi
+            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+              <span>Deskripsi & Instruksi Brief</span>
+              <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">✨ WYSIWYG Rich Text Editor</span>
             </label>
-            <textarea
-              name="description"
-              defaultValue={task.description ?? ''}
-              rows={3}
-              className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all resize-none"
+            <TiptapEditor
+              value={description}
+              onChange={setDescription}
+              placeholder="Edit rincian brief tugas dengan format lengkap..."
+              minHeight="min-h-[220px]"
             />
           </div>
 
