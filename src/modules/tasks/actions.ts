@@ -812,9 +812,9 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
   const task = await db
-    .prepare('SELECT id, title, project_id, workspace_id, status, task_type FROM tasks WHERE id = ?')
+    .prepare('SELECT id, title, project_id, workspace_id, status, task_type, created_by FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string } | null;
+    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null } | null;
 
   if (!task) return { success: false, error: 'Task not found.' };
 
@@ -847,10 +847,11 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
 
   const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assignment.assignment_role);
   const isMentorWs = task.task_type === 'MENTOR' || (await db.prepare('SELECT workspace_type FROM workspaces WHERE id = ?').bind(workspaceId).first() as any)?.workspace_type === 'MENTOR';
+  const isTaskCreator = (task.created_by != null && task.created_by === session.userId) || (assignment as any).assigned_by === session.userId;
 
   if (isMentorWs) {
-    if (!isCoordinator) {
-      return { success: false, error: 'Forbidden: Hanya Koordinator atau Admin yang dapat memberikan penilaian/QC pada workspace Mentor.' };
+    if (!isCoordinator && !isTaskCreator) {
+      return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat memberikan penilaian/QC pada workspace Mentor.' };
     }
   } else if (isOjtRole) {
     if (!isLeader && !isMentor && !isCoordinator) {
@@ -990,9 +991,9 @@ export async function updateSparks(assignmentId: string, sparks: number) {
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
   const task = await db
-    .prepare('SELECT workspace_id FROM tasks WHERE id = ?')
+    .prepare('SELECT workspace_id, task_type, created_by FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { workspace_id: string | null } | null;
+    .first() as { workspace_id: string | null; task_type: string; created_by: string | null } | null;
 
   const workspaceId = task?.workspace_id || '';
 
@@ -1009,7 +1010,14 @@ export async function updateSparks(assignmentId: string, sparks: number) {
 
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
-  if (!isLeader && !isMentor && !isCoordinator) {
+  const isMentorWs = task?.task_type === 'MENTOR' || (await db.prepare('SELECT workspace_type FROM workspaces WHERE id = ?').bind(workspaceId).first() as any)?.workspace_type === 'MENTOR';
+  const isTaskCreator = (task?.created_by != null && task.created_by === session.userId) || (assignment as any).assigned_by === session.userId;
+
+  if (isMentorWs) {
+    if (!isCoordinator && !isTaskCreator) {
+      return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat mengubah Sparks pada workspace Mentor.' };
+    }
+  } else if (!isLeader && !isMentor && !isCoordinator) {
     return { success: false, error: 'Only Leader, Mentor, or Coordinator can update Sparks.' };
   }
 
@@ -1058,9 +1066,9 @@ export async function requestRevision(assignmentId: string, note: string) {
   }
 
   const task = await db
-    .prepare('SELECT id, title, project_id, workspace_id, status, task_type FROM tasks WHERE id = ?')
+    .prepare('SELECT id, title, project_id, workspace_id, status, task_type, created_by FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string } | null;
+    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null } | null;
 
   if (!task) return { success: false, error: 'Task not found.' };
 
@@ -1068,8 +1076,15 @@ export async function requestRevision(assignmentId: string, note: string) {
   const ctx = await getSessionContext(session.userId);
 
   const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assignment.assignment_role);
+  const isMentorWs = task.task_type === 'MENTOR' || (await db.prepare('SELECT workspace_type FROM workspaces WHERE id = ?').bind(workspaceId).first() as any)?.workspace_type === 'MENTOR';
+  const isTaskCreator = (task.created_by != null && task.created_by === session.userId) || (assignment as any).assigned_by === session.userId;
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM'));
 
-  if (isOjtRole) {
+  if (isMentorWs) {
+    if (!isCoordinator && !isTaskCreator) {
+      return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat meminta revisi pada workspace Mentor.' };
+    }
+  } else if (isOjtRole) {
     const isLeader = (await db
       .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
       .bind(workspaceId, session.userId)
@@ -1079,8 +1094,6 @@ export async function requestRevision(assignmentId: string, note: string) {
       .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
       .bind(workspaceId, session.userId)
       .first()) !== null;
-
-    const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
     if (!isLeader && !isMentor && !isCoordinator) {
       throw new Error('Forbidden: You do not have permission to request revision for this step.');
@@ -1280,9 +1293,9 @@ export async function declineAssignment(assignmentId: string, note: string) {
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
   const task = await db
-    .prepare('SELECT id, project_id, workspace_id, status FROM tasks WHERE id = ?')
+    .prepare('SELECT id, project_id, workspace_id, status, task_type, created_by FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; project_id: string; workspace_id: string | null; status: string } | null;
+    .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null } | null;
 
   if (!task) return { success: false, error: 'Task not found.' };
 
@@ -1290,8 +1303,15 @@ export async function declineAssignment(assignmentId: string, note: string) {
   const ctx = await getSessionContext(session.userId);
 
   const isOjtRole = ['RESEARCHER', 'PLANNER', 'CREATOR'].includes(assignment.assignment_role);
+  const isMentorWs = task.task_type === 'MENTOR' || (await db.prepare('SELECT workspace_type FROM workspaces WHERE id = ?').bind(workspaceId).first() as any)?.workspace_type === 'MENTOR';
+  const isTaskCreator = (task.created_by != null && task.created_by === session.userId) || (assignment as any).assigned_by === session.userId;
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM'));
 
-  if (isOjtRole) {
+  if (isMentorWs) {
+    if (!isCoordinator && !isTaskCreator) {
+      return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat menolak karya pada workspace Mentor.' };
+    }
+  } else if (isOjtRole) {
     const isLeader = (await db
       .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
       .bind(workspaceId, session.userId)
@@ -1301,8 +1321,6 @@ export async function declineAssignment(assignmentId: string, note: string) {
       .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
       .bind(workspaceId, session.userId)
       .first()) !== null;
-
-    const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
     if (!isLeader && !isMentor && !isCoordinator) {
       throw new Error('Forbidden: You do not have permission to decline this step.');

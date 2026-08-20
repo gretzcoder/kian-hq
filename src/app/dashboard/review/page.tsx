@@ -121,10 +121,11 @@ export default async function ReviewPage() {
       return false;
     }
 
-    // ── Mentor Workspaces: ONLY Coordinators/Admins evaluate submissions ──
+    // ── Mentor Workspaces: ONLY Coordinators/Admins OR Task Creator evaluate submissions ──
     const isMentorWs = r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR';
     if (isMentorWs) {
-      return isCoordinator && r.coordinator_approved === 0;
+      const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
+      return (isCoordinator || isTaskCreator) && r.coordinator_approved === 0;
     }
 
     // ── Regular / Troopers tasks: show if user is Coordinator, Mentor, or Leader and step is pending ──

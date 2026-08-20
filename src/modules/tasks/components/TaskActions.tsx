@@ -156,6 +156,7 @@ interface TaskActionsProps {
   taskExtendedDeadline?: number | null;
   taskType?: string;
   taskDescription?: string | null;
+  taskCreatedBy?: string | null;
   isDirectBrief?: boolean;
   workspaceType?: string;
   assignments: TaskAssignment[];
@@ -190,6 +191,7 @@ export default function TaskActions({
   taskExtendedDeadline,
   taskType,
   taskDescription,
+  taskCreatedBy,
   isDirectBrief = false,
   workspaceType,
   assignments,
@@ -211,6 +213,8 @@ export default function TaskActions({
   const [revisionInputs, setRevisionInputs] = useState<Record<string, string>>({});
   const [showRevisionMap, setShowRevisionMap] = useState<Record<string, boolean>>({});
   const [errorMap, setErrorMap] = useState<Record<string, string>>({});
+
+  const isTaskCreator = Boolean(taskCreatedBy && taskCreatedBy === currentUserId);
 
 
   const getDrivePreviewUrl = (url: string) => {
@@ -865,19 +869,19 @@ export default function TaskActions({
                                 </>
                               )}
 
-                              {/* QC Approver Actions: Only non-submitter, and for MENTOR workspace ONLY Coordinator */}
+                              {/* QC Approver Actions: Only non-submitter, and for MENTOR workspace ONLY Coordinator or Task Creator */}
                               {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(assign.status) &&
                                 assign.user_id !== currentUserId &&
-                                (isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)) && (
+                                (isMentorWs ? (isCoordinator || isTaskCreator) : (isLeader || isMentor || isCoordinator)) && (
                                 <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
                                   <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                                     Persetujuan QC & Pemberian Sparks
                                   </p>
                                   <ReviewActions
                                     assignmentId={assign.id}
-                                    canRequestRevision={isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)}
-                                    canAwardBadge={isMentorWs ? isCoordinator : (isMentor || isCoordinator)}
-                                    isStaffOrCoord={isCoordinator}
+                                    canRequestRevision={isMentorWs ? (isCoordinator || isTaskCreator) : (isLeader || isMentor || isCoordinator)}
+                                    canAwardBadge={isMentorWs ? (isCoordinator || isTaskCreator) : (isMentor || isCoordinator)}
+                                    isStaffOrCoord={isCoordinator || isTaskCreator}
                                     mentorApproved={assign.mentor_approved ?? 0}
                                     coordinatorApproved={assign.coordinator_approved ?? 0}
                                     isMentorWs={isMentorWs}
@@ -1129,16 +1133,16 @@ export default function TaskActions({
                       {/* QC Approver Actions for Reviewer */}
                       {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(categoryAss.status) &&
                         categoryAss.user_id !== currentUserId &&
-                        (isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)) && (
+                        (isMentorWs ? (isCoordinator || isTaskCreator) : (isLeader || isMentor || isCoordinator)) && (
                         <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
                           <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                             Persetujuan QC & Pemberian Sparks
                           </p>
                           <ReviewActions
                             assignmentId={categoryAss.id}
-                            canRequestRevision={isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)}
-                            canAwardBadge={isMentorWs ? isCoordinator : (isMentor || isCoordinator)}
-                            isStaffOrCoord={isCoordinator}
+                            canRequestRevision={isMentorWs ? (isCoordinator || isTaskCreator) : (isLeader || isMentor || isCoordinator)}
+                            canAwardBadge={isMentorWs ? (isCoordinator || isTaskCreator) : (isMentor || isCoordinator)}
+                            isStaffOrCoord={isCoordinator || isTaskCreator}
                             mentorApproved={categoryAss.mentor_approved ?? 0}
                             coordinatorApproved={categoryAss.coordinator_approved ?? 0}
                             isMentorWs={isMentorWs}
@@ -1379,19 +1383,19 @@ export default function TaskActions({
                   )}
                 </div>
               )}
-              {/* QC Approver Actions: Only non-submitter, and for MENTOR workspace ONLY Coordinator */}
+              {/* QC Approver Actions: Only non-submitter, and for MENTOR workspace ONLY Coordinator or Task Creator */}
               {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status) &&
                 a.user_id !== currentUserId &&
-                (isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)) && (
+                (isMentorWs ? (isCoordinator || isTaskCreator) : (isLeader || isMentor || isCoordinator)) && (
                 <div className="space-y-3 bg-zinc-50 dark:bg-zinc-900/40 rounded-xl p-3 border border-zinc-100 dark:border-zinc-800/60 mt-2">
                   <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
                     Persetujuan QC & Pemberian Sparks
                   </p>
                   <ReviewActions
                     assignmentId={a.id}
-                    canRequestRevision={isMentorWs ? isCoordinator : (isLeader || isMentor || isCoordinator)}
-                    canAwardBadge={isMentorWs ? isCoordinator : (isMentor || isCoordinator)}
-                    isStaffOrCoord={isCoordinator}
+                    canRequestRevision={isMentorWs ? (isCoordinator || isTaskCreator) : (isLeader || isMentor || isCoordinator)}
+                    canAwardBadge={isMentorWs ? (isCoordinator || isTaskCreator) : (isMentor || isCoordinator)}
+                    isStaffOrCoord={isCoordinator || isTaskCreator}
                     mentorApproved={a.mentor_approved ?? 0}
                     coordinatorApproved={a.coordinator_approved ?? 0}
                     isMentorWs={isMentorWs}

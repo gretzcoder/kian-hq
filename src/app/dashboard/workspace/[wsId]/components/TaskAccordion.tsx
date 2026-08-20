@@ -408,6 +408,7 @@ export default function TaskAccordion({
                         taskExtendedDeadline={task.extended_deadline}
                         taskType={task.task_type}
                         taskDescription={task.description}
+                        taskCreatedBy={task.created_by}
                         isDirectBrief={isDirectBriefTask}
                         workspaceType={workspaceType}
                         assignments={taskAssignments}
