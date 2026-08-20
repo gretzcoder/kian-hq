@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskActions from '@/modules/tasks/components/TaskActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
-import TiptapEditor from '@/components/editor/TiptapEditor';
+import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
 import { updateTask, deleteTask } from '@/modules/tasks/actions';
 
@@ -391,8 +391,13 @@ export default function TaskAccordion({
                     <div className="px-5 pb-5">
                       {/* Description when expanded */}
                       {task.description && (
-                        <div className="mb-4 text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
-                          <MarkdownViewer content={task.description.replace('[DIRECT_BRIEF]', '')} />
+                        <div className="mb-4">
+                          <DocxDocumentViewer
+                            content={task.description}
+                            docTitle={isDirectBriefTask ? "Dokumen Brief Direct (.docx)" : "Dokumen Brief Tugas (.docx)"}
+                            badgeLabel={isDirectBriefTask ? "⚡ Brief Direct Koordinator" : "Brief Tugas"}
+                            roleName={task.title}
+                          />
                         </div>
                       )}
                       {/* Assignments + Actions */}
@@ -560,9 +565,10 @@ function EditTaskModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-      <div className="w-full max-w-2xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-5 my-auto text-left" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 pb-4">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-3xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] text-left" onClick={(e) => e.stopPropagation()}>
+        {/* Sticky Header */}
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 px-6 py-4 shrink-0 bg-white dark:bg-[#09090b] rounded-t-3xl">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-bold">
               ✏️
@@ -575,19 +581,20 @@ function EditTaskModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-sm transition-all"
+            className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-sm transition-all cursor-pointer"
           >
             ✕
           </button>
         </div>
 
-        {error && (
-          <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
-            ⚠️ {error}
-          </p>
-        )}
+        {/* Scrollable Form Content */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+          {error && (
+            <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
+              ⚠️ {error}
+            </p>
+          )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
               Judul Tugas <span className="text-red-500">*</span>
@@ -610,7 +617,7 @@ function EditTaskModal({
               value={description}
               onChange={setDescription}
               placeholder="Edit rincian brief tugas dengan format lengkap..."
-              minHeight="min-h-[220px]"
+              minHeight="min-h-[180px]"
             />
           </div>
 
@@ -644,18 +651,19 @@ function EditTaskModal({
             </div>
           </div>
 
-          <div className="flex gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80">
+          {/* Sticky Action Footer */}
+          <div className="flex gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 sticky bottom-0 bg-white dark:bg-[#09090b] z-10 -mx-6 -mb-6 p-6 rounded-b-3xl">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+              className="flex-1 py-3 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400 cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 py-3 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-md shadow-purple-500/20 disabled:opacity-60"
+              className="flex-1 py-3 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-md shadow-purple-500/20 disabled:opacity-60 cursor-pointer"
             >
               {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
             </button>
