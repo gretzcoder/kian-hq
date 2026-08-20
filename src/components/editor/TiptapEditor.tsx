@@ -610,7 +610,10 @@ export function DocxDocumentViewer({
 }) {
   if (!content) return null;
 
-  const contentClean = content.replace(/^\[DIRECT_BRIEF\]\s*/i, '').trim();
+  const contentClean = content
+    .replace(/^\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]\s*/i, '')
+    .replace(/^\[DIRECT_BRIEF\]\s*/i, '')
+    .trim();
   const textOnly = contentClean.replace(/<[^>]*>/g, '').trim();
   const wordCount = textOnly ? textOnly.split(/\s+/).filter(Boolean).length : 0;
   const charCount = textOnly.length;

@@ -12,6 +12,20 @@ import { cleanAppreciationNote } from '@/lib/noteUtils';
 import SendReminderButton from '@/components/SendReminderButton';
 import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 
+export function getDirectBriefCategories(description: string | null | undefined): string[] {
+  if (!description) return [];
+  const match = description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]/);
+  if (match && match[1]) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (Array.isArray(parsed)) {
+        return parsed.map((c) => String(c).trim()).filter(Boolean);
+      }
+    } catch {}
+  }
+  return [];
+}
+
 // ─── CreatorDrivePreview ────────────────────────────────────────────────────
 // Aspect-ratio aware, user-friendly Google Drive preview widget for Creator step
 export function CreatorDrivePreview({ url }: { url: string }) {
@@ -263,10 +277,18 @@ export default function TaskActions({
     const url = urlInputs[assignmentId];
     if (!url?.trim()) return;
 
+    const categories = getDirectBriefCategories(taskDescription);
+    const selectedCat = categoryInputs[assignmentId];
+    if (isDirectBriefTask && categories.length > 0 && (!selectedCat || !selectedCat.trim())) {
+      setErrorMap((prev) => ({ ...prev, [assignmentId]: 'Silakan pilih salah satu kategori output yang tersedia terlebih dahulu.' }));
+      toast('Pilih salah satu kategori output yang tersedia terlebih dahulu.', 'warning');
+      return;
+    }
+
     setLoading(assignmentId);
     setErrorMap((prev) => ({ ...prev, [assignmentId]: '' }));
     try {
-      const res = await submitResult(assignmentId, url.trim());
+      const res = await submitResult(assignmentId, url.trim(), selectedCat);
       if (res.success) {
         setShowSubmitMap((prev) => ({ ...prev, [assignmentId]: false }));
         toast('Hasil pengerjaan berhasil dikirim untuk di-review!', 'success');
@@ -380,17 +402,28 @@ export default function TaskActions({
 
   // Direct Brief submission state
   const [directUrlInput, setDirectUrlInput] = useState('');
+  const [selectedDirectCategory, setSelectedDirectCategory] = useState('');
+  const [categoryInputs, setCategoryInputs] = useState<Record<string, string>>({});
   const [showDirectForm, setShowDirectForm] = useState(false);
 
   const handleDirectSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!directUrlInput.trim()) return;
+
+    const categories = getDirectBriefCategories(taskDescription);
+    if (categories.length > 0 && (!selectedDirectCategory || !selectedDirectCategory.trim())) {
+      alert('Silakan pilih salah satu kategori output yang tersedia terlebih dahulu.');
+      return;
+    }
+
     setLoading('direct_submit');
     try {
-      const res = await submitDirectTaskResult(taskId, directUrlInput.trim());
+      const res = await submitDirectTaskResult(taskId, directUrlInput.trim(), selectedDirectCategory);
       if (res.success) {
         setDirectUrlInput('');
+        setSelectedDirectCategory('');
         setShowDirectForm(false);
+        toast('Hasil karya berhasil dikirim untuk di-review!', 'success');
       } else {
         alert(res.error ?? 'Gagal mengirimkan hasil karya.');
       }
@@ -899,6 +932,7 @@ export default function TaskActions({
       if (!canUserSubmitDirect) return null; // Koordinator / Admin does NOT see submit form
 
       const mySubmission = assignments.find(a => a.user_id === currentUserId && (a.result_url || a.status !== 'ASSIGNED'));
+      const categories = getDirectBriefCategories(taskDescription);
 
       if (mySubmission && !showDirectForm) {
         return (
@@ -914,7 +948,7 @@ export default function TaskActions({
             <button
               type="button"
               onClick={() => setShowDirectForm(true)}
-              className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/20"
+              className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/20 cursor-pointer"
             >
               📤 Kirim Ulang (Resubmit)
             </button>
@@ -933,26 +967,59 @@ export default function TaskActions({
             </span>
           </div>
 
-          <form onSubmit={handleDirectSubmit} className="flex gap-2">
-            <input
-              type="url"
-              value={directUrlInput}
-              onChange={(e) => setDirectUrlInput(e.target.value)}
-              placeholder="Paste URL Karya (Google Drive / Figma / Canva / Youtube)..."
-              required
-              className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
-            />
-            <button
-              type="submit"
-              disabled={loading === 'direct_submit'}
-              className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 shrink-0"
-            >
-              {loading === 'direct_submit' ? 'Mengirim...' : 'Kirim Submit'}
-            </button>
+          <form onSubmit={handleDirectSubmit} className="space-y-3">
+            {categories.length > 0 && (
+              <div className="space-y-1">
+                <label className="block text-[10px] font-extrabold text-purple-700 dark:text-purple-300 uppercase tracking-wide">
+                  Pilih Kategori Output Karya Yang Dikerjakan <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedDirectCategory}
+                  onChange={(e) => setSelectedDirectCategory(e.target.value)}
+                  required
+                  className="w-full bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
+                >
+                  <option value="">-- Pilih Kategori Output Karya --</option>
+                  {categories.map((cat) => {
+                    const claimedAss = displayAssignments.find(
+                      (a) => (a.result_url || a.status !== 'ASSIGNED') && (a.assignment_role === cat || a.assignment_role === `Kategori: ${cat}` || a.assignment_role.includes(cat))
+                    );
+                    const isClaimedByMe = mySubmission && (mySubmission.assignment_role === cat || mySubmission.assignment_role === `Kategori: ${cat}`);
+                    const isClaimedByOther = claimedAss && !isClaimedByMe && (claimedAss.user_id !== currentUserId);
+
+                    return (
+                      <option key={cat} value={cat} disabled={Boolean(isClaimedByOther)}>
+                        {isClaimedByOther ? `❌ ${cat} (Sudah diambil oleh ${claimedAss.user_name || 'Peserta lain'})` : `✓ ${cat}`}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={directUrlInput}
+                onChange={(e) => setDirectUrlInput(e.target.value)}
+                placeholder="Paste URL Karya (Google Drive / Figma / Canva / Youtube)..."
+                required
+                className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+              />
+              <button
+                type="submit"
+                disabled={loading === 'direct_submit'}
+                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 shrink-0 cursor-pointer active:scale-95"
+              >
+                {loading === 'direct_submit' ? 'Mengirim...' : 'Kirim Submit'}
+              </button>
+            </div>
           </form>
         </div>
       );
     };
+
+    const categories = getDirectBriefCategories(taskDescription);
 
     if (isDirectBriefTask && displayAssignments.length === 0) {
       return (
@@ -974,6 +1041,55 @@ export default function TaskActions({
 
     return (
       <div className="space-y-3">
+        {/* Category Slots Overview Card for Direct Brief */}
+        {isDirectBriefTask && categories.length > 0 && (
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-blue-500/10 border border-blue-500/20 space-y-2.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs font-black text-blue-900 dark:text-blue-200 flex items-center gap-1.5 uppercase tracking-wide">
+                <span>🎯</span> Slot Kategori Output ({categories.length} Kategori)
+              </span>
+              <span className="text-[10px] text-blue-600 dark:text-blue-400 font-extrabold bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
+                1 Kategori = 1 Submitter (Eksklusif)
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {categories.map((cat, idx) => {
+                const claimedAss = displayAssignments.find(
+                  (a) => (a.result_url || a.status !== 'ASSIGNED') && (a.assignment_role === cat || a.assignment_role === `Kategori: ${cat}` || a.assignment_role.includes(cat))
+                );
+                return (
+                  <div
+                    key={idx}
+                    className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                      claimedAss
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+                        : 'bg-white/80 dark:bg-zinc-900/80 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className={`w-5 h-5 rounded-md text-[10px] font-black flex items-center justify-center shrink-0 ${
+                        claimedAss ? 'bg-emerald-500 text-white' : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
+                      }`}>
+                        #{idx + 1}
+                      </span>
+                      <span className="font-bold truncate">{cat}</span>
+                    </div>
+                    {claimedAss ? (
+                      <span className="text-[9px] font-extrabold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-md shrink-0 border border-emerald-500/30">
+                        ✓ {claimedAss.user_name || 'Taken'}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-md shrink-0">
+                        Tersedia
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {isDirectBriefTask && renderDirectBriefSubmitBox()}
         <div className="flex items-center justify-between">
           <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
@@ -987,7 +1103,8 @@ export default function TaskActions({
         </div>
         {displayAssignments.map((a) => {
           const isMe = a.user_id === currentUserId;
-          const roleLabel = isDirectBriefTask ? 'Submitter' : a.assignment_role;
+          const isCategoryRole = isDirectBriefTask && categories.length > 0 && categories.some(c => a.assignment_role.includes(c));
+          const roleLabel = isDirectBriefTask ? (isCategoryRole ? a.assignment_role : 'Submitter') : a.assignment_role;
           const status = statusColors[a.status] ?? statusColors.DRAFT;
           return (
             <div
@@ -999,11 +1116,9 @@ export default function TaskActions({
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  {!isDirectBriefTask && (
-                    <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border text-purple-600 bg-purple-500/10 border-purple-500/15">
-                      {roleLabel}
-                    </span>
-                  )}
+                  <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border text-purple-600 bg-purple-500/10 border-purple-500/15">
+                    {roleLabel}
+                  </span>
                   <span className="text-zinc-900 dark:text-zinc-100 font-extrabold text-sm flex items-center gap-1.5">
                     <span>👤</span> {a.user_name ?? 'Peserta'}
                   </span>
@@ -1038,28 +1153,58 @@ export default function TaskActions({
               {isMe && ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(a.status) && (
                 <div className="pt-1">
                   {showSubmitMap[a.id] ? (
-                    <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="flex gap-2">
-                      <input
-                        type="url"
-                        value={urlInputs[a.id] ?? ''}
-                        onChange={(e) => setUrlInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
-                        placeholder="Paste Google Drive / Figma / Result URL..."
-                        required
-                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
-                      />
-                      <button
-                        type="submit"
-                        disabled={loading === a.id}
-                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm"
-                      >
-                        {loading === a.id ? '...' : 'Submit'}
-                      </button>
+                    <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="space-y-2">
+                      {categories.length > 0 && (
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                            Pilih Kategori Output Karya <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={categoryInputs[a.id] || ''}
+                            onChange={(e) => setCategoryInputs(prev => ({ ...prev, [a.id]: e.target.value }))}
+                            required
+                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3.5 py-2.5 font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                          >
+                            <option value="">-- Pilih Kategori Output Karya --</option>
+                            {categories.map((cat) => {
+                              const claimedAss = displayAssignments.find(
+                                (c) => (c.result_url || c.status !== 'ASSIGNED') && (c.assignment_role === cat || c.assignment_role === `Kategori: ${cat}`)
+                              );
+                              const isClaimedByMe = a.assignment_role === cat || a.assignment_role === `Kategori: ${cat}`;
+                              const isClaimedByOther = claimedAss && !isClaimedByMe && (claimedAss.user_id !== currentUserId);
+
+                              return (
+                                <option key={cat} value={cat} disabled={Boolean(isClaimedByOther)}>
+                                  {isClaimedByOther ? `❌ ${cat} (Sudah diambil oleh ${claimedAss.user_name || 'Peserta lain'})` : `✓ ${cat}`}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          value={urlInputs[a.id] ?? ''}
+                          onChange={(e) => setUrlInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                          placeholder="Paste Google Drive / Figma / Result URL..."
+                          required
+                          className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
+                        />
+                        <button
+                          type="submit"
+                          disabled={loading === a.id}
+                          className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
+                        >
+                          {loading === a.id ? '...' : 'Submit'}
+                        </button>
+                      </div>
                     </form>
                   ) : (
                     <button
                       type="button"
                       onClick={() => setShowSubmitMap((prev) => ({ ...prev, [a.id]: true }))}
-                      className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98]"
+                      className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer"
                     >
                       {a.status === 'REVISION_REQUESTED' ? '📤 Resubmit Hasil Karya' : '📤 Submit Hasil Karya'}
                     </button>

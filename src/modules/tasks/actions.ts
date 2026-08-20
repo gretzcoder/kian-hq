@@ -121,12 +121,24 @@ export async function createTask(workspaceId: string, formData: FormData) {
   }
 
   const isDirectBrief = (formData.get('isDirectBrief') as string) === 'true' || (formData.get('briefSource') as string) === 'DIRECT_COORDINATOR';
+  const directBriefCategoriesStr = formData.get('directBriefCategories') as string;
+  let parsedCategories: string[] = [];
+  if (directBriefCategoriesStr) {
+    try {
+      parsedCategories = (JSON.parse(directBriefCategoriesStr) as string[]).map(c => String(c).trim()).filter(Boolean);
+    } catch {}
+  }
+
   const briefUrl = (formData.get('briefUrl') as string) || (formData.get('brief_url') as string);
   const assigneeUserId = (formData.get('assigneeUserId') as string) || (formData.get('assigned_user_id') as string);
 
   let finalDescription = description ? description.trim() : '';
-  if (isDirectBrief && !finalDescription.includes('[DIRECT_BRIEF]')) {
-    finalDescription = `[DIRECT_BRIEF]\n${finalDescription}`;
+  if (isDirectBrief) {
+    if (parsedCategories.length > 0) {
+      finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(parsedCategories)}]\n[DIRECT_BRIEF]\n${finalDescription}`;
+    } else if (!finalDescription.includes('[DIRECT_BRIEF]')) {
+      finalDescription = `[DIRECT_BRIEF]\n${finalDescription}`;
+    }
   }
   if (briefUrl && briefUrl.trim() && !finalDescription.includes(briefUrl.trim())) {
     finalDescription = `${finalDescription}\n📎 Link Brief: ${briefUrl.trim()}`;
@@ -523,7 +535,7 @@ export async function startWork(assignmentId: string) {
  * Transitions: IN_PROGRESS → SUBMITTED → IN_REVIEW (auto-chained).
  * Only the assigned user can submit (or anyone with UPLOAD perm).
  */
-export async function submitResult(assignmentId: string, resultUrl: string) {
+export async function submitResult(assignmentId: string, resultUrl: string, selectedCategory?: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
@@ -534,9 +546,9 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
   const db = await getDB();
 
   const assignment = await db
-    .prepare('SELECT id, task_id, user_id, status FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, user_id, status, assignment_role FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as AssignmentRow | null;
+    .first() as (AssignmentRow & { assignment_role: string }) | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
@@ -560,7 +572,7 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
 
     const effectiveDeadline = Math.max(task?.extended_deadline || 0, task?.deadline || 0) || null;
     if (effectiveDeadline && effectiveDeadline < nowMs) {
-      return { success: false, error: 'Tenggat waktu (deadline) tugas ini telah berakhir. Pengumpulan tidak dapat dilakukan.' };
+      return { success: false, error: 'Tenggat waktu (deadline) tugas ini telah berakhir. Pengumpulkan tidak dapat dilakukan.' };
     }
 
     if (task?.parent_task_id) {
@@ -571,6 +583,30 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
 
       if (parent && !['APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(parent.status)) {
         return { success: false, error: 'Cannot submit this task until the prerequisite task is Approved.' };
+      }
+    }
+
+    // Direct Brief Category Claim Validation
+    if (selectedCategory && selectedCategory.trim()) {
+      const cleanCat = selectedCategory.trim();
+      const existingClaim = await db
+        .prepare(`
+          SELECT ta.id, u.name as user_name
+          FROM task_assignments ta
+          JOIN users u ON ta.user_id = u.id
+          WHERE ta.task_id = ?
+            AND ta.id != ?
+            AND (ta.assignment_role = ? OR ta.assignment_role = ?)
+            AND (ta.result_url IS NOT NULL OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED', 'RESUBMITTED', 'SUBMITTED'))
+        `)
+        .bind(assignment.task_id, assignmentId, cleanCat, `Kategori: ${cleanCat}`)
+        .first() as { id: string; user_name: string } | null;
+
+      if (existingClaim) {
+        return {
+          success: false,
+          error: `Kategori output "${cleanCat}" sudah diambil oleh ${existingClaim.user_name || 'peserta lain'}. Silakan pilih kategori output lain yang masih tersedia.`,
+        };
       }
     }
 
@@ -607,16 +643,19 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
     const ctx = await getSessionContext(session.userId);
     const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
+    const updatedRole = selectedCategory && selectedCategory.trim() ? selectedCategory.trim() : assignment.assignment_role;
+
     await db
       .prepare(`
         UPDATE task_assignments
         SET status = ?, result_url = ?, submitted_at = ?, revision_note = NULL,
+            assignment_role = ?,
             lead_approved = CASE WHEN ? THEN 1 ELSE 0 END,
             mentor_approved = CASE WHEN ? THEN 1 ELSE 0 END,
             coordinator_approved = CASE WHEN ? THEN 1 ELSE 0 END
         WHERE id = ?
       `)
-      .bind(nextStatus, resultUrl.trim(), now, isLeader ? 1 : 0, isMentor ? 1 : 0, isCoordinator ? 1 : 0, assignmentId)
+      .bind(nextStatus, resultUrl.trim(), now, updatedRole, isLeader ? 1 : 0, isMentor ? 1 : 0, isCoordinator ? 1 : 0, assignmentId)
       .run();
     if (task) {
       await logWorkflowEvent({
@@ -670,7 +709,7 @@ export async function submitResult(assignmentId: string, resultUrl: string) {
  * to submit a result for a Direct Brief Task.
  * If no assignment exists for the user yet, it auto-creates an assignment row for them!
  */
-export async function submitDirectTaskResult(taskId: string, resultUrl: string) {
+export async function submitDirectTaskResult(taskId: string, resultUrl: string, selectedCategory?: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
@@ -693,8 +732,31 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string) 
     .bind(taskId, session.userId)
     .first() as { id: string; status: string } | null;
 
+  if (selectedCategory && selectedCategory.trim()) {
+    const cleanCat = selectedCategory.trim();
+    const existingClaim = await db
+      .prepare(`
+        SELECT ta.id, u.name as user_name
+        FROM task_assignments ta
+        JOIN users u ON ta.user_id = u.id
+        WHERE ta.task_id = ?
+          AND ta.user_id != ?
+          AND (ta.assignment_role = ? OR ta.assignment_role = ?)
+          AND (ta.result_url IS NOT NULL OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED', 'RESUBMITTED', 'SUBMITTED'))
+      `)
+      .bind(taskId, session.userId, cleanCat, `Kategori: ${cleanCat}`)
+      .first() as { id: string; user_name: string } | null;
+
+    if (existingClaim) {
+      return {
+        success: false,
+        error: `Kategori output "${cleanCat}" telah diambil oleh ${existingClaim.user_name || 'peserta lain'}. Silakan pilih kategori output lain yang masih tersedia.`,
+      };
+    }
+  }
+
   const now = Math.floor(Date.now() / 1000);
-  const defaultRole = task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : 'DESIGNER';
+  const roleValue = selectedCategory && selectedCategory.trim() ? selectedCategory.trim() : (task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : 'DESIGNER');
 
   if (!assignment) {
     const newId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
@@ -704,7 +766,7 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string) 
           (id, task_id, user_id, assignment_role, assigned_by, status, result_url, submitted_at, created_at)
         VALUES (?, ?, ?, ?, ?, 'WAITING_REVIEW', ?, ?, ?)
       `)
-      .bind(newId, taskId, session.userId, defaultRole, session.userId, resultUrl.trim(), now, now)
+      .bind(newId, taskId, session.userId, roleValue, session.userId, resultUrl.trim(), now, now)
       .run();
 
     if (task.workspace_id) {
@@ -715,7 +777,7 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string) 
     return { success: true };
   } else {
     // Reuse submitResult logic for existing assignment
-    return submitResult(assignment.id, resultUrl);
+    return submitResult(assignment.id, resultUrl, selectedCategory);
   }
 }
 

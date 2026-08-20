@@ -26,6 +26,7 @@ export default function CreateTaskForm({
   const [loading, setLoading] = useState(false);
   const [outputType, setOutputType] = useState<'DESIGN' | 'VIDEO'>('DESIGN');
   const [isDirectBrief, setIsDirectBrief] = useState(false);
+  const [categories, setCategories] = useState<string[]>(['Desain Feed Post 1', 'Desain Feed Post 2']);
   const [priority, setPriority] = useState<'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
   const [parentTaskId, setParentTaskId] = useState('');
   const [assigneeUserId, setAssigneeUserId] = useState('');
@@ -121,10 +122,81 @@ export default function CreateTaskForm({
             )}
           </div>
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-            Centang opsi ini hanya bila rincian brief tugas diberikan langsung.
+            Centang opsi ini hanya bila rincian brief tugas diberikan langsung oleh Koordinator.
           </p>
         </div>
       </div>
+
+      {/* Dynamic Categories Section for Direct Brief */}
+      {isDirectBrief && (
+        <div className="p-4 rounded-2xl bg-blue-500/5 dark:bg-blue-500/[0.04] border border-blue-500/20 space-y-3">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎯</span>
+              <div>
+                <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
+                  Kategori & Slot Output Karya (Direct Brief)
+                </h4>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  Tentukan kategori/rincian output karya yang wajib dipilih oleh peserta saat submit (minimal 2 kategori). Setiap kategori hanya dapat di-submit 1x oleh 1 peserta.
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
+              {categories.filter(c => c.trim()).length} Slot Output Defined
+            </span>
+          </div>
+
+          <div className="space-y-2 pt-1">
+            {categories.map((cat, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border border-blue-500/20">
+                  #{idx + 1}
+                </span>
+                <input
+                  type="text"
+                  value={cat}
+                  onChange={(e) => {
+                    const updated = [...categories];
+                    updated[idx] = e.target.value;
+                    setCategories(updated);
+                  }}
+                  placeholder={idx === 0 ? "misal: Desain Feed Instagram - Post 1" : idx === 1 ? "misal: Desain Feed Instagram - Post 2" : `Nama Kategori Output #${idx + 1}`}
+                  className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-blue-500 font-medium text-zinc-900 dark:text-zinc-100"
+                />
+                {categories.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = categories.filter((_, i) => i !== idx);
+                      setCategories(updated);
+                    }}
+                    className="p-2 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+                    title="Hapus Kategori"
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
+              onClick={() => setCategories((prev) => [...prev, ''])}
+              className="text-xs font-extrabold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-3 py-1.5 rounded-xl border border-blue-500/20 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+            >
+              <span>➕</span>
+              <span>Tambah Kategori Output</span>
+            </button>
+            <span className="text-[10px] text-zinc-400 italic">
+              *Peserta bebas memilih 1 kategori yang tersedia saat submit
+            </span>
+          </div>
+          <input type="hidden" name="directBriefCategories" value={JSON.stringify(categories.filter(c => c.trim()))} />
+        </div>
+      )}
 
       {/* Required Output Type Selector (Design vs Video) */}
       <div>

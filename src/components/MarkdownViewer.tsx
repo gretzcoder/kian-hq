@@ -13,7 +13,10 @@ interface MarkdownViewerProps {
 export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps) {
   if (!content) return null;
 
-  const contentClean = content.replace(/^\[DIRECT_BRIEF\]\s*/i, '').trim();
+  const contentClean = content
+    .replace(/^\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]\s*/i, '')
+    .replace(/^\[DIRECT_BRIEF\]\s*/i, '')
+    .trim();
 
   const isHtml =
     /^\s*<[a-z][\s\S]*>/i.test(contentClean) ||
