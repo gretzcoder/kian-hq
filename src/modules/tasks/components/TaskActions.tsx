@@ -1267,6 +1267,26 @@ export default function TaskActions({
       );
     }
 
+    if (isDirectBriefTask && displayAssignments.length === 0) {
+      return (
+        <div className="space-y-3 my-2">
+          {renderDirectBriefSubmitBox()}
+          <div className="p-6 rounded-2xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center space-y-1.5 bg-zinc-50/50 dark:bg-zinc-900/20">
+            <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-center gap-1.5">
+              <span>📌</span> {isMentorWs ? 'Belum Ada Submission dari Mentor' : 'Belum Ada Peserta yang Mengumpulkan Hasil Karya'}
+            </p>
+            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+              {isMentorWs
+                ? 'Daftar hasil karya yang dikirimkan oleh mentor akan otomatis muncul di sini untuk Anda review & berikan Sparks.'
+                : 'Daftar submission akan otomatis muncul di sini begitu peserta menempelkan link hasil karya mereka.'}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
         {isDirectBriefTask && renderDirectBriefSubmitBox()}
         <div className="flex items-center justify-between">
           <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
@@ -1280,8 +1300,7 @@ export default function TaskActions({
         </div>
         {displayAssignments.map((a) => {
           const isMe = a.user_id === currentUserId;
-          const isCategoryRole = isDirectBriefTask && categories.length > 0 && categories.some(c => a.assignment_role.includes(c));
-          const roleLabel = isDirectBriefTask ? (isCategoryRole ? a.assignment_role : 'Submitter') : a.assignment_role;
+          const roleLabel = isDirectBriefTask ? 'Submitter' : a.assignment_role;
           const status = statusColors[a.status] ?? statusColors.DRAFT;
           return (
             <div
@@ -1293,9 +1312,11 @@ export default function TaskActions({
             >
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2">
-                  <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border text-purple-600 bg-purple-500/10 border-purple-500/15">
-                    {roleLabel}
-                  </span>
+                  {!isDirectBriefTask && (
+                    <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full border text-purple-600 bg-purple-500/10 border-purple-500/15">
+                      {roleLabel}
+                    </span>
+                  )}
                   <span className="text-zinc-900 dark:text-zinc-100 font-extrabold text-sm flex items-center gap-1.5">
                     <span>👤</span> {a.user_name ?? 'Peserta'}
                   </span>
@@ -1330,58 +1351,28 @@ export default function TaskActions({
               {isMe && ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(a.status) && (
                 <div className="pt-1">
                   {showSubmitMap[a.id] ? (
-                    <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="space-y-2">
-                      {categories.length > 0 && (
-                        <div className="space-y-1">
-                          <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
-                            Pilih Kategori Output Karya <span className="text-red-500">*</span>
-                          </label>
-                          <select
-                            value={categoryInputs[a.id] || ''}
-                            onChange={(e) => setCategoryInputs(prev => ({ ...prev, [a.id]: e.target.value }))}
-                            required
-                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3.5 py-2.5 font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-                          >
-                            <option value="">-- Pilih Kategori Output Karya --</option>
-                            {categories.map((cat) => {
-                              const claimedAss = displayAssignments.find(
-                                (c) => (c.result_url || c.status !== 'ASSIGNED') && (c.assignment_role === cat || c.assignment_role === `Kategori: ${cat}`)
-                              );
-                              const isClaimedByMe = a.assignment_role === cat || a.assignment_role === `Kategori: ${cat}`;
-                              const isClaimedByOther = claimedAss && !isClaimedByMe && (claimedAss.user_id !== currentUserId);
-
-                              return (
-                                <option key={cat} value={cat} disabled={Boolean(isClaimedByOther)}>
-                                  {isClaimedByOther ? `❌ ${cat} (Sudah diambil oleh ${claimedAss.user_name || 'Peserta lain'})` : `✓ ${cat}`}
-                                </option>
-                              );
-                            })}
-                          </select>
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <input
-                          type="url"
-                          value={urlInputs[a.id] ?? ''}
-                          onChange={(e) => setUrlInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
-                          placeholder="Paste Google Drive / Figma / Result URL..."
-                          required
-                          className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
-                        />
-                        <button
-                          type="submit"
-                          disabled={loading === a.id}
-                          className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer"
-                        >
-                          {loading === a.id ? '...' : 'Submit'}
-                        </button>
-                      </div>
+                    <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="flex gap-2">
+                      <input
+                        type="url"
+                        value={urlInputs[a.id] ?? ''}
+                        onChange={(e) => setUrlInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                        placeholder="Paste Google Drive / Figma / Result URL..."
+                        required
+                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
+                      />
+                      <button
+                        type="submit"
+                        disabled={loading === a.id}
+                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                      >
+                        {loading === a.id ? '...' : 'Submit'}
+                      </button>
                     </form>
                   ) : (
                     <button
                       type="button"
                       onClick={() => setShowSubmitMap((prev) => ({ ...prev, [a.id]: true }))}
-                      className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer"
+                      className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98]"
                     >
                       {a.status === 'REVISION_REQUESTED' ? '📤 Resubmit Hasil Karya' : '📤 Submit Hasil Karya'}
                     </button>
