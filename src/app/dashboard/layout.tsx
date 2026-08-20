@@ -64,23 +64,36 @@ export default async function DashboardLayout({
       .bind(session.userId)
       .first() as Promise<{ onboarding_completed: number; feature_tour_completed?: number; avatar_url: string | null } | null>,
 
-    // All announcement timestamps — no LIMIT (accurate badge count)
+    // Recent announcement timestamps (for unread badge indicator)
     db
-      .prepare('SELECT created_at FROM announcements ORDER BY created_at DESC')
+      .prepare('SELECT created_at FROM announcements ORDER BY created_at DESC LIMIT 50')
       .all() as Promise<{ results: { created_at: number }[] }>,
 
-    // Per-workspace latest activity (workspace / tasks / chat / task assignments)
+    // Per-workspace latest activity — using flat GROUP BY LEFT JOINs for high CPU performance
     (isGlobalWorkspaceManager || ctx.roles.some((r) => r.toUpperCase().includes('MENTOR')))
       ? (db
           .prepare(
             `SELECT ws.id AS wsId,
                MAX(
                  ws.created_at,
-                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
-                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0),
-                 COALESCE((SELECT MAX(ta.created_at) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id), 0)
+                 COALESCE(t.max_t, 0),
+                 COALESCE(wc.max_wc, 0),
+                 COALESCE(ta.max_ta, 0)
                ) AS latestTs
              FROM workspaces ws
+             LEFT JOIN (
+               SELECT workspace_id, MAX(created_at) AS max_t
+               FROM tasks WHERE status != 'DELETED' GROUP BY workspace_id
+             ) t ON ws.id = t.workspace_id
+             LEFT JOIN (
+               SELECT workspace_id, MAX(created_at) AS max_wc
+               FROM workspace_chats GROUP BY workspace_id
+             ) wc ON ws.id = wc.workspace_id
+             LEFT JOIN (
+               SELECT t.workspace_id, MAX(ta.created_at) AS max_ta
+               FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
+               WHERE t.status != 'DELETED' GROUP BY t.workspace_id
+             ) ta ON ws.id = ta.workspace_id
              WHERE ws.deleted_at IS NULL`
           )
           .all() as Promise<{ results: { wsId: string; latestTs: number }[] }>)
@@ -89,11 +102,24 @@ export default async function DashboardLayout({
             `SELECT ws.id AS wsId,
                MAX(
                  ws.created_at,
-                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
-                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0),
-                 COALESCE((SELECT MAX(ta.created_at) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id AND ta.user_id = ?), 0)
+                 COALESCE(t.max_t, 0),
+                 COALESCE(wc.max_wc, 0),
+                 COALESCE(ta.max_ta, 0)
                ) AS latestTs
              FROM workspaces ws
+             LEFT JOIN (
+               SELECT workspace_id, MAX(created_at) AS max_t
+               FROM tasks WHERE status != 'DELETED' GROUP BY workspace_id
+             ) t ON ws.id = t.workspace_id
+             LEFT JOIN (
+               SELECT workspace_id, MAX(created_at) AS max_wc
+               FROM workspace_chats GROUP BY workspace_id
+             ) wc ON ws.id = wc.workspace_id
+             LEFT JOIN (
+               SELECT t.workspace_id, MAX(ta.created_at) AS max_ta
+               FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
+               WHERE ta.user_id = ? AND t.status != 'DELETED' GROUP BY t.workspace_id
+             ) ta ON ws.id = ta.workspace_id
              WHERE ws.deleted_at IS NULL
                AND (
                  EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
@@ -101,33 +127,49 @@ export default async function DashboardLayout({
                  OR ws.workspace_type = 'ASSESSMENT'
                )`
           )
-          .bind(session.userId, session.userId, session.userId)
+          .bind(session.userId, session.userId, session.userId, session.userId)
           .all() as Promise<{ results: { wsId: string; latestTs: number }[] }>),
 
     // Pending review count — skipped if user has no TASK_REVIEW permission
     canReview
-      ? (db
-          .prepare(
-            `SELECT COUNT(DISTINCT ta.id) AS cnt
-             FROM task_assignments ta
-             JOIN tasks t ON ta.task_id = t.id
-             LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-             WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
-               AND ta.result_url IS NOT NULL
-               AND TRIM(ta.result_url) != ''
-               AND t.status != 'DELETED'
-               AND (ws.deleted_at IS NULL OR ws.id IS NULL)
-               AND ta.user_id != ?
-               AND (
-                 (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AND ta.lead_approved = 0)
-                 OR (EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?) AND ta.mentor_approved = 0)
-                 OR (EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?) AND ta.mentor_approved = 0)
-                 OR (t.created_by = ? AND ta.mentor_approved = 0)
-                 OR (? = 1 AND ta.coordinator_approved = 0)
-               )`
-          )
-          .bind(session.userId, session.userId, session.userId, session.userId, session.userId, isCoordinator ? 1 : 0)
-          .first() as Promise<{ cnt: number } | null>)
+      ? (isCoordinator
+          ? (db
+              .prepare(
+                `SELECT COUNT(DISTINCT ta.id) AS cnt
+                 FROM task_assignments ta
+                 JOIN tasks t ON ta.task_id = t.id
+                 LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+                 WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
+                   AND ta.result_url IS NOT NULL
+                   AND TRIM(ta.result_url) != ''
+                   AND t.status != 'DELETED'
+                   AND (ws.deleted_at IS NULL OR ws.id IS NULL)
+                   AND ta.user_id != ?
+                   AND ta.coordinator_approved = 0`
+              )
+              .bind(session.userId)
+              .first() as Promise<{ cnt: number } | null>)
+          : (db
+              .prepare(
+                `SELECT COUNT(DISTINCT ta.id) AS cnt
+                 FROM task_assignments ta
+                 JOIN tasks t ON ta.task_id = t.id
+                 LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+                 WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
+                   AND ta.result_url IS NOT NULL
+                   AND TRIM(ta.result_url) != ''
+                   AND t.status != 'DELETED'
+                   AND (ws.deleted_at IS NULL OR ws.id IS NULL)
+                   AND ta.user_id != ?
+                   AND (
+                     (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AND ta.lead_approved = 0)
+                     OR (EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?) AND ta.mentor_approved = 0)
+                     OR (EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?) AND ta.mentor_approved = 0)
+                     OR (t.created_by = ? AND ta.mentor_approved = 0)
+                   )`
+              )
+              .bind(session.userId, session.userId, session.userId, session.userId, session.userId, session.userId)
+              .first() as Promise<{ cnt: number } | null>))
       : Promise.resolve(null),
   ]);
 
