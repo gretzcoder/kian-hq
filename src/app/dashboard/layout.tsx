@@ -128,7 +128,7 @@ export default async function DashboardLayout({
                )
              GROUP BY ws.id`
           )
-          .bind(session.userId, session.userId, session.userId, session.userId)
+          .bind(session.userId, session.userId, session.userId)
           .all() as Promise<{ results: { wsId: string; latestTs: number }[] }>),
 
     // Pending review count — skipped if user has no TASK_REVIEW permission
