@@ -264,9 +264,8 @@ export default function CreateTaskForm({
 
         <div className="space-y-4">
           <div>
-            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-              <span>Deskripsi & Brief Instruksi Koordinator</span>
-              <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">✨ WYSIWYG Rich Text</span>
+            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+              Brief / Instruksi Pengerjaan
             </label>
             <TiptapEditor
               value={description}

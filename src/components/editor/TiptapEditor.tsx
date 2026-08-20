@@ -165,16 +165,16 @@ export default function TiptapEditor({
       <div className="bg-zinc-900 text-white px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs border-b border-zinc-800 sticky top-0 z-30 shrink-0">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
-            W
+            📄
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-xs">Dokumen Laporan (.docx)</span>
+              <span className="font-bold text-white text-xs">Brief / Instruksi Pengerjaan</span>
               <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-400/30">
                 Word Layout
               </span>
             </div>
-            <p className="text-[10px] text-zinc-400">Tiptap DOCX Paper Editor</p>
+            <p className="text-[10px] text-zinc-400">Lembar Instruksi & Brief Tugas</p>
           </div>
         </div>
 
@@ -593,17 +593,21 @@ export default function TiptapEditor({
 
 export function DocxDocumentViewer({
   content,
-  roleName = 'Laporan Hasil Pengerjaan',
+  docTitle = 'Brief / Instruksi Pengerjaan',
+  roleName = 'Brief & Instruksi Tugas Workspace',
+  badgeText = 'Dokumen Brief',
 }: {
   content: string;
+  docTitle?: string;
   roleName?: string;
+  badgeText?: string;
 }) {
   if (!content) return null;
 
-  const textOnly = content.replace(/<[^>]*>/g, '').trim();
+  const contentClean = content.replace(/^\[DIRECT_BRIEF\]\s*/i, '').trim();
+  const textOnly = contentClean.replace(/<[^>]*>/g, '').trim();
   const wordCount = textOnly ? textOnly.split(/\s+/).filter(Boolean).length : 0;
   const charCount = textOnly.length;
-  const isHtml = /^\s*<[a-z][\s\S]*>/i.test(content.trim()) || content.includes('</p>') || content.includes('</div>') || content.includes('</span>') || content.includes('</ul>') || content.includes('</ol>') || content.includes('</table>') || content.includes('<img');
 
   return (
     <div className="border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden bg-zinc-200/60 dark:bg-zinc-950 shadow-lg transition-all my-3">
@@ -611,13 +615,13 @@ export function DocxDocumentViewer({
       <div className="bg-zinc-900 text-white px-4 py-2.5 flex items-center justify-between gap-3 text-xs border-b border-zinc-800">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
-            W
+            📄
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-xs">Dokumen Laporan (.docx)</span>
-              <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-400/30">
-                Laporan Diserahkan
+              <span className="font-bold text-white text-xs">{docTitle}</span>
+              <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-400/30">
+                {badgeText}
               </span>
             </div>
             <p className="text-[10px] text-zinc-400">{roleName}</p>
@@ -630,16 +634,9 @@ export function DocxDocumentViewer({
       </div>
 
       {/* 📄 DOCX Paper Canvas Page */}
-      <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[520px] scroll-smooth">
+      <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[560px] scroll-smooth">
         <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[260px] p-6 sm:p-10 transition-all">
-          {isHtml ? (
-            <div
-              className="prose-editor text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: fixGoogleDriveImagesInHtml(content) }}
-            />
-          ) : (
-            <MarkdownViewer content={content} />
-          )}
+          <MarkdownViewer content={contentClean} />
         </div>
       </div>
 
@@ -653,7 +650,7 @@ export function DocxDocumentViewer({
           <span><strong className="text-zinc-700 dark:text-zinc-300 font-bold">{charCount}</strong> karakter</span>
         </div>
         <div className="flex items-center gap-2 text-[10px] text-zinc-400">
-          <span>Format DOCX Document (Read Only)</span>
+          <span>Format Lembar Brief</span>
         </div>
       </div>
     </div>

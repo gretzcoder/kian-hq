@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskActions from '@/modules/tasks/components/TaskActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
-import TiptapEditor from '@/components/editor/TiptapEditor';
+import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
 import { updateTask, deleteTask } from '@/modules/tasks/actions';
 
@@ -389,25 +389,15 @@ export default function TaskAccordion({
                 return (
                   <>
                     <div className="px-5 pb-5">
-                      {/* Description & Brief Card when expanded */}
+                      {/* Description & Brief Viewer Container when expanded */}
                       {task.description && (
-                        <div className="mb-5 rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-zinc-900/30 overflow-hidden shadow-xs">
-                          <div className="bg-zinc-100/80 dark:bg-zinc-900/80 px-4.5 py-2.5 border-b border-zinc-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm">📌</span>
-                              <span className="text-xs font-black text-zinc-800 dark:text-zinc-200 uppercase tracking-wide">
-                                {isDirectBriefTask ? 'Brief & Instruksi Koordinator' : 'Deskripsi & Catatan Tugas'}
-                              </span>
-                            </div>
-                            {isDirectBriefTask && (
-                              <span className="text-[9px] font-black uppercase text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full">
-                                ⚡ Brief Direct
-                              </span>
-                            )}
-                          </div>
-                          <div className="p-5 sm:p-6 bg-white dark:bg-zinc-950/40">
-                            <MarkdownViewer content={task.description.replace('[DIRECT_BRIEF]', '')} />
-                          </div>
+                        <div className="mb-4">
+                          <DocxDocumentViewer
+                            content={task.description.replace('[DIRECT_BRIEF]', '')}
+                            docTitle="Brief / Instruksi Pengerjaan"
+                            roleName={isDirectBriefTask ? "Brief Direct Koordinator" : "Catatan & Instruksi Tugas"}
+                            badgeText={isDirectBriefTask ? "⚡ Brief Direct" : "Brief Active"}
+                          />
                         </div>
                       )}
                       {/* Assignments + Actions */}
@@ -667,11 +657,8 @@ function EditTaskModal({
 
             {/* Tiptap Editor Column */}
             <div className="md:col-span-2 space-y-2">
-              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-                <span>Deskripsi & Brief Instruksi Koordinator</span>
-                <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/20">
-                  ✨ WYSIWYG Tiptap Editor
-                </span>
+              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                Brief / Instruksi Pengerjaan
               </label>
               <TiptapEditor
                 value={description}
