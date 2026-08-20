@@ -27,7 +27,7 @@ export default async function Home() {
             KIAN HQ
           </span>
           <span className="text-[10px] px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/50 font-bold tracking-wider">
-            V1.2
+            V1.8
           </span>
         </div>
         <div className="flex items-center gap-5">

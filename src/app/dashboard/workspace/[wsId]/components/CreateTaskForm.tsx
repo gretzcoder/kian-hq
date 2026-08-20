@@ -34,9 +34,9 @@ export default function CreateTaskForm({
   const [success, setSuccess] = useState(false);
 
   const priorityColors: Record<string, string> = {
-    LOW:    'text-zinc-500 bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800',
+    LOW: 'text-zinc-500 bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800',
     NORMAL: 'text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700',
-    HIGH:   'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/20',
+    HIGH: 'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/20',
     URGENT: 'text-red-600 dark:text-red-400 bg-red-500/5 border-red-500/20',
   };
 
@@ -93,11 +93,10 @@ export default function CreateTaskForm({
       {/* Prominent Direct Brief Option Card */}
       <div
         onClick={() => setIsDirectBrief((prev) => !prev)}
-        className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-start gap-3.5 ${
-          isDirectBrief
+        className={`p-4 rounded-2xl border transition-all cursor-pointer select-none flex items-start gap-3.5 ${isDirectBrief
             ? 'bg-blue-500/10 border-blue-500/40 ring-2 ring-blue-500/20 shadow-xs'
             : 'bg-zinc-50/50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
-        }`}
+          }`}
       >
         <input
           type="checkbox"
@@ -117,12 +116,12 @@ export default function CreateTaskForm({
               </span>
             ) : (
               <span className="bg-zinc-200/80 dark:bg-zinc-800 text-zinc-500 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                Opsional / Centang Jika Perlu
+                Direct Brief Tidak Aktif
               </span>
             )}
           </div>
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-            Centang opsi ini hanya bila rincian brief tugas ditulis langsung oleh Koordinator di form ini (tanpa alur 3-step OJT / tanpa alur Content Brief terpisah & bukan Ujian Skill/Assessment).
+            Centang opsi ini hanya bila rincian brief tugas diberikan langsung.
           </p>
         </div>
       </div>
@@ -136,11 +135,10 @@ export default function CreateTaskForm({
           <button
             type="button"
             onClick={() => setOutputType('DESIGN')}
-            className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${
-              outputType === 'DESIGN'
+            className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${outputType === 'DESIGN'
                 ? 'bg-purple-500/10 border-purple-500 text-purple-700 dark:text-purple-300 font-bold ring-2 ring-purple-500/20 shadow-sm'
                 : 'bg-zinc-50/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
-            }`}
+              }`}
           >
             <span className="text-2xl">🎨</span>
             <div>
@@ -152,11 +150,10 @@ export default function CreateTaskForm({
           <button
             type="button"
             onClick={() => setOutputType('VIDEO')}
-            className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${
-              outputType === 'VIDEO'
+            className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${outputType === 'VIDEO'
                 ? 'bg-pink-500/10 border-pink-500 text-pink-700 dark:text-pink-300 font-bold ring-2 ring-pink-500/20 shadow-sm'
                 : 'bg-zinc-50/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
-            }`}
+              }`}
           >
             <span className="text-2xl">🎬</span>
             <div>
@@ -218,7 +215,7 @@ export default function CreateTaskForm({
                 type="datetime-local"
                 name="start_at"
                 onClick={(e) => {
-                  try { e.currentTarget.showPicker?.(); } catch {}
+                  try { e.currentTarget.showPicker?.(); } catch { }
                 }}
                 className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
               />
@@ -233,7 +230,7 @@ export default function CreateTaskForm({
                 name="deadline"
                 required
                 onClick={(e) => {
-                  try { e.currentTarget.showPicker?.(); } catch {}
+                  try { e.currentTarget.showPicker?.(); } catch { }
                 }}
                 className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
               />
@@ -300,11 +297,10 @@ export default function CreateTaskForm({
                   key={p}
                   type="button"
                   onClick={() => setPriority(p)}
-                  className={`flex-1 text-[10px] font-black uppercase tracking-wide py-2.5 rounded-xl border transition-all ${
-                    priority === p
+                  className={`flex-1 text-[10px] font-black uppercase tracking-wide py-2.5 rounded-xl border transition-all ${priority === p
                       ? priorityColors[p]
                       : 'text-zinc-400 bg-transparent border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
-                  }`}
+                    }`}
                 >
                   {p}
                 </button>

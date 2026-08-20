@@ -1,5 +1,6 @@
+'use client';
+
 import { useState } from 'react';
-import { MarkdownViewer } from '@/components/MarkdownViewer';
 
 interface CollapsibleNoteViewerProps {
   content: string | null | undefined;
@@ -87,7 +88,16 @@ export function CollapsibleNoteViewer({
             !expanded && isLong ? 'max-h-[130px] overflow-hidden' : 'max-h-none'
           }`}
         >
-          <MarkdownViewer content={trimmed} />
+          {isHtml ? (
+            <div
+              className="prose dark:prose-invert prose-xs max-w-none text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 font-medium leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: trimmed }}
+            />
+          ) : (
+            <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed italic whitespace-pre-wrap">
+              "{trimmed}"
+            </p>
+          )}
 
           {/* Fade-out gradient mask when collapsed */}
           {!expanded && isLong && (
