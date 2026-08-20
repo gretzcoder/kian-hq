@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskActions from '@/modules/tasks/components/TaskActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
-import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
+import TiptapEditor from '@/components/editor/TiptapEditor';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
 import { updateTask, deleteTask } from '@/modules/tasks/actions';
 
@@ -391,13 +391,8 @@ export default function TaskAccordion({
                     <div className="px-5 pb-5">
                       {/* Description when expanded */}
                       {task.description && (
-                        <div className="mb-4">
-                          <DocxDocumentViewer
-                            content={task.description}
-                            docTitle={isDirectBriefTask ? "Dokumen Brief Direct (.docx)" : "Dokumen Brief Tugas (.docx)"}
-                            badgeLabel={isDirectBriefTask ? "⚡ Brief Direct Koordinator" : "Brief Tugas"}
-                            roleName={task.title}
-                          />
+                        <div className="mb-4 text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed border-b border-zinc-100 dark:border-zinc-800/80 pb-3">
+                          <MarkdownViewer content={task.description.replace('[DIRECT_BRIEF]', '')} />
                         </div>
                       )}
                       {/* Assignments + Actions */}
@@ -565,110 +560,132 @@ function EditTaskModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-      <div className="w-full max-w-3xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] sm:max-h-[88vh] text-left" onClick={(e) => e.stopPropagation()}>
-        {/* Sticky Header */}
-        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 px-6 py-4 shrink-0 bg-white dark:bg-[#09090b] rounded-t-3xl">
+    <div
+      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div
+        className="w-full max-w-5xl xl:max-w-6xl max-h-[92vh] bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl my-auto text-left flex flex-col overflow-hidden transition-all"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 px-6 sm:px-8 py-4.5 shrink-0 bg-white/90 dark:bg-[#09090b]/90 backdrop-blur-sm z-10">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-bold">
               ✏️
             </div>
             <div>
-              <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">Edit Tugas</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Perbarui judul, instruksi brief, tenggat waktu, atau tanggal mulai tugas.</p>
+              <h3 className="text-base sm:text-lg font-black text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <span>Edit Tugas</span>
+                {isDirectBrief && (
+                  <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full uppercase">
+                    ⚡ Brief Direct Koordinator
+                  </span>
+                )}
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Perbarui judul, instruksi brief, tenggat waktu, atau tanggal mulai tugas.
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-sm transition-all cursor-pointer"
+            className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800/80 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-sm transition-all cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700"
           >
             ✕
           </button>
         </div>
 
-        {/* Scrollable Form Content */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
+        {/* Scrollable Form Body */}
+        <form id="edit-task-form" onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-5 overflow-y-auto flex-1 scroll-smooth">
           {error && (
             <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
               ⚠️ {error}
             </p>
           )}
 
-          <div>
-            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-              Judul Tugas <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="title"
-              defaultValue={task.title}
-              required
-              className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all"
-            />
-          </div>
+          {/* Grid Layout: Left Meta Fields, Right Tiptap Editor */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="md:col-span-1 space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                  Judul Tugas <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  defaultValue={task.title}
+                  required
+                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all font-medium"
+                />
+              </div>
 
-          <div>
-            <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-              <span>Deskripsi & Instruksi Brief</span>
-              <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400">✨ WYSIWYG Rich Text Editor</span>
-            </label>
-            <TiptapEditor
-              value={description}
-              onChange={setDescription}
-              placeholder="Edit rincian brief tugas dengan format lengkap..."
-              minHeight="min-h-[180px]"
-            />
-          </div>
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                  Tanggal & Jam Mulai (Start Date)
+                </label>
+                <input
+                  type="datetime-local"
+                  name="start_at"
+                  defaultValue={defaultStartAt}
+                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3.5 py-3 focus:outline-none transition-all"
+                />
+              </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                Tanggal & Jam Mulai (Start Date)
-              </label>
-              <input
-                type="datetime-local"
-                name="start_at"
-                defaultValue={defaultStartAt}
-                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all"
-              />
+              <div>
+                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+                  Tenggat Waktu (Deadline) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  name="deadline"
+                  defaultValue={defaultDeadline}
+                  required
+                  onClick={(e) => {
+                    try { e.currentTarget.showPicker?.(); } catch {}
+                  }}
+                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3.5 py-3 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                Tenggat Waktu (Deadline) <span className="text-red-500">*</span>
+            {/* Tiptap Editor Column */}
+            <div className="md:col-span-2 space-y-2">
+              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+                <span>Deskripsi & Brief Instruksi Koordinator</span>
+                <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/20">
+                  ✨ WYSIWYG Tiptap Editor
+                </span>
               </label>
-              <input
-                type="datetime-local"
-                name="deadline"
-                defaultValue={defaultDeadline}
-                required
-                onClick={(e) => {
-                  try { e.currentTarget.showPicker?.(); } catch {}
-                }}
-                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3 py-3 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+              <TiptapEditor
+                value={description}
+                onChange={setDescription}
+                placeholder="Edit rincian brief tugas dengan format lengkap..."
+                minHeight="min-h-[350px]"
               />
             </div>
-          </div>
-
-          {/* Sticky Action Footer */}
-          <div className="flex gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800/80 sticky bottom-0 bg-white dark:bg-[#09090b] z-10 -mx-6 -mb-6 p-6 rounded-b-3xl">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400 cursor-pointer"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 py-3 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-md shadow-purple-500/20 disabled:opacity-60 cursor-pointer"
-            >
-              {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
-            </button>
           </div>
         </form>
+
+        {/* Footer Actions Bar */}
+        <div className="flex items-center justify-end gap-3 px-6 sm:px-8 py-4 border-t border-zinc-100 dark:border-zinc-800/80 shrink-0 bg-zinc-50/50 dark:bg-[#09090b] z-10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-6 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400 cursor-pointer"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            form="edit-task-form"
+            disabled={loading}
+            className="px-8 py-2.5 text-xs font-extrabold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-md shadow-purple-500/20 disabled:opacity-60 cursor-pointer active:scale-[0.98]"
+          >
+            {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
+          </button>
+        </div>
       </div>
     </div>
   );

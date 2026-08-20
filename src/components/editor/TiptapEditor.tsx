@@ -208,7 +208,7 @@ export default function TiptapEditor({
       {mode === 'edit' ? (
         <>
           {/* 🎛️ Word DOCX Ribbon Toolbar - Sticky Toolbar Google Docs style */}
-          <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-2 flex flex-wrap items-center gap-1.5 text-xs select-none shadow-xs overflow-x-auto max-w-full min-w-0 sticky top-[45px] z-20 shrink-0">
+          <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 p-2 flex flex-wrap items-center gap-1.5 text-xs select-none shadow-xs overflow-x-auto max-w-full min-w-0 sticky top-0 z-20 shrink-0">
             {/* Formatting Group */}
             <div className="flex items-center gap-0.5 bg-zinc-100 dark:bg-zinc-800/60 p-0.5 rounded-lg border border-zinc-200/60 dark:border-zinc-800">
               <button
@@ -541,16 +541,16 @@ export default function TiptapEditor({
           </div>
 
           {/* 📄 DOCX Paper Canvas Page Container - Scrollable area */}
-          <div className="bg-zinc-100 dark:bg-zinc-950 p-3 sm:p-5 overflow-y-auto max-h-[300px] sm:max-h-[380px] lg:max-h-[450px] flex-1 scroll-smooth">
-            <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[320px] p-5 sm:p-8 transition-all">
+          <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[520px] sm:max-h-[620px] flex-1 scroll-smooth">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[420px] p-6 sm:p-12 transition-all">
               <EditorContent editor={editor} />
             </div>
           </div>
         </>
       ) : (
         /* 👁️ DOCX Document Preview Mode */
-        <div className="bg-zinc-100 dark:bg-zinc-950 p-3 sm:p-5 overflow-y-auto max-h-[300px] sm:max-h-[380px] lg:max-h-[450px] flex-1 scroll-smooth">
-          <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[320px] p-5 sm:p-8 transition-all">
+        <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[520px] sm:max-h-[620px] flex-1 scroll-smooth">
+          <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[420px] p-6 sm:p-12 transition-all">
             <div className="flex items-center justify-between mb-6 pb-3 border-b border-zinc-200 dark:border-zinc-800">
               <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-2">
                 <span>📄 Pratinjau Dokumen Laporan (.docx)</span>
@@ -594,21 +594,16 @@ export default function TiptapEditor({
 export function DocxDocumentViewer({
   content,
   roleName = 'Laporan Hasil Pengerjaan',
-  docTitle = 'Dokumen Laporan (.docx)',
-  badgeLabel = 'Laporan Diserahkan',
 }: {
   content: string;
   roleName?: string;
-  docTitle?: string;
-  badgeLabel?: string;
 }) {
   if (!content) return null;
 
-  const contentClean = content.replace(/^\[DIRECT_BRIEF\]\s*/i, '').trim();
-  const textOnly = contentClean.replace(/<[^>]*>/g, '').trim();
+  const textOnly = content.replace(/<[^>]*>/g, '').trim();
   const wordCount = textOnly ? textOnly.split(/\s+/).filter(Boolean).length : 0;
   const charCount = textOnly.length;
-  const isHtml = /^\s*<[a-z][\s\S]*>/i.test(contentClean) || contentClean.includes('</p>') || contentClean.includes('</div>') || contentClean.includes('</span>') || contentClean.includes('</ul>') || contentClean.includes('</ol>') || contentClean.includes('</table>') || contentClean.includes('<img');
+  const isHtml = /^\s*<[a-z][\s\S]*>/i.test(content.trim()) || content.includes('</p>') || content.includes('</div>') || content.includes('</span>') || content.includes('</ul>') || content.includes('</ol>') || content.includes('</table>') || content.includes('<img');
 
   return (
     <div className="border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden bg-zinc-200/60 dark:bg-zinc-950 shadow-lg transition-all my-3">
@@ -620,9 +615,9 @@ export function DocxDocumentViewer({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-xs">{docTitle}</span>
+              <span className="font-bold text-white text-xs">Dokumen Laporan (.docx)</span>
               <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-400/30">
-                {badgeLabel}
+                Laporan Diserahkan
               </span>
             </div>
             <p className="text-[10px] text-zinc-400">{roleName}</p>
@@ -635,15 +630,15 @@ export function DocxDocumentViewer({
       </div>
 
       {/* 📄 DOCX Paper Canvas Page */}
-      <div className="bg-zinc-100 dark:bg-zinc-950 p-3 sm:p-6 overflow-y-auto max-h-[450px] sm:max-h-[550px] scroll-smooth">
-        <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[220px] p-5 sm:p-8 transition-all">
+      <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[520px] scroll-smooth">
+        <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[260px] p-6 sm:p-10 transition-all">
           {isHtml ? (
             <div
               className="prose-editor text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: fixGoogleDriveImagesInHtml(contentClean) }}
+              dangerouslySetInnerHTML={{ __html: fixGoogleDriveImagesInHtml(content) }}
             />
           ) : (
-            <MarkdownViewer content={contentClean} />
+            <MarkdownViewer content={content} />
           )}
         </div>
       </div>
