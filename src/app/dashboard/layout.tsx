@@ -93,7 +93,8 @@ export default async function DashboardLayout({
                FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
                WHERE t.status != 'DELETED' GROUP BY t.workspace_id
              ) ta ON ws.id = ta.workspace_id
-             WHERE ws.deleted_at IS NULL`
+             WHERE ws.deleted_at IS NULL
+             GROUP BY ws.id`
           )
           .all() as Promise<{ results: { wsId: string; latestTs: number }[] }>)
       : (db
@@ -124,7 +125,8 @@ export default async function DashboardLayout({
                  EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
                  OR ws.ojt_coordinator_id = ?
                  OR ws.workspace_type = 'ASSESSMENT'
-               )`
+               )
+             GROUP BY ws.id`
           )
           .bind(session.userId, session.userId, session.userId, session.userId)
           .all() as Promise<{ results: { wsId: string; latestTs: number }[] }>),
