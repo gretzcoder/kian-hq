@@ -1,4 +1,4 @@
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { BadgeItem, CATEGORY_META } from '@/modules/badges/badgeTypes';
 import { deleteBadgeAction, claimBadgeSparksAction } from '@/modules/badges/badgeActions';
 import { useUI } from '@/components/ui/UIProvider';
@@ -32,6 +32,10 @@ export function BadgeDetailModal({
   const [isClaiming, setIsClaiming] = useState(false);
   const [localClaimed, setLocalClaimed] = useState<boolean | null>(null);
   const [selectedOwnerForProfile, setSelectedOwnerForProfile] = useState<UserProfileData | null>(null);
+
+  useEffect(() => {
+    setLocalClaimed(null);
+  }, [badge.id]);
 
   if (!isOpen) return null;
 

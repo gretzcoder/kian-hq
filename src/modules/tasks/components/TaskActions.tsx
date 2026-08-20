@@ -1008,11 +1008,11 @@ export default function TaskActions({
                 />
               )}
               {a.result_url && (
-                <div className="space-y-1">
-                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                <div className="space-y-1 pt-1">
+                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider block">
                     Hasil Karya Peserta:
                   </span>
-                  <CreatorDrivePreview url={a.result_url} />
+                  <SubmittedLinkPreviewer url={a.result_url} autoExpand={true} />
                 </div>
               )}
               {isMe && ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(a.status) && (

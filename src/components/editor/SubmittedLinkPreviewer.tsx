@@ -62,7 +62,9 @@ export function parseSubmittedLink(rawUrl: string): ParsedLinkInfo {
     let embedUrl: string | undefined = undefined;
     if (match && match[1]) {
       const designId = match[1];
-      const hash = match[2] ? `/${match[2]}` : '';
+      const secondPart = match[2];
+      const isReserved = secondPart && ['view', 'edit', 'watch', 'remix', 'present', 'live'].includes(secondPart.toLowerCase());
+      const hash = secondPart && !isReserved ? `/${secondPart}` : '';
       embedUrl = `https://www.canva.com/design/${designId}${hash}/view?embed`;
     }
     const isShortlink = !match;
