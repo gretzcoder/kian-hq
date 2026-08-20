@@ -81,28 +81,21 @@ export default async function ProjectDetailPage({ params }: PageProps) {
 
   if (!project) notFound();
 
-  // Batch permissions
-  const ctx = await getSessionContext(session.userId);
-  const isOJT = ctx.userType === 'OJT';
-
-  const projectMentor = await db
-    .prepare('SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?')
-    .bind(projectId, session.userId)
-    .first();
-  const isProjectMentor = !!projectMentor;
-
-  if (isOJT && !isProjectMentor) {
-    redirect('/dashboard/workspace');
-  }
-
-  const canDeleteProject = ctx.can('PROJECT_MANAGE');
-  const canEditBrief     = ctx.can('BRIEF_REVIEW');
-  const canCreateWs      = ctx.can('WORKSPACE_MANAGE') || isProjectMentor;
-  const canDeleteWs      = ctx.can('WORKSPACE_MANAGE') || isProjectMentor;
-
-  // Fetch Workspaces for this project
-  const { results: workspacesRaw } = await db
-    .prepare(`
+  // Batch permissions & data fetching in parallel
+  const [
+    ctx,
+    projectMentorRow,
+    { results: workspacesRaw },
+    { results: tasksRaw },
+    { results: mentorsRaw },
+    briefRow,
+    { results: eventsRaw },
+    { results: currentCoordinatorsRaw },
+    { results: availableUsersRaw }
+  ] = await Promise.all([
+    getSessionContext(session.userId),
+    db.prepare('SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?').bind(projectId, session.userId).first(),
+    db.prepare(`
       SELECT ws.id, ws.name, ws.description, ws.status,
              COUNT(t.id) as task_count
       FROM workspaces ws
@@ -110,14 +103,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       WHERE ws.project_id = ? AND ws.deleted_at IS NULL
       GROUP BY ws.id
       ORDER BY ws.created_at ASC
-    `)
-    .bind(projectId)
-    .all();
-  const workspaces = workspacesRaw as unknown as WorkspaceRow[];
-
-  // Fetch legacy tasks (not yet in a workspace)
-  const { results: tasksRaw } = await db
-    .prepare(`
+    `).bind(projectId).all(),
+    db.prepare(`
       SELECT t.*, u.name as assigned_name, u.email as assigned_email, c.name as creator_name
       FROM tasks t
       LEFT JOIN task_assignments ta ON t.id = ta.task_id AND ta.assignment_role = 'PIC'
@@ -125,20 +112,8 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       LEFT JOIN users c ON t.created_by = c.id
       WHERE t.project_id = ? AND (t.workspace_id IS NULL)
       ORDER BY t.created_at ASC
-    `)
-    .bind(projectId)
-    .all();
-  const tasks = tasksRaw as unknown as TaskRow[];
-
-  // Users (for legacy task form)
-  const { results: usersRaw } = await db
-    .prepare('SELECT id, name FROM users ORDER BY name ASC')
-    .all();
-  const users = usersRaw as unknown as UserRow[];
-
-  // Fetch Mentor Troopers for workspace mentor selection dropdown
-  const { results: mentorsRaw } = await db
-    .prepare(`
+    `).bind(projectId).all(),
+    db.prepare(`
       SELECT DISTINCT u.id, u.name, u.email
       FROM users u
       JOIN user_roles ur ON u.id = ur.user_id
@@ -146,35 +121,46 @@ export default async function ProjectDetailPage({ params }: PageProps) {
       WHERE u.status = 'ACTIVE'
         AND (r.id = 'role_mentor_troopers' OR r.name = 'MENTOR TROOPERS')
       ORDER BY u.name ASC
-    `)
-    .all();
-  const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
+    `).all(),
+    db.prepare('SELECT id, audience, objectives, key_messages, visual_style, status FROM content_briefs WHERE project_id = ?').bind(projectId).first() as Promise<BriefRow | null>,
+    db.prepare(`
+      SELECT we.id, we.entity_type, we.entity_id, we.from_status, we.to_status, we.note, we.created_at,
+             u.name AS user_name
+      FROM (
+        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
+        FROM workflow_events
+        WHERE entity_type = 'project' AND entity_id = ?
 
-  // Content Brief
-  const brief = await db
-    .prepare('SELECT id, audience, objectives, key_messages, visual_style, status FROM content_briefs WHERE project_id = ?')
-    .bind(projectId)
-    .first() as BriefRow | null;
+        UNION ALL
 
-  // Fetch unified timeline events (audit trail)
-  const { results: eventsRaw } = await db.prepare(`
-    SELECT we.id, we.entity_type, we.entity_id, we.from_status, we.to_status, we.note, we.created_at,
-           u.name AS user_name
-    FROM workflow_events we
-    LEFT JOIN users u ON we.triggered_by = u.id
-    WHERE (we.entity_type = 'project' AND we.entity_id = ?)
-       OR (we.entity_type = 'brief' AND we.entity_id IN (SELECT id FROM content_briefs WHERE project_id = ?))
-       OR (we.entity_type = 'workspace' AND we.entity_id IN (SELECT id FROM workspaces WHERE project_id = ?))
-       OR (we.entity_type = 'task' AND we.entity_id IN (SELECT id FROM tasks WHERE project_id = ?))
-       OR (we.entity_type = 'task_assignment' AND we.entity_id IN (
-           SELECT ta.id FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.project_id = ?
-       ))
-    ORDER BY we.created_at DESC
-  `).bind(projectId, projectId, projectId, projectId, projectId).all();
-  const events = eventsRaw as any[];
+        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
+        FROM workflow_events
+        WHERE entity_type = 'brief' AND entity_id IN (SELECT id FROM content_briefs WHERE project_id = ?)
 
-  // Fetch current project coordinators & all users for manager dropdown
-  const [{ results: currentCoordinatorsRaw }, { results: allUsersRaw }] = await Promise.all([
+        UNION ALL
+
+        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
+        FROM workflow_events
+        WHERE entity_type = 'workspace' AND entity_id IN (SELECT id FROM workspaces WHERE project_id = ?)
+
+        UNION ALL
+
+        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
+        FROM workflow_events
+        WHERE entity_type = 'task' AND entity_id IN (SELECT id FROM tasks WHERE project_id = ?)
+
+        UNION ALL
+
+        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
+        FROM workflow_events
+        WHERE entity_type = 'task_assignment' AND entity_id IN (
+            SELECT ta.id FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.project_id = ?
+        )
+      ) we
+      LEFT JOIN users u ON we.triggered_by = u.id
+      ORDER BY we.created_at DESC
+      LIMIT 50
+    `).bind(projectId, projectId, projectId, projectId, projectId).all(),
     db.prepare(`
       SELECT u.id, u.name, u.email
       FROM project_coordinators pc
@@ -184,9 +170,28 @@ export default async function ProjectDetailPage({ params }: PageProps) {
     `).bind(projectId).all(),
     db.prepare('SELECT id, name, email FROM users WHERE status = "ACTIVE" ORDER BY name ASC').all(),
   ]);
-  const currentCoordinators = currentCoordinatorsRaw as unknown as Array<{ id: string; name: string; email: string }>;
-  const availableUsers = allUsersRaw as unknown as Array<{ id: string; name: string; email: string }>;
+
+  const isOJT = ctx.userType === 'OJT';
+  const isProjectMentor = !!projectMentorRow;
+
+  if (isOJT && !isProjectMentor) {
+    redirect('/dashboard/workspace');
+  }
+
+  const canDeleteProject = ctx.can('PROJECT_MANAGE');
+  const canEditBrief     = ctx.can('BRIEF_REVIEW');
+  const canCreateWs      = ctx.can('WORKSPACE_MANAGE') || isProjectMentor;
+  const canDeleteWs      = ctx.can('WORKSPACE_MANAGE') || isProjectMentor;
   const canUpdateProject = ctx.can('UPDATE');
+
+  const workspaces = workspacesRaw as unknown as WorkspaceRow[];
+  const tasks = tasksRaw as unknown as TaskRow[];
+  const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
+  const brief = briefRow;
+  const events = eventsRaw as any[];
+  const currentCoordinators = currentCoordinatorsRaw as unknown as Array<{ id: string; name: string; email: string }>;
+  const availableUsers = availableUsersRaw as unknown as Array<{ id: string; name: string; email: string }>;
+  const users = availableUsers;
 
   // Server Actions
   async function handleDeleteProject() {
