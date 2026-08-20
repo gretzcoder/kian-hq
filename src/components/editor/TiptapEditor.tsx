@@ -20,13 +20,19 @@ interface TiptapEditorProps {
   onChange: (html: string) => void;
   placeholder?: string;
   minHeight?: string;
+  maxHeight?: string;
+  docTitle?: string;
+  docSubtitle?: string;
 }
 
 export default function TiptapEditor({
   value,
   onChange,
-  placeholder = 'Mulai menulis isi dokumen laporan di sini...',
-  minHeight = 'min-h-[480px]',
+  placeholder = 'Mulai menulis isi dokumen di sini...',
+  minHeight = 'min-h-[180px]',
+  maxHeight = 'max-h-[300px] sm:max-h-[360px]',
+  docTitle = 'Brief / Instruksi Pengerjaan',
+  docSubtitle = 'Lembar Instruksi & Brief Tugas',
 }: TiptapEditorProps) {
   const [mounted, setMounted] = useState(false);
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
@@ -541,16 +547,16 @@ export default function TiptapEditor({
           </div>
 
           {/* 📄 DOCX Paper Canvas Page Container - Scrollable area */}
-          <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[520px] sm:max-h-[620px] flex-1 scroll-smooth">
-            <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[420px] p-6 sm:p-12 transition-all">
+          <div className={`bg-zinc-100 dark:bg-zinc-950 p-3 sm:p-4 overflow-y-auto ${maxHeight} flex-1 scroll-smooth`}>
+            <div className={`max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-md ${minHeight} p-4 sm:p-6 transition-all`}>
               <EditorContent editor={editor} />
             </div>
           </div>
         </>
       ) : (
         /* 👁️ DOCX Document Preview Mode */
-        <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[520px] sm:max-h-[620px] flex-1 scroll-smooth">
-          <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[420px] p-6 sm:p-12 transition-all">
+        <div className={`bg-zinc-100 dark:bg-zinc-950 p-3 sm:p-4 overflow-y-auto ${maxHeight} flex-1 scroll-smooth`}>
+          <div className={`max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-md ${minHeight} p-4 sm:p-6 transition-all`}>
             <div className="flex items-center justify-between mb-6 pb-3 border-b border-zinc-200 dark:border-zinc-800">
               <span className="text-xs font-bold text-blue-600 dark:text-blue-400 flex items-center gap-2">
                 <span>📄 Pratinjau Dokumen Laporan (.docx)</span>

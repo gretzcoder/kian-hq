@@ -603,7 +603,7 @@ function EditTaskModal({
         </div>
 
         {/* Scrollable Form Body */}
-        <form id="edit-task-form" onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-5 overflow-y-auto flex-1 scroll-smooth">
+        <form id="edit-task-form" onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4 overflow-y-auto flex-1 scroll-smooth">
           {error && (
             <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
               ⚠️ {error}
@@ -622,7 +622,7 @@ function EditTaskModal({
                   name="title"
                   defaultValue={task.title}
                   required
-                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all font-medium"
+                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-2.5 focus:outline-none transition-all font-medium"
                 />
               </div>
 
@@ -634,7 +634,7 @@ function EditTaskModal({
                   type="datetime-local"
                   name="start_at"
                   defaultValue={defaultStartAt}
-                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3.5 py-3 focus:outline-none transition-all"
+                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none transition-all"
                 />
               </div>
 
@@ -650,7 +650,7 @@ function EditTaskModal({
                   onClick={(e) => {
                     try { e.currentTarget.showPicker?.(); } catch {}
                   }}
-                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3.5 py-3 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none transition-all cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                 />
               </div>
             </div>
@@ -664,7 +664,8 @@ function EditTaskModal({
                 value={description}
                 onChange={setDescription}
                 placeholder="Edit rincian brief tugas dengan format lengkap..."
-                minHeight="min-h-[350px]"
+                minHeight="min-h-[180px]"
+                maxHeight="max-h-[280px] sm:max-h-[320px]"
               />
             </div>
           </div>
