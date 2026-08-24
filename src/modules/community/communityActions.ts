@@ -150,6 +150,8 @@ export async function getCommunityChannels(): Promise<{
   const generalChannels: CommunityChannel[] = [];
   let defaultChannelId: string | null = null;
 
+  const allChannelsList: CommunityChannel[] = [];
+
   for (const ch of channels) {
     if (ch.is_default === 1 && !defaultChannelId) {
       defaultChannelId = ch.id;
@@ -202,6 +204,8 @@ export async function getCommunityChannels(): Promise<{
       lastMessageAt,
     };
 
+    allChannelsList.push(item);
+
     if (ch.category === 'WORK' || ch.category_id === 'cat_work' || ch.category.toLowerCase().includes('kerja')) {
       workChannels.push(item);
     } else {
@@ -213,7 +217,7 @@ export async function getCommunityChannels(): Promise<{
     defaultChannelId = channels[0].id;
   }
 
-  return { workChannels, generalChannels, categories, defaultChannelId, canManage };
+  return { workChannels, generalChannels, allChannels: allChannelsList, categories, defaultChannelId, canManage };
 }
 
 /**

@@ -199,6 +199,7 @@ export default function CommunityChatView({
 
   const [workChannels, setWorkChannels] = useState<CommunityChannel[]>(initialWorkChannels);
   const [generalChannels, setGeneralChannels] = useState<CommunityChannel[]>(initialGeneralChannels);
+  const [channelsList, setChannelsList] = useState<CommunityChannel[]>([...initialWorkChannels, ...initialGeneralChannels]);
   const [activeChannel, setActiveChannel] = useState<CommunityChannel>(defaultChannel);
 
   // Admin / Coordinator Channel & Category Management State
@@ -233,6 +234,11 @@ export default function CommunityChatView({
       const res = await getCommunityChannels();
       setWorkChannels(res.workChannels);
       setGeneralChannels(res.generalChannels);
+      if (res.allChannels && res.allChannels.length > 0) {
+        setChannelsList(res.allChannels);
+      } else {
+        setChannelsList([...res.workChannels, ...res.generalChannels]);
+      }
       if (res.categories && res.categories.length > 0) {
         setCategories(res.categories);
       }
@@ -986,231 +992,160 @@ export default function CommunityChatView({
 
         {/* Channel Category Lists */}
         <div className="flex-1 overflow-y-auto p-3 space-y-5">
-          {/* 💼 KATEGORI KERJAAN */}
-          <div className="space-y-1">
-            <div className="px-3 flex items-center justify-between mb-1.5 group/cat">
-              <p className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1.5">
-                <span>💼</span>
-                <span>Kategori Kerjaan</span>
-              </p>
-              <div className="flex items-center gap-1">
-                {canManageCommunity && (
-                  <button
-                    type="button"
-                    onClick={() => openChannelModal(undefined, 'WORK')}
-                    className="text-[9px] font-bold text-purple-500 hover:text-purple-700 hover:bg-purple-500/10 px-1 py-0.5 rounded transition-all cursor-pointer"
-                    title="Tambah Saluran ke Kategori Kerjaan"
-                  >
-                    + Saluran
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleClearCategory('WORK')}
-                  className="text-[9px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 px-1.5 py-0.5 rounded-md transition-all flex items-center gap-1 cursor-pointer"
-                  title="Bersihkan seluruh chat di Kategori Kerjaan"
-                >
-                  <span>🧹</span>
-                  <span>Bersihkan</span>
-                </button>
-              </div>
-            </div>
+          {categories.map((cat) => {
+            const categoryChannels = channelsList.filter((ch) => {
+              const chCatId = ch.category_id || ch.category;
+              if (chCatId === cat.id) return true;
+              if (cat.id === 'cat_work' || cat.name.toUpperCase().includes('KERJA')) {
+                return ch.category === 'WORK' || chCatId === 'cat_work';
+              }
+              if (cat.id === 'cat_general' || cat.name.toUpperCase().includes('GENERAL')) {
+                return ch.category === 'GENERAL' || chCatId === 'cat_general';
+              }
+              return chCatId === cat.id || ch.category === cat.name;
+            });
 
-            {workChannels.map((ch) => {
-              const isActive = activeChannel.id === ch.id;
-              return (
-                <div key={ch.id} className="relative group/chan flex items-center">
-                  <button
-                    onClick={() => handleSelectChannel(ch)}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
-                      isActive
-                        ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
-                        : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 truncate min-w-0 pr-12">
-                      <span className="text-sm shrink-0">{ch.icon || '💬'}</span>
-                      <span className="truncate">{ch.name}</span>
-                      {Boolean(ch.is_default) && (
-                        <span
-                          title="Default Chat Room saat ini"
-                          className={`px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight shrink-0 ${
-                            isActive ? 'bg-amber-400 text-purple-950' : 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
+            return (
+              <div key={cat.id} className="space-y-1">
+                {/* Category Header */}
+                <div className="px-3 flex items-center justify-between mb-1.5 group/cat">
+                  <p className="text-[9px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest flex items-center gap-1.5 truncate">
+                    <span>{cat.icon || '📁'}</span>
+                    <span className="truncate">{cat.name}</span>
+                  </p>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {canManageCommunity && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openChannelModal(undefined, cat.id)}
+                          className="text-[9px] font-bold text-purple-500 hover:text-purple-700 hover:bg-purple-500/10 px-1 py-0.5 rounded transition-all cursor-pointer"
+                          title={`Tambah Saluran ke ${cat.name}`}
+                        >
+                          + Saluran
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openCategoryModal(cat)}
+                          className="text-[9px] font-bold text-zinc-400 hover:text-blue-500 px-0.5 cursor-pointer"
+                          title="Edit Kategori"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategory(cat)}
+                          className="text-[9px] font-bold text-zinc-400 hover:text-red-500 px-0.5 cursor-pointer"
+                          title="Hapus Kategori"
+                        >
+                          🗑️
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleClearCategory(cat.id)}
+                      className="text-[9px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 px-1.5 py-0.5 rounded-md transition-all flex items-center gap-1 cursor-pointer"
+                      title={`Bersihkan seluruh chat di ${cat.name}`}
+                    >
+                      <span>🧹</span>
+                      <span className="hidden sm:inline">Bersihkan</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Channels List in Category */}
+                {categoryChannels.length === 0 ? (
+                  <div className="px-3 py-1.5 text-[10px] italic text-zinc-400 dark:text-zinc-600">
+                    Belum ada saluran di kategori ini
+                  </div>
+                ) : (
+                  categoryChannels.map((ch) => {
+                    const isActive = activeChannel.id === ch.id;
+                    return (
+                      <div key={ch.id} className="relative group/chan flex items-center">
+                        <button
+                          onClick={() => handleSelectChannel(ch)}
+                          className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
+                            isActive
+                              ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+                              : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60'
                           }`}
                         >
-                          ⭐ Default
-                        </span>
-                      )}
-                    </div>
+                          <div className="flex items-center gap-2 truncate min-w-0 pr-12">
+                            <span className="text-sm shrink-0">{ch.icon || '💬'}</span>
+                            <span className="truncate">{ch.name}</span>
+                            {Boolean(ch.is_default) && (
+                              <span
+                                title="Default Chat Room saat ini"
+                                className={`px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight shrink-0 ${
+                                  isActive ? 'bg-amber-400 text-purple-950' : 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
+                                }`}
+                              >
+                                ⭐ Default
+                              </span>
+                            )}
+                          </div>
 
-                    {!!ch.unreadCount && ch.unreadCount > 0 && !isActive && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500 text-white shrink-0 shadow-xs">
-                        {ch.unreadCount}
-                      </span>
-                    )}
-                  </button>
+                          {!!ch.unreadCount && ch.unreadCount > 0 && !isActive && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-purple-500 text-white shrink-0 shadow-xs">
+                              {ch.unreadCount}
+                            </span>
+                          )}
+                        </button>
 
-                  {canManageCommunity && (
-                    <div className="absolute right-2 opacity-0 group-hover/chan:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xs px-1.5 py-0.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleSetDefaultChannel(ch.id); }}
-                        title={ch.is_default ? 'Default Chat Room saat ini' : 'Jadikan Default Chat Room'}
-                        className={`p-0.5 text-xs transition-transform hover:scale-110 cursor-pointer ${ch.is_default ? 'text-amber-400' : 'text-zinc-400 hover:text-amber-400'}`}
-                      >
-                        {ch.is_default ? '⭐' : '☆'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleReorderChannel(ch.id, 'UP'); }}
-                        title="Naikkan Saluran"
-                        className="text-[10px] text-zinc-400 hover:text-purple-400 px-0.5 cursor-pointer"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleReorderChannel(ch.id, 'DOWN'); }}
-                        title="Turunkan Saluran"
-                        className="text-[10px] text-zinc-400 hover:text-purple-400 px-0.5 cursor-pointer"
-                      >
-                        ▼
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); openChannelModal(ch); }}
-                        title="Edit Saluran"
-                        className="text-xs text-zinc-400 hover:text-blue-400 px-0.5 cursor-pointer"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteChannel(ch); }}
-                        title="Hapus Saluran"
-                        className="text-xs text-zinc-400 hover:text-red-400 px-0.5 cursor-pointer"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 💬 GENERAL & SANTAI */}
-          <div className="space-y-1">
-            <div className="px-3 flex items-center justify-between mb-1.5 group/cat">
-              <p className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
-                <span>💬</span>
-                <span>General & Santai</span>
-              </p>
-              <div className="flex items-center gap-1">
-                {canManageCommunity && (
-                  <button
-                    type="button"
-                    onClick={() => openChannelModal(undefined, 'GENERAL')}
-                    className="text-[9px] font-bold text-blue-500 hover:text-blue-700 hover:bg-blue-500/10 px-1 py-0.5 rounded transition-all cursor-pointer"
-                    title="Tambah Saluran ke General & Santai"
-                  >
-                    + Saluran
-                  </button>
+                        {canManageCommunity && (
+                          <div className="absolute right-2 opacity-0 group-hover/chan:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xs px-1.5 py-0.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleSetDefaultChannel(ch.id); }}
+                              title={ch.is_default ? 'Default Chat Room saat ini' : 'Jadikan Default Chat Room'}
+                              className={`p-0.5 text-xs transition-transform hover:scale-110 cursor-pointer ${ch.is_default ? 'text-amber-400' : 'text-zinc-400 hover:text-amber-400'}`}
+                            >
+                              {ch.is_default ? '⭐' : '☆'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleReorderChannel(ch.id, 'UP'); }}
+                              title="Naikkan Saluran"
+                              className="text-[10px] text-zinc-400 hover:text-purple-400 px-0.5 cursor-pointer"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleReorderChannel(ch.id, 'DOWN'); }}
+                              title="Turunkan Saluran"
+                              className="text-[10px] text-zinc-400 hover:text-purple-400 px-0.5 cursor-pointer"
+                            >
+                              ▼
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); openChannelModal(ch); }}
+                              title="Edit Saluran"
+                              className="text-xs text-zinc-400 hover:text-blue-400 px-0.5 cursor-pointer"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteChannel(ch); }}
+                              title="Hapus Saluran"
+                              className="text-xs text-zinc-400 hover:text-red-400 px-0.5 cursor-pointer"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
-                <button
-                  type="button"
-                  onClick={() => handleClearCategory('GENERAL')}
-                  className="text-[9px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 px-1.5 py-0.5 rounded-md transition-all flex items-center gap-1 cursor-pointer"
-                  title="Bersihkan seluruh chat di Kategori General & Santai"
-                >
-                  <span>🧹</span>
-                  <span>Bersihkan</span>
-                </button>
               </div>
-            </div>
-
-            {generalChannels.map((ch) => {
-              const isActive = activeChannel.id === ch.id;
-              return (
-                <div key={ch.id} className="relative group/chan flex items-center">
-                  <button
-                    onClick={() => handleSelectChannel(ch)}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all ${
-                      isActive
-                        ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
-                        : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 truncate min-w-0 pr-12">
-                      <span className="text-sm shrink-0">{ch.icon || '💬'}</span>
-                      <span className="truncate">{ch.name}</span>
-                      {Boolean(ch.is_default) && (
-                        <span
-                          title="Default Chat Room saat ini"
-                          className={`px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tight shrink-0 ${
-                            isActive ? 'bg-amber-400 text-purple-950' : 'bg-amber-500/20 text-amber-500 border border-amber-500/30'
-                          }`}
-                        >
-                          ⭐ Default
-                        </span>
-                      )}
-                    </div>
-
-                    {!!ch.unreadCount && ch.unreadCount > 0 && !isActive && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500 text-white shrink-0 shadow-xs">
-                        {ch.unreadCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {canManageCommunity && (
-                    <div className="absolute right-2 opacity-0 group-hover/chan:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xs px-1.5 py-0.5 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleSetDefaultChannel(ch.id); }}
-                        title={ch.is_default ? 'Default Chat Room saat ini' : 'Set sebagai Default Chat Room'}
-                        className={`p-0.5 text-xs transition-transform hover:scale-110 cursor-pointer ${ch.is_default ? 'text-amber-400' : 'text-zinc-400 hover:text-amber-400'}`}
-                      >
-                        {ch.is_default ? '⭐' : '☆'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleReorderChannel(ch.id, 'UP'); }}
-                        title="Naikkan Saluran"
-                        className="text-[10px] text-zinc-400 hover:text-purple-400 px-0.5 cursor-pointer"
-                      >
-                        ▲
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleReorderChannel(ch.id, 'DOWN'); }}
-                        title="Turunkan Saluran"
-                        className="text-[10px] text-zinc-400 hover:text-purple-400 px-0.5 cursor-pointer"
-                      >
-                        ▼
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); openChannelModal(ch); }}
-                        title="Edit Saluran"
-                        className="text-xs text-zinc-400 hover:text-blue-400 px-0.5 cursor-pointer"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteChannel(ch); }}
-                        title="Hapus Saluran"
-                        className="text-xs text-zinc-400 hover:text-red-400 px-0.5 cursor-pointer"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+            );
+          })}
+        </div>
         </div>
       </aside>
 
@@ -2158,11 +2093,9 @@ export default function CommunityChatView({
                   onChange={(e) => setChannelForm({ ...channelForm, category: e.target.value })}
                   className="w-full text-xs p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 focus:outline-none focus:border-purple-500 font-bold"
                 >
-                  <option value="WORK">💼 Kategori Kerjaan (WORK)</option>
-                  <option value="GENERAL">💬 General & Santai (GENERAL)</option>
                   {categories.map((cat) => (
                     <option key={cat.id} value={cat.id}>
-                      {cat.icon} {cat.name}
+                      {cat.icon || '📁'} {cat.name}
                     </option>
                   ))}
                 </select>
