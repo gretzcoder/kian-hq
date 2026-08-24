@@ -321,9 +321,14 @@ export function ThreadSidePanel({
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSend(e);
+            if (e.key === 'Enter') {
+              if (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(max-width: 768px)').matches)) {
+                return;
+              }
+              if (!e.shiftKey) {
+                e.preventDefault();
+                handleSend(e);
+              }
             }
           }}
           placeholder={`Balas di "${threadName}" (ketik # untuk tag menu)...`}

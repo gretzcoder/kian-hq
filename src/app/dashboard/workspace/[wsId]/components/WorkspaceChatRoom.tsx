@@ -1127,9 +1127,14 @@ export function WorkspaceChatRoom({
             value={inputMessage}
             onChange={handleInputChange}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend(e);
+              if (e.key === 'Enter') {
+                if (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(max-width: 768px)').matches)) {
+                  return;
+                }
+                if (!e.shiftKey) {
+                  e.preventDefault();
+                  handleSend(e);
+                }
               }
             }}
             placeholder="Ketik pesan tim (ketik # untuk tag menu)..."

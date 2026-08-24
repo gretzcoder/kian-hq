@@ -26,6 +26,8 @@ export interface DirectMessage {
   status: 'SENT' | 'DELIVERED' | 'READ';
   isRequest: boolean;
   createdAt: number;
+  isEdited?: boolean;
+  editCount?: number;
 }
 
 export interface ConversationItem {
@@ -569,7 +571,7 @@ export async function acceptMessageRequestAction(partnerUserId: string): Promise
 }
 
 /**
- * Helper to ensure deleted_for column exists in direct_messages
+ * Helper to ensure deleted_for, is_edited, edit_count columns exist in direct_messages
  */
 async function ensureDMDeletedForColumn(db: any) {
   try {
@@ -578,7 +580,101 @@ async function ensureDMDeletedForColumn(db: any) {
     if (!existingCols.has('deleted_for')) {
       await db.prepare("ALTER TABLE direct_messages ADD COLUMN deleted_for TEXT DEFAULT '[]'").run();
     }
+    if (!existingCols.has('is_edited')) {
+      await db.prepare("ALTER TABLE direct_messages ADD COLUMN is_edited INTEGER DEFAULT 0").run();
+    }
+    if (!existingCols.has('edit_count')) {
+      await db.prepare("ALTER TABLE direct_messages ADD COLUMN edit_count INTEGER DEFAULT 0").run();
+    }
   } catch {}
+}
+
+/**
+ * Edit a direct message (Max 5x edit, within 15 minutes of sending)
+ */
+export async function editDirectMessageAction(messageId: string, newText: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const trimmed = newText?.trim();
+  if (!trimmed) return { success: false, error: 'Pesan tidak boleh kosong.' };
+
+  const db = await getDB();
+  await ensureDMDeletedForColumn(db);
+  const now = Math.floor(Date.now() / 1000);
+
+  const row = (await db
+    .prepare('SELECT sender_id, created_at, edit_count FROM direct_messages WHERE id = ?')
+    .bind(messageId)
+    .first()) as { sender_id: string; created_at: number; edit_count?: number } | null;
+
+  if (!row) return { success: false, error: 'Pesan tidak ditemukan.' };
+  if (row.sender_id !== session.userId) return { success: false, error: 'Anda hanya dapat mengedit pesan sendiri.' };
+
+  const editCount = Number(row.edit_count || 0);
+  if (editCount >= 5) {
+    return { success: false, error: 'Batas maksimal 5x edit untuk pesan ini telah tercapai.' };
+  }
+
+  const createdAt = Number(row.created_at) || 0;
+  if (now - createdAt > 15 * 60) {
+    return { success: false, error: 'Pesan hanya dapat diedit dalam waktu 15 menit setelah dikirim.' };
+  }
+
+  try {
+    await db
+      .prepare('UPDATE direct_messages SET message = ?, edit_count = COALESCE(edit_count, 0) + 1, is_edited = 1 WHERE id = ?')
+      .bind(trimmed, messageId)
+      .run();
+  } catch {
+    await db
+      .prepare('UPDATE direct_messages SET message = ?, is_edited = 1 WHERE id = ?')
+      .bind(trimmed, messageId)
+      .run();
+  }
+
+  revalidatePath('/dashboard');
+  return { success: true };
+}
+
+/**
+ * Delete a direct message for EVERYONE (only if within 15 minutes of sending or if Admin)
+ */
+export async function deleteDirectMessageEveryoneAction(messageId: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  await ensureDMDeletedForColumn(db);
+  const now = Math.floor(Date.now() / 1000);
+
+  const row = (await db
+    .prepare('SELECT sender_id, created_at FROM direct_messages WHERE id = ?')
+    .bind(messageId)
+    .first()) as { sender_id: string; created_at: number } | null;
+
+  if (!row) return { success: false, error: 'Pesan tidak ditemukan.' };
+
+  if (row.sender_id !== session.userId) {
+    const userRow = (await db
+      .prepare('SELECT user_type FROM users WHERE id = ?')
+      .bind(session.userId)
+      .first()) as { user_type?: string } | null;
+    const userRole = (userRow?.user_type || '').toUpperCase();
+    if (!['ADMIN', 'SUPERADMIN', 'EXECUTIVE'].includes(userRole)) {
+      return { success: false, error: 'Anda tidak memiliki izin menghapus pesan ini untuk semua orang.' };
+    }
+  } else {
+    const createdAt = Number(row.created_at) || 0;
+    if (now - createdAt > 15 * 60) {
+      return { success: false, error: 'Pesan hanya dapat dihapus untuk semua orang dalam waktu 15 menit setelah dikirim. Silakan gunakan Hapus untuk Saya.' };
+    }
+  }
+
+  await db.prepare('DELETE FROM direct_messages WHERE id = ?').bind(messageId).run();
+
+  revalidatePath('/dashboard');
+  return { success: true };
 }
 
 /**

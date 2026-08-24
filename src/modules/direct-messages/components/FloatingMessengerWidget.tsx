@@ -10,6 +10,8 @@ import {
   toggleDMReactionAction,
   acceptMessageRequestAction,
   deleteDirectMessagePOVAction,
+  editDirectMessageAction,
+  deleteDirectMessageEveryoneAction,
   DirectMessage,
 } from '../dmActions';
 import { respondFriendRequestAction, getFriendshipStatusAction, FriendshipStatus } from '@/modules/friends/friendActions';
@@ -217,6 +219,22 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
   const [sending, setSending] = useState(false);
 
   const touchTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const [editingMsg, setEditingMsg] = useState<DirectMessage | null>(null);
+  const [editText, setEditText] = useState('');
+  const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [deleteType, setDeleteType] = useState<'POV' | 'EVERYONE'>('POV');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const triggerToast = (msgText: string) => {
+    setToastMessage(msgText);
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const isTouchDevice = () => {
+    if (typeof window === 'undefined') return false;
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(max-width: 768px)').matches;
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -528,44 +546,101 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
                     </div>
 
                     {/* Action Bar (Triggered by Press & Hold / Click) */}
-                    {isActionActive && (
-                      <div
-                        onClick={(e) => e.stopPropagation()}
-                        className={`absolute -top-9 ${isMe ? 'right-0' : 'left-0'} flex items-center gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full px-2.5 py-1 shadow-xl z-20 animate-in zoom-in-95 duration-150`}
-                      >
-                        {COMMON_EMOJIS.slice(0, 5).map((e) => (
+                    {isActionActive && (() => {
+                      const nowSec = Math.floor(Date.now() / 1000);
+                      const createdAtSec = m.createdAt < 10000000000 ? m.createdAt : Math.floor(m.createdAt / 1000);
+                      const isWithin15Min = nowSec - createdAtSec <= 15 * 60;
+                      const canEditMsg = isMe && isWithin15Min && (m.editCount || 0) < 5;
+                      const canDeleteEveryone = (isMe && isWithin15Min) || ['ADMIN', 'SUPERADMIN', 'EXECUTIVE'].includes((partnerInfo?.userType || '').toUpperCase());
+
+                      return (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className={`absolute -top-9 ${isMe ? 'right-0' : 'left-0'} flex items-center gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full px-2.5 py-1 shadow-xl z-20 animate-in zoom-in-95 duration-150 max-w-xs`}
+                        >
+                          {COMMON_EMOJIS.slice(0, 4).map((e) => (
+                            <button
+                              key={e}
+                              type="button"
+                              onClick={() => handleToggleReaction(m.id, e)}
+                              className="hover:scale-125 transition-transform text-sm cursor-pointer p-0.5"
+                            >
+                              {e}
+                            </button>
+                          ))}
                           <button
-                            key={e}
                             type="button"
-                            onClick={() => handleToggleReaction(m.id, e)}
-                            className="hover:scale-125 transition-transform text-sm cursor-pointer p-0.5"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(m.message);
+                              setActiveActionMsgId(null);
+                              triggerToast('Pesan berhasil disalin!');
+                            }}
+                            className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-bold px-2 py-0.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 ml-0.5 cursor-pointer shrink-0"
+                            title="Salin teks pesan"
                           >
-                            {e}
+                            📋 Salin
                           </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setReplyingTo(m);
-                            setActiveActionMsgId(null);
-                          }}
-                          className="text-[10px] bg-purple-600 text-white font-bold px-2 py-0.5 rounded-full hover:bg-purple-700 ml-1 cursor-pointer"
-                        >
-                          ↩ Reply
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDeleteTargetMsgId(m.id);
-                            setActiveActionMsgId(null);
-                          }}
-                          className="text-[10px] bg-red-600/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold px-2 py-0.5 rounded-full hover:bg-red-600 hover:text-white ml-1 cursor-pointer transition-colors"
-                          title="Hapus pesan ini dari tampilan Anda (POV)"
-                        >
-                          🗑️ Hapus
-                        </button>
-                      </div>
-                    )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReplyingTo(m);
+                              setActiveActionMsgId(null);
+                            }}
+                            className="text-[10px] bg-purple-600 text-white font-bold px-2 py-0.5 rounded-full hover:bg-purple-700 ml-0.5 cursor-pointer shrink-0"
+                          >
+                            ↩ Reply
+                          </button>
+
+                          {canEditMsg && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingMsg(m);
+                                setEditText(m.message);
+                                setActiveActionMsgId(null);
+                              }}
+                              className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold px-2 py-0.5 rounded-full hover:bg-amber-500 hover:text-white ml-0.5 cursor-pointer transition-colors shrink-0"
+                              title={`Edit pesan (Sisa ${5 - (m.editCount || 0)}x edit)`}
+                            >
+                              ✏️ Edit
+                            </button>
+                          )}
+
+                          {canDeleteEveryone ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTargetMsgId(m.id);
+                                setDeleteType('EVERYONE');
+                                setActiveActionMsgId(null);
+                              }}
+                              className="text-[10px] bg-red-600/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold px-2 py-0.5 rounded-full hover:bg-red-600 hover:text-white ml-0.5 cursor-pointer transition-colors shrink-0"
+                              title="Hapus pesan untuk semua orang"
+                            >
+                              🗑️ Hapus Semua
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteTargetMsgId(m.id);
+                                setDeleteType('POV');
+                                setActiveActionMsgId(null);
+                              }}
+                              className="text-[10px] bg-zinc-200/60 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-bold px-2 py-0.5 rounded-full hover:bg-zinc-300 ml-0.5 cursor-pointer transition-colors shrink-0"
+                              title="Hapus pesan untuk Anda saja (POV)"
+                            >
+                              🗑️ Hapus Saya
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -589,6 +664,59 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-zinc-900/90 text-white text-xs font-bold px-3.5 py-1.5 rounded-full shadow-lg backdrop-blur-md animate-in fade-in duration-150 border border-zinc-700">
+          {toastMessage}
+        </div>
+      )}
+
+      {/* Editing Message Banner */}
+      {editingMsg && (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!editingMsg || !editText.trim() || submittingEdit) return;
+            setSubmittingEdit(true);
+            const res = await editDirectMessageAction(editingMsg.id, editText.trim());
+            if (res.success) {
+              triggerToast('Pesan berhasil diperbarui!');
+              setEditingMsg(null);
+              setEditText('');
+              await fetchMessages();
+            } else {
+              alert(res.error || 'Gagal mengedit pesan.');
+            }
+            setSubmittingEdit(false);
+          }}
+          className="p-2 bg-amber-500/10 border-t border-amber-500/20 flex items-center gap-2 text-xs"
+        >
+          <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0 text-[10px]">
+            ✏️ Edit ({5 - (editingMsg.editCount || 0)}x tersisa):
+          </span>
+          <input
+            type="text"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            className="flex-1 px-2 py-1 rounded-xl bg-white dark:bg-zinc-800 border border-amber-500/30 text-xs focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={submittingEdit}
+            className="px-2 py-0.5 bg-amber-600 text-white font-bold rounded-lg text-xs hover:bg-amber-700 disabled:opacity-50 shrink-0"
+          >
+            Simpan
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditingMsg(null)}
+            className="text-zinc-400 font-bold text-xs hover:text-zinc-600 shrink-0"
+          >
+            ✕
+          </button>
+        </form>
+      )}
 
       {/* Full Modern Emoji Picker Popover */}
       {showEmojiPicker && (
@@ -714,9 +842,12 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
+              if (e.key === 'Enter') {
+                if (isTouchDevice()) return;
+                if (!e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
               }
             }}
             placeholder="Ketik pesan / ketik # untuk tag menu..."
@@ -736,7 +867,7 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
         </div>
       </div>
 
-      {/* POV Delete Message Modal */}
+      {/* Delete Message Modal */}
       <DeletePOVModal
         isOpen={Boolean(deleteTargetMsgId)}
         onClose={() => setDeleteTargetMsgId(null)}
@@ -744,18 +875,32 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
           if (!deleteTargetMsgId) return;
           setSubmittingDeleteMsg(true);
           try {
-            await deleteDirectMessagePOVAction(deleteTargetMsgId);
+            if (deleteType === 'EVERYONE') {
+              const res = await deleteDirectMessageEveryoneAction(deleteTargetMsgId);
+              if (res.success) {
+                triggerToast('Pesan dihapus untuk semua orang');
+              } else {
+                alert(res.error || 'Gagal menghapus pesan');
+              }
+            } else {
+              await deleteDirectMessagePOVAction(deleteTargetMsgId);
+              triggerToast('Pesan dihapus untuk Anda');
+            }
             setDeleteTargetMsgId(null);
             await fetchMessages();
           } catch (err) {
-            console.error('Failed to delete POV message:', err);
+            console.error('Failed to delete message:', err);
           } finally {
             setSubmittingDeleteMsg(false);
           }
         }}
         submitting={submittingDeleteMsg}
-        title="⚠️ Hapus Pesan ini untuk Saya?"
-        message="Apakah Anda yakin ingin menghapus pesan ini? Pesan ini HANYA akan dihapus dari tampilan Anda (POV). Lawan bicara Anda tetap dapat melihat pesan ini."
+        title={deleteType === 'EVERYONE' ? '🗑️ Hapus Pesan untuk Semua Orang?' : '⚠️ Hapus Pesan untuk Saya?'}
+        message={
+          deleteType === 'EVERYONE'
+            ? 'Apakah Anda yakin ingin menghapus pesan ini untuk semua orang? Pesan akan terhapus secara permanen dari percakapan.'
+            : 'Apakah Anda yakin ingin menghapus pesan ini? Pesan ini HANYA akan dihapus dari tampilan Anda (POV).'
+        }
       />
 
       {/* Menu Tag Picker Modal */}
