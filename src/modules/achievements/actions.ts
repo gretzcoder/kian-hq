@@ -34,200 +34,220 @@ export interface UserAchievementSummary {
 
 /** Ensure achievement_history table exists */
 export async function ensureAchievementHistoryTable() {
-  const db = await getDB();
-  await db.prepare(`
-    CREATE TABLE IF NOT EXISTS achievement_history (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      achievement_type TEXT NOT NULL,
-      title TEXT NOT NULL,
-      period TEXT NOT NULL,
-      rank INTEGER NOT NULL DEFAULT 1,
-      score INTEGER NOT NULL DEFAULT 0,
-      category TEXT NOT NULL DEFAULT 'GENERAL',
-      earned_at INTEGER NOT NULL,
-      created_at INTEGER NOT NULL,
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-  `).run();
+  try {
+    const db = await getDB();
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS achievement_history (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        achievement_type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        period TEXT NOT NULL,
+        rank INTEGER NOT NULL DEFAULT 1,
+        score INTEGER NOT NULL DEFAULT 0,
+        category TEXT NOT NULL DEFAULT 'GENERAL',
+        earned_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `).run();
 
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_achievement_history_user ON achievement_history(user_id);`).run();
-  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_achievement_history_category ON achievement_history(category);`).run();
+    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_achievement_history_user ON achievement_history(user_id)`).run();
+    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_achievement_history_category ON achievement_history(category)`).run();
+  } catch (err) {
+    console.error('ensureAchievementHistoryTable error:', err);
+  }
 }
 
 /** Get Full Achievement History across system or for specific user/category */
 export async function getAchievementHistoryAction(categoryFilter = 'ALL', userIdFilter = '') {
-  await ensureAchievementHistoryTable();
-  await syncLeaderboardAchievements();
+  try {
+    await ensureAchievementHistoryTable();
+    await syncLeaderboardAchievements();
 
-  const db = await getDB();
-  let query = `
-    SELECT 
-      ah.id,
-      ah.user_id as userId,
-      u.name as userName,
-      u.email as userEmail,
-      u.avatar_url as userAvatar,
-      r.name as userRole,
-      ah.achievement_type as achievementType,
-      ah.title,
-      ah.period,
-      ah.rank,
-      ah.score,
-      ah.category,
-      ah.earned_at as earnedAt
-    FROM achievement_history ah
-    JOIN users u ON ah.user_id = u.id
-    LEFT JOIN user_roles ur ON u.id = ur.user_id
-    LEFT JOIN roles r ON ur.role_id = r.id
-    WHERE 1=1
-  `;
+    const db = await getDB();
+    let query = `
+      SELECT 
+        ah.id,
+        ah.user_id as userId,
+        u.name as userName,
+        u.email as userEmail,
+        u.avatar_url as userAvatar,
+        r.name as userRole,
+        ah.achievement_type as achievementType,
+        ah.title,
+        ah.period,
+        ah.rank,
+        ah.score,
+        ah.category,
+        ah.earned_at as earnedAt
+      FROM achievement_history ah
+      JOIN users u ON ah.user_id = u.id
+      LEFT JOIN user_roles ur ON u.id = ur.user_id
+      LEFT JOIN roles r ON ur.role_id = r.id
+      WHERE 1=1
+    `;
 
-  const params: any[] = [];
+    const params: any[] = [];
 
-  if (categoryFilter && categoryFilter !== 'ALL') {
-    query += ` AND (UPPER(ah.category) = UPPER(?) OR UPPER(ah.achievement_type) = UPPER(?))`;
-    params.push(categoryFilter, categoryFilter);
+    if (categoryFilter && categoryFilter !== 'ALL') {
+      query += ` AND (UPPER(ah.category) = UPPER(?) OR UPPER(ah.achievement_type) = UPPER(?))`;
+      params.push(categoryFilter, categoryFilter);
+    }
+
+    if (userIdFilter) {
+      query += ` AND ah.user_id = ?`;
+      params.push(userIdFilter);
+    }
+
+    query += ` ORDER BY ah.earned_at DESC, ah.created_at DESC`;
+
+    const { results } = await db.prepare(query).bind(...params).all();
+    return (results as any[]) || [];
+  } catch (err) {
+    console.error('getAchievementHistoryAction error:', err);
+    return [];
   }
-
-  if (userIdFilter) {
-    query += ` AND ah.user_id = ?`;
-    params.push(userIdFilter);
-  }
-
-  query += ` ORDER BY ah.earned_at DESC, ah.created_at DESC`;
-
-  const { results } = await db.prepare(query).bind(...params).all();
-  return (results as any[]) || [];
 }
 
 /** Get User Achievement Counter, Last Date & Streak Summary for Profile/Leaderboard */
 export async function getUserAchievementStatsAction(userId: string) {
-  await ensureAchievementHistoryTable();
-  await syncLeaderboardAchievements();
+  try {
+    await ensureAchievementHistoryTable();
+    await syncLeaderboardAchievements();
 
-  const db = await getDB();
-  const { results } = await db.prepare(`
-    SELECT achievement_type, title, category, rank, score, period, earned_at
-    FROM achievement_history
-    WHERE user_id = ?
-    ORDER BY earned_at DESC
-  `).bind(userId).all();
+    const db = await getDB();
+    const { results } = await db.prepare(`
+      SELECT achievement_type, title, category, rank, score, period, earned_at
+      FROM achievement_history
+      WHERE user_id = ?
+      ORDER BY earned_at DESC
+    `).bind(userId).all();
 
-  const rows = (results as any[]) || [];
-  const map: Record<string, {
-    achievementType: string;
-    title: string;
-    category: string;
-    items: Array<{ period: string; earnedAt: number; rank: number; score: number }>;
-  }> = {};
+    const rows = (results as any[]) || [];
+    const map: Record<string, {
+      achievementType: string;
+      title: string;
+      category: string;
+      items: Array<{ period: string; earnedAt: number; rank: number; score: number }>;
+    }> = {};
 
-  for (const r of rows) {
-    const key = r.achievement_type;
-    if (!map[key]) {
-      map[key] = {
-        achievementType: r.achievement_type,
-        title: r.title,
-        category: r.category,
-        items: [],
-      };
-    }
-    map[key].items.push({
-      period: r.period,
-      earnedAt: r.earned_at,
-      rank: r.rank,
-      score: r.score,
-    });
-  }
-
-  const summaries: UserAchievementSummary[] = Object.values(map).map((group) => {
-    const totalCount = group.items.length;
-    const lastItem = group.items[0]; // Most recent
-    const meta = getAchievementMeta(group.achievementType, group.category);
-
-    // Calculate Streak (Consecutive period wins)
-    let streakCount = 1;
-    for (let i = 0; i < group.items.length - 1; i++) {
-      // If earnedAt timestamp difference is within ~10 days (for weekly) or ~35 days (for monthly)
-      const diffDays = Math.abs(group.items[i].earnedAt - group.items[i + 1].earnedAt) / (24 * 3600);
-      if (diffDays <= 36) {
-        streakCount++;
-      } else {
-        break;
+    for (const r of rows) {
+      const key = r.achievement_type;
+      if (!map[key]) {
+        map[key] = {
+          achievementType: r.achievement_type,
+          title: r.title,
+          category: r.category,
+          items: [],
+        };
       }
+      map[key].items.push({
+        period: r.period,
+        earnedAt: r.earned_at,
+        rank: r.rank,
+        score: r.score,
+      });
     }
 
-    return {
-      achievementType: group.achievementType,
-      title: group.title,
-      category: group.category,
-      emoji: meta.emoji,
-      totalCount,
-      lastEarnedAt: lastItem.earnedAt,
-      lastPeriod: lastItem.period,
-      streakCount: totalCount > 1 ? streakCount : 1,
-      color: meta.color,
-    };
-  });
+    const summaries: UserAchievementSummary[] = Object.values(map).map((group) => {
+      const totalCount = group.items.length;
+      const lastItem = group.items[0]; // Most recent
+      const meta = getAchievementMeta(group.achievementType, group.category);
 
-  return summaries;
+      // Calculate Streak (Consecutive period wins)
+      let streakCount = 1;
+      for (let i = 0; i < group.items.length - 1; i++) {
+        // If earnedAt timestamp difference is within ~10 days (for weekly) or ~35 days (for monthly)
+        const diffDays = Math.abs(group.items[i].earnedAt - group.items[i + 1].earnedAt) / (24 * 3600);
+        if (diffDays <= 36) {
+          streakCount++;
+        } else {
+          break;
+        }
+      }
+
+      return {
+        achievementType: group.achievementType,
+        title: group.title,
+        category: group.category,
+        emoji: meta.emoji,
+        totalCount,
+        lastEarnedAt: lastItem.earnedAt,
+        lastPeriod: lastItem.period,
+        streakCount: totalCount > 1 ? streakCount : 1,
+        color: meta.color,
+      };
+    });
+
+    return summaries;
+  } catch (err) {
+    console.error('getUserAchievementStatsAction error:', err);
+    return [];
+  }
 }
 
 /** Get User Active Champion Streak String for Leaderboard (e.g. "🔥 3 Weeks Streak" or "🏆 4x Champion") */
 export async function getUserStreakBadgeMapAction(): Promise<Record<string, string>> {
-  await ensureAchievementHistoryTable();
+  try {
+    await ensureAchievementHistoryTable();
 
-  const db = await getDB();
-  const { results } = await db.prepare(`
-    SELECT user_id, achievement_type, title, period, earned_at
-    FROM achievement_history
-    ORDER BY user_id, earned_at DESC
-  `).all();
+    const db = await getDB();
+    const { results } = await db.prepare(`
+      SELECT user_id, achievement_type, title, period, earned_at
+      FROM achievement_history
+      ORDER BY user_id, earned_at DESC
+    `).all();
 
-  const userMap: Record<string, string> = {};
-  const rows = (results as any[]) || [];
+    const userMap: Record<string, string> = {};
+    const rows = (results as any[]) || [];
 
-  const groupedByUser: Record<string, any[]> = {};
-  for (const r of rows) {
-    if (!groupedByUser[r.user_id]) groupedByUser[r.user_id] = [];
-    groupedByUser[r.user_id].push(r);
-  }
-
-  for (const [uId, items] of Object.entries(groupedByUser)) {
-    const weeklyWins = items.filter((x) => x.achievement_type === 'WEEKLY_CHAMPION');
-    if (weeklyWins.length > 0) {
-      if (weeklyWins.length >= 2) {
-        userMap[uId] = `🔥 ${weeklyWins.length}x Champion`;
-      } else {
-        userMap[uId] = `🏆 1x Champion`;
-      }
-    } else if (items.length > 0) {
-      userMap[uId] = `🌟 ${items.length}x Title Winner`;
+    const groupedByUser: Record<string, any[]> = {};
+    for (const r of rows) {
+      if (!groupedByUser[r.user_id]) groupedByUser[r.user_id] = [];
+      groupedByUser[r.user_id].push(r);
     }
-  }
 
-  return userMap;
+    for (const [uId, items] of Object.entries(groupedByUser)) {
+      const weeklyWins = items.filter((x) => x.achievement_type === 'WEEKLY_CHAMPION');
+      if (weeklyWins.length > 0) {
+        if (weeklyWins.length >= 2) {
+          userMap[uId] = `🔥 ${weeklyWins.length}x Champion`;
+        } else {
+          userMap[uId] = `🏆 1x Champion`;
+        }
+      } else if (items.length > 0) {
+        userMap[uId] = `🌟 ${items.length}x Title Winner`;
+      }
+    }
+
+    return userMap;
+  } catch (err) {
+    console.error('getUserStreakBadgeMapAction error:', err);
+    return {};
+  }
 }
 
 /** Seed / Sync Top Performers into achievement_history */
 export async function syncLeaderboardAchievements() {
-  const db = await getDB();
+  try {
+    const db = await getDB();
 
-  // Check if we already seeded sample achievements for current active period
-  const { count } = (await db.prepare('SELECT COUNT(*) as count FROM achievement_history').first() as any) || { count: 0 };
-  if (count > 0) return; // Already seeded / populated
+    // Check if we already seeded sample achievements for current active period
+    const { count } = (await db.prepare('SELECT COUNT(*) as count FROM achievement_history').first() as any) || { count: 0 };
+    if (count > 0) return; // Already seeded / populated
 
-  // Fetch top users by Sparks history / task completed to seed initial achievement history
-  const { results: topUsers } = await db.prepare(`
-    SELECT u.id, u.name, u.email,
-      COALESCE(SUM(CAST(JSON_EXTRACT(sa.metadata, '$.sparks') AS INTEGER)), 0) as total_sparks
-    FROM users u
-    LEFT JOIN sparks_adjustments sa ON u.id = sa.user_id
-    WHERE u.status = 'ACTIVE'
-    GROUP BY u.id
-    ORDER BY total_sparks DESC
-    LIMIT 10
-  `).all();
+    // Fetch top users by Sparks history / task completed to seed initial achievement history
+    const { results: topUsers } = await db.prepare(`
+      SELECT u.id, u.name, u.email,
+        COALESCE(SUM(sa.sparks), 0) as total_sparks
+      FROM users u
+      LEFT JOIN sparks_adjustments sa ON u.id = sa.user_id
+      WHERE u.status = 'ACTIVE'
+      GROUP BY u.id
+      ORDER BY total_sparks DESC
+      LIMIT 10
+    `).all();
 
   const users = (topUsers as any[]) || [];
   if (users.length === 0) return;
@@ -348,5 +368,8 @@ export async function syncLeaderboardAchievements() {
       item.earnedAt,
       nowSec
     ).run();
+  }
+  } catch (err) {
+    console.error('syncLeaderboardAchievements error:', err);
   }
 }
