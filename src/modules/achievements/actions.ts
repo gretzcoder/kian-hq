@@ -242,9 +242,7 @@ export async function syncLeaderboardAchievements() {
     const db = await getDB();
     const nowSec = Math.floor(Date.now() / 1000);
     const weekLabel = getWeekPeriodLabel();
-    const monthLabel = getMonthPeriodLabel();
     const saturdayTs = getWeeklySaturdayTimestamp();
-    const monthEndTs = getMonthlyLastDayTimestamp();
 
     const leaderboardCategories: Array<{
       id:
@@ -271,89 +269,73 @@ export async function syncLeaderboardAchievements() {
       { id: 'role_researcher', categoryKey: 'RESEARCHER', labelName: 'Researcher' },
     ];
 
-    const todayDate = new Date();
-    const currentDayOfMonth = todayDate.getDate();
-    const lastDayOfMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate();
-    const isEndOfMonth = currentDayOfMonth >= lastDayOfMonth;
-
     for (const cat of leaderboardCategories) {
-      for (const period of ['week', 'month'] as const) {
-        // Monthly achievements are ONLY recorded on/after the end of the month (H-1 / last day)
-        if (period === 'month' && !isEndOfMonth) {
-          continue;
-        }
+      try {
+        const lbResult = await getLeaderboardData(cat.id, 'month');
+        const topItems = (lbResult.data || []).slice(0, 3);
 
-        try {
-          const lbResult = await getLeaderboardData(cat.id, period);
-          const topItems = (lbResult.data || []).slice(0, 3);
-          const periodLabel = period === 'week' ? weekLabel : monthLabel;
-          const earnedAt = period === 'week' ? saturdayTs : monthEndTs;
+        for (let i = 0; i < topItems.length; i++) {
+          const item = topItems[i];
+          const rankNum = i + 1;
+          const winnerUserId = (item as any).userId || (item as any).leaderId || (item as any).id;
+          const score = item.totalSparks || (item as any).score || 0;
 
-          for (let i = 0; i < topItems.length; i++) {
-            const item = topItems[i];
-            const rankNum = i + 1;
-            const winnerUserId = (item as any).userId || (item as any).leaderId || (item as any).id;
-            const score = item.totalSparks || (item as any).score || 0;
+          if (!winnerUserId || (score <= 0 && !(item as any).tasksCompleted)) continue;
 
-            if (!winnerUserId || (score <= 0 && !(item as any).tasksCompleted)) continue;
-
-            // Compute Rank Title
-            let title = '';
-            const pText = period === 'week' ? 'Weekly' : 'Monthly';
-
-            if (cat.categoryKey === 'CHAMPION') {
-              if (rankNum === 1) title = `${pText} Champion`;
-              else if (rankNum === 2) title = `Runner-Up Champion (${pText})`;
-              else title = `3rd Place Champion (${pText})`;
-            } else {
-              if (rankNum === 1) title = `Top 1 ${cat.labelName} (${pText})`;
-              else if (rankNum === 2) title = `Top 2 ${cat.labelName} (${pText})`;
-              else title = `Top 3 ${cat.labelName} (${pText})`;
-            }
-
-            const typeKey = `${cat.categoryKey}_RANK${rankNum}_${period.toUpperCase()}`;
-
-            const existing = (await db.prepare(`
-              SELECT id FROM achievement_history
-              WHERE category = ? AND period = ? AND rank = ?
-            `).bind(cat.categoryKey, periodLabel, rankNum).first()) as any;
-
-            if (existing) {
-              await db.prepare(`
-                UPDATE achievement_history
-                SET user_id = ?, achievement_type = ?, title = ?, score = ?, earned_at = ?
-                WHERE id = ?
-              `).bind(
-                winnerUserId,
-                typeKey,
-                title,
-                score,
-                earnedAt,
-                existing.id
-              ).run();
-            } else {
-              const newId = `ach_${Math.random().toString(36).substring(2, 10)}`;
-              await db.prepare(`
-                INSERT INTO achievement_history
-                (id, user_id, achievement_type, title, period, rank, score, category, earned_at, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-              `).bind(
-                newId,
-                winnerUserId,
-                typeKey,
-                title,
-                periodLabel,
-                rankNum,
-                score,
-                cat.categoryKey,
-                earnedAt,
-                nowSec
-              ).run();
-            }
+          // Compute Rank Title
+          let title = '';
+          if (cat.categoryKey === 'CHAMPION') {
+            if (rankNum === 1) title = `Weekly Champion`;
+            else if (rankNum === 2) title = `Runner-Up Champion (Weekly)`;
+            else title = `3rd Place Champion (Weekly)`;
+          } else {
+            if (rankNum === 1) title = `Top 1 ${cat.labelName} (Weekly)`;
+            else if (rankNum === 2) title = `Top 2 ${cat.labelName} (Weekly)`;
+            else title = `Top 3 ${cat.labelName} (Weekly)`;
           }
-        } catch (catErr) {
-          // Ignore individual category sync error
+
+          const typeKey = `${cat.categoryKey}_RANK${rankNum}_WEEKLY`;
+
+          const existing = (await db.prepare(`
+            SELECT id FROM achievement_history
+            WHERE category = ? AND period = ? AND rank = ?
+          `).bind(cat.categoryKey, weekLabel, rankNum).first()) as any;
+
+          if (existing) {
+            await db.prepare(`
+              UPDATE achievement_history
+              SET user_id = ?, achievement_type = ?, title = ?, score = ?, earned_at = ?
+              WHERE id = ?
+            `).bind(
+              winnerUserId,
+              typeKey,
+              title,
+              score,
+              saturdayTs,
+              existing.id
+            ).run();
+          } else {
+            const newId = `ach_${Math.random().toString(36).substring(2, 10)}`;
+            await db.prepare(`
+              INSERT INTO achievement_history
+              (id, user_id, achievement_type, title, period, rank, score, category, earned_at, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).bind(
+              newId,
+              winnerUserId,
+              typeKey,
+              title,
+              weekLabel,
+              rankNum,
+              score,
+              cat.categoryKey,
+              saturdayTs,
+              nowSec
+            ).run();
+          }
         }
+      } catch (catErr) {
+        // Ignore individual category sync error
       }
     }
   } catch (err) {
