@@ -16,7 +16,7 @@ import {
 } from '../dmActions';
 import { respondFriendRequestAction, getFriendshipStatusAction, FriendshipStatus } from '@/modules/friends/friendActions';
 import UserAvatar from '@/components/ui/UserAvatar';
-import { DeletePOVModal } from '@/components/DeletePOVModal';
+import { DeleteMessageModal } from '@/components/DeleteMessageModal';
 import { parseRichMessageContent } from '@/lib/menuTagging';
 import { MenuHashtagAutocompletePopover } from '@/components/MenuHashtagAutocompletePopover';
 import { MenuTagModal } from '@/components/MenuTagModal';
@@ -225,6 +225,21 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
   const [submittingEdit, setSubmittingEdit] = useState(false);
   const [deleteType, setDeleteType] = useState<'POV' | 'EVERYONE'>('POV');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
+  const [openMenuMsgId, setOpenMenuMsgId] = useState<string | null>(null);
+
+  const toggleSelectMsg = (msgId: string) => {
+    setSelectedMsgIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(msgId)) {
+        next.delete(msgId);
+      } else {
+        next.add(msgId);
+      }
+      return next;
+    });
+  };
 
   const triggerToast = (msgText: string) => {
     setToastMessage(msgText);
@@ -505,37 +520,73 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
                   </div>
                 )}
 
-                <div className="flex items-end gap-1.5 max-w-[88%] sm:max-w-[85%]">
+                <div className="flex items-end gap-2 max-w-[92%] sm:max-w-[85%] group">
+                  {/* Multi-select Circular Checkbox (WhatsApp Web Style) */}
+                  {isSelectMode && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelectMsg(m.id);
+                      }}
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all mb-2 shrink-0 ${
+                        selectedMsgIds.has(m.id)
+                          ? 'bg-purple-600 border-purple-600 text-white scale-110'
+                          : 'border-zinc-300 dark:border-zinc-700 hover:border-purple-400 bg-white dark:bg-zinc-900'
+                      }`}
+                    >
+                      {selectedMsgIds.has(m.id) && '✓'}
+                    </button>
+                  )}
+
                   {!isMe && (
                     <UserAvatar src={avatar} name={name} size="xs" square className="rounded-lg mb-1 shrink-0" />
                   )}
 
-                  <div className="relative">
-                    {/* Message Bubble (Supports Press & Hold / Long-press on mobile and Desktop click) */}
+                  <div className="relative flex-1 min-w-0">
+                    {/* Message Bubble */}
                     <div
-                      onTouchStart={() => handleTouchStart(m.id)}
-                      onTouchEnd={handleTouchEnd}
-                      onMouseDown={() => handleTouchStart(m.id)}
-                      onMouseUp={handleTouchEnd}
                       onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveActionMsgId((prev) => (prev === m.id ? null : m.id));
+                        if (isSelectMode) {
+                          e.stopPropagation();
+                          toggleSelectMsg(m.id);
+                        }
                       }}
-                      className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-2xs cursor-pointer transition-all ${
+                      className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-2xs relative transition-all ${
                         isMe
                           ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs'
                           : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200/80 dark:border-zinc-700/80 rounded-bl-xs'
-                      }`}
+                      } ${selectedMsgIds.has(m.id) ? 'ring-2 ring-purple-500/80 ring-offset-1' : ''}`}
                     >
+                      {/* WhatsApp Web Chevron Down Action Menu Trigger (v) */}
+                      {!isSelectMode && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuMsgId((prev) => (prev === m.id ? null : m.id));
+                          }}
+                          className={`absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 ${
+                            isMe ? 'text-white/80 hover:text-white' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                          } cursor-pointer z-10`}
+                          title="Opsi Pesan"
+                        >
+                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+                      )}
+
                       {m.attachmentUrl && (
                         <div className="mb-1.5 rounded-xl overflow-hidden border border-white/20">
                           <img src={m.attachmentUrl} alt="Attachment" className="max-h-48 w-full object-cover" />
                         </div>
                       )}
-                      <div className="whitespace-pre-wrap">{parseRichMessageContent(m.message)}</div>
+                      <div className="whitespace-pre-wrap pr-4">{parseRichMessageContent(m.message)}</div>
 
                       {/* Timestamp & Delivery Indicator */}
                       <div className={`mt-1 flex items-center gap-1 text-[9px] ${isMe ? 'justify-end text-purple-200/80' : 'justify-start text-zinc-400'}`}>
+                        {m.isEdited && <span className="text-[8px] opacity-70 italic font-mono">(edited)</span>}
                         <span>{new Date(m.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
                         {isMe && (
                           <span title={m.status === 'READ' ? 'Terbaca' : 'Terkirim'} className="font-bold">
@@ -545,99 +596,100 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
                       </div>
                     </div>
 
-                    {/* Action Bar (Triggered by Press & Hold / Click) */}
-                    {isActionActive && (() => {
+                    {/* WhatsApp Web Popover Dropdown Menu */}
+                    {openMenuMsgId === m.id && (() => {
                       const nowSec = Math.floor(Date.now() / 1000);
                       const createdAtSec = m.createdAt < 10000000000 ? m.createdAt : Math.floor(m.createdAt / 1000);
                       const isWithin15Min = nowSec - createdAtSec <= 15 * 60;
                       const canEditMsg = isMe && isWithin15Min && (m.editCount || 0) < 5;
-                      const canDeleteEveryone = (isMe && isWithin15Min) || ['ADMIN', 'SUPERADMIN', 'EXECUTIVE'].includes((partnerInfo?.userType || '').toUpperCase());
 
                       return (
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className={`absolute -top-9 ${isMe ? 'right-0' : 'left-0'} flex items-center gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full px-2.5 py-1 shadow-xl z-20 animate-in zoom-in-95 duration-150 max-w-xs`}
+                          className={`absolute top-8 ${isMe ? 'right-0' : 'left-0'} z-50 w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl py-1 text-xs animate-in zoom-in-95 duration-150`}
                         >
-                          {COMMON_EMOJIS.slice(0, 4).map((e) => (
-                            <button
-                              key={e}
-                              type="button"
-                              onClick={() => handleToggleReaction(m.id, e)}
-                              className="hover:scale-125 transition-transform text-sm cursor-pointer p-0.5"
-                            >
-                              {e}
-                            </button>
-                          ))}
+                          {/* Quick Reactions Strip */}
+                          <div className="px-2 py-1 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-around">
+                            {COMMON_EMOJIS.slice(0, 5).map((e) => (
+                              <button
+                                key={e}
+                                type="button"
+                                onClick={() => {
+                                  handleToggleReaction(m.id, e);
+                                  setOpenMenuMsgId(null);
+                                }}
+                                className="hover:scale-125 transition-transform text-sm cursor-pointer p-0.5"
+                              >
+                                {e}
+                              </button>
+                            ))}
+                          </div>
+
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onClick={() => {
+                              setReplyingTo(m);
+                              setOpenMenuMsgId(null);
+                            }}
+                            className="w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
+                          >
+                            <span>↩</span>
+                            <span>Balas Pesan</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
                               navigator.clipboard.writeText(m.message);
-                              setActiveActionMsgId(null);
+                              setOpenMenuMsgId(null);
                               triggerToast('Pesan berhasil disalin!');
                             }}
-                            className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 font-bold px-2 py-0.5 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-700 ml-0.5 cursor-pointer shrink-0"
-                            title="Salin teks pesan"
+                            className="w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
                           >
-                            📋 Salin
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setReplyingTo(m);
-                              setActiveActionMsgId(null);
-                            }}
-                            className="text-[10px] bg-purple-600 text-white font-bold px-2 py-0.5 rounded-full hover:bg-purple-700 ml-0.5 cursor-pointer shrink-0"
-                          >
-                            ↩ Reply
+                            <span>📋</span>
+                            <span>Salin Teks</span>
                           </button>
 
                           {canEditMsg && (
                             <button
                               type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
+                              onClick={() => {
                                 setEditingMsg(m);
                                 setEditText(m.message);
-                                setActiveActionMsgId(null);
+                                setOpenMenuMsgId(null);
                               }}
-                              className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-bold px-2 py-0.5 rounded-full hover:bg-amber-500 hover:text-white ml-0.5 cursor-pointer transition-colors shrink-0"
-                              title={`Edit pesan (Sisa ${5 - (m.editCount || 0)}x edit)`}
+                              className="w-full px-3 py-1.5 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400 cursor-pointer"
                             >
-                              ✏️ Edit
+                              <span>✏️</span>
+                              <span>Edit ({5 - (m.editCount || 0)}x tersisa)</span>
                             </button>
                           )}
 
-                          {canDeleteEveryone ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteTargetMsgId(m.id);
-                                setDeleteType('EVERYONE');
-                                setActiveActionMsgId(null);
-                              }}
-                              className="text-[10px] bg-red-600/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold px-2 py-0.5 rounded-full hover:bg-red-600 hover:text-white ml-0.5 cursor-pointer transition-colors shrink-0"
-                              title="Hapus pesan untuk semua orang"
-                            >
-                              🗑️ Hapus Semua
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteTargetMsgId(m.id);
-                                setDeleteType('POV');
-                                setActiveActionMsgId(null);
-                              }}
-                              className="text-[10px] bg-zinc-200/60 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-bold px-2 py-0.5 rounded-full hover:bg-zinc-300 ml-0.5 cursor-pointer transition-colors shrink-0"
-                              title="Hapus pesan untuk Anda saja (POV)"
-                            >
-                              🗑️ Hapus Saya
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsSelectMode(true);
+                              setSelectedMsgIds(new Set([m.id]));
+                              setOpenMenuMsgId(null);
+                            }}
+                            className="w-full px-3 py-1.5 text-left hover:bg-indigo-500/10 flex items-center gap-2 font-medium text-indigo-600 dark:text-indigo-400 cursor-pointer"
+                          >
+                            <span>☑️</span>
+                            <span>Pilih Pesan</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedMsgIds(new Set([m.id]));
+                              setDeleteTargetMsgId(m.id);
+                              setOpenMenuMsgId(null);
+                            }}
+                            className="w-full px-3 py-1.5 text-left hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 font-medium text-red-600 dark:text-red-400 border-t border-zinc-100 dark:border-zinc-800 cursor-pointer"
+                          >
+                            <span>🗑️</span>
+                            <span>Hapus Pesan</span>
+                          </button>
                         </div>
                       );
                     })()}
@@ -867,40 +919,96 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
         </div>
       </div>
 
+      {/* Multi-Select Floating Action Bar (WhatsApp Web Style Image 4) */}
+      {isSelectMode && (
+        <div className="p-3 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between shadow-2xl z-30 animate-in slide-in-from-bottom-2 duration-150">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-100">
+              {selectedMsgIds.size} Selected
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSelectMode(false);
+                setSelectedMsgIds(new Set());
+              }}
+              className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 font-bold px-2 py-0.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 cursor-pointer"
+            >
+              Batal
+            </button>
+          </div>
+
+          <button
+            type="button"
+            disabled={selectedMsgIds.size === 0}
+            onClick={() => {
+              setDeleteTargetMsgId('BATCH');
+            }}
+            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-40 flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <span>🗑️ Hapus</span>
+          </button>
+        </div>
+      )}
+
       {/* Delete Message Modal */}
-      <DeletePOVModal
+      <DeleteMessageModal
         isOpen={Boolean(deleteTargetMsgId)}
         onClose={() => setDeleteTargetMsgId(null)}
-        onConfirm={async () => {
+        selectedCount={selectedMsgIds.size || 1}
+        canDeleteEveryone={(() => {
+          if (selectedMsgIds.size === 0) return true;
+          const userRole = ((partnerInfo as any)?.userType || '').toUpperCase();
+          const isAdmin = ['ADMIN', 'SUPERADMIN', 'EXECUTIVE'].includes(userRole);
+          if (isAdmin) return true;
+
+          const nowSec = Math.floor(Date.now() / 1000);
+          return Array.from(selectedMsgIds).every((id) => {
+            const target = messages.find((m) => m.id === id);
+            if (!target) return false;
+            const createdAtSec = target.createdAt < 10000000000 ? target.createdAt : Math.floor(target.createdAt / 1000);
+            return target.senderId !== partnerInfo?.id && (nowSec - createdAtSec <= 15 * 60);
+          });
+        })()}
+        onConfirmEveryone={async () => {
           if (!deleteTargetMsgId) return;
           setSubmittingDeleteMsg(true);
           try {
-            if (deleteType === 'EVERYONE') {
-              const res = await deleteDirectMessageEveryoneAction(deleteTargetMsgId);
-              if (res.success) {
-                triggerToast('Pesan dihapus untuk semua orang');
-              } else {
-                alert(res.error || 'Gagal menghapus pesan');
-              }
-            } else {
-              await deleteDirectMessagePOVAction(deleteTargetMsgId);
-              triggerToast('Pesan dihapus untuk Anda');
+            const ids = Array.from(selectedMsgIds);
+            for (const id of ids) {
+              await deleteDirectMessageEveryoneAction(id);
             }
+            triggerToast(`${ids.length} pesan dihapus untuk semua orang`);
             setDeleteTargetMsgId(null);
+            setIsSelectMode(false);
+            setSelectedMsgIds(new Set());
             await fetchMessages();
-          } catch (err) {
-            console.error('Failed to delete message:', err);
+          } catch (err: any) {
+            alert(err.message || 'Gagal menghapus pesan');
+          } finally {
+            setSubmittingDeleteMsg(false);
+          }
+        }}
+        onConfirmPOV={async () => {
+          if (!deleteTargetMsgId) return;
+          setSubmittingDeleteMsg(true);
+          try {
+            const ids = Array.from(selectedMsgIds);
+            for (const id of ids) {
+              await deleteDirectMessagePOVAction(id);
+            }
+            triggerToast(`${ids.length} pesan dihapus untuk Anda`);
+            setDeleteTargetMsgId(null);
+            setIsSelectMode(false);
+            setSelectedMsgIds(new Set());
+            await fetchMessages();
+          } catch (err: any) {
+            alert(err.message || 'Gagal menghapus pesan');
           } finally {
             setSubmittingDeleteMsg(false);
           }
         }}
         submitting={submittingDeleteMsg}
-        title={deleteType === 'EVERYONE' ? '🗑️ Hapus Pesan untuk Semua Orang?' : '⚠️ Hapus Pesan untuk Saya?'}
-        message={
-          deleteType === 'EVERYONE'
-            ? 'Apakah Anda yakin ingin menghapus pesan ini untuk semua orang? Pesan akan terhapus secara permanen dari percakapan.'
-            : 'Apakah Anda yakin ingin menghapus pesan ini? Pesan ini HANYA akan dihapus dari tampilan Anda (POV).'
-        }
       />
 
       {/* Menu Tag Picker Modal */}

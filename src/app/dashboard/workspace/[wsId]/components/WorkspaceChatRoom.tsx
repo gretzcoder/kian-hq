@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import UserAvatar from '@/components/ui/UserAvatar';
+import { DeleteMessageModal } from '@/components/DeleteMessageModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns';
@@ -179,6 +180,23 @@ export function WorkspaceChatRoom({
   const [onlineCount, setOnlineCount] = useState<number>(1);
   const [typingNames, setTypingNames] = useState<string[]>([]);
   const [membersPresenceMap, setMembersPresenceMap] = useState<Record<string, MemberPresenceInfo>>({});
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
+  const [openMenuMsgId, setOpenMenuMsgId] = useState<string | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [submittingDelete, setSubmittingDelete] = useState(false);
+
+  const toggleSelectMsg = (msgId: string) => {
+    setSelectedMsgIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(msgId)) {
+        next.delete(msgId);
+      } else {
+        next.add(msgId);
+      }
+      return next;
+    });
+  };
 
   const [isPending, startTransition] = useTransition();
 
@@ -712,93 +730,157 @@ export function WorkspaceChatRoom({
                   isSameSender ? 'mt-1' : 'mt-3.5'
                 }`}
               >
-                {/* ── Floating Action Bar on Hover ── */}
-                <div
-                  className={`absolute -top-4 ${
-                    isMe ? 'right-2' : 'left-2'
-                  } hidden group-hover:flex items-center gap-1 bg-white/95 dark:bg-zinc-900/95 border border-zinc-200 dark:border-zinc-700 shadow-xl rounded-full px-2.5 py-1 z-20 transition-all backdrop-blur-md`}
-                >
-                  {QUICK_EMOJIS.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => handleToggleReaction(msg.id, emoji)}
-                      className="hover:scale-125 transition-transform text-xs p-1 rounded-md cursor-pointer"
-                      title={`Beri reaksi ${emoji}`}
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-
-                  <div className="w-px h-3.5 bg-zinc-200 dark:bg-zinc-700 mx-0.5" />
-
-                  {/* Reply Button */}
-                  <button
-                    type="button"
-                    onClick={() => setReplyingTo(msg)}
-                    className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-purple-600 p-1 cursor-pointer"
-                    title="Balas pesan"
-                  >
-                    ↩ Balas
-                  </button>
-
-                  {/* Copy Text Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleCopyText(msg.message)}
-                    className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-purple-600 p-1 cursor-pointer"
-                    title="Salin teks"
-                  >
-                    📋 Salin
-                  </button>
-
-                  {/* Pin Button (Restricted to Admin/Coordinator/Mentor/Leader) */}
-                  {canPinMessage && (
+                <div className="flex items-end gap-2 max-w-[88%] sm:max-w-[80%] group">
+                  {/* Multi-select Circular Checkbox */}
+                  {isSelectMode && (
                     <button
                       type="button"
-                      onClick={() => handleTogglePin(msg.id)}
-                      className={`text-[10px] font-bold p-1 cursor-pointer ${
-                        msg.is_pinned ? 'text-amber-500 hover:text-amber-600' : 'text-zinc-400 hover:text-amber-500'
-                      }`}
-                      title={msg.is_pinned ? 'Lepas sematan' : 'Sematkan pesan ini (Pin)'}
-                    >
-                      📌 {msg.is_pinned ? 'Unpin' : 'Pin'}
-                    </button>
-                  )}
-
-                  {/* Edit Button (Own messages only with 15-min and max 5-edit limits) */}
-                  {isMe && !msg.is_sticker && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (msg.can_edit === false && msg.edit_disabled_reason) {
-                          alert(msg.edit_disabled_reason);
-                          return;
-                        }
-                        setEditingMsg(msg);
-                        setEditText(msg.message);
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelectMsg(msg.id);
                       }}
-                      className={`text-[10px] font-bold p-1 cursor-pointer ${
-                        msg.can_edit === false ? 'text-zinc-400 opacity-60' : 'text-zinc-600 dark:text-zinc-300 hover:text-indigo-600'
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all mb-2 shrink-0 ${
+                        selectedMsgIds.has(msg.id)
+                          ? 'bg-purple-600 border-purple-600 text-white scale-110'
+                          : 'border-zinc-300 dark:border-zinc-700 hover:border-purple-400 bg-white dark:bg-zinc-900'
                       }`}
-                      title={msg.can_edit === false ? (msg.edit_disabled_reason || 'Pesan tidak dapat diedit') : `Edit pesan (Sisa ${5 - (msg.edit_count || 0)} kali)`}
                     >
-                      ✏️ Edit
+                      {selectedMsgIds.has(msg.id) && '✓'}
                     </button>
                   )}
 
-                  {/* Delete Button (Own or Admin) */}
-                  {(isMe || canDeleteAny) && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(msg.id)}
-                      className="text-[10px] font-bold text-zinc-400 hover:text-red-500 p-1 cursor-pointer"
-                      title="Hapus pesan"
-                    >
-                      🗑️
-                    </button>
-                  )}
-                </div>
+                  <div className="relative flex-1 min-w-0">
+                    {/* WhatsApp Web Chevron Down Action Menu Trigger (v) */}
+                    {!isSelectMode && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuMsgId((prev) => (prev === msg.id ? null : msg.id));
+                        }}
+                        className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 ${
+                          isMe ? 'text-white/80 hover:text-white' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                        } cursor-pointer z-10`}
+                        title="Opsi Pesan"
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                    )}
+
+                    {/* Dropdown Menu Popover */}
+                    {openMenuMsgId === msg.id && (() => {
+                      const nowSec = Math.floor(Date.now() / 1000);
+                      const createdAtSec = msg.created_at < 10000000000 ? msg.created_at : Math.floor(msg.created_at / 1000);
+                      const isWithin15Min = nowSec - createdAtSec <= 15 * 60;
+                      const canEdit = isMe && isWithin15Min && (msg.edit_count || 0) < 5;
+
+                      return (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className={`absolute top-8 ${isMe ? 'right-0' : 'left-0'} z-50 w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl py-1 text-xs animate-in zoom-in-95 duration-150`}
+                        >
+                          {/* Quick Reactions Strip */}
+                          <div className="px-2 py-1 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-around">
+                            {QUICK_EMOJIS.slice(0, 5).map((e) => (
+                              <button
+                                key={e}
+                                type="button"
+                                onClick={() => {
+                                  handleToggleReaction(msg.id, e);
+                                  setOpenMenuMsgId(null);
+                                }}
+                                className="hover:scale-125 transition-transform text-sm cursor-pointer p-0.5"
+                              >
+                                {e}
+                              </button>
+                            ))}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplyingTo(msg);
+                              setOpenMenuMsgId(null);
+                            }}
+                            className="w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
+                          >
+                            <span>↩</span>
+                            <span>Balas Pesan</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleCopyText(msg.message);
+                              setOpenMenuMsgId(null);
+                            }}
+                            className="w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
+                          >
+                            <span>📋</span>
+                            <span>Salin Teks</span>
+                          </button>
+
+                          {canPinMessage && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleTogglePin(msg.id);
+                                setOpenMenuMsgId(null);
+                              }}
+                              className="w-full px-3 py-1.5 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400 cursor-pointer"
+                            >
+                              <span>📌</span>
+                              <span>{msg.is_pinned ? 'Unpin' : 'Pin Pesan'}</span>
+                            </button>
+                          )}
+
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMsg(msg);
+                                setEditText(msg.message);
+                                setOpenMenuMsgId(null);
+                              }}
+                              className="w-full px-3 py-1.5 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400 cursor-pointer"
+                            >
+                              <span>✏️</span>
+                              <span>Edit ({5 - (msg.edit_count || 0)}x tersisa)</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsSelectMode(true);
+                              setSelectedMsgIds(new Set([msg.id]));
+                              setOpenMenuMsgId(null);
+                            }}
+                            className="w-full px-3 py-1.5 text-left hover:bg-indigo-500/10 flex items-center gap-2 font-medium text-indigo-600 dark:text-indigo-400 cursor-pointer"
+                          >
+                            <span>☑️</span>
+                            <span>Pilih Pesan</span>
+                          </button>
+
+                          {(isMe || canDeleteAny) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedMsgIds(new Set([msg.id]));
+                                setDeleteModalOpen(true);
+                                setOpenMenuMsgId(null);
+                              }}
+                              className="w-full px-3 py-1.5 text-left hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 font-medium text-red-600 dark:text-red-400 border-t border-zinc-100 dark:border-zinc-800 cursor-pointer"
+                            >
+                              <span>🗑️</span>
+                              <span>Hapus Pesan</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                 {/* Sender Info & Presence Status */}
                 {!isSameSender && (
@@ -947,6 +1029,8 @@ export function WorkspaceChatRoom({
                     )}
                   </div>
                 )}
+              </div>
+            </div>
 
                 {/* Emoji Reactions Badges Bar */}
                 {msg.reactions && msg.reactions.length > 0 && (
@@ -1161,6 +1245,95 @@ export function WorkspaceChatRoom({
         onSelectMenu={(menu: MenuTagOption) => {
           setInputMessage((prev) => `${prev} #[${menu.label}](${menu.path}) `.trimStart());
         }}
+      />
+
+      {/* Multi-Select Floating Action Bar (WhatsApp Web Style Image 4) */}
+      {isSelectMode && (
+        <div className="p-3 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between shadow-2xl z-30 animate-in slide-in-from-bottom-2 duration-150">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-zinc-800 dark:text-zinc-100">
+              {selectedMsgIds.size} Selected
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsSelectMode(false);
+                setSelectedMsgIds(new Set());
+              }}
+              className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 font-bold px-2 py-0.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 cursor-pointer"
+            >
+              Batal
+            </button>
+          </div>
+
+          <button
+            type="button"
+            disabled={selectedMsgIds.size === 0}
+            onClick={() => {
+              setDeleteModalOpen(true);
+            }}
+            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-md disabled:opacity-40 flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <span>🗑️ Hapus</span>
+          </button>
+        </div>
+      )}
+
+      {/* Delete Message Modal (WhatsApp Web Style) */}
+      <DeleteMessageModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        selectedCount={selectedMsgIds.size || 1}
+        canDeleteEveryone={(() => {
+          if (canDeleteAny) return true;
+          if (selectedMsgIds.size === 0) return true;
+          const nowSec = Math.floor(Date.now() / 1000);
+          return Array.from(selectedMsgIds).every((id) => {
+            const target = messages.find((m) => m.id === id);
+            if (!target) return false;
+            const createdAtSec = target.created_at < 10000000000 ? target.created_at : Math.floor(target.created_at / 1000);
+            return target.user_id === currentUserId && (nowSec - createdAtSec <= 15 * 60);
+          });
+        })()}
+        onConfirmEveryone={async () => {
+          setSubmittingDelete(true);
+          try {
+            const ids = Array.from(selectedMsgIds);
+            for (const id of ids) {
+              await deleteWorkspaceMessage(id, workspaceId);
+            }
+            setToastMsg(`${ids.length} pesan dihapus untuk semua orang`);
+            setTimeout(() => setToastMsg(null), 2500);
+            setDeleteModalOpen(false);
+            setIsSelectMode(false);
+            setSelectedMsgIds(new Set());
+            const latest = await getWorkspaceChats(workspaceId);
+            if (latest && Array.isArray(latest)) {
+              setMessages(latest);
+            }
+          } catch (err: any) {
+            alert(err.message || 'Gagal menghapus pesan');
+          } finally {
+            setSubmittingDelete(false);
+          }
+        }}
+        onConfirmPOV={async () => {
+          setSubmittingDelete(true);
+          try {
+            const ids = Array.from(selectedMsgIds);
+            setMessages((prev) => prev.filter((m) => !ids.includes(m.id)));
+            setToastMsg(`${ids.length} pesan dihapus untuk Anda`);
+            setTimeout(() => setToastMsg(null), 2500);
+            setDeleteModalOpen(false);
+            setIsSelectMode(false);
+            setSelectedMsgIds(new Set());
+          } catch (err: any) {
+            alert(err.message || 'Gagal menghapus pesan');
+          } finally {
+            setSubmittingDelete(false);
+          }
+        }}
+        submitting={submittingDelete}
       />
     </div>
   );

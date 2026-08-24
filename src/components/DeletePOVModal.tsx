@@ -39,8 +39,12 @@ export function DeletePOVModal({
               <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100 leading-tight">
                 {title}
               </h3>
-              <span className="text-[10px] font-extrabold text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full inline-block mt-0.5">
-                Hanya Hapus untuk Saya
+              <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full inline-block mt-0.5 ${
+                title.includes('Semua')
+                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10'
+                  : 'text-amber-600 dark:text-amber-400 bg-amber-500/10'
+              }`}>
+                {title.includes('Semua') ? 'Hapus untuk Semua Orang' : 'Hapus untuk Saya'}
               </span>
             </div>
           </div>
