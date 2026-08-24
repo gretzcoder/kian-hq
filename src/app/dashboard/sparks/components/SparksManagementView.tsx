@@ -142,14 +142,17 @@ export default function SparksManagementView({ overview, period }: SparksManagem
   const filteredUsers = overview.users.filter((u) => {
     const q = search.toLowerCase();
     const matchesSearch = u.userName.toLowerCase().includes(q) || u.userEmail.toLowerCase().includes(q);
+    if (!matchesSearch) return false;
 
-    if (roleFilter === 'ALL') return matchesSearch;
+    if (roleFilter === 'ALL') return true;
     const rUpper = (u.roleNames || '').toUpperCase() + ' ' + u.userType.toUpperCase();
-    if (roleFilter === 'TROOPERS') return matchesSearch && (rUpper.includes('TROOPER') || rUpper.includes('OJT'));
-    if (roleFilter === 'MENTOR') return matchesSearch && rUpper.includes('MENTOR');
-    if (roleFilter === 'COORDINATOR') return matchesSearch && rUpper.includes('COORDINATOR');
+    const isMentor = rUpper.includes('MENTOR');
 
-    return matchesSearch;
+    if (roleFilter === 'TROOPERS') return !isMentor;
+    if (roleFilter === 'MENTOR') return isMentor;
+    if (roleFilter === 'COORDINATOR') return rUpper.includes('COORDINATOR');
+
+    return true;
   });
 
   return (
