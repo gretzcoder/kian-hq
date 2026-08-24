@@ -3,7 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
 import UserAvatar from '@/components/ui/UserAvatar';
-import { AchievementItem, getAchievementMeta } from '@/modules/achievements/actions';
+import { AchievementItem } from '@/modules/achievements/actions';
+import { getAchievementMeta } from '@/modules/achievements/utils';
 
 interface AchievementHistoryViewProps {
   initialData: AchievementItem[];
