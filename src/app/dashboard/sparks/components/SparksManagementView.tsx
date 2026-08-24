@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect } from 'react';
+import { useState, useTransition, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -18,12 +18,31 @@ interface SparksManagementViewProps {
   period: 'all' | 'month' | 'week';
 }
 
+type SortField = 'tasksCompleted' | 'assessmentsCount' | 'appreciationCount' | 'totalSparks';
+type SortOrder = 'desc' | 'asc';
+
 export default function SparksManagementView({ overview, period }: SparksManagementViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
+  const [sortField, setSortField] = useState<SortField>('totalSparks');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [pending, startTransition] = useTransition();
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortOrder === 'desc') {
+        setSortOrder('asc');
+      } else {
+        setSortField('totalSparks');
+        setSortOrder('desc');
+      }
+    } else {
+      setSortField(field);
+      setSortOrder('desc');
+    }
+  };
 
   // Multiplier States
   const [designMult, setDesignMult] = useState<number>(1.0);
@@ -138,22 +157,35 @@ export default function SparksManagementView({ overview, period }: SparksManagem
     });
   };
 
-  // Filtered Users
-  const filteredUsers = overview.users.filter((u) => {
-    const q = search.toLowerCase();
-    const matchesSearch = u.userName.toLowerCase().includes(q) || u.userEmail.toLowerCase().includes(q);
-    if (!matchesSearch) return false;
+  // Filtered & Sorted Users
+  const filteredUsers = useMemo(() => {
+    const list = overview.users.filter((u) => {
+      const q = search.toLowerCase();
+      const matchesSearch = u.userName.toLowerCase().includes(q) || u.userEmail.toLowerCase().includes(q);
+      if (!matchesSearch) return false;
 
-    if (roleFilter === 'ALL') return true;
-    const rUpper = (u.roleNames || '').toUpperCase() + ' ' + u.userType.toUpperCase();
-    const isMentor = rUpper.includes('MENTOR');
+      if (roleFilter === 'ALL') return true;
+      const rUpper = (u.roleNames || '').toUpperCase() + ' ' + u.userType.toUpperCase();
+      const isMentor = rUpper.includes('MENTOR');
 
-    if (roleFilter === 'TROOPERS') return !isMentor;
-    if (roleFilter === 'MENTOR') return isMentor;
-    if (roleFilter === 'COORDINATOR') return rUpper.includes('COORDINATOR');
+      if (roleFilter === 'TROOPERS') return !isMentor;
+      if (roleFilter === 'MENTOR') return isMentor;
+      if (roleFilter === 'COORDINATOR') return rUpper.includes('COORDINATOR');
 
-    return true;
-  });
+      return true;
+    });
+
+    return list.sort((a, b) => {
+      const valA = a[sortField];
+      const valB = b[sortField];
+
+      if (valA === valB) {
+        return b.totalSparks - a.totalSparks;
+      }
+
+      return sortOrder === 'desc' ? valB - valA : valA - valB;
+    });
+  }, [overview.users, search, roleFilter, sortField, sortOrder]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 w-full min-w-0 overflow-hidden">
@@ -403,6 +435,31 @@ export default function SparksManagementView({ overview, period }: SparksManagem
           </div>
         </div>
 
+        {/* Mobile Sorting Controls */}
+        <div className="flex sm:hidden items-center justify-between gap-2 bg-zinc-50 dark:bg-zinc-900 p-2.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 text-xs">
+          <span className="text-[10px] font-black uppercase text-zinc-400 shrink-0">Urutkan:</span>
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+            {[
+              { id: 'totalSparks', label: 'Sparks' },
+              { id: 'tasksCompleted', label: 'Tasks' },
+              { id: 'assessmentsCount', label: 'Assessments' },
+              { id: 'appreciationCount', label: 'Apresiasi' },
+            ].map((col) => (
+              <button
+                key={col.id}
+                onClick={() => handleSort(col.id as any)}
+                className={`text-[10px] font-bold px-2 py-1 rounded-lg border shrink-0 transition-all ${
+                  sortField === col.id
+                    ? 'bg-purple-600 text-white border-purple-600 font-extrabold'
+                    : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700'
+                }`}
+              >
+                {col.label} {sortField === col.id ? (sortOrder === 'desc' ? '▼' : '▲') : ''}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Desktop Rankings Table */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
@@ -411,10 +468,71 @@ export default function SparksManagementView({ overview, period }: SparksManagem
                 <th className="pb-3 px-3">Rank</th>
                 <th className="pb-3 px-3">Pengguna</th>
                 <th className="pb-3 px-3">Role</th>
-                <th className="pb-3 px-3 text-center">Troopers Tasks</th>
-                <th className="pb-3 px-3 text-center">Assessments</th>
-                <th className="pb-3 px-3 text-center">Apresiasi</th>
-                <th className="pb-3 px-3 text-right">Total Sparks</th>
+
+                {/* Troopers Tasks Sortable Header */}
+                <th
+                  onClick={() => handleSort('tasksCompleted')}
+                  className={`pb-3 px-3 text-center cursor-pointer select-none transition-colors hover:text-purple-600 dark:hover:text-purple-400 ${
+                    sortField === 'tasksCompleted' ? 'text-purple-600 dark:text-purple-400 font-black' : ''
+                  }`}
+                  title="Klik 1x: Tertinggi → Terendah (DESC) | Klik 2x: Terendah → Tertinggi (ASC)"
+                >
+                  <div className="inline-flex items-center justify-center gap-1">
+                    <span>Troopers Tasks</span>
+                    <span className="text-[10px]">
+                      {sortField === 'tasksCompleted' ? (sortOrder === 'desc' ? '▼' : '▲') : '↕'}
+                    </span>
+                  </div>
+                </th>
+
+                {/* Assessments Sortable Header */}
+                <th
+                  onClick={() => handleSort('assessmentsCount')}
+                  className={`pb-3 px-3 text-center cursor-pointer select-none transition-colors hover:text-purple-600 dark:hover:text-purple-400 ${
+                    sortField === 'assessmentsCount' ? 'text-purple-600 dark:text-purple-400 font-black' : ''
+                  }`}
+                  title="Klik 1x: Tertinggi → Terendah (DESC) | Klik 2x: Terendah → Tertinggi (ASC)"
+                >
+                  <div className="inline-flex items-center justify-center gap-1">
+                    <span>Assessments</span>
+                    <span className="text-[10px]">
+                      {sortField === 'assessmentsCount' ? (sortOrder === 'desc' ? '▼' : '▲') : '↕'}
+                    </span>
+                  </div>
+                </th>
+
+                {/* Apresiasi Sortable Header */}
+                <th
+                  onClick={() => handleSort('appreciationCount')}
+                  className={`pb-3 px-3 text-center cursor-pointer select-none transition-colors hover:text-purple-600 dark:hover:text-purple-400 ${
+                    sortField === 'appreciationCount' ? 'text-purple-600 dark:text-purple-400 font-black' : ''
+                  }`}
+                  title="Klik 1x: Tertinggi → Terendah (DESC) | Klik 2x: Terendah → Tertinggi (ASC)"
+                >
+                  <div className="inline-flex items-center justify-center gap-1">
+                    <span>Apresiasi</span>
+                    <span className="text-[10px]">
+                      {sortField === 'appreciationCount' ? (sortOrder === 'desc' ? '▼' : '▲') : '↕'}
+                    </span>
+                  </div>
+                </th>
+
+                {/* Total Sparks Sortable Header */}
+                <th
+                  onClick={() => handleSort('totalSparks')}
+                  className={`pb-3 px-3 text-right cursor-pointer select-none transition-colors hover:text-purple-600 dark:hover:text-purple-400 ${
+                    sortField === 'totalSparks' ? 'text-purple-600 dark:text-purple-400 font-black' : ''
+                  }`}
+                  title="Klik 1x: Tertinggi → Terendah (DESC) | Klik 2x: Terendah → Tertinggi (ASC)"
+                >
+                  <div className="inline-flex items-center justify-end gap-1">
+                    <span>Total Sparks</span>
+                    <span className="text-[10px]">
+                      {sortField === 'totalSparks' ? (sortOrder === 'desc' ? '▼' : '▲') : '↕'}
+                    </span>
+                  </div>
+                </th>
+
                 <th className="pb-3 px-3 text-right">Aksi</th>
               </tr>
             </thead>
