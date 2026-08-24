@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { UserAvatar } from '@/components/UserAvatar';
+import UserAvatar from '@/components/ui/UserAvatar';
 import { AchievementItem } from '@/modules/achievements/actions';
 import { getAchievementMeta } from '@/modules/achievements/utils';
 
