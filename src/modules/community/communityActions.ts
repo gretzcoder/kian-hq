@@ -738,7 +738,7 @@ export async function clearCommunityChannelMessages(
  * Clears all messages in all community channels of a specific category ('WORK' | 'GENERAL')
  */
 export async function clearCommunityCategoryMessages(
-  category: 'WORK' | 'GENERAL'
+  categoryId: string
 ): Promise<{ success: boolean; error?: string }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'Unauthorized' };
@@ -762,18 +762,18 @@ export async function clearCommunityCategoryMessages(
          WHERE message_id IN (
            SELECT m.id FROM community_messages m
            JOIN community_channels c ON m.channel_id = c.id
-           WHERE c.category = ?
+           WHERE c.category = ? OR c.category_id = ?
          )`
       )
-      .bind(category)
+      .bind(categoryId, categoryId)
       .run();
 
     await db
       .prepare(
         `DELETE FROM community_messages
-         WHERE channel_id IN (SELECT id FROM community_channels WHERE category = ?)`
+         WHERE channel_id IN (SELECT id FROM community_channels WHERE category = ? OR category_id = ?)`
       )
-      .bind(category)
+      .bind(categoryId, categoryId)
       .run();
 
     revalidatePath('/dashboard/community');
