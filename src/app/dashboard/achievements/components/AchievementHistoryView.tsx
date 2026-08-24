@@ -12,7 +12,22 @@ interface AchievementHistoryViewProps {
 }
 
 export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }: AchievementHistoryViewProps) {
-  const [categoryFilter, setCategoryFilter] = useState<string>(initialCategory.toUpperCase());
+  const normalizedInitialCat = useMemo(() => {
+    const raw = initialCategory.toUpperCase();
+    if (raw.includes('MENTOR')) return 'MENTOR';
+    if (raw.includes('DESIGN')) return 'DESIGNER';
+    if (raw.includes('EDITOR') || raw.includes('VIDEO')) return 'VIDEO_EDITOR';
+    if (raw.includes('PLAN')) return 'PLANNER';
+    if (raw.includes('RESEARCH')) return 'RESEARCHER';
+    if (raw.includes('LEADER')) return 'TEAM_LEADER';
+    if (raw.includes('PRODUCTIVE')) return 'PRODUCTIVE';
+    if (raw.includes('QUALITY')) return 'QUALITY';
+    if (raw.includes('WORKSPACE')) return 'WORKSPACE';
+    if (raw.includes('CHAMPION')) return 'CHAMPION';
+    return raw;
+  }, [initialCategory]);
+
+  const [categoryFilter, setCategoryFilter] = useState<string>(normalizedInitialCat);
   const [periodFilter, setPeriodFilter] = useState<'ALL' | 'WEEKLY' | 'MONTHLY'>('ALL');
   const [search, setSearch] = useState<string>('');
 
