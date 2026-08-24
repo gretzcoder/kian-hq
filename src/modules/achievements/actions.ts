@@ -236,7 +236,7 @@ export async function getUserStreakBadgeMapAction(): Promise<Record<string, stri
   }
 }
 
-/** Seed & Dynamically Sync Leaderboard Winners into achievement_history */
+/** Seed & Dynamically Sync Top 3 Leaderboard Winners into achievement_history */
 export async function syncLeaderboardAchievements() {
   try {
     const db = await getDB();
@@ -258,38 +258,55 @@ export async function syncLeaderboardAchievements() {
         | 'role_researcher'
         | 'role_leader';
       categoryKey: string;
-      weeklyTitle: string;
-      monthlyTitle: string;
+      labelName: string;
     }> = [
-      { id: 'overall', categoryKey: 'CHAMPION', weeklyTitle: 'Weekly Champion', monthlyTitle: 'Monthly Champion' },
-      { id: 'productive', categoryKey: 'PRODUCTIVE', weeklyTitle: 'Top Productive (Weekly)', monthlyTitle: 'Top Productive (Monthly)' },
-      { id: 'quality', categoryKey: 'QUALITY', weeklyTitle: 'Top Quality (Weekly)', monthlyTitle: 'Top Quality (Monthly)' },
-      { id: 'role_mentor_troopers', categoryKey: 'MENTOR', weeklyTitle: 'Top Mentor (Weekly)', monthlyTitle: 'Top Mentor (Monthly)' },
-      { id: 'role_leader', categoryKey: 'TEAM_LEADER', weeklyTitle: 'Top Team Leader (Weekly)', monthlyTitle: 'Top Team Leader (Monthly)' },
-      { id: 'role_designer', categoryKey: 'DESIGNER', weeklyTitle: 'Top Designer (Weekly)', monthlyTitle: 'Top Designer (Monthly)' },
-      { id: 'role_editor', categoryKey: 'VIDEO_EDITOR', weeklyTitle: 'Top Video Editor (Weekly)', monthlyTitle: 'Top Video Editor (Monthly)' },
-      { id: 'role_planner', categoryKey: 'PLANNER', weeklyTitle: 'Top Planner (Weekly)', monthlyTitle: 'Top Planner (Monthly)' },
-      { id: 'role_researcher', categoryKey: 'RESEARCHER', weeklyTitle: 'Top Researcher (Weekly)', monthlyTitle: 'Top Researcher (Monthly)' },
+      { id: 'overall', categoryKey: 'CHAMPION', labelName: 'Champion' },
+      { id: 'productive', categoryKey: 'PRODUCTIVE', labelName: 'Productive' },
+      { id: 'quality', categoryKey: 'QUALITY', labelName: 'Quality' },
+      { id: 'role_mentor_troopers', categoryKey: 'MENTOR', labelName: 'Mentor' },
+      { id: 'role_leader', categoryKey: 'TEAM_LEADER', labelName: 'Team Leader' },
+      { id: 'role_designer', categoryKey: 'DESIGNER', labelName: 'Designer' },
+      { id: 'role_editor', categoryKey: 'VIDEO_EDITOR', labelName: 'Video Editor' },
+      { id: 'role_planner', categoryKey: 'PLANNER', labelName: 'Planner' },
+      { id: 'role_researcher', categoryKey: 'RESEARCHER', labelName: 'Researcher' },
     ];
 
     for (const cat of leaderboardCategories) {
       for (const period of ['week', 'month'] as const) {
         try {
           const lbResult = await getLeaderboardData(cat.id, period);
-          const topItem = lbResult.data && lbResult.data[0];
-          const winnerUserId = topItem ? ((topItem as any).userId || (topItem as any).leaderId || (topItem as any).id) : null;
+          const topItems = (lbResult.data || []).slice(0, 3);
+          const periodLabel = period === 'week' ? weekLabel : monthLabel;
+          const earnedAt = period === 'week' ? saturdayTs : monthEndTs;
 
-          if (topItem && winnerUserId && (topItem.totalSparks > 0 || (topItem as any).tasksCompleted > 0)) {
-            const periodLabel = period === 'week' ? weekLabel : monthLabel;
-            const title = period === 'week' ? cat.weeklyTitle : cat.monthlyTitle;
-            const typeKey = `${cat.categoryKey}_${period.toUpperCase()}`;
-            const score = topItem.totalSparks || (topItem as any).score || 0;
-            const earnedAt = period === 'week' ? saturdayTs : monthEndTs;
+          for (let i = 0; i < topItems.length; i++) {
+            const item = topItems[i];
+            const rankNum = i + 1;
+            const winnerUserId = (item as any).userId || (item as any).leaderId || (item as any).id;
+            const score = item.totalSparks || (item as any).score || 0;
+
+            if (!winnerUserId || (score <= 0 && !(item as any).tasksCompleted)) continue;
+
+            // Compute Rank Title
+            let title = '';
+            const pText = period === 'week' ? 'Weekly' : 'Monthly';
+
+            if (cat.categoryKey === 'CHAMPION') {
+              if (rankNum === 1) title = `${pText} Champion`;
+              else if (rankNum === 2) title = `Runner-Up Champion (${pText})`;
+              else title = `3rd Place Champion (${pText})`;
+            } else {
+              if (rankNum === 1) title = `Top 1 ${cat.labelName} (${pText})`;
+              else if (rankNum === 2) title = `Top 2 ${cat.labelName} (${pText})`;
+              else title = `Top 3 ${cat.labelName} (${pText})`;
+            }
+
+            const typeKey = `${cat.categoryKey}_RANK${rankNum}_${period.toUpperCase()}`;
 
             const existing = (await db.prepare(`
               SELECT id FROM achievement_history
-              WHERE category = ? AND period = ?
-            `).bind(cat.categoryKey, periodLabel).first()) as any;
+              WHERE category = ? AND period = ? AND rank = ?
+            `).bind(cat.categoryKey, periodLabel, rankNum).first()) as any;
 
             if (existing) {
               await db.prepare(`
@@ -309,13 +326,14 @@ export async function syncLeaderboardAchievements() {
               await db.prepare(`
                 INSERT INTO achievement_history
                 (id, user_id, achievement_type, title, period, rank, score, category, earned_at, created_at)
-                VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               `).bind(
                 newId,
                 winnerUserId,
                 typeKey,
                 title,
                 periodLabel,
+                rankNum,
                 score,
                 cat.categoryKey,
                 earnedAt,

@@ -218,9 +218,26 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
 
                       {/* Rank Column */}
                       <td className="py-3.5 px-3 text-center">
-                        <span className="font-mono font-extrabold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
-                          #{item.rank}
-                        </span>
+                        {item.rank === 1 && (
+                          <span className="font-mono font-extrabold text-amber-500 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                            🥇 #1
+                          </span>
+                        )}
+                        {item.rank === 2 && (
+                          <span className="font-mono font-extrabold text-slate-400 bg-slate-400/10 px-2.5 py-1 rounded-lg border border-slate-400/30">
+                            🥈 #2
+                          </span>
+                        )}
+                        {item.rank === 3 && (
+                          <span className="font-mono font-extrabold text-amber-700 dark:text-amber-600 bg-amber-700/10 px-2.5 py-1 rounded-lg border border-amber-700/30">
+                            🥉 #3
+                          </span>
+                        )}
+                        {item.rank > 3 && (
+                          <span className="font-mono font-extrabold text-zinc-500 bg-zinc-500/10 px-2.5 py-1 rounded-lg border border-zinc-500/20">
+                            #{item.rank}
+                          </span>
+                        )}
                       </td>
 
                       {/* Score Column */}
