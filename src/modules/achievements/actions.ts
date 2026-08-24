@@ -3,6 +3,7 @@
 import { getDB } from '@/db/client';
 import { getSession } from '@/modules/auth/session';
 import { getAchievementMeta, getWeekPeriodLabel, getMonthPeriodLabel } from './utils';
+import { getLeaderboardData } from '@/modules/leaderboard/actions';
 
 export interface AchievementItem {
   id: string;
@@ -228,105 +229,88 @@ export async function syncLeaderboardAchievements() {
   try {
     const db = await getDB();
     const nowSec = Math.floor(Date.now() / 1000);
+    const weekLabel = getWeekPeriodLabel();
+    const monthLabel = getMonthPeriodLabel();
 
-    // 1. Initial Seed if table is empty
-    const { count } = (await db.prepare('SELECT COUNT(*) as count FROM achievement_history').first() as any) || { count: 0 };
-    if (count === 0) {
-      // Fetch active users to seed initial history
-      const { results: topUsers } = await db.prepare(`
-        SELECT u.id, u.name, u.email
-        FROM users u
-        WHERE u.status = 'ACTIVE'
-        LIMIT 10
-      `).all();
+    const leaderboardCategories: Array<{
+      id:
+        | 'overall'
+        | 'productive'
+        | 'quality'
+        | 'role_mentor_troopers'
+        | 'role_designer'
+        | 'role_editor'
+        | 'role_planner'
+        | 'role_researcher'
+        | 'role_leader';
+      categoryKey: string;
+      weeklyTitle: string;
+      monthlyTitle: string;
+    }> = [
+      { id: 'overall', categoryKey: 'CHAMPION', weeklyTitle: 'Weekly Champion', monthlyTitle: 'Monthly Champion' },
+      { id: 'productive', categoryKey: 'PRODUCTIVE', weeklyTitle: 'Top Productive (Weekly)', monthlyTitle: 'Top Productive (Monthly)' },
+      { id: 'quality', categoryKey: 'QUALITY', weeklyTitle: 'Top Quality (Weekly)', monthlyTitle: 'Top Quality (Monthly)' },
+      { id: 'role_mentor_troopers', categoryKey: 'MENTOR', weeklyTitle: 'Top Mentor (Weekly)', monthlyTitle: 'Top Mentor (Monthly)' },
+      { id: 'role_leader', categoryKey: 'TEAM_LEADER', weeklyTitle: 'Top Team Leader (Weekly)', monthlyTitle: 'Top Team Leader (Monthly)' },
+      { id: 'role_designer', categoryKey: 'DESIGNER', weeklyTitle: 'Top Designer (Weekly)', monthlyTitle: 'Top Designer (Monthly)' },
+      { id: 'role_editor', categoryKey: 'VIDEO_EDITOR', weeklyTitle: 'Top Video Editor (Weekly)', monthlyTitle: 'Top Video Editor (Monthly)' },
+      { id: 'role_planner', categoryKey: 'PLANNER', weeklyTitle: 'Top Planner (Weekly)', monthlyTitle: 'Top Planner (Monthly)' },
+      { id: 'role_researcher', categoryKey: 'RESEARCHER', weeklyTitle: 'Top Researcher (Weekly)', monthlyTitle: 'Top Researcher (Monthly)' },
+    ];
 
-      const users = (topUsers as any[]) || [];
-      if (users.length > 0) {
-        const sampleAchievements = [
-          // Weekly & Monthly Champion
-          { userId: users[0]?.id, type: 'WEEKLY_CHAMPION', title: 'Weekly Champion', period: 'Week 4 Aug 2026', rank: 1, score: 1105, category: 'CHAMPION', earnedAt: nowSec - 2 * 24 * 3600 },
-          { userId: users[0]?.id, type: 'WEEKLY_CHAMPION', title: 'Weekly Champion', period: 'Week 2 Aug 2026', rank: 1, score: 1024, category: 'CHAMPION', earnedAt: nowSec - 14 * 24 * 3600 },
-          { userId: users[0]?.id, type: 'WEEKLY_CHAMPION', title: 'Weekly Champion', period: 'Week 1 Aug 2026', rank: 1, score: 982, category: 'CHAMPION', earnedAt: nowSec - 21 * 24 * 3600 },
-          { userId: users[0]?.id, type: 'MONTHLY_CHAMPION', title: 'Monthly Champion', period: 'Aug 2026', rank: 1, score: 4820, category: 'CHAMPION', earnedAt: nowSec - 5 * 24 * 3600 },
+    for (const cat of leaderboardCategories) {
+      for (const period of ['week', 'month'] as const) {
+        try {
+          const lbResult = await getLeaderboardData(cat.id, period);
+          const topItem = lbResult.data && lbResult.data[0];
+          const winnerUserId = topItem ? ((topItem as any).userId || (topItem as any).leaderId || (topItem as any).id) : null;
 
-          // Top Mentors
-          { userId: users[0]?.id, type: 'TOP_MENTOR_WEEKLY', title: 'Top Mentor (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 845, category: 'MENTOR', earnedAt: nowSec - 2 * 24 * 3600 },
-          { userId: users[1]?.id || users[0]?.id, type: 'TOP_MENTOR_MONTHLY', title: 'Top Mentor (Monthly)', period: 'Aug 2026', rank: 1, score: 3200, category: 'MENTOR', earnedAt: nowSec - 5 * 24 * 3600 },
+          if (topItem && winnerUserId && (topItem.totalSparks > 0 || (topItem as any).tasksCompleted > 0)) {
+            const periodLabel = period === 'week' ? weekLabel : monthLabel;
+            const title = period === 'week' ? cat.weeklyTitle : cat.monthlyTitle;
+            const typeKey = `${cat.categoryKey}_${period.toUpperCase()}`;
+            const score = topItem.totalSparks || (topItem as any).score || 0;
 
-          // Top Designers
-          { userId: users[1]?.id || users[0]?.id, type: 'TOP_DESIGNER_WEEKLY', title: 'Top Designer (Weekly)', period: 'Week 3 Aug 2026', rank: 1, score: 750, category: 'DESIGNER', earnedAt: nowSec - 9 * 24 * 3600 },
-          { userId: users[1]?.id || users[0]?.id, type: 'TOP_DESIGNER_MONTHLY', title: 'Top Designer (Monthly)', period: 'Aug 2026', rank: 1, score: 2800, category: 'DESIGNER', earnedAt: nowSec - 5 * 24 * 3600 },
+            const existing = (await db.prepare(`
+              SELECT id FROM achievement_history
+              WHERE category = ? AND period = ?
+            `).bind(cat.categoryKey, periodLabel).first()) as any;
 
-          // Top Video Editors
-          { userId: users[2]?.id || users[0]?.id, type: 'TOP_VIDEO_EDITOR_WEEKLY', title: 'Top Video Editor (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 890, category: 'VIDEO_EDITOR', earnedAt: nowSec - 3 * 24 * 3600 },
-
-          // Top Planners & Researchers
-          { userId: users[3]?.id || users[0]?.id, type: 'TOP_PLANNER_MONTHLY', title: 'Top Planner (Monthly)', period: 'Aug 2026', rank: 1, score: 540, category: 'PLANNER', earnedAt: nowSec - 7 * 24 * 3600 },
-          { userId: users[4]?.id || users[0]?.id, type: 'TOP_RESEARCHER_MONTHLY', title: 'Top Researcher (Monthly)', period: 'Aug 2026', rank: 1, score: 620, category: 'RESEARCHER', earnedAt: nowSec - 8 * 24 * 3600 },
-
-          // Most Productive & High Quality
-          { userId: users[1]?.id || users[0]?.id, type: 'TOP_PRODUCTIVE_WEEKLY', title: 'Top Productive (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 950, category: 'PRODUCTIVE', earnedAt: nowSec - 2 * 24 * 3600 },
-          { userId: users[2]?.id || users[0]?.id, type: 'TOP_QUALITY_WEEKLY', title: 'Top Quality (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 980, category: 'QUALITY', earnedAt: nowSec - 2 * 24 * 3600 },
-        ];
-
-        for (const item of sampleAchievements) {
-          if (!item.userId) continue;
-          const id = `ach_${Math.random().toString(36).substring(2, 10)}`;
-          await db.prepare(`
-            INSERT OR IGNORE INTO achievement_history
-            (id, user_id, achievement_type, title, period, rank, score, category, earned_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `).bind(
-            id,
-            item.userId,
-            item.type,
-            item.title,
-            item.period,
-            item.rank,
-            item.score,
-            item.category,
-            item.earnedAt,
-            nowSec
-          ).run();
+            if (existing) {
+              await db.prepare(`
+                UPDATE achievement_history
+                SET user_id = ?, achievement_type = ?, title = ?, score = ?, earned_at = ?
+                WHERE id = ?
+              `).bind(
+                winnerUserId,
+                typeKey,
+                title,
+                score,
+                nowSec,
+                existing.id
+              ).run();
+            } else {
+              const newId = `ach_${Math.random().toString(36).substring(2, 10)}`;
+              await db.prepare(`
+                INSERT INTO achievement_history
+                (id, user_id, achievement_type, title, period, rank, score, category, earned_at, created_at)
+                VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+              `).bind(
+                newId,
+                winnerUserId,
+                typeKey,
+                title,
+                periodLabel,
+                score,
+                cat.categoryKey,
+                nowSec,
+                nowSec
+              ).run();
+            }
+          }
+        } catch (catErr) {
+          // Ignore individual category sync error
         }
-      }
-    }
-
-    // 2. Dynamic Live Sync for Mentors
-    // Check Top Mentors from users with MENTOR role
-    const { results: topMentors } = await db.prepare(`
-      SELECT u.id, u.name, COALESCE(SUM(sa.sparks), 0) as total_sparks
-      FROM users u
-      LEFT JOIN user_roles ur ON u.id = ur.user_id
-      LEFT JOIN roles r ON ur.role_id = r.id
-      LEFT JOIN sparks_adjustments sa ON u.id = sa.user_id
-      WHERE (UPPER(r.name) LIKE '%MENTOR%' OR UPPER(u.user_type) LIKE '%MENTOR%')
-      GROUP BY u.id
-      ORDER BY total_sparks DESC
-      LIMIT 1
-    `).all();
-
-    const topMentor = (topMentors as any[])?.[0];
-    if (topMentor && topMentor.id) {
-      const weekLabel = getWeekPeriodLabel();
-      const existing = await db.prepare(`
-        SELECT id FROM achievement_history WHERE user_id = ? AND category = 'MENTOR' AND period = ?
-      `).bind(topMentor.id, weekLabel).first();
-
-      if (!existing) {
-        const id = `ach_${Math.random().toString(36).substring(2, 10)}`;
-        await db.prepare(`
-          INSERT INTO achievement_history
-          (id, user_id, achievement_type, title, period, rank, score, category, earned_at, created_at)
-          VALUES (?, ?, 'TOP_MENTOR_WEEKLY', 'Top Mentor (Weekly)', ?, 1, ?, 'MENTOR', ?, ?)
-        `).bind(
-          id,
-          topMentor.id,
-          weekLabel,
-          topMentor.total_sparks || 845,
-          nowSec,
-          nowSec
-        ).run();
       }
     }
   } catch (err) {
