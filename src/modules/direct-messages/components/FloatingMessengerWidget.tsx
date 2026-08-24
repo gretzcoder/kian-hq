@@ -602,11 +602,14 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
                       const createdAtSec = m.createdAt < 10000000000 ? m.createdAt : Math.floor(m.createdAt / 1000);
                       const isWithin15Min = nowSec - createdAtSec <= 15 * 60;
                       const canEditMsg = isMe && isWithin15Min && (m.editCount || 0) < 5;
+                      const msgIdx = messages.findIndex((msg) => msg.id === m.id);
+                      const isNearBottom = msgIdx >= messages.length - 3;
+                      const verticalPos = isNearBottom ? 'bottom-full mb-1' : 'top-8';
 
                       return (
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className={`absolute top-8 ${isMe ? 'right-0' : 'left-0'} z-50 w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl py-1 text-xs animate-in zoom-in-95 duration-150`}
+                          className={`absolute ${verticalPos} ${isMe ? 'right-0' : 'left-0'} z-[100] w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl py-1 text-xs animate-in zoom-in-95 duration-150`}
                         >
                           {/* Quick Reactions Strip */}
                           <div className="px-2 py-1 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-around">
@@ -742,31 +745,45 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
             }
             setSubmittingEdit(false);
           }}
-          className="p-2 bg-amber-500/10 border-t border-amber-500/20 flex items-center gap-2 text-xs"
+          className="p-2.5 bg-amber-500/10 border-t border-amber-500/20 flex flex-col gap-1.5 text-xs animate-in slide-in-from-bottom-2 duration-150"
         >
-          <span className="text-amber-600 dark:text-amber-400 font-bold shrink-0 text-[10px]">
-            ✏️ Edit ({5 - (editingMsg.editCount || 0)}x tersisa):
-          </span>
-          <input
-            type="text"
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            className="flex-1 px-2 py-1 rounded-xl bg-white dark:bg-zinc-800 border border-amber-500/30 text-xs focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={submittingEdit}
-            className="px-2 py-0.5 bg-amber-600 text-white font-bold rounded-lg text-xs hover:bg-amber-700 disabled:opacity-50 shrink-0"
-          >
-            Simpan
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditingMsg(null)}
-            className="text-zinc-400 font-bold text-xs hover:text-zinc-600 shrink-0"
-          >
-            ✕
-          </button>
+          <div className="flex items-center justify-between">
+            <span className="text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center gap-1">
+              <span>✏️ Edit Pesan</span>
+              <span className="text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 rounded-md font-mono">
+                (Sisa {5 - (editingMsg.editCount || 0)}x edit)
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setEditingMsg(null)}
+              className="text-zinc-400 font-bold text-xs hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="flex items-end gap-2">
+            <textarea
+              rows={2}
+              value={editText}
+              onChange={(e) => {
+                setEditText(e.target.value);
+                e.target.style.height = 'auto';
+                const newH = Math.min(Math.max(e.target.scrollHeight, 44), 140);
+                e.target.style.height = `${newH}px`;
+              }}
+              placeholder="Edit pesan Anda..."
+              className="flex-1 bg-white dark:bg-zinc-900 border border-amber-500/30 rounded-2xl p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-amber-500 shadow-xs resize-none min-h-[44px] max-h-[140px] leading-relaxed overflow-y-auto"
+            />
+            <button
+              type="submit"
+              disabled={submittingEdit || !editText.trim()}
+              className="px-3.5 py-2 bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs hover:bg-amber-700 disabled:opacity-50 cursor-pointer shrink-0 transition-all"
+            >
+              Simpan
+            </button>
+          </div>
         </form>
       )}
 
