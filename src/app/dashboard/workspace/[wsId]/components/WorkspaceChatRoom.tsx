@@ -183,8 +183,16 @@ export function WorkspaceChatRoom({
   const [isPending, startTransition] = useTransition();
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      const newHeight = Math.min(Math.max(inputRef.current.scrollHeight, 40), 180);
+      inputRef.current.style.height = `${newHeight}px`;
+    }
+  }, [inputMessage]);
 
   // Strict Pin Authorization Check (Admin, Coordinator, Mentor, Team Leader only)
   const canPinMessage = useMemo(() => {
@@ -244,7 +252,7 @@ export function WorkspaceChatRoom({
           setOnlineCount(presenceData.onlineCount || 1);
           setTypingNames(presenceData.typingNames || []);
           const pMap: Record<string, MemberPresenceInfo> = {};
-          presenceData.membersPresence.forEach((m) => {
+          (presenceData.membersPresence || []).forEach((m) => {
             pMap[m.userId] = m;
           });
           setMembersPresenceMap(pMap);
@@ -267,7 +275,7 @@ export function WorkspaceChatRoom({
   }, [messages.length]);
 
   // Input Typing Indicator Handler
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setInputMessage(value);
 
@@ -297,7 +305,7 @@ export function WorkspaceChatRoom({
     if (mentionIndex >= 0) {
       const before = inputMessage.slice(0, mentionIndex);
       const after = inputMessage.slice(inputRef.current?.selectionStart || inputMessage.length);
-      const updated = `${before}@${member.name} ${after}`;
+      const updated = `${before}@${member.name} `;
       setInputMessage(updated);
     }
     setMentionQuery(null);
@@ -306,8 +314,8 @@ export function WorkspaceChatRoom({
   };
 
   // Handle Send Message
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const trimmed = inputMessage.trim();
     if (!trimmed) return;
 
@@ -342,6 +350,10 @@ export function WorkspaceChatRoom({
     setReplyingTo(null);
     setMentionQuery(null);
     setShowEmojiPicker(false);
+
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+    }
 
     startTransition(async () => {
       const res = await sendWorkspaceMessage(
@@ -1078,28 +1090,28 @@ export function WorkspaceChatRoom({
       )}
 
       {/* ── Input Footer Form ── */}
-      <form
-        onSubmit={handleSend}
-        className="p-3 border-t border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/30 flex items-center gap-2"
-      >
-        <button
-          type="button"
-          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          className="w-10 h-10 rounded-2xl bg-zinc-100 dark:bg-zinc-800 hover:bg-purple-500/10 hover:text-purple-600 text-zinc-600 dark:text-zinc-300 flex items-center justify-center text-lg transition-all shrink-0 cursor-pointer"
-          title="Buka Emoji & Stiker"
-        >
-          ✨
-        </button>
+      {/* Chat Action Bar & Auto-resizing Text Input */}
+      <form onSubmit={handleSend} className="p-3 bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 flex items-end gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 pb-0.5">
+          <button
+            type="button"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="h-10 w-10 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center text-sm transition-all shrink-0 cursor-pointer shadow-xs active:scale-95"
+            title="Pilih Emoji"
+          >
+            😊
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setIsMenuModalOpen(true)}
-          className="h-10 px-3 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 text-xs font-black flex items-center gap-1 transition-all shrink-0 cursor-pointer active:scale-95"
-          title="Tag Menu atau Sub-Menu Pintasan"
-        >
-          <span>📌</span>
-          <span className="hidden sm:inline">Tag Menu</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setIsMenuModalOpen(true)}
+            className="h-10 px-3 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 text-xs font-black flex items-center gap-1 transition-all shrink-0 cursor-pointer active:scale-95"
+            title="Tag Menu atau Sub-Menu Pintasan"
+          >
+            <span>📌</span>
+            <span className="hidden sm:inline">Tag Menu</span>
+          </button>
+        </div>
 
         <div className="flex-1 relative">
           <MenuHashtagAutocompletePopover
@@ -1109,24 +1121,32 @@ export function WorkspaceChatRoom({
               if (inputRef.current) inputRef.current.focus();
             }}
           />
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
+            rows={1}
             value={inputMessage}
             onChange={handleInputChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend(e);
+              }
+            }}
             placeholder="Ketik pesan tim (ketik # untuk tag menu)..."
-            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 shadow-xs transition-all"
+            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 shadow-xs transition-all resize-none min-h-[40px] max-h-[180px] leading-relaxed overflow-y-auto scrollbar-thin"
           />
         </div>
 
-        <button
-          type="submit"
-          disabled={isPending || !inputMessage.trim()}
-          className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-2xl shadow-md hover:scale-105 active:scale-95 transition-all disabled:opacity-40 shrink-0 flex items-center gap-1.5 cursor-pointer"
-        >
-          <span>Kirim</span>
-          <span className="text-sm">🚀</span>
-        </button>
+        <div className="shrink-0 pb-0.5">
+          <button
+            type="submit"
+            disabled={isPending || !inputMessage.trim()}
+            className="h-10 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-2xl shadow-md hover:scale-105 active:scale-95 transition-all disabled:opacity-40 shrink-0 flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>Kirim</span>
+            <span className="text-sm">🚀</span>
+          </button>
+        </div>
       </form>
 
       {/* Menu Tag Picker Modal */}

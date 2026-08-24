@@ -219,6 +219,15 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
   const touchTimer = useRef<NodeJS.Timeout | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 38), 160);
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  }, [inputText]);
 
   const fetchMessages = async () => {
     if (!partnerId) return;
@@ -646,45 +655,47 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
       )}
 
       {/* Message Input Box */}
-      <div className="p-2.5 sm:p-2 bg-white dark:bg-[#09090b] border-t border-zinc-200 dark:border-zinc-800 flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => {
-            setShowEmojiPicker(!showEmojiPicker);
-            setShowStickers(false);
-          }}
-          className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 text-sm transition-colors cursor-pointer"
-          title="Modern Emoji Picker"
-        >
-          😊
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setShowStickers(!showStickers);
-            setShowEmojiPicker(false);
-          }}
-          className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 text-sm transition-colors cursor-pointer"
-          title="Stickers / Reaction Quick"
-        >
-          🎨
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowAttachmentInput(!showAttachmentInput)}
-          className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 text-sm transition-colors cursor-pointer"
-          title="Lampiran Gambar"
-        >
-          🖼️
-        </button>
-        <button
-          type="button"
-          onClick={() => setIsMenuModalOpen(true)}
-          className="p-1.5 rounded-xl hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold transition-colors cursor-pointer"
-          title="Tag Menu & Sub-Menu Sistem"
-        >
-          📌
-        </button>
+      <div className="p-2.5 sm:p-2 bg-white dark:bg-[#09090b] border-t border-zinc-200 dark:border-zinc-800 flex items-end gap-1 sm:gap-1.5">
+        <div className="flex items-center gap-0.5 shrink-0 pb-1">
+          <button
+            type="button"
+            onClick={() => {
+              setShowEmojiPicker(!showEmojiPicker);
+              setShowStickers(false);
+            }}
+            className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 text-sm transition-colors cursor-pointer"
+            title="Modern Emoji Picker"
+          >
+            😊
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowStickers(!showStickers);
+              setShowEmojiPicker(false);
+            }}
+            className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 text-sm transition-colors cursor-pointer"
+            title="Stickers / Reaction Quick"
+          >
+            🎨
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAttachmentInput(!showAttachmentInput)}
+            className="p-1.5 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 text-sm transition-colors cursor-pointer"
+            title="Lampiran Gambar"
+          >
+            🖼️
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsMenuModalOpen(true)}
+            className="p-1.5 rounded-xl hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold transition-colors cursor-pointer"
+            title="Tag Menu & Sub-Menu Sistem"
+          >
+            📌
+          </button>
+        </div>
 
         <div className="flex-1 relative">
           <MenuHashtagAutocompletePopover
@@ -694,26 +705,35 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
                 const updated = prev.replace(/#([a-zA-Z0-9_\-\s>]*)$/, formattedTag + ' ');
                 return updated;
               });
+              if (textareaRef.current) textareaRef.current.focus();
             }}
           />
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
+            rows={1}
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
             placeholder="Ketik pesan / ketik # untuk tag menu..."
-            className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 sm:py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
+            className="w-full bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500 resize-none min-h-[38px] max-h-[160px] leading-relaxed overflow-y-auto scrollbar-thin transition-all"
           />
         </div>
 
-        <button
-          type="button"
-          onClick={() => handleSendMessage()}
-          disabled={sending || (!inputText.trim() && !attachmentUrl.trim())}
-          className="p-2.5 sm:p-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all cursor-pointer shrink-0"
-        >
-          🚀
-        </button>
+        <div className="shrink-0 pb-0.5">
+          <button
+            type="button"
+            onClick={() => handleSendMessage()}
+            disabled={sending || (!inputText.trim() && !attachmentUrl.trim())}
+            className="p-2.5 sm:p-2.5 rounded-2xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-xs disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all cursor-pointer shrink-0"
+          >
+            🚀
+          </button>
+        </div>
       </div>
 
       {/* POV Delete Message Modal */}

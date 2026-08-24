@@ -441,6 +441,14 @@ export default function CommunityChatView({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 38), 180);
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  }, [inputMessage]);
   const messageRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1826,7 +1834,7 @@ export default function CommunityChatView({
                     ? `Balas @${replyingTo.user_name}...`
                     : `Tulis pesan di #${activeChannel.name} (ketik # untuk tag menu)...`
                 }
-                className="w-full bg-transparent text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 outline-none resize-none max-h-24"
+                className="w-full bg-transparent text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 outline-none resize-none min-h-[38px] max-h-[180px] leading-relaxed overflow-y-auto scrollbar-thin"
               />
             </div>
 

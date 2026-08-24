@@ -35,6 +35,15 @@ export function ThreadSidePanel({
   const [inputMessage, setInputMessage] = useState('');
   const [sending, setSending] = useState(false);
   const repliesContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const newHeight = Math.min(Math.max(textareaRef.current.scrollHeight, 38), 160);
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  }, [inputMessage]);
 
   const fetchDetails = async () => {
     if (!threadRootId) return;
@@ -297,28 +306,38 @@ export function ThreadSidePanel({
       {/* ── Thread Reply Input Box ── */}
       <form
         onSubmit={handleSend}
-        className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] flex items-center gap-2 shrink-0 relative"
+        className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#09090b] flex items-end gap-2 shrink-0 relative"
       >
         <MenuHashtagAutocompletePopover
           inputText={inputMessage}
           onSelectTag={(formattedTag) => {
             setInputMessage((prev) => prev.replace(/#([a-zA-Z0-9_\-\s>]*)$/, formattedTag + ' '));
+            if (textareaRef.current) textareaRef.current.focus();
           }}
         />
-        <input
-          type="text"
+        <textarea
+          ref={textareaRef}
+          rows={1}
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSend(e);
+            }
+          }}
           placeholder={`Balas di "${threadName}" (ketik # untuk tag menu)...`}
-          className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500/50"
+          className="flex-1 bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-3.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500/50 resize-none min-h-[38px] max-h-[160px] leading-relaxed overflow-y-auto scrollbar-thin"
         />
-        <button
-          type="submit"
-          disabled={sending || !inputMessage.trim()}
-          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold shadow-md disabled:opacity-50 transition-all shrink-0 cursor-pointer"
-        >
-          {sending ? '...' : 'Balas ➔'}
-        </button>
+        <div className="shrink-0 pb-0.5">
+          <button
+            type="submit"
+            disabled={sending || !inputMessage.trim()}
+            className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-2xl text-xs font-bold shadow-md disabled:opacity-50 transition-all cursor-pointer"
+          >
+            {sending ? '...' : 'Balas ➔'}
+          </button>
+        </div>
       </form>
     </motion.aside>
   );
