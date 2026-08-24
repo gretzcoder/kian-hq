@@ -13,17 +13,21 @@ interface AchievementHistoryViewProps {
 
 export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }: AchievementHistoryViewProps) {
   const [categoryFilter, setCategoryFilter] = useState<string>(initialCategory.toUpperCase());
+  const [periodFilter, setPeriodFilter] = useState<'ALL' | 'WEEKLY' | 'MONTHLY'>('ALL');
   const [search, setSearch] = useState<string>('');
 
   const categories = [
-    { id: 'ALL', label: '🌐 Semua' },
-    { id: 'WEEKLY', label: '🏆 Weekly' },
-    { id: 'MONTHLY', label: '👑 Monthly' },
-    { id: 'DESIGNER', label: '🎨 Designer' },
-    { id: 'VIDEO_EDITOR', label: '🎬 Video Editor' },
-    { id: 'PLANNER', label: '🧠 Planner' },
-    { id: 'RESEARCHER', label: '🔍 Researcher' },
-    { id: 'MENTOR', label: '🎓 Mentor' },
+    { id: 'ALL', label: '🌐 Semua Kategori' },
+    { id: 'CHAMPION', label: '🏆 Champion' },
+    { id: 'PRODUCTIVE', label: '⚡ Most Productive' },
+    { id: 'QUALITY', label: '🎯 High Quality' },
+    { id: 'WORKSPACE', label: '🏢 Top Workspaces' },
+    { id: 'MENTOR', label: '🥇 Top Mentors' },
+    { id: 'TEAM_LEADER', label: '👑 Team Leaders' },
+    { id: 'DESIGNER', label: '🎨 Designers' },
+    { id: 'VIDEO_EDITOR', label: '🎬 Video Editors' },
+    { id: 'PLANNER', label: '🧠 Planners' },
+    { id: 'RESEARCHER', label: '🔍 Researchers' },
   ];
 
   const filteredItems = useMemo(() => {
@@ -37,22 +41,36 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
 
       if (!matchesSearch) return false;
 
+      // Period Filter Check (Weekly / Monthly)
+      if (periodFilter === 'WEEKLY') {
+        const isWeekly = item.period.toLowerCase().includes('week') || item.title.toLowerCase().includes('weekly');
+        if (!isWeekly) return false;
+      } else if (periodFilter === 'MONTHLY') {
+        const isMonthly = !item.period.toLowerCase().includes('week') || item.title.toLowerCase().includes('monthly');
+        if (!isMonthly) return false;
+      }
+
+      // Category Filter Check
       if (categoryFilter === 'ALL') return true;
 
       const catUpper = item.category.toUpperCase();
       const typeUpper = item.achievementType.toUpperCase();
+      const titleUpper = item.title.toUpperCase();
 
-      if (categoryFilter === 'WEEKLY') return catUpper === 'WEEKLY' || typeUpper.includes('WEEKLY');
-      if (categoryFilter === 'MONTHLY') return catUpper === 'MONTHLY' || typeUpper.includes('MONTHLY');
-      if (categoryFilter === 'DESIGNER') return catUpper === 'DESIGNER' || typeUpper.includes('DESIGN');
-      if (categoryFilter === 'VIDEO_EDITOR') return catUpper === 'VIDEO_EDITOR' || typeUpper.includes('EDITOR') || typeUpper.includes('VIDEO');
-      if (categoryFilter === 'PLANNER') return catUpper === 'PLANNER' || typeUpper.includes('PLANNER');
-      if (categoryFilter === 'RESEARCHER') return catUpper === 'RESEARCHER' || typeUpper.includes('RESEARCH');
-      if (categoryFilter === 'MENTOR') return catUpper === 'MENTOR' || typeUpper.includes('MENTOR');
+      if (categoryFilter === 'CHAMPION') return catUpper === 'CHAMPION' || catUpper === 'WEEKLY' || catUpper === 'MONTHLY' || titleUpper.includes('CHAMPION');
+      if (categoryFilter === 'PRODUCTIVE') return catUpper === 'PRODUCTIVE' || titleUpper.includes('PRODUCTIVE');
+      if (categoryFilter === 'QUALITY') return catUpper === 'QUALITY' || titleUpper.includes('QUALITY');
+      if (categoryFilter === 'WORKSPACE') return catUpper === 'WORKSPACE' || titleUpper.includes('WORKSPACE');
+      if (categoryFilter === 'MENTOR') return catUpper === 'MENTOR' || titleUpper.includes('MENTOR');
+      if (categoryFilter === 'TEAM_LEADER') return catUpper === 'TEAM_LEADER' || titleUpper.includes('TEAM LEADER') || titleUpper.includes('LEADER');
+      if (categoryFilter === 'DESIGNER') return catUpper === 'DESIGNER' || titleUpper.includes('DESIGN');
+      if (categoryFilter === 'VIDEO_EDITOR') return catUpper === 'VIDEO_EDITOR' || titleUpper.includes('EDITOR') || titleUpper.includes('VIDEO');
+      if (categoryFilter === 'PLANNER') return catUpper === 'PLANNER' || titleUpper.includes('PLANNER');
+      if (categoryFilter === 'RESEARCHER') return catUpper === 'RESEARCHER' || titleUpper.includes('RESEARCH');
 
       return true;
     });
-  }, [initialData, categoryFilter, search]);
+  }, [initialData, categoryFilter, periodFilter, search]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 w-full min-w-0">
@@ -67,15 +85,32 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
               Achievement History
             </h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 font-medium">
-              Riwayat pencapaian gelar juara & gelar keahlian utama seluruh anggota dari Leaderboard.
+              Riwayat pencapaian gelar juara mingguan (Sabtu 24:00) & bulanan (akhir bulan) seluruh kategori Leaderboard.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-xl font-mono">
-            {filteredItems.length} Record Achievement
-          </span>
+          {/* Period Filter Switcher */}
+          <div className="grid grid-cols-3 p-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+            {[
+              { id: 'ALL', label: 'Semua' },
+              { id: 'WEEKLY', label: '🗓️ Weekly' },
+              { id: 'MONTHLY', label: '📅 Monthly' },
+            ].map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setPeriodFilter(p.id as any)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  periodFilter === p.id
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

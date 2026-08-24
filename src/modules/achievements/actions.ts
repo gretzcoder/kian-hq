@@ -255,98 +255,35 @@ export async function syncLeaderboardAchievements() {
   const nowSec = Math.floor(Date.now() / 1000);
   const oneWeek = 7 * 24 * 3600;
 
-  // Generate realistic historical achievement entries for top performers
+  // Generate realistic historical achievement entries covering all 10 Leaderboard categories for weekly & monthly periods
   const sampleAchievements = [
-    {
-      userId: users[0]?.id,
-      type: 'WEEKLY_CHAMPION',
-      title: 'Weekly Champion',
-      period: 'Week 4 Aug 2026',
-      rank: 1,
-      score: 1105,
-      category: 'WEEKLY',
-      earnedAt: nowSec - 2 * 24 * 3600,
-    },
-    {
-      userId: users[0]?.id,
-      type: 'WEEKLY_CHAMPION',
-      title: 'Weekly Champion',
-      period: 'Week 2 Aug 2026',
-      rank: 1,
-      score: 1024,
-      category: 'WEEKLY',
-      earnedAt: nowSec - 14 * 24 * 3600,
-    },
-    {
-      userId: users[0]?.id,
-      type: 'WEEKLY_CHAMPION',
-      title: 'Weekly Champion',
-      period: 'Week 1 Aug 2026',
-      rank: 1,
-      score: 982,
-      category: 'WEEKLY',
-      earnedAt: nowSec - 21 * 24 * 3600,
-    },
-    {
-      userId: users[0]?.id,
-      type: 'MONTHLY_CHAMPION',
-      title: 'Monthly Champion',
-      period: 'Aug 2026',
-      rank: 1,
-      score: 4820,
-      category: 'MONTHLY',
-      earnedAt: nowSec - 5 * 24 * 3600,
-    },
-    {
-      userId: users[1]?.id || users[0]?.id,
-      type: 'TOP_DESIGNER',
-      title: 'Top Designer',
-      period: 'Week 3 Aug 2026',
-      rank: 1,
-      score: 750,
-      category: 'DESIGNER',
-      earnedAt: nowSec - 9 * 24 * 3600,
-    },
-    {
-      userId: users[1]?.id || users[0]?.id,
-      type: 'TOP_DESIGNER',
-      title: 'Top Designer',
-      period: 'Week 1 Aug 2026',
-      rank: 1,
-      score: 680,
-      category: 'DESIGNER',
-      earnedAt: nowSec - 23 * 24 * 3600,
-    },
-    {
-      userId: users[2]?.id || users[0]?.id,
-      type: 'TOP_VIDEO_EDITOR',
-      title: 'Top Video Editor',
-      period: 'Week 4 Aug 2026',
-      rank: 1,
-      score: 890,
-      category: 'VIDEO_EDITOR',
-      earnedAt: nowSec - 3 * 24 * 3600,
-    },
-    {
-      userId: users[3]?.id || users[0]?.id,
-      type: 'TOP_PLANNER',
-      title: 'Top Planner',
-      period: 'Aug 2026',
-      rank: 1,
-      score: 540,
-      category: 'PLANNER',
-      earnedAt: nowSec - 7 * 24 * 3600,
-    },
-    {
-      userId: users[4]?.id || users[0]?.id,
-      type: 'TOP_RESEARCHER',
-      title: 'Top Researcher',
-      period: 'Aug 2026',
-      rank: 1,
-      score: 620,
-      category: 'RESEARCHER',
-      earnedAt: nowSec - 8 * 24 * 3600,
-    },
+    { userId: users[0]?.id, type: 'WEEKLY_CHAMPION', title: 'Weekly Champion', period: 'Week 4 Aug 2026', rank: 1, score: 1105, category: 'CHAMPION', earnedAt: nowSec - 2 * 24 * 3600 },
+    { userId: users[0]?.id, type: 'WEEKLY_CHAMPION', title: 'Weekly Champion', period: 'Week 2 Aug 2026', rank: 1, score: 1024, category: 'CHAMPION', earnedAt: nowSec - 14 * 24 * 3600 },
+    { userId: users[0]?.id, type: 'WEEKLY_CHAMPION', title: 'Weekly Champion', period: 'Week 1 Aug 2026', rank: 1, score: 982, category: 'CHAMPION', earnedAt: nowSec - 21 * 24 * 3600 },
+    { userId: users[0]?.id, type: 'MONTHLY_CHAMPION', title: 'Monthly Champion', period: 'Aug 2026', rank: 1, score: 4820, category: 'CHAMPION', earnedAt: nowSec - 5 * 24 * 3600 },
+
+    { userId: users[1]?.id || users[0]?.id, type: 'TOP_PRODUCTIVE_WEEKLY', title: 'Top Productive (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 950, category: 'PRODUCTIVE', earnedAt: nowSec - 2 * 24 * 3600 },
+    { userId: users[1]?.id || users[0]?.id, type: 'TOP_PRODUCTIVE_MONTHLY', title: 'Top Productive (Monthly)', period: 'Aug 2026', rank: 1, score: 3900, category: 'PRODUCTIVE', earnedAt: nowSec - 5 * 24 * 3600 },
+
+    { userId: users[2]?.id || users[0]?.id, type: 'TOP_QUALITY_WEEKLY', title: 'Top Quality (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 980, category: 'QUALITY', earnedAt: nowSec - 2 * 24 * 3600 },
+    { userId: users[2]?.id || users[0]?.id, type: 'TOP_QUALITY_MONTHLY', title: 'Top Quality (Monthly)', period: 'Aug 2026', rank: 1, score: 4100, category: 'QUALITY', earnedAt: nowSec - 5 * 24 * 3600 },
+
+    { userId: users[3]?.id || users[0]?.id, type: 'TOP_WORKSPACE_WEEKLY', title: 'Top Workspace Team (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 2400, category: 'WORKSPACE', earnedAt: nowSec - 2 * 24 * 3600 },
+    { userId: users[3]?.id || users[0]?.id, type: 'TOP_WORKSPACE_MONTHLY', title: 'Top Workspace Team (Monthly)', period: 'Aug 2026', rank: 1, score: 9800, category: 'WORKSPACE', earnedAt: nowSec - 5 * 24 * 3600 },
+
+    { userId: users[4]?.id || users[0]?.id, type: 'TOP_MENTOR_WEEKLY', title: 'Top Mentor (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 820, category: 'MENTOR', earnedAt: nowSec - 2 * 24 * 3600 },
+    { userId: users[4]?.id || users[0]?.id, type: 'TOP_MENTOR_MONTHLY', title: 'Top Mentor (Monthly)', period: 'Aug 2026', rank: 1, score: 3200, category: 'MENTOR', earnedAt: nowSec - 5 * 24 * 3600 },
+
+    { userId: users[0]?.id, type: 'TOP_TEAM_LEADER_WEEKLY', title: 'Top Team Leader (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 1050, category: 'TEAM_LEADER', earnedAt: nowSec - 2 * 24 * 3600 },
+
+    { userId: users[1]?.id || users[0]?.id, type: 'TOP_DESIGNER_WEEKLY', title: 'Top Designer (Weekly)', period: 'Week 3 Aug 2026', rank: 1, score: 750, category: 'DESIGNER', earnedAt: nowSec - 9 * 24 * 3600 },
+    { userId: users[1]?.id || users[0]?.id, type: 'TOP_DESIGNER_MONTHLY', title: 'Top Designer (Monthly)', period: 'Aug 2026', rank: 1, score: 2800, category: 'DESIGNER', earnedAt: nowSec - 5 * 24 * 3600 },
+
+    { userId: users[2]?.id || users[0]?.id, type: 'TOP_VIDEO_EDITOR_WEEKLY', title: 'Top Video Editor (Weekly)', period: 'Week 4 Aug 2026', rank: 1, score: 890, category: 'VIDEO_EDITOR', earnedAt: nowSec - 3 * 24 * 3600 },
+
+    { userId: users[3]?.id || users[0]?.id, type: 'TOP_PLANNER_MONTHLY', title: 'Top Planner (Monthly)', period: 'Aug 2026', rank: 1, score: 540, category: 'PLANNER', earnedAt: nowSec - 7 * 24 * 3600 },
+
+    { userId: users[4]?.id || users[0]?.id, type: 'TOP_RESEARCHER_MONTHLY', title: 'Top Researcher (Monthly)', period: 'Aug 2026', rank: 1, score: 620, category: 'RESEARCHER', earnedAt: nowSec - 8 * 24 * 3600 },
   ];
 
   for (const item of sampleAchievements) {
