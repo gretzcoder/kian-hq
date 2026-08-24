@@ -1146,7 +1146,6 @@ export default function CommunityChatView({
             );
           })}
         </div>
-        </div>
       </aside>
 
       {/* ── MAIN CHAT CANVAS ── */}
