@@ -2,7 +2,13 @@
 
 import { getDB } from '@/db/client';
 import { getSession } from '@/modules/auth/session';
-import { getAchievementMeta, getWeekPeriodLabel, getMonthPeriodLabel } from './utils';
+import { 
+  getAchievementMeta, 
+  getWeekPeriodLabel, 
+  getMonthPeriodLabel,
+  getWeeklySaturdayTimestamp,
+  getMonthlyLastDayTimestamp,
+} from './utils';
 import { getLeaderboardData } from '@/modules/leaderboard/actions';
 
 export interface AchievementItem {
@@ -86,7 +92,13 @@ export async function getAchievementHistoryAction(categoryFilter = 'ALL', userId
       JOIN users u ON ah.user_id = u.id
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
-      WHERE 1=1
+      WHERE u.id NOT IN (
+        SELECT ur2.user_id
+        FROM user_roles ur2
+        JOIN roles r2 ON ur2.role_id = r2.id
+        WHERE r2.id IN ('role_coordinator', 'role_executive') OR r2.name IN ('COORDINATOR', 'EXECUTIVE', 'KOORDINATOR')
+      )
+      AND u.email NOT LIKE '%admin@kian.com%'
     `;
 
     const params: any[] = [];
@@ -231,6 +243,8 @@ export async function syncLeaderboardAchievements() {
     const nowSec = Math.floor(Date.now() / 1000);
     const weekLabel = getWeekPeriodLabel();
     const monthLabel = getMonthPeriodLabel();
+    const saturdayTs = getWeeklySaturdayTimestamp();
+    const monthEndTs = getMonthlyLastDayTimestamp();
 
     const leaderboardCategories: Array<{
       id:
@@ -270,6 +284,7 @@ export async function syncLeaderboardAchievements() {
             const title = period === 'week' ? cat.weeklyTitle : cat.monthlyTitle;
             const typeKey = `${cat.categoryKey}_${period.toUpperCase()}`;
             const score = topItem.totalSparks || (topItem as any).score || 0;
+            const earnedAt = period === 'week' ? saturdayTs : monthEndTs;
 
             const existing = (await db.prepare(`
               SELECT id FROM achievement_history
@@ -286,7 +301,7 @@ export async function syncLeaderboardAchievements() {
                 typeKey,
                 title,
                 score,
-                nowSec,
+                earnedAt,
                 existing.id
               ).run();
             } else {
@@ -303,7 +318,7 @@ export async function syncLeaderboardAchievements() {
                 periodLabel,
                 score,
                 cat.categoryKey,
-                nowSec,
+                earnedAt,
                 nowSec
               ).run();
             }

@@ -135,7 +135,7 @@ export function getAchievementMeta(type: string, category: string) {
   };
 }
 
-/** Calculate current Week string e.g. "Week 4 Aug 2026" (Saturday 24:00 cutoff) */
+/** Calculate current Week string e.g. "Week 4 Aug 2026" */
 export function getWeekPeriodLabel(d = new Date()): string {
   const dayOfMonth = d.getDate();
   const weekNum = Math.min(4, Math.ceil(dayOfMonth / 7));
@@ -144,9 +144,26 @@ export function getWeekPeriodLabel(d = new Date()): string {
   return `Week ${weekNum} ${monthName} ${year}`;
 }
 
-/** Calculate current Month string e.g. "Aug 2026" (Last day of month cutoff) */
+/** Calculate current Month string e.g. "Aug 2026" */
 export function getMonthPeriodLabel(d = new Date()): string {
   const monthName = d.toLocaleDateString('en-US', { month: 'short' });
   const year = d.getFullYear();
   return `${monthName} ${year}`;
+}
+
+/** Calculate Saturday 23:59:59 timestamp for weekly period */
+export function getWeeklySaturdayTimestamp(d = new Date()): number {
+  const date = new Date(d);
+  const day = date.getDay(); // 0: Sun, 1: Mon, ..., 6: Sat
+  // If today is Sunday (0) or Monday (1), the weekly cutoff Saturday was 1 or 2 days ago!
+  const diffToLastSaturday = day === 6 ? 0 : -(day + 1);
+  date.setDate(date.getDate() + diffToLastSaturday);
+  date.setHours(23, 59, 59, 0);
+  return Math.floor(date.getTime() / 1000);
+}
+
+/** Calculate Last Day of Month 23:59:59 timestamp for monthly period */
+export function getMonthlyLastDayTimestamp(d = new Date()): number {
+  const date = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+  return Math.floor(date.getTime() / 1000);
 }
