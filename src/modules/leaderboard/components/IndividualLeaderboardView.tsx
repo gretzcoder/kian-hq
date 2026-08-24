@@ -149,6 +149,11 @@ export function IndividualLeaderboardView({
                           <span>{user.userName}</span>
                           <span className="text-[10px] text-zinc-400 font-mono">↗</span>
                         </Link>
+                        {user.streakBadge && (
+                          <span className="text-[10px] font-mono font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full shrink-0">
+                            {user.streakBadge}
+                          </span>
+                        )}
                         {isMe && (
                           <span className="text-[9px] bg-purple-600 text-white font-bold px-2 py-0.5 rounded-full">
                             Anda

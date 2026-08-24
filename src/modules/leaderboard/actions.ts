@@ -3,6 +3,7 @@
 import { getDB } from '@/db/client';
 import { getSession } from '@/modules/auth/session';
 import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
+import { getUserStreakBadgeMapAction } from '@/modules/achievements/actions';
 
 export interface LeaderboardUser {
   rank: number;
@@ -15,6 +16,7 @@ export interface LeaderboardUser {
   zeroRevisionCount: number;
   onTimeCount: number;
   primaryRole: string;
+  streakBadge?: string | null;
 }
 
 export interface WorkspaceLeaderboardItem {
@@ -326,9 +328,11 @@ export async function getLeaderboardData(
       items.sort((a, b) => b.totalSparks - a.totalSparks || b.tasksCompleted - a.tasksCompleted);
     }
 
+    const streakMap = await getUserStreakBadgeMapAction();
     const ranked: LeaderboardUser[] = items.map((item, idx) => ({
       rank: idx + 1,
       ...item,
+      streakBadge: streakMap[item.userId] || null,
     }));
 
     return { type: 'individual' as const, data: ranked };

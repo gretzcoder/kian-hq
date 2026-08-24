@@ -16,6 +16,8 @@ export const SHORTHAND_MENU_MAP: Record<string, MenuTagInfo> = {
   '#workspace': { label: 'Workspace', path: '/dashboard/workspace', icon: '⚡' },
   '#my-workspace': { label: 'My Workspace', path: '/dashboard/workspace', icon: '⚡' },
   '#leaderboard': { label: 'Leaderboard', path: '/dashboard/leaderboard', icon: '🏆' },
+  '#achievements': { label: 'Achievement History', path: '/dashboard/achievements', icon: '🏆' },
+  '#achievement-history': { label: 'Achievement History', path: '/dashboard/achievements', icon: '🏆' },
   '#sparks-history': { label: 'Leaderboard > History Sparks', path: '/dashboard/leaderboard?tab=history', icon: '⚡' },
   '#badge': { label: 'Badge Gallery', path: '/dashboard/badges', icon: '🏅' },
   '#badges': { label: 'Badge Gallery', path: '/dashboard/badges', icon: '🏅' },

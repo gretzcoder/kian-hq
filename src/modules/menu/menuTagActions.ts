@@ -42,6 +42,7 @@ export async function getAccessibleMenuOptions(): Promise<MenuTagOption[]> {
     ...(!isOJT ? [{ id: 'menu_projects', label: 'Projects', category: 'UTAMA' as const, path: '/dashboard/projects', icon: '📁', description: 'Daftar semua proyek kampanye' }] : []),
     { id: 'menu_workspace', label: 'Workspace Console', category: 'UTAMA', path: '/dashboard/workspace', icon: '⚡', description: 'Ruang kerja tim dan rundown tugas' },
     { id: 'menu_leaderboard', label: 'Leaderboard', category: 'UTAMA', path: '/dashboard/leaderboard', icon: '🏆', description: 'Klasemen Sparks dan peringkat troopers' },
+    { id: 'menu_achievements', label: 'Achievement History', category: 'UTAMA', path: '/dashboard/achievements', icon: '🏆', description: 'Riwayat pencapaian gelar juara & gelar keahlian seluruh anggota' },
     { id: 'menu_badges', label: 'Badge Gallery', category: 'UTAMA', path: '/dashboard/badges', icon: '🏅', description: 'Koleksi pencapaian lencana dan apresiasi' },
 
     // ── KOLABORASI ──
