@@ -151,19 +151,23 @@ export function getMonthPeriodLabel(d = new Date()): string {
   return `${monthName} ${year}`;
 }
 
-/** Calculate Saturday 23:59:59 timestamp for weekly period */
+/** Calculate Saturday 12:00:00 timestamp for weekly period to prevent timezone rollover */
 export function getWeeklySaturdayTimestamp(d = new Date()): number {
   const date = new Date(d);
   const day = date.getDay(); // 0: Sun, 1: Mon, ..., 6: Sat
   // If today is Sunday (0) or Monday (1), the weekly cutoff Saturday was 1 or 2 days ago!
   const diffToLastSaturday = day === 6 ? 0 : -(day + 1);
   date.setDate(date.getDate() + diffToLastSaturday);
-  date.setHours(23, 59, 59, 0);
+  date.setHours(12, 0, 0, 0);
   return Math.floor(date.getTime() / 1000);
 }
 
-/** Calculate Last Day of Month 23:59:59 timestamp for monthly period */
+/** Calculate Last Day of Month 12:00:00 timestamp for monthly period to prevent timezone rollover */
 export function getMonthlyLastDayTimestamp(d = new Date()): number {
-  const date = new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  // Get last day of month (e.g. 31 for August)
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const date = new Date(Date.UTC(year, month, lastDay, 12, 0, 0));
   return Math.floor(date.getTime() / 1000);
 }
