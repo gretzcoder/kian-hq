@@ -271,8 +271,18 @@ export async function syncLeaderboardAchievements() {
       { id: 'role_researcher', categoryKey: 'RESEARCHER', labelName: 'Researcher' },
     ];
 
+    const todayDate = new Date();
+    const currentDayOfMonth = todayDate.getDate();
+    const lastDayOfMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate();
+    const isEndOfMonth = currentDayOfMonth >= lastDayOfMonth;
+
     for (const cat of leaderboardCategories) {
       for (const period of ['week', 'month'] as const) {
+        // Monthly achievements are ONLY recorded on/after the end of the month (H-1 / last day)
+        if (period === 'month' && !isEndOfMonth) {
+          continue;
+        }
+
         try {
           const lbResult = await getLeaderboardData(cat.id, period);
           const topItems = (lbResult.data || []).slice(0, 3);
