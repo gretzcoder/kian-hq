@@ -98,6 +98,7 @@ export interface CommunityMemberGroup {
 export async function getCommunityChannels(): Promise<{
   workChannels: CommunityChannel[];
   generalChannels: CommunityChannel[];
+  allChannels: CommunityChannel[];
   categories: CommunityCategory[];
   defaultChannelId: string | null;
   canManage: boolean;

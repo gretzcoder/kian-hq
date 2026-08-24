@@ -469,10 +469,11 @@ export default function CommunityChatView({
     }
   };
 
-  const handleClearCategory = async (cat: 'WORK' | 'GENERAL') => {
-    const label = cat === 'WORK' ? 'Kategori Kerjaan' : 'Kategori General & Santai';
+  const handleClearCategory = async (catId: string) => {
+    const targetCat = categories.find((c) => c.id === catId);
+    const label = targetCat?.name || 'Kategori ini';
     if (!confirm(`Apakah Anda yakin ingin membersihkan seluruh percakapan di seluruh saluran ${label}?`)) return;
-    const res = await clearCommunityCategoryMessages(cat);
+    const res = await clearCommunityCategoryMessages(catId);
     if (res.success) {
       const msgs = await getCommunityMessages(activeChannel.id);
       setMessages(msgs);
