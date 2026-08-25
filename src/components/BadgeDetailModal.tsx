@@ -126,10 +126,16 @@ export function BadgeDetailModal({
             )}
           </div>
 
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2 flex-wrap justify-center">
             <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border bg-white/40 dark:bg-black/40 ${catMeta.border} ${catMeta.textGradient}`}>
               {catMeta.label}
             </span>
+            {badge.isContinuousEarning && (
+              <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center gap-1 font-mono">
+                <span>🔄 Continuous Earning</span>
+                {badge.claimCount && badge.claimCount > 1 ? `(${badge.claimCount}x)` : ''}
+              </span>
+            )}
             {badge.sparksReward > 0 && (
               <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 font-mono">
                 ✨ +{badge.sparksReward} Sparks

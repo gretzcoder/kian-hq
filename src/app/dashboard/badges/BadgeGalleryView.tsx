@@ -202,9 +202,16 @@ export default function BadgeGalleryView({
                 <div>
                   {/* Top Header Row */}
                   <div className="flex items-center justify-between gap-2 mb-3">
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border bg-white/50 dark:bg-black/50 ${meta.border} ${meta.textGradient} shrink-0`}>
-                      {meta.label}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border bg-white/50 dark:bg-black/50 ${meta.border} ${meta.textGradient} shrink-0`}>
+                        {meta.label}
+                      </span>
+                      {badge.isContinuousEarning && (
+                        <span className="text-[9px] font-bold px-2 py-1 rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0" title="Auto-Earn Sparks setiap kali achievement terulang">
+                          🔄 Auto
+                        </span>
+                      )}
+                    </div>
                     <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-xl border shrink-0 transition-all ${
                       badge.isOwned
                         ? badge.sparksReward > 0

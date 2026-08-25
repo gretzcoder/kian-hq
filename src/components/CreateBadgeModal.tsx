@@ -1,7 +1,14 @@
 'use client';
 
 import { useState, useEffect, useTransition } from 'react';
-import { BadgeCategory, BadgeItem, CATEGORY_META, RECOMMENDED_CATEGORY_SPARKS, RequirementType } from '@/modules/badges/badgeTypes';
+import {
+  BadgeCategory,
+  BadgeItem,
+  CATEGORY_META,
+  RECOMMENDED_CATEGORY_SPARKS,
+  RequirementType,
+  AchievementConditionItem,
+} from '@/modules/badges/badgeTypes';
 import { createBadgeAction, updateBadgeAction, getBadgeRequirementOptions } from '@/modules/badges/badgeActions';
 
 interface CreateBadgeModalProps {
@@ -20,14 +27,27 @@ export function CreateBadgeModal({
   const isEditing = Boolean(editBadge);
 
   const [name, setName] = useState(editBadge?.name || '');
-  const [category, setCategory] = useState<BadgeCategory>(editBadge?.category || 'TROOPER');
+  const [category, setCategory] = useState<BadgeCategory>(editBadge?.category || 'ACHIEVEMENT');
   const [description, setDescription] = useState(editBadge?.description || '');
   const [iconMode, setIconMode] = useState<'URL' | 'FILE'>('URL');
   const [iconUrl, setIconUrl] = useState(editBadge?.iconUrl || '');
   const [iconFile, setIconFile] = useState<File | null>(null);
-  const [requirementType, setRequirementType] = useState<RequirementType>(editBadge?.requirementType || 'NONE');
-  const [selectedReqIds, setSelectedReqIds] = useState<string[]>(editBadge?.requirementData || []);
-  const [sparksReward, setSparksReward] = useState<number>(editBadge ? editBadge.sparksReward : RECOMMENDED_CATEGORY_SPARKS.TROOPER);
+  const [requirementType, setRequirementType] = useState<RequirementType>(editBadge?.requirementType || 'ACHIEVEMENT');
+  const [selectedReqIds, setSelectedReqIds] = useState<string[]>(
+    editBadge?.requirementType === 'TASK' || editBadge?.requirementType === 'WORKSPACE'
+      ? (editBadge.requirementData as string[]) || []
+      : []
+  );
+
+  const [achievementConditions, setAchievementConditions] = useState<AchievementConditionItem[]>(() => {
+    if (editBadge?.requirementType === 'ACHIEVEMENT' && Array.isArray(editBadge.requirementData) && editBadge.requirementData.length > 0) {
+      return editBadge.requirementData as AchievementConditionItem[];
+    }
+    return [{ id: 'cond_1', category: 'CHAMPION', minCount: 1, conditionType: 'COUNT', periodType: 'ANY' }];
+  });
+
+  const [isContinuousEarning, setIsContinuousEarning] = useState<boolean>(editBadge?.isContinuousEarning ?? false);
+  const [sparksReward, setSparksReward] = useState<number>(editBadge ? editBadge.sparksReward : RECOMMENDED_CATEGORY_SPARKS.ACHIEVEMENT);
   const [isCustomSparks, setIsCustomSparks] = useState<boolean>(Boolean(editBadge));
 
   const [options, setOptions] = useState<{
@@ -57,7 +77,12 @@ export function CreateBadgeModal({
       setDescription(editBadge.description || '');
       setIconUrl(editBadge.iconUrl || '');
       setRequirementType(editBadge.requirementType);
-      setSelectedReqIds(editBadge.requirementData || []);
+      if (editBadge.requirementType === 'ACHIEVEMENT' && Array.isArray(editBadge.requirementData)) {
+        setAchievementConditions(editBadge.requirementData as AchievementConditionItem[]);
+      } else if (Array.isArray(editBadge.requirementData)) {
+        setSelectedReqIds(editBadge.requirementData as string[]);
+      }
+      setIsContinuousEarning(editBadge.isContinuousEarning ?? false);
       setSparksReward(editBadge.sparksReward);
       setIsCustomSparks(true);
     }
@@ -65,8 +90,11 @@ export function CreateBadgeModal({
 
   const handleCategorySelect = (cat: BadgeCategory) => {
     setCategory(cat);
+    if (cat === 'ACHIEVEMENT') {
+      setRequirementType('ACHIEVEMENT');
+    }
     if (!isCustomSparks) {
-      setSparksReward(RECOMMENDED_CATEGORY_SPARKS[cat] || 10);
+      setSparksReward(RECOMMENDED_CATEGORY_SPARKS[cat] || 25);
     }
   };
 
@@ -76,6 +104,29 @@ export function CreateBadgeModal({
     setSelectedReqIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
+  };
+
+  const handleAddCondition = () => {
+    setAchievementConditions((prev) => [
+      ...prev,
+      {
+        id: `cond_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        category: 'CHAMPION',
+        minCount: 1,
+        conditionType: 'COUNT',
+        periodType: 'ANY',
+      },
+    ]);
+  };
+
+  const handleUpdateCondition = (id: string, field: keyof AchievementConditionItem, value: any) => {
+    setAchievementConditions((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, [field]: value } : c))
+    );
+  };
+
+  const handleRemoveCondition = (id: string) => {
+    setAchievementConditions((prev) => (prev.length > 1 ? prev.filter((c) => c.id !== id) : prev));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -91,7 +142,14 @@ export function CreateBadgeModal({
     formData.append('category', category);
     formData.append('description', description.trim());
     formData.append('requirement_type', requirementType);
-    formData.append('requirement_data', JSON.stringify(selectedReqIds));
+
+    if (requirementType === 'ACHIEVEMENT') {
+      formData.append('requirement_data', JSON.stringify(achievementConditions));
+    } else {
+      formData.append('requirement_data', JSON.stringify(selectedReqIds));
+    }
+
+    formData.append('is_continuous_earning', isContinuousEarning ? '1' : '0');
     formData.append('sparks_reward', String(sparksReward));
 
     if (iconMode === 'URL' && iconUrl.trim()) {
@@ -115,7 +173,21 @@ export function CreateBadgeModal({
     });
   };
 
-  const catMeta = CATEGORY_META[category] || CATEGORY_META.TROOPER;
+  const catMeta = CATEGORY_META[category] || CATEGORY_META.ACHIEVEMENT;
+
+  const achievementCategoryOptions = [
+    { id: 'CHAMPION', label: '🏆 Champion (Juara Umum)' },
+    { id: 'PRODUCTIVE', label: '⚡ Most Productive' },
+    { id: 'QUALITY', label: '🎯 High Quality' },
+    { id: 'WORKSPACE', label: '🏢 Top Workspaces' },
+    { id: 'MENTOR', label: '🥇 Top Mentors' },
+    { id: 'TEAM_LEADER', label: '👑 Team Leaders' },
+    { id: 'DESIGNER', label: '🎨 Designers' },
+    { id: 'VIDEO_EDITOR', label: '🎬 Video Editors' },
+    { id: 'PLANNER', label: '🧠 Planners' },
+    { id: 'RESEARCHER', label: '🔍 Researchers' },
+    { id: 'ALL', label: '🌟 Semua Kategori Gelar' },
+  ];
 
   return (
     <div
@@ -129,7 +201,7 @@ export function CreateBadgeModal({
         {/* Header */}
         <div className="p-6 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{isEditing ? '✏️' : '🎖️'}</span>
+            <span className="text-2xl">{isEditing ? '✏️' : '🏆'}</span>
             <div>
               <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100">
                 {isEditing ? 'Edit Badge' : 'Buat Badge Baru'}
@@ -165,7 +237,7 @@ export function CreateBadgeModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Contoh: Video Editing Master, Event Champion 2026"
+              placeholder="Contoh: 10x Champion Master, Elite Multi-Role Winner"
               required
               className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-900 dark:text-zinc-100 font-bold focus:outline-none focus:border-purple-500"
             />
@@ -206,7 +278,7 @@ export function CreateBadgeModal({
                 ✨ Reward Creative Sparks (Bonus User)
               </label>
               <span className="text-[10px] font-bold text-amber-500 font-mono">
-                💡 Rekomendasi: +{RECOMMENDED_CATEGORY_SPARKS[category] || 10} Sparks
+                💡 Rekomendasi: +{RECOMMENDED_CATEGORY_SPARKS[category] || 25} Sparks
               </span>
             </div>
 
@@ -229,7 +301,7 @@ export function CreateBadgeModal({
             {/* Quick recommendation buttons */}
             <div className="flex items-center gap-1.5 flex-wrap pt-1">
               <span className="text-[10px] text-zinc-400 font-bold">Pilih Cepat:</span>
-              {[0, 10, 15, 20, 35, 50].map((amount) => (
+              {[0, 10, 15, 20, 25, 35, 50].map((amount) => (
                 <button
                   key={amount}
                   type="button"
@@ -313,18 +385,31 @@ export function CreateBadgeModal({
             <label className="block text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1.5">
               Syarat Kelayakan Dapatkan Badge
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button
+                type="button"
+                onClick={() => setRequirementType('ACHIEVEMENT')}
+                className={`p-3 rounded-2xl border text-left transition-all ${
+                  requirementType === 'ACHIEVEMENT'
+                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold shadow-xs'
+                    : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-500'
+                }`}
+              >
+                <p className="font-bold text-xs">🏆 Achievement</p>
+                <p className="text-[9px] opacity-80 mt-0.5">Syarat juara & streak Leaderboard</p>
+              </button>
+
               <button
                 type="button"
                 onClick={() => { setRequirementType('NONE'); setSelectedReqIds([]); }}
                 className={`p-3 rounded-2xl border text-left transition-all ${
                   requirementType === 'NONE'
-                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold'
+                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold shadow-xs'
                     : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-500'
                 }`}
               >
-                <p className="font-bold text-xs">✨ Tanpa Syarat / Manual</p>
-                <p className="text-[9px] opacity-80 mt-0.5">Diberikan langsung oleh Mentor/Admin</p>
+                <p className="font-bold text-xs">✨ Tanpa Syarat</p>
+                <p className="text-[9px] opacity-80 mt-0.5">Manual oleh Mentor/Admin</p>
               </button>
 
               <button
@@ -332,12 +417,12 @@ export function CreateBadgeModal({
                 onClick={() => { setRequirementType('TASK'); setSelectedReqIds([]); }}
                 className={`p-3 rounded-2xl border text-left transition-all ${
                   requirementType === 'TASK'
-                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold'
+                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold shadow-xs'
                     : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-500'
                 }`}
               >
                 <p className="font-bold text-xs">📋 Task Tertentu</p>
-                <p className="text-[9px] opacity-80 mt-0.5">Pilih 1 atau lebih task (status ACC)</p>
+                <p className="text-[9px] opacity-80 mt-0.5">Pilih 1 atau lebih task</p>
               </button>
 
               <button
@@ -345,18 +430,137 @@ export function CreateBadgeModal({
                 onClick={() => { setRequirementType('WORKSPACE'); setSelectedReqIds([]); }}
                 className={`p-3 rounded-2xl border text-left transition-all ${
                   requirementType === 'WORKSPACE'
-                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold'
+                    ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold shadow-xs'
                     : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-500'
                 }`}
               >
-                <p className="font-bold text-xs">📁 Workspace Lengkap</p>
-                <p className="text-[9px] opacity-80 mt-0.5">Semua task dalam workspace selesai</p>
+                <p className="font-bold text-xs">📁 Workspace</p>
+                <p className="text-[9px] opacity-80 mt-0.5">Semua task workspace</p>
               </button>
             </div>
           </div>
 
+          {/* Syarat Achievement Configurator */}
+          {requirementType === 'ACHIEVEMENT' && (
+            <div className="space-y-3 bg-gradient-to-br from-purple-500/5 via-indigo-500/5 to-amber-500/5 dark:from-purple-950/30 dark:to-indigo-950/20 p-4 rounded-2xl border border-purple-500/20">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1.5">
+                  <span>🏆 Atur Syarat Pencapaian Gelar Leaderboard</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddCondition}
+                  className="px-2.5 py-1 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  + Tambah Syarat
+                </button>
+              </div>
+
+              {achievementConditions.map((cond, index) => (
+                <div key={cond.id || index} className="p-3 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 space-y-2 relative group">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-zinc-500">Syarat #{index + 1}</span>
+                    {achievementConditions.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCondition(cond.id)}
+                        className="text-[10px] font-bold text-rose-500 hover:underline"
+                      >
+                        🗑️ Hapus
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* Kategori Gelar */}
+                    <div>
+                      <label className="block text-[9px] font-bold text-zinc-400 mb-1">Kategori Gelar</label>
+                      <select
+                        value={cond.category}
+                        onChange={(e) => handleUpdateCondition(cond.id, 'category', e.target.value)}
+                        className="w-full text-xs p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-bold"
+                      >
+                        {achievementCategoryOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Tipe Hitungan */}
+                    <div>
+                      <label className="block text-[9px] font-bold text-zinc-400 mb-1">Tipe Hitungan</label>
+                      <select
+                        value={cond.conditionType}
+                        onChange={(e) => handleUpdateCondition(cond.id, 'conditionType', e.target.value)}
+                        className="w-full text-xs p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-bold"
+                      >
+                        <option value="COUNT">📊 Total Menang (Kumulatif)</option>
+                        <option value="STREAK">🔥 Streak Beruntun (Consecutive)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    {/* Minimum Jumlah Wins / Streak */}
+                    <div>
+                      <label className="block text-[9px] font-bold text-zinc-400 mb-1">Minimal Jumlah Pencapaian</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={cond.minCount}
+                          onChange={(e) => handleUpdateCondition(cond.id, 'minCount', Math.max(1, parseInt(e.target.value, 10) || 1))}
+                          className="w-24 text-xs p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-black font-mono"
+                        />
+                        <span className="text-[11px] font-bold text-zinc-500">
+                          {cond.conditionType === 'STREAK' ? '× Streak Beruntun' : '× Total Menang'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Periode Check */}
+                    <div>
+                      <label className="block text-[9px] font-bold text-zinc-400 mb-1">Filter Periode</label>
+                      <select
+                        value={cond.periodType || 'ANY'}
+                        onChange={(e) => handleUpdateCondition(cond.id, 'periodType', e.target.value)}
+                        className="w-full text-xs p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-bold"
+                      >
+                        <option value="ANY">🗓️ Semua Periode (Weekly & Monthly)</option>
+                        <option value="WEEKLY">🗓️ Weekly Only</option>
+                        <option value="MONTHLY">📅 Monthly Only</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Toggle Continuous Earning */}
+              <div className="pt-2 border-t border-purple-500/20">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isContinuousEarning}
+                    onChange={(e) => setIsContinuousEarning(e.target.checked)}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 mt-0.5"
+                  />
+                  <div>
+                    <p className="text-xs font-black text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                      <span>🔄 Continuous Earning</span>
+                      <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-500/10 border border-purple-500/20">Auto-Reward Sparks</span>
+                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                      Otomatis memberikan reward <strong>+{sparksReward} Sparks</strong> setiap kali pengguna mencapai gelar juara lagi di periode berikutnya tanpa perlu membuat badge baru.
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
           {/* Searchable Picker for Task / Workspace Requirement */}
-          {requirementType !== 'NONE' && (
+          {(requirementType === 'TASK' || requirementType === 'WORKSPACE') && (
             <div className="space-y-2 bg-zinc-50 dark:bg-zinc-900/50 p-3.5 rounded-2xl border border-zinc-200 dark:border-zinc-800">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">

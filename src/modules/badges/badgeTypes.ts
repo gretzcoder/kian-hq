@@ -1,5 +1,5 @@
-export type BadgeCategory = 'TROOPER' | 'EVENT' | 'CLIENT' | 'EPIC' | 'LEGENDARY';
-export type RequirementType = 'TASK' | 'WORKSPACE' | 'NONE';
+export type BadgeCategory = 'ACHIEVEMENT' | 'TROOPER' | 'EVENT' | 'CLIENT' | 'EPIC' | 'LEGENDARY';
+export type RequirementType = 'ACHIEVEMENT' | 'TASK' | 'WORKSPACE' | 'NONE';
 
 export interface BadgeOwner {
   userId: string;
@@ -14,9 +14,17 @@ export interface BadgeOwner {
 export interface RequirementItemProgress {
   id: string;
   title: string;
-  type: 'TASK' | 'WORKSPACE';
+  type: 'TASK' | 'WORKSPACE' | 'ACHIEVEMENT';
   completed: boolean;
   statusText: string;
+}
+
+export interface AchievementConditionItem {
+  id: string;
+  category: string; // CHAMPION | PRODUCTIVE | QUALITY | WORKSPACE | MENTOR | TEAM_LEADER | DESIGNER | VIDEO_EDITOR | PLANNER | RESEARCHER | ALL
+  minCount: number;
+  conditionType: 'COUNT' | 'STREAK';
+  periodType?: 'ANY' | 'WEEKLY' | 'MONTHLY';
 }
 
 export interface BadgeItem {
@@ -26,7 +34,9 @@ export interface BadgeItem {
   iconUrl: string | null;
   description: string | null;
   requirementType: RequirementType;
-  requirementData: string[] | null; // Array of Task IDs or Workspace IDs
+  requirementData: string[] | AchievementConditionItem[] | null;
+  isContinuousEarning?: boolean;
+  claimCount?: number;
   sparksReward: number;
   createdBy: string;
   createdAt: number;
@@ -41,6 +51,7 @@ export interface BadgeItem {
 }
 
 export const RECOMMENDED_CATEGORY_SPARKS: Record<BadgeCategory, number> = {
+  ACHIEVEMENT: 25,
   TROOPER: 10,
   EVENT: 15,
   CLIENT: 20,
@@ -51,6 +62,13 @@ export const RECOMMENDED_CATEGORY_SPARKS: Record<BadgeCategory, number> = {
 // ── Default Eye-Catching Category Icons ─────────────────────────────────────
 
 export const CATEGORY_META: Record<BadgeCategory, { label: string; icon: string; bgGradient: string; textGradient: string; border: string }> = {
+  ACHIEVEMENT: {
+    label: 'Achievement Badge',
+    icon: '🏆',
+    bgGradient: 'from-amber-500/25 via-purple-600/20 to-indigo-600/15 dark:from-amber-900/50 dark:to-purple-950/40',
+    textGradient: 'from-amber-500 via-purple-500 to-indigo-400 dark:from-yellow-300 dark:to-purple-300',
+    border: 'border-amber-400/40 dark:border-purple-400/50',
+  },
   TROOPER: {
     label: 'Trooper Badge',
     icon: '🛡️',
