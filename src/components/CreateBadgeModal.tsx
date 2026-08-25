@@ -500,7 +500,7 @@ export function CreateBadgeModal({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                     {/* Minimum Jumlah Wins / Streak */}
                     <div>
                       <label className="block text-[9px] font-bold text-zinc-400 mb-1">Minimal Jumlah Pencapaian</label>
@@ -511,11 +511,8 @@ export function CreateBadgeModal({
                           max={100}
                           value={cond.minCount}
                           onChange={(e) => handleUpdateCondition(cond.id, 'minCount', Math.max(1, parseInt(e.target.value, 10) || 1))}
-                          className="w-24 text-xs p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-black font-mono"
+                          className="w-full text-xs p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-black font-mono"
                         />
-                        <span className="text-[11px] font-bold text-zinc-500">
-                          {cond.conditionType === 'STREAK' ? '× Streak Beruntun' : '× Total Menang'}
-                        </span>
                       </div>
                     </div>
 
@@ -527,10 +524,23 @@ export function CreateBadgeModal({
                         onChange={(e) => handleUpdateCondition(cond.id, 'periodType', e.target.value)}
                         className="w-full text-xs p-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-bold"
                       >
-                        <option value="ANY">🗓️ Semua Periode (Weekly & Monthly)</option>
+                        <option value="ANY">🗓️ Semua Periode</option>
                         <option value="WEEKLY">🗓️ Weekly Only</option>
                         <option value="MONTHLY">📅 Monthly Only</option>
                       </select>
+                    </div>
+
+                    {/* Mulai Tanggal Cutoff */}
+                    <div>
+                      <label className="block text-[9px] font-bold text-purple-600 dark:text-purple-400 mb-1" title="Pencapaian sebelum tanggal ini diabaikan">
+                        📅 Mulai Tanggal (Cutoff)
+                      </label>
+                      <input
+                        type="date"
+                        value={cond.startDate || ''}
+                        onChange={(e) => handleUpdateCondition(cond.id, 'startDate', e.target.value)}
+                        className="w-full text-xs p-1.5 rounded-lg border border-purple-500/30 bg-zinc-50 dark:bg-zinc-800 font-bold text-zinc-900 dark:text-zinc-100"
+                      />
                     </div>
                   </div>
                 </div>

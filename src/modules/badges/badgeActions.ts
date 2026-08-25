@@ -219,6 +219,11 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
               if (catKey !== 'ALL' && a.category !== catKey) return false;
               if (periodType === 'WEEKLY' && !a.period.toLowerCase().includes('week')) return false;
               if (periodType === 'MONTHLY' && a.period.toLowerCase().includes('week')) return false;
+              if (cond.startDate) {
+                const startTs = Math.floor(new Date(`${cond.startDate}T00:00:00Z`).getTime() / 1000);
+                const itemEarnedSec = typeof a.earned_at === 'number' && a.earned_at > 10000000000 ? Math.floor(a.earned_at / 1000) : Number(a.earned_at);
+                if (itemEarnedSec < startTs) return false;
+              }
               return true;
             });
 
@@ -601,11 +606,17 @@ export async function getAllBadgesWithUserProgress(): Promise<{
           const catName = catLabelMap[cond.category] || cond.category;
           const typeName = cond.conditionType === 'STREAK' ? 'Streak Beruntun' : 'Total Menang';
           const periodName = cond.periodType === 'WEEKLY' ? 'Weekly' : cond.periodType === 'MONTHLY' ? 'Monthly' : 'Semua Periode';
+          const dateNotice = cond.startDate ? ` [Cutoff: ≥ ${cond.startDate}]` : '';
 
           const filteredMyAch = myAchievements.filter((a) => {
             if (cond.category !== 'ALL' && a.category !== cond.category) return false;
             if (cond.periodType === 'WEEKLY' && !a.period.toLowerCase().includes('week')) return false;
             if (cond.periodType === 'MONTHLY' && a.period.toLowerCase().includes('week')) return false;
+            if (cond.startDate) {
+              const startTs = Math.floor(new Date(`${cond.startDate}T00:00:00Z`).getTime() / 1000);
+              const itemEarnedSec = typeof a.earned_at === 'number' && a.earned_at > 10000000000 ? Math.floor(a.earned_at / 1000) : Number(a.earned_at);
+              if (itemEarnedSec < startTs) return false;
+            }
             return true;
           });
 
@@ -624,7 +635,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
 
           requirements.push({
             id: cond.id || `cond_${Math.random()}`,
-            title: `Pencapaian: ${catName}`,
+            title: `Pencapaian: ${catName}${dateNotice}`,
             type: 'ACHIEVEMENT',
             completed: isCondSatisfied,
             statusText: isCondSatisfied

@@ -25,6 +25,7 @@ export interface AchievementConditionItem {
   minCount: number;
   conditionType: 'COUNT' | 'STREAK';
   periodType?: 'ANY' | 'WEEKLY' | 'MONTHLY';
+  startDate?: string; // Optional Start Date Threshold YYYY-MM-DD
 }
 
 export interface BadgeItem {
