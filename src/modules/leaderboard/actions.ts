@@ -73,7 +73,7 @@ const sparksExpr = (alias: string) => `
  * Calculate exact boundary timestamps for Weekly (Monday 00:00:00 WIB) and Monthly (1st 00:00:00 WIB).
  * Timezone: WIB (UTC+7).
  */
-export function getLeaderboardPeriodStartTimestamp(period: 'week' | 'month' | 'all'): number {
+export async function getLeaderboardPeriodStartTimestamp(period: 'week' | 'month' | 'all'): Promise<number> {
   if (period === 'all') return 0;
 
   const now = new Date();
@@ -126,7 +126,7 @@ export async function getLeaderboardData(
   const session = await getSession();
   const currentUserId = session?.userId || '';
 
-  const periodStartTs = getLeaderboardPeriodStartTimestamp(period);
+  const periodStartTs = await getLeaderboardPeriodStartTimestamp(period);
 
   /** Build a WHERE time-range fragment for a given table alias. */
   const buildTimeClause = (alias: string): string => {
@@ -540,7 +540,7 @@ export async function getSparksHistory(
     if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
   }
 
-  const pStartTs = getLeaderboardPeriodStartTimestamp(period);
+  const pStartTs = await getLeaderboardPeriodStartTimestamp(period);
   let timeClause = '';
   if (pStartTs > 0) {
     timeClause = `AND COALESCE(ta.reviewed_at, ta.submitted_at) >= ${pStartTs}`;
