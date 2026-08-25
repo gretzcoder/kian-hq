@@ -41,7 +41,7 @@ export default function SparksHistoryModal({
   userId,
   userName,
   category,
-  period = 'month',
+  period = 'week',
   isOpen,
   onClose,
   canManageSparks = false,
@@ -263,8 +263,8 @@ export default function SparksHistoryModal({
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           <div className="flex items-center gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-900/60 rounded-2xl w-fit border border-zinc-200/80 dark:border-zinc-800/80">
             {[
-              { id: 'month', label: '🗓️ Bulan Ini' },
-              { id: 'week', label: '📅 Minggu Ini' },
+              { id: 'week', label: '📅 Weekly' },
+              { id: 'month', label: '🗓️ Monthly' },
               { id: 'all', label: '♾️ All-Time' },
             ].map((p) => (
               <button

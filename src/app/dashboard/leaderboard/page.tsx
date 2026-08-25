@@ -26,8 +26,8 @@ const CATEGORIES = [
 ];
 
 const PERIODS = [
-  { id: 'month', label: '🗓️ Bulan Ini' },
-  { id: 'week', label: '📅 Minggu Ini' },
+  { id: 'week', label: '📅 Weekly' },
+  { id: 'month', label: '🗓️ Monthly' },
   { id: 'all', label: '♾️ All-Time' },
 ];
 
@@ -41,7 +41,7 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
   ]);
 
   const activeCategory = (params.category || 'overall') as any;
-  const activePeriod = (params.period || 'month') as any;
+  const activePeriod = (params.period || 'week') as any;
 
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
   const canManageSparks = ctx.can('SPARKS_MANAGE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');

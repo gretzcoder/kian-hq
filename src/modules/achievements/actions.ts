@@ -271,7 +271,7 @@ export async function syncLeaderboardAchievements() {
 
     for (const cat of leaderboardCategories) {
       try {
-        const lbResult = await getLeaderboardData(cat.id, 'month');
+        const lbResult = await getLeaderboardData(cat.id, 'week');
         const topItems = (lbResult.data || []).slice(0, 3);
 
         for (let i = 0; i < topItems.length; i++) {

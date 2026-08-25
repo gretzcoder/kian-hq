@@ -70,6 +70,42 @@ const sparksExpr = (alias: string) => `
 `;
 
 /**
+ * Calculate exact boundary timestamps for Weekly (Monday 00:00:00 WIB) and Monthly (1st 00:00:00 WIB).
+ * Timezone: WIB (UTC+7).
+ */
+export function getLeaderboardPeriodStartTimestamp(period: 'week' | 'month' | 'all'): number {
+  if (period === 'all') return 0;
+
+  const now = new Date();
+  const wibOffset = 7 * 60 * 60 * 1000;
+  const wibDate = new Date(now.getTime() + wibOffset);
+
+  if (period === 'week') {
+    // 0 is Sun, 1 is Mon, 2 is Tue, ..., 6 is Sat
+    const day = wibDate.getUTCDay();
+    const diffToMon = day === 0 ? 6 : day - 1;
+    const mondayWib = new Date(Date.UTC(
+      wibDate.getUTCFullYear(),
+      wibDate.getUTCMonth(),
+      wibDate.getUTCDate() - diffToMon,
+      0, 0, 0, 0
+    ));
+    return Math.floor((mondayWib.getTime() - wibOffset) / 1000);
+  }
+
+  if (period === 'month') {
+    const firstOfMonthWib = new Date(Date.UTC(
+      wibDate.getUTCFullYear(),
+      wibDate.getUTCMonth(),
+      1, 0, 0, 0, 0
+    ));
+    return Math.floor((firstOfMonthWib.getTime() - wibOffset) / 1000);
+  }
+
+  return 0;
+}
+
+/**
  * Fetch Leaderboard Data according to Category & Time Filter
  */
 export async function getLeaderboardData(
@@ -84,48 +120,34 @@ export async function getLeaderboardData(
     | 'role_planner'
     | 'role_researcher'
     | 'role_leader',
-  period: 'month' | 'week' | 'all' = 'month'
+  period: 'month' | 'week' | 'all' = 'week'
 ) {
   const db = await getDB();
   const session = await getSession();
   const currentUserId = session?.userId || '';
-  const now = Math.floor(Date.now() / 1000);
+
+  const periodStartTs = getLeaderboardPeriodStartTimestamp(period);
 
   /** Build a WHERE time-range fragment for a given table alias. */
   const buildTimeClause = (alias: string): string => {
-    if (period === 'week') {
-      const ts = now - 7 * 24 * 60 * 60;
-      return `AND COALESCE(${alias}.reviewed_at, ${alias}.submitted_at) >= ${ts}`;
-    }
-    if (period === 'month') {
-      const ts = now - 30 * 24 * 60 * 60;
-      return `AND COALESCE(${alias}.reviewed_at, ${alias}.submitted_at) >= ${ts}`;
+    if (periodStartTs > 0) {
+      return `AND COALESCE(${alias}.reviewed_at, ${alias}.submitted_at) >= ${periodStartTs}`;
     }
     return '';
   };
 
   /** Build a WHERE time-range fragment for tasks table. */
   const buildTaskTimeClause = (alias: string): string => {
-    if (period === 'week') {
-      const ts = now - 7 * 24 * 60 * 60;
-      return `AND COALESCE(${alias}.start_at, ${alias}.created_at) >= ${ts}`;
-    }
-    if (period === 'month') {
-      const ts = now - 30 * 24 * 60 * 60;
-      return `AND COALESCE(${alias}.start_at, ${alias}.created_at) >= ${ts}`;
+    if (periodStartTs > 0) {
+      return `AND COALESCE(${alias}.start_at, ${alias}.created_at) >= ${periodStartTs}`;
     }
     return '';
   };
 
   /** Build a WHERE time-range fragment for sparks_adjustments table. */
   const buildAdjustmentTimeClause = (alias: string): string => {
-    if (period === 'week') {
-      const ts = now - 7 * 24 * 60 * 60;
-      return `AND ${alias}.created_at >= ${ts}`;
-    }
-    if (period === 'month') {
-      const ts = now - 30 * 24 * 60 * 60;
-      return `AND ${alias}.created_at >= ${ts}`;
+    if (periodStartTs > 0) {
+      return `AND ${alias}.created_at >= ${periodStartTs}`;
     }
     return '';
   };
@@ -518,13 +540,10 @@ export async function getSparksHistory(
     if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
   }
 
+  const pStartTs = getLeaderboardPeriodStartTimestamp(period);
   let timeClause = '';
-  if (period === 'week') {
-    const oneWeekAgo = now - 7 * 24 * 60 * 60;
-    timeClause = `AND COALESCE(ta.reviewed_at, ta.submitted_at) >= ${oneWeekAgo}`;
-  } else if (period === 'month') {
-    const oneMonthAgo = now - 30 * 24 * 60 * 60;
-    timeClause = `AND COALESCE(ta.reviewed_at, ta.submitted_at) >= ${oneMonthAgo}`;
+  if (pStartTs > 0) {
+    timeClause = `AND COALESCE(ta.reviewed_at, ta.submitted_at) >= ${pStartTs}`;
   }
 
   let roleFilter = '';
@@ -654,12 +673,8 @@ export async function getSparksHistory(
   let adjustmentItems: SparksHistoryItem[] = [];
   if (category !== 'workspace' && category !== 'coordinator') {
     let saTimeClause = '';
-    if (period === 'week') {
-      const oneWeekAgo = now - 7 * 24 * 60 * 60;
-      saTimeClause = `AND sa.created_at >= ${oneWeekAgo}`;
-    } else if (period === 'month') {
-      const oneMonthAgo = now - 30 * 24 * 60 * 60;
-      saTimeClause = `AND sa.created_at >= ${oneMonthAgo}`;
+    if (pStartTs > 0) {
+      saTimeClause = `AND sa.created_at >= ${pStartTs}`;
     }
 
     const { results: saResults } = await db
