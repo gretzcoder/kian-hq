@@ -157,12 +157,12 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
 
       const { results: rawAchievements } = await db
         .prepare(`
-          SELECT ah.user_id, ah.category_key, ah.period_type, ah.earned_date, ah.rank
+          SELECT ah.user_id, ah.category, ah.period, ah.earned_at, ah.rank
           FROM achievement_history ah
           JOIN users u ON ah.user_id = u.id
           WHERE u.status = 'ACTIVE'
           ${achClause}
-          ORDER BY ah.user_id, ah.earned_date ASC
+          ORDER BY ah.user_id, ah.earned_at ASC
         `)
         .bind(...achParams)
         .all();
@@ -216,8 +216,9 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
             const conditionType = cond.conditionType || 'COUNT';
 
             const filtered = achievements.filter((a) => {
-              if (catKey !== 'ALL' && a.category_key !== catKey) return false;
-              if (periodType !== 'ANY' && a.period_type !== periodType) return false;
+              if (catKey !== 'ALL' && a.category !== catKey) return false;
+              if (periodType === 'WEEKLY' && !a.period.toLowerCase().includes('week')) return false;
+              if (periodType === 'MONTHLY' && a.period.toLowerCase().includes('week')) return false;
               return true;
             });
 
@@ -508,6 +509,12 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       workspaceMap.set(w.id, w.name);
     });
 
+    // 6. Fetch achievement history records for requirement checking
+    const { results: allAchievementsRaw } = await db
+      .prepare('SELECT user_id, category, period, earned_at, rank FROM achievement_history')
+      .all();
+    const userAchievementsList = (allAchievementsRaw as any[]) || [];
+
     // Process badges and check auto-award eligibility
     const badges: BadgeItem[] = [];
     let userOwnedCount = 0;
@@ -566,6 +573,63 @@ export async function getAllBadgesWithUserProgress(): Promise<{
             statusText: isWsDone
               ? '✅ Workspace Selesai'
               : `⏳ ${completedWsTasks}/${totalWsTasks} Task ACC`,
+          });
+        });
+      } else if (reqType === 'ACHIEVEMENT') {
+        let condItems: any[] = [];
+        if (b.requirement_data) {
+          try { condItems = JSON.parse(b.requirement_data); } catch {}
+        }
+
+        const catLabelMap: Record<string, string> = {
+          CHAMPION: '🏆 Champion (Juara Umum)',
+          PRODUCTIVE: '⚡ Most Productive',
+          QUALITY: '🎯 High Quality',
+          WORKSPACE: '🏢 Top Workspaces',
+          MENTOR: '🥇 Top Mentors',
+          TEAM_LEADER: '👑 Team Leaders',
+          DESIGNER: '🎨 Designers',
+          VIDEO_EDITOR: '🎬 Video Editors',
+          PLANNER: '🧠 Planners',
+          RESEARCHER: '🔍 Researchers',
+          ALL: '🌟 Semua Kategori Gelar',
+        };
+
+        const myAchievements = userAchievementsList.filter((a) => a.user_id === session.userId);
+
+        condItems.forEach((cond) => {
+          const catName = catLabelMap[cond.category] || cond.category;
+          const typeName = cond.conditionType === 'STREAK' ? 'Streak Beruntun' : 'Total Menang';
+          const periodName = cond.periodType === 'WEEKLY' ? 'Weekly' : cond.periodType === 'MONTHLY' ? 'Monthly' : 'Semua Periode';
+
+          const filteredMyAch = myAchievements.filter((a) => {
+            if (cond.category !== 'ALL' && a.category !== cond.category) return false;
+            if (cond.periodType === 'WEEKLY' && !a.period.toLowerCase().includes('week')) return false;
+            if (cond.periodType === 'MONTHLY' && a.period.toLowerCase().includes('week')) return false;
+            return true;
+          });
+
+          let currentVal = 0;
+          if (cond.conditionType === 'COUNT') {
+            currentVal = filteredMyAch.length;
+          } else {
+            let maxS = 0, currS = 0;
+            filteredMyAch.forEach(() => { currS++; if (currS > maxS) maxS = currS; });
+            currentVal = maxS;
+          }
+
+          const targetCount = cond.minCount || 1;
+          const isCondSatisfied = currentVal >= targetCount;
+          if (isCondSatisfied) completedCount++;
+
+          requirements.push({
+            id: cond.id || `cond_${Math.random()}`,
+            title: `Pencapaian: ${catName}`,
+            type: 'ACHIEVEMENT',
+            completed: isCondSatisfied,
+            statusText: isCondSatisfied
+              ? `✅ Terpenuhi (${currentVal}/${targetCount} ${typeName})`
+              : `⏳ Progress: ${currentVal}/${targetCount} ${typeName} (${periodName})`,
           });
         });
       }

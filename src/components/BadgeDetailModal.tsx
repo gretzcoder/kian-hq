@@ -251,7 +251,7 @@ export function BadgeDetailModal({
               ) : (
                 <div className="space-y-2">
                   <p className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">
-                    Target {badge.requirementType === 'TASK' ? 'Tugas' : 'Workspace'} yang Harus Selesai
+                    Target {badge.requirementType === 'TASK' ? 'Tugas' : badge.requirementType === 'WORKSPACE' ? 'Workspace' : 'Pencapaian Gelar Leaderboard'} yang Harus Terpenuhi
                   </p>
                   {badge.requirements.map((req) => (
                     <div
