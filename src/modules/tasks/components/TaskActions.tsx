@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { submitResult, submitDirectTaskResult, deleteTask, approveAssignment, requestRevision, startWork, updateSparks } from '../actions';
-import { uploadTaskSubmissionToDrive } from '@/modules/storage/actions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
@@ -152,7 +151,6 @@ import { ExtendDeadlineModal } from '@/components/ExtendDeadlineModal';
 
 interface TaskActionsProps {
   taskId: string;
-  workspaceId?: string;
   taskTitle?: string;
   taskDeadline?: number | null;
   taskExtendedDeadline?: number | null;
@@ -188,7 +186,6 @@ import EditSparksModal from './EditSparksModal';
 
 export default function TaskActions({
   taskId,
-  workspaceId,
   taskTitle,
   taskDeadline,
   taskExtendedDeadline,
@@ -216,70 +213,6 @@ export default function TaskActions({
   const [revisionInputs, setRevisionInputs] = useState<Record<string, string>>({});
   const [showRevisionMap, setShowRevisionMap] = useState<Record<string, boolean>>({});
   const [errorMap, setErrorMap] = useState<Record<string, string>>({});
-  const [uploadingMap, setUploadingMap] = useState<Record<string, boolean>>({});
-  const [uploadingStatusMap, setUploadingStatusMap] = useState<Record<string, string>>({});
-
-  const handleFileUploadToDrive = async (e: React.ChangeEvent<HTMLInputElement>, assignId: string) => {
-    const fileList = e.target.files;
-    if (!fileList || fileList.length === 0) return;
-
-    const files = Array.from(fileList);
-    setUploadingMap((prev) => ({ ...prev, [assignId]: true }));
-    setErrorMap((prev) => ({ ...prev, [assignId]: '' }));
-
-    try {
-      const uploadedUrls: string[] = [];
-      const errors: string[] = [];
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const progressLabel = files.length > 1 ? `⏳ Uploading (${i + 1}/${files.length})...` : '⏳ Uploading...';
-        setUploadingStatusMap((prev) => ({ ...prev, [assignId]: progressLabel }));
-
-        if (file.size > 50 * 1024 * 1024) {
-          errors.push(`File "${file.name}" melebihi batas 50MB.`);
-          continue;
-        }
-
-        const formData = new FormData();
-        formData.set('file', file);
-        if (workspaceId) formData.set('workspaceId', workspaceId);
-        if (taskTitle) formData.set('taskTitle', taskTitle);
-
-        const res = await uploadTaskSubmissionToDrive(formData);
-        if (res.success && res.url) {
-          uploadedUrls.push(res.url);
-        } else {
-          errors.push(res.error || `Gagal upload file "${file.name}".`);
-        }
-      }
-
-      if (uploadedUrls.length > 0) {
-        setUrlInputs((prev) => {
-          const current = prev[assignId]?.trim() || '';
-          const newJoined = uploadedUrls.join('\n');
-          return { ...prev, [assignId]: current ? `${current}\n${newJoined}` : newJoined };
-        });
-        toast(`${uploadedUrls.length} file berhasil di-upload ke Google Drive!`, 'success');
-      }
-
-      if (errors.length > 0) {
-        const errStr = errors.join(' | ');
-        setErrorMap((prev) => ({ ...prev, [assignId]: errStr }));
-        toast(errStr, 'error');
-      }
-    } catch (err: any) {
-      const msg = err?.message?.includes('Server Components render')
-        ? 'Gagal upload file. Ukuran file terlalu besar (maks 50MB per file) atau koneksi bermasalah.'
-        : (err?.message || 'Gagal upload file.');
-      setErrorMap((prev) => ({ ...prev, [assignId]: msg }));
-      toast(msg, 'error');
-    } finally {
-      setUploadingMap((prev) => ({ ...prev, [assignId]: false }));
-      setUploadingStatusMap((prev) => ({ ...prev, [assignId]: '' }));
-      e.target.value = '';
-    }
-  };
 
   const isTaskCreator = Boolean(taskCreatedBy && taskCreatedBy === currentUserId);
 
@@ -868,41 +801,29 @@ export default function TaskActions({
                                           {showSubmitMap[assign.id] ? (
                                             <form onSubmit={(e) => handleSubmitResult(e, assign.id)} className="space-y-2">
                                               {['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(assign.assignment_role) ? (
-                                                <div className="flex flex-col gap-2">
-                                                  <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center">
-                                                     <textarea
-                                                       value={urlInputs[assign.id] ?? ''}
-                                                       onChange={(e) => setUrlInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
-                                                       placeholder="Paste Link Google Drive / Canva / Figma / Multi-file (pisahkan dengan enter)..."
-                                                       rows={Math.min(4, Math.max(1, (urlInputs[assign.id] || '').split('\n').length))}
-                                                       required
-                                                       className="flex-1 min-w-[200px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-500 transition-all text-zinc-900 dark:text-zinc-100 resize-y min-h-[36px]"
-                                                     />
-                                                     <label className="shrink-0 bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 font-bold text-[10px] px-3 py-1.5 rounded-lg border border-purple-500/20 cursor-pointer flex items-center gap-1 transition-all active:scale-95">
-                                                       <span>{uploadingMap[assign.id] ? (uploadingStatusMap[assign.id] || '⏳ Uploading...') : '☁️ Upload File (G-Drive)'}</span>
-                                                       <input
-                                                         type="file"
-                                                         multiple
-                                                         disabled={uploadingMap[assign.id]}
-                                                         className="hidden"
-                                                         onChange={(e) => handleFileUploadToDrive(e, assign.id)}
-                                                       />
-                                                     </label>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: false }))}
-                                                      className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 font-bold text-[10px] px-2.5 py-1.5 rounded-lg"
-                                                    >
-                                                      Batal
-                                                    </button>
-                                                    <button
-                                                      type="submit"
-                                                      disabled={loading === assign.id || uploadingMap[assign.id]}
-                                                      className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50"
-                                                    >
-                                                      {loading === assign.id ? '...' : (assign.result_url ? 'Simpan' : 'Submit')}
-                                                    </button>
-                                                  </div>
+                                                <div className="flex gap-2">
+                                                  <input
+                                                    type="url"
+                                                    value={urlInputs[assign.id] ?? ''}
+                                                    onChange={(e) => setUrlInputs((prev) => ({ ...prev, [assign.id]: e.target.value }))}
+                                                    placeholder="Paste Link Google Drive / Canva / Figma hasil karya..."
+                                                    required
+                                                    className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-purple-500 transition-all text-zinc-900 dark:text-zinc-100"
+                                                  />
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setShowSubmitMap((prev) => ({ ...prev, [assign.id]: false }))}
+                                                    className="text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 font-bold text-[10px] px-3 py-1.5 rounded-lg"
+                                                  >
+                                                    Batal
+                                                  </button>
+                                                  <button
+                                                    type="submit"
+                                                    disabled={loading === assign.id}
+                                                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-[10px] px-3.5 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                                                  >
+                                                    {loading === assign.id ? '...' : (assign.result_url ? 'Simpan Perubahan' : 'Submit')}
+                                                  </button>
                                                 </div>
                                               ) : (
                                                 <div className="space-y-2">
@@ -1274,29 +1195,19 @@ export default function TaskActions({
                       {isMine && ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(categoryAss.status) && (
                         <div className="pt-1">
                           {showSubmitMap[categoryAss.id] ? (
-                            <form onSubmit={(e) => handleSubmitResult(e, categoryAss.id)} className="flex flex-wrap sm:flex-nowrap gap-2 items-start">
-                              <textarea
+                            <form onSubmit={(e) => handleSubmitResult(e, categoryAss.id)} className="flex gap-2">
+                              <input
+                                type="url"
                                 value={urlInputs[categoryAss.id] ?? ''}
                                 onChange={(e) => setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: e.target.value }))}
-                                placeholder="Paste URL Karya (Google Drive / Canva / Figma / Multi-file)..."
-                                rows={Math.min(4, Math.max(1, (urlInputs[categoryAss.id] || '').split('\n').length))}
+                                placeholder="Paste URL Karya (Google Drive / Canva / Figma / Youtube)..."
                                 required
-                                className="flex-1 min-w-[200px] bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100 min-h-[38px]"
+                                className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
                               />
-                              <label className="shrink-0 bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 font-bold text-xs px-3 py-2 rounded-xl border border-purple-500/20 cursor-pointer flex items-center gap-1 transition-all active:scale-95">
-                                <span>{uploadingMap[categoryAss.id] ? (uploadingStatusMap[categoryAss.id] || '⏳ Uploading...') : '☁️ Upload File'}</span>
-                                <input
-                                  type="file"
-                                  multiple
-                                  disabled={uploadingMap[categoryAss.id]}
-                                  className="hidden"
-                                  onChange={(e) => handleFileUploadToDrive(e, categoryAss.id)}
-                                />
-                              </label>
                               <button
                                 type="submit"
-                                disabled={loading === categoryAss.id || uploadingMap[categoryAss.id]}
-                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm cursor-pointer"
+                                disabled={loading === categoryAss.id}
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer font-bold"
                               >
                                 {loading === categoryAss.id ? '...' : 'Submit'}
                               </button>
@@ -1485,29 +1396,19 @@ export default function TaskActions({
               {isMe && ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(a.status) && (
                 <div className="pt-1">
                   {showSubmitMap[a.id] ? (
-                    <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="flex flex-wrap sm:flex-nowrap gap-2 items-start">
-                      <textarea
+                    <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="flex gap-2">
+                      <input
+                        type="url"
                         value={urlInputs[a.id] ?? ''}
                         onChange={(e) => setUrlInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
                         placeholder="Paste Google Drive / Figma / Result URL..."
-                        rows={Math.min(4, Math.max(1, (urlInputs[a.id] || '').split('\n').length))}
                         required
-                        className="flex-1 min-w-[200px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100 min-h-[38px]"
+                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
                       />
-                      <label className="shrink-0 bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 font-bold text-xs px-3 py-2 rounded-xl border border-purple-500/20 cursor-pointer flex items-center gap-1 transition-all active:scale-95">
-                        <span>{uploadingMap[a.id] ? (uploadingStatusMap[a.id] || '⏳ Uploading...') : '☁️ Upload File'}</span>
-                        <input
-                          type="file"
-                          multiple
-                          disabled={uploadingMap[a.id]}
-                          className="hidden"
-                          onChange={(e) => handleFileUploadToDrive(e, a.id)}
-                        />
-                      </label>
                       <button
                         type="submit"
-                        disabled={loading === a.id || uploadingMap[a.id]}
-                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-sm"
+                        disabled={loading === a.id}
+                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm"
                       >
                         {loading === a.id ? '...' : 'Submit'}
                       </button>

@@ -185,14 +185,13 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
 
     const ojtCoordinatorId = formData.get('ojt_coordinator_id') as string;
     const workspaceType = formData.get('workspace_type') as string;
-    const gdriveFolderId = (formData.get('gdrive_folder_id') as string)?.trim() || null;
     const newWsType = (['ASSESSMENT', 'TROOPERS', 'MENTOR'].includes(workspaceType)) ? workspaceType : ws.workspace_type;
 
     await db
       .prepare(`
-        UPDATE workspaces SET name = ?, description = ?, ojt_coordinator_id = ?, workspace_type = ?, gdrive_folder_id = ? WHERE id = ?
+        UPDATE workspaces SET name = ?, description = ?, ojt_coordinator_id = ?, workspace_type = ? WHERE id = ?
       `)
-      .bind(name.trim(), description || null, ojtCoordinatorId || null, newWsType, gdriveFolderId, workspaceId)
+      .bind(name.trim(), description || null, ojtCoordinatorId || null, newWsType, workspaceId)
       .run();
 
     if (newWsType === 'ASSESSMENT' && ws.workspace_type !== 'ASSESSMENT') {

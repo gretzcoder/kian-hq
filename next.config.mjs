@@ -4,11 +4,6 @@ initOpenNextCloudflareForDev({ remoteBindings: false });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '50mb',
-    },
-  },
   async headers() {
     return [
       {

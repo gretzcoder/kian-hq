@@ -396,7 +396,6 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
                 initialDescription={workspace.description}
                 initialMentorId={workspace.ojt_coordinator_id}
                 initialType={workspace.workspace_type as any}
-                initialGDriveFolderId={(workspace as any).gdrive_folder_id}
                 mentors={mentors}
                 isAssessment={workspace.workspace_type === 'ASSESSMENT'}
               />

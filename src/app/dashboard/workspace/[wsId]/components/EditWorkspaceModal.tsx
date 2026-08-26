@@ -16,7 +16,6 @@ interface EditWorkspaceModalProps {
   initialDescription: string | null;
   initialMentorId: string | null;
   initialType?: 'TROOPERS' | 'ASSESSMENT' | 'MENTOR';
-  initialGDriveFolderId?: string | null;
   mentors: Mentor[];
   isAssessment: boolean;
 }
@@ -27,7 +26,6 @@ export default function EditWorkspaceModal({
   initialDescription,
   initialMentorId,
   initialType,
-  initialGDriveFolderId,
   mentors,
   isAssessment,
 }: EditWorkspaceModalProps) {
@@ -40,7 +38,6 @@ export default function EditWorkspaceModal({
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription ?? '');
   const [mentorId, setMentorId] = useState(initialMentorId ?? '');
-  const [gdriveFolderId, setGDriveFolderId] = useState(initialGDriveFolderId ?? '');
   const [wsType, setWsType] = useState<'TROOPERS' | 'ASSESSMENT' | 'MENTOR'>(defaultType);
 
   const handleOpen = () => {
@@ -48,7 +45,6 @@ export default function EditWorkspaceModal({
     setName(initialName);
     setDescription(initialDescription ?? '');
     setMentorId(initialMentorId ?? '');
-    setGDriveFolderId(initialGDriveFolderId ?? '');
     setWsType(initialType ?? (isAssessment ? 'ASSESSMENT' : 'TROOPERS'));
     setError(null);
     setIsOpen(true);
@@ -70,7 +66,6 @@ export default function EditWorkspaceModal({
       formData.append('description', description.trim());
       formData.append('ojt_coordinator_id', mentorId);
       formData.append('workspace_type', wsType);
-      formData.append('gdrive_folder_id', gdriveFolderId.trim());
 
       const res = await updateWorkspace(workspaceId, formData);
       if (res.success) {
@@ -184,21 +179,6 @@ export default function EditWorkspaceModal({
                     );
                   })}
                 </div>
-              </div>
-
-              {/* Folder ID Google Drive Workspace */}
-              <div>
-                <label className={labelCls}>📁 Folder ID Google Drive Workspace (Opsional)</label>
-                <input
-                  type="text"
-                  value={gdriveFolderId}
-                  onChange={(e) => setGDriveFolderId(e.target.value)}
-                  placeholder="Paste Folder ID Google Drive untuk workspace ini..."
-                  className={inputCls}
-                />
-                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-1">
-                  Semua file submit tugas anggota workspace ini akan otomatis disimpan ke folder Google Drive ini.
-                </p>
               </div>
 
               {/* Mentor — hanya untuk TROOPERS workspace */}

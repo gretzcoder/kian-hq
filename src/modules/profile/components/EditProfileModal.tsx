@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { updateOjtProfile, changePassword } from '../actions';
-import { uploadProfileAvatarToDrive } from '@/modules/storage/actions';
 
 interface EditProfileModalProps {
   initialData: {
@@ -56,32 +55,7 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
   const [bio, setBio] = useState(initialData.bio || '');
 
   const [profileLoading, setProfileLoading] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  const handleAvatarFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadingAvatar(true);
-    setProfileMsg(null);
-    try {
-      const formData = new FormData();
-      formData.set('file', file);
-
-      const res = await uploadProfileAvatarToDrive(formData);
-      if (res.success && res.url) {
-        setAvatarUrl(res.url);
-        setProfileMsg({ ok: true, text: 'Foto profil berhasil di-upload ke Google Drive!' });
-      } else {
-        setProfileMsg({ ok: false, text: res.error || 'Gagal upload foto profil ke Google Drive.' });
-      }
-    } catch (err: any) {
-      setProfileMsg({ ok: false, text: err.message || 'Gagal upload file.' });
-    } finally {
-      setUploadingAvatar(false);
-    }
-  };
 
   // Password Form State
   const [currentPw, setCurrentPw] = useState('');
@@ -288,26 +262,14 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
               </div>
 
               <div>
-                <label className={labelCls}>Foto Profil (URL atau Upload Direct G-Drive)</label>
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="url"
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="https://..."
-                    className={inputCls}
-                  />
-                  <label className="shrink-0 bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 font-bold text-xs px-3.5 py-2.5 rounded-xl border border-purple-500/20 cursor-pointer flex items-center gap-1.5 transition-all">
-                    <span>{uploadingAvatar ? '⏳ Uploading...' : '☁️ Upload G-Drive'}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      disabled={uploadingAvatar}
-                      className="hidden"
-                      onChange={handleAvatarFileUpload}
-                    />
-                  </label>
-                </div>
+                <label className={labelCls}>Foto Profil (URL)</label>
+                <input
+                  type="url"
+                  value={avatarUrl}
+                  onChange={(e) => setAvatarUrl(e.target.value)}
+                  placeholder="https://..."
+                  className={inputCls}
+                />
               </div>
 
               {/* Department field for Staff */}
