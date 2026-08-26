@@ -194,7 +194,7 @@ export function parseSubmittedLink(rawUrl: string): ParsedLinkInfo {
   };
 }
 
-export function SubmittedLinkPreviewer({
+export function SingleSubmittedLinkPreviewer({
   url,
   autoExpand = true,
 }: {
@@ -346,4 +346,41 @@ export function SubmittedLinkPreviewer({
       )}
     </div>
   );
+}
+
+export function SubmittedLinkPreviewer({
+  url,
+  autoExpand = true,
+}: {
+  url: string;
+  autoExpand?: boolean;
+}) {
+  const raw = (url || '').trim();
+  if (!raw) return null;
+
+  const isHtml = /<[a-z][\s\S]*>/i.test(raw) || raw.includes('</p>') || raw.includes('</div>') || raw.includes('</span>') || raw.includes('</ul>') || raw.includes('</ol>') || raw.includes('<h');
+
+  if (!isHtml) {
+    const extractedUrls = Array.from(
+      new Set((raw.match(/https?:\/\/[^\s<"'\],]+/gi) || []).map((u) => u.trim()))
+    );
+
+    if (extractedUrls.length > 1) {
+      return (
+        <div className="space-y-3 pt-1">
+          <div className="flex items-center gap-2 text-xs font-bold text-purple-600 dark:text-purple-400 border-b border-purple-500/10 pb-1.5">
+            <span>📁</span>
+            <span>Hasil Multi-File / Link ({extractedUrls.length} File):</span>
+          </div>
+          <div className="space-y-3">
+            {extractedUrls.map((singleUrl, idx) => (
+              <SingleSubmittedLinkPreviewer key={idx} url={singleUrl} autoExpand={autoExpand} />
+            ))}
+          </div>
+        </div>
+      );
+    }
+  }
+
+  return <SingleSubmittedLinkPreviewer url={raw} autoExpand={autoExpand} />;
 }

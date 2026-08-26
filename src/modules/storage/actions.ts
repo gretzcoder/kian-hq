@@ -184,23 +184,22 @@ export async function ensureWorkspaceDriveFolder(workspaceId: string, workspaceN
  * Upload a submission file to Google Drive and return the view link
  */
 export async function uploadTaskSubmissionToDrive(formData: FormData): Promise<{ success: boolean; url?: string; error?: string }> {
-  const session = await getSession();
-  if (!session) return { success: false, error: 'Unauthorized' };
-
-  const file = formData.get('file') as File | null;
-  const workspaceId = formData.get('workspaceId') as string | null;
-  const taskTitle = (formData.get('taskTitle') as string) || 'Task Submission';
-
-  if (!file || file.size === 0) {
-    return { success: false, error: 'Pilih file terlebih dahulu.' };
-  }
-
-  const settings = await getStorageSettings();
-  if (!settings.gdrive_enabled || !settings.is_configured) {
-    return { success: false, error: 'Integrasi Google Drive belum diaktifkan oleh Koordinator.' };
-  }
-
   try {
+    const session = await getSession();
+    if (!session) return { success: false, error: 'Unauthorized' };
+
+    const file = formData.get('file') as File | null;
+    const workspaceId = formData.get('workspaceId') as string | null;
+
+    if (!file || file.size === 0) {
+      return { success: false, error: 'Pilih file terlebih dahulu.' };
+    }
+
+    const settings = await getStorageSettings();
+    if (!settings.gdrive_enabled || !settings.is_configured) {
+      return { success: false, error: 'Integrasi Google Drive belum diaktifkan oleh Koordinator.' };
+    }
+
     const token = await getGoogleDriveAccessToken(settings.gdrive_client_email, settings.gdrive_private_key);
 
     // Resolve workspace folder
@@ -235,20 +234,20 @@ export async function uploadTaskSubmissionToDrive(formData: FormData): Promise<{
  * Upload a User Profile avatar photo to Google Drive
  */
 export async function uploadProfileAvatarToDrive(formData: FormData): Promise<{ success: boolean; url?: string; error?: string }> {
-  const session = await getSession();
-  if (!session) return { success: false, error: 'Unauthorized' };
-
-  const file = formData.get('file') as File | null;
-  if (!file || file.size === 0) {
-    return { success: false, error: 'File foto profile wajib dipilih.' };
-  }
-
-  const settings = await getStorageSettings();
-  if (!settings.gdrive_enabled || !settings.is_configured) {
-    return { success: false, error: 'Integrasi Google Drive belum diaktifkan oleh Koordinator.' };
-  }
-
   try {
+    const session = await getSession();
+    if (!session) return { success: false, error: 'Unauthorized' };
+
+    const file = formData.get('file') as File | null;
+    if (!file || file.size === 0) {
+      return { success: false, error: 'File foto profile wajib dipilih.' };
+    }
+
+    const settings = await getStorageSettings();
+    if (!settings.gdrive_enabled || !settings.is_configured) {
+      return { success: false, error: 'Integrasi Google Drive belum diaktifkan oleh Koordinator.' };
+    }
+
     const token = await getGoogleDriveAccessToken(settings.gdrive_client_email, settings.gdrive_private_key);
     const parentFolder = settings.gdrive_avatars_folder_id || settings.gdrive_root_folder_id || undefined;
 
