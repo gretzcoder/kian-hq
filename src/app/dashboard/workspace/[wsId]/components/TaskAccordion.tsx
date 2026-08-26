@@ -188,6 +188,7 @@ export default function TaskAccordion({
 
   // Target task open if in URL searchParams, otherwise ALL tasks start collapsed
   const [openTaskId, setOpenTaskId] = useState<string | null>(targetTaskId || null);
+  const [filterCategory, setFilterCategory] = useState<'ALL' | 'OVERDUE' | 'ON_PROGRESS' | 'COMPLETED'>('ALL');
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
   const [extendTask, setExtendTask] = useState<TaskRow | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
@@ -210,6 +211,29 @@ export default function TaskAccordion({
     setOpenTaskId((prev) => (prev === id ? null : id));
   };
 
+  const nowMs = Date.now();
+
+  const isTaskFinished = (t: TaskRow) =>
+    ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(t.status);
+
+  const getTaskActiveDeadline = (t: TaskRow) =>
+    Math.max(t.extended_deadline || 0, t.deadline || 0) || null;
+
+  const isTaskOverdue = (t: TaskRow) => {
+    if (isTaskFinished(t)) return false;
+    const dl = getTaskActiveDeadline(t);
+    return dl !== null && dl < nowMs;
+  };
+
+  const isTaskOnProgress = (t: TaskRow) => {
+    if (isTaskFinished(t)) return false;
+    return !isTaskOverdue(t);
+  };
+
+  const overdueCount = tasks.filter(isTaskOverdue).length;
+  const onProgressCount = tasks.filter(isTaskOnProgress).length;
+  const completedCount = tasks.filter(isTaskFinished).length;
+
   const sortedTasks = [...tasks].sort((a, b) => {
     if (!a.deadline && !b.deadline) return a.created_at - b.created_at;
     if (!a.deadline) return 1;
@@ -217,9 +241,124 @@ export default function TaskAccordion({
     return a.deadline - b.deadline;
   });
 
+  const filteredTasks = sortedTasks.filter((task) => {
+    if (filterCategory === 'OVERDUE') return isTaskOverdue(task);
+    if (filterCategory === 'ON_PROGRESS') return isTaskOnProgress(task);
+    if (filterCategory === 'COMPLETED') return isTaskFinished(task);
+    return true;
+  });
+
   return (
-    <div className="space-y-3">
-      {sortedTasks.map((task) => {
+    <div className="space-y-4">
+      {/* Category Filter Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full no-scrollbar scrollbar-none">
+        <button
+          type="button"
+          onClick={() => setFilterCategory('ALL')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border ${
+            filterCategory === 'ALL'
+              ? 'bg-purple-600 text-white border-purple-600 shadow-sm shadow-purple-500/20'
+              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          <span>📋 Semua Task</span>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+              filterCategory === 'ALL'
+                ? 'bg-white/20 text-white'
+                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+            }`}
+          >
+            {tasks.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterCategory('OVERDUE')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border ${
+            filterCategory === 'OVERDUE'
+              ? 'bg-red-600 text-white border-red-600 shadow-sm shadow-red-500/20'
+              : overdueCount > 0
+                ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 hover:bg-red-500/20'
+                : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          <span>🚨 Terlewat Deadline</span>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+              filterCategory === 'OVERDUE'
+                ? 'bg-white/20 text-white'
+                : overdueCount > 0
+                  ? 'bg-red-500/20 text-red-600 dark:text-red-400 font-black'
+                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+            }`}
+          >
+            {overdueCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterCategory('ON_PROGRESS')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border ${
+            filterCategory === 'ON_PROGRESS'
+              ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/20'
+              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          <span>⚙️ On Progress</span>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+              filterCategory === 'ON_PROGRESS'
+                ? 'bg-white/20 text-white'
+                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+            }`}
+          >
+            {onProgressCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterCategory('COMPLETED')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border ${
+            filterCategory === 'COMPLETED'
+              ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-500/20'
+              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          <span>✅ Selesai</span>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+              filterCategory === 'COMPLETED'
+                ? 'bg-white/20 text-white'
+                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+            }`}
+          >
+            {completedCount}
+          </span>
+        </button>
+      </div>
+
+      {filteredTasks.length === 0 ? (
+        <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-10 text-center bg-white dark:bg-transparent space-y-2">
+          <p className="text-3xl">
+            {filterCategory === 'OVERDUE' ? '🎉' : filterCategory === 'COMPLETED' ? '📋' : '⚙️'}
+          </p>
+          <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+            {filterCategory === 'OVERDUE'
+              ? 'Tidak ada tugas yang terlewat deadline.'
+              : filterCategory === 'COMPLETED'
+              ? 'Belum ada tugas yang selesai.'
+              : 'Tidak ada tugas yang aktif / on progress saat ini.'}
+          </p>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+            Pilih kategori &quot;Semua Task&quot; untuk melihat seluruh daftar tugas.
+          </p>
+        </div>
+      ) : (
+        filteredTasks.map((task) => {
         const isOpen = openTaskId === task.id;
         const isTarget = targetTaskId === task.id;
         const taskAssignments = assignmentsByTask[task.id] ?? [];
@@ -441,7 +580,8 @@ export default function TaskAccordion({
             </div>
           </div>
         );
-      })}
+      })
+      )}
       {/* Edit Task Modal */}
       {editingTask && (
         <EditTaskModal
