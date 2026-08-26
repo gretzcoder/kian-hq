@@ -461,22 +461,39 @@ export default function TaskActions({
       { role: 'CREATOR', label: 'Step 3: Creator (Produksi Konten)', desc: 'Membuat aset media / konten visual.' },
     ].filter(step => allowedStepRoles.includes(step.role));
 
-    // Find the currently active step index (first step that is NOT approved)
-    const activeStepIndex = steps.findIndex((step) => {
-      const assign = assignments.find((a) => a.assignment_role === step.role);
-      return !assign || !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(assign.status);
+    // Find the currently active step index for currentUserId
+    const activeStepIndex = steps.findIndex((step, idx) => {
+      const stepAssigns = assignments.filter((a) => a.assignment_role === step.role);
+      const myAssign = stepAssigns.find((a) => a.user_id === currentUserId);
+
+      let isPrevSatisfied = true;
+      if (idx > 0) {
+        const prevStep = steps[idx - 1];
+        const prevAssigns = assignments.filter((a) => a.assignment_role === prevStep.role);
+        const myPrevAssign = prevAssigns.find((a) => a.user_id === currentUserId);
+        if (myPrevAssign) {
+          isPrevSatisfied = ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(myPrevAssign.status);
+        } else {
+          isPrevSatisfied = prevAssigns.length === 0 || prevAssigns.some((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status));
+        }
+      }
+
+      if (!isPrevSatisfied) return false;
+
+      if (myAssign) {
+        return !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(myAssign.status);
+      }
+      return !stepAssigns.every((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status));
     });
 
     // Default target active step (if all approved, expand the last step)
     const activeRole = activeStepIndex !== -1 ? steps[activeStepIndex].role : steps[steps.length - 1]?.role;
 
-    let previousStepApproved = true;
-
     const isMentorWs = workspaceType === 'MENTOR';
 
     return (
       <div className="space-y-4 relative pl-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[2px] before:bg-zinc-200 dark:before:bg-zinc-800">
-        {steps.map((step) => {
+        {steps.map((step, stepIdx) => {
           const allStepAssignments = assignments.filter((a) => a.assignment_role === step.role);
           let visibleAssignments: TaskAssignment[] = [];
 
@@ -494,9 +511,20 @@ export default function TaskActions({
           }
 
           const primaryAssign = visibleAssignments.find((a) => a.user_id === currentUserId) || visibleAssignments[0];
-          const isActive = previousStepApproved;
+
+          const isUnlockedForMe = (() => {
+            if (stepIdx === 0) return true;
+            const prevStep = steps[stepIdx - 1];
+            const prevAssignments = assignments.filter((a) => a.assignment_role === prevStep.role);
+            const myPrevAssign = prevAssignments.find((a) => a.user_id === currentUserId);
+            if (myPrevAssign) {
+              return ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(myPrevAssign.status);
+            }
+            return prevAssignments.length === 0 || prevAssignments.some((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status));
+          })();
+
+          const isActive = isUnlockedForMe;
           const isApproved = visibleAssignments.length > 0 && visibleAssignments.every((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status));
-          previousStepApproved = visibleAssignments.length === 0 || isApproved;
 
           const statusBadge = primaryAssign ? statusColors[primaryAssign.status] ?? 'bg-zinc-100 text-zinc-500' : '';
 
@@ -747,14 +775,26 @@ export default function TaskActions({
                               )}
 
                               {/* Intern / Mentor Assignee Actions */}
-                              {isMe && (
-                                <>
-                                  {!isActive && !isApproved ? (
-                                    <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-3 text-[10px] text-amber-700 dark:text-amber-400 font-bold flex items-center gap-2">
-                                      <span>🔒</span>
-                                      <span>Step ini masih terkunci. Menunggu Step sebelumnya disetujui QC.</span>
-                                    </div>
-                                  ) : (
+                              {isMe && (() => {
+                                const isUnlockedForThisAssignee = (() => {
+                                  if (stepIdx === 0) return true;
+                                  const prevStep = steps[stepIdx - 1];
+                                  const prevAssignments = assignments.filter((a) => a.assignment_role === prevStep.role);
+                                  const userPrevAssign = prevAssignments.find((a) => a.user_id === assign.user_id);
+                                  if (userPrevAssign) {
+                                    return ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(userPrevAssign.status);
+                                  }
+                                  return prevAssignments.length === 0 || prevAssignments.some((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status));
+                                })();
+
+                                return (
+                                  <>
+                                    {!isUnlockedForThisAssignee && !isApprovedState ? (
+                                      <div className="bg-amber-500/5 border border-amber-500/15 rounded-xl p-3 text-[10px] text-amber-700 dark:text-amber-400 font-bold flex items-center gap-2">
+                                        <span>🔒</span>
+                                        <span>Step ini masih terkunci. Menunggu Step sebelumnya disetujui QC.</span>
+                                      </div>
+                                    ) : (
                                     <>
                                       {['ASSIGNED', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED', 'IN_PROGRESS', 'WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(assign.status) && !isApproved && (
                                         <div className="space-y-2">
@@ -865,9 +905,10 @@ export default function TaskActions({
                                         </div>
                                       )}
                                     </>
-                                  )}
-                                </>
-                              )}
+                                    )}
+                                  </>
+                                );
+                              })()}
 
                               {/* QC Approver Actions: Only non-submitter, and for MENTOR workspace ONLY Coordinator or Task Creator */}
                               {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(assign.status) &&

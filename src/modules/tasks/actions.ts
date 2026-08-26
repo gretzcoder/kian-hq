@@ -32,40 +32,39 @@ interface AssignmentRow {
 // Helper: Check OJT sequential rundown prerequisites
 // ---------------------------------------------------------------------------
 async function checkOJTPrerequisites(db: any, taskId: string, role: string, userId?: string): Promise<{ allowed: boolean; error?: string }> {
-  let userClause = '';
-  const params: any[] = [taskId];
-  if (userId) {
-    userClause = ' AND user_id = ?';
-    params.push(userId);
-  }
+  const checkRolePrereq = async (prevRole: string, roleName: string) => {
+    const allPrev = await db
+      .prepare(`SELECT user_id, status FROM task_assignments WHERE task_id = ? AND assignment_role = ?`)
+      .bind(taskId, prevRole)
+      .all();
+    const rows = (allPrev.results as any[]) || [];
+    if (rows.length === 0) return { allowed: true };
+
+    if (userId) {
+      const myRow = rows.find((r) => r.user_id === userId);
+      if (myRow) {
+        if (!['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(myRow.status)) {
+          return { allowed: false, error: `Tidak dapat melanjutkan step ${role} sebelum step ${roleName} Anda disetujui QC.` };
+        }
+        return { allowed: true };
+      }
+    }
+
+    const hasApproved = rows.some((r) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(r.status));
+    if (!hasApproved) {
+      return { allowed: false, error: `Tidak dapat melanjutkan step ${role} sebelum step ${roleName} disetujui QC.` };
+    }
+    return { allowed: true };
+  };
 
   if (role === 'PLANNER') {
-    // Check if RESEARCHER step exists for this user and is approved
-    const res = await db
-      .prepare(`SELECT status FROM task_assignments WHERE task_id = ? ${userClause} AND assignment_role = 'RESEARCHER'`)
-      .bind(...params)
-      .first() as { status: string } | null;
-    if (res && !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(res.status)) {
-      return { allowed: false, error: 'Tidak dapat melanjutkan step Planning sebelum step Research disetujui QC.' };
-    }
+    return checkRolePrereq('RESEARCHER', 'Research');
   } else if (['CREATOR', 'DESIGNER', 'VIDEO_EDITOR'].includes(role)) {
-    // Check if PLANNER step exists for this user and is approved
-    const planner = await db
-      .prepare(`SELECT status FROM task_assignments WHERE task_id = ? ${userClause} AND assignment_role = 'PLANNER'`)
-      .bind(...params)
-      .first() as { status: string } | null;
-    if (planner && !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(planner.status)) {
-      return { allowed: false, error: 'Tidak dapat melanjutkan step ini sebelum step Planning disetujui QC.' };
-    }
+    const planCheck = await checkRolePrereq('PLANNER', 'Planning');
+    if (!planCheck.allowed) return planCheck;
 
-    // Check if RESEARCHER step exists for this user and is approved (if planner wasn't assigned)
-    const researcher = await db
-      .prepare(`SELECT status FROM task_assignments WHERE task_id = ? ${userClause} AND assignment_role = 'RESEARCHER'`)
-      .bind(...params)
-      .first() as { status: string } | null;
-    if (researcher && !['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(researcher.status)) {
-      return { allowed: false, error: 'Tidak dapat melanjutkan step ini sebelum step Research disetujui QC.' };
-    }
+    const resCheck = await checkRolePrereq('RESEARCHER', 'Research');
+    if (!resCheck.allowed) return resCheck;
   }
   return { allowed: true };
 }
