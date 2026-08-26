@@ -14,6 +14,7 @@ import WorkspaceReadTracker from '../components/WorkspaceReadTracker';
 import { AssessmentPanel } from './components/AssessmentPanel';
 import EditWorkspaceModal from './components/EditWorkspaceModal';
 import { repairAssessmentTaskStatuses } from '@/modules/workspaces/assessmentActions';
+import { syncAndRepairTaskStatuses } from '@/modules/tasks/actions';
 
 
 interface WorkspaceRow {
@@ -102,6 +103,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   // Auto-repair any assessment tasks whose status was corrupted to WAITING_REVIEW by submissions
   await repairAssessmentTaskStatuses(db, wsId);
+  await syncAndRepairTaskStatuses(db, wsId);
 
   // Fetch everything else IN PARALLEL — no sequential waterfall
   const [

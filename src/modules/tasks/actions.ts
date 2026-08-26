@@ -932,11 +932,11 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
 
     if (nextStatus === 'APPROVED') {
       const { results: pending } = await db
-        .prepare("SELECT id FROM task_assignments WHERE task_id = ? AND status NOT IN ('APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD')")
+        .prepare("SELECT id FROM task_assignments WHERE task_id = ? AND status NOT IN ('APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED')")
         .bind(task.id)
         .all();
 
-      if (pending.length === 0 || task.status !== 'APPROVED') {
+      if (pending.length === 0) {
         await db
           .prepare('UPDATE tasks SET status = ?, revision_note = NULL WHERE id = ?')
           .bind('APPROVED', task.id)
@@ -950,9 +950,14 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
           triggeredBy: session.userId,
           note: `Task stage auto-progressed to APPROVED`,
         });
+      } else if (task.status === 'APPROVED') {
+        await db
+          .prepare("UPDATE tasks SET status = 'IN_PROGRESS' WHERE id = ?")
+          .bind(task.id)
+          .run();
       }
     } else if (isOjtRole) {
-      if (task.status !== 'WAITING_REVIEW') {
+      if (task.status !== 'WAITING_REVIEW' && task.status !== 'APPROVED') {
         await db
           .prepare('UPDATE tasks SET status = ? WHERE id = ?')
           .bind('WAITING_REVIEW', task.id)
@@ -1871,6 +1876,54 @@ export async function extendTaskDeadline(
   } catch (err: any) {
     console.error('extendTaskDeadline error:', err);
     return { success: false, error: err.message || 'Gagal memperpanjang deadline.' };
+  }
+}
+
+/**
+ * Auto-repairs task statuses in DB so that a task is ONLY marked 'APPROVED'
+ * when ALL of its assignments have been completed/approved.
+ * If any assignment is still pending (e.g., ASSIGNED, IN_PROGRESS, REVISION_REQUESTED),
+ * and the task was prematurely set to 'APPROVED', it reverts the task status to 'IN_PROGRESS'.
+ */
+export async function syncAndRepairTaskStatuses(db: any, workspaceId?: string) {
+  try {
+    const wsClause = workspaceId ? 'WHERE workspace_id = ? AND status != "DELETED"' : 'WHERE status != "DELETED"';
+    const params = workspaceId ? [workspaceId] : [];
+
+    const { results: tasks } = await db
+      .prepare(`SELECT id, status, task_type FROM tasks ${wsClause}`)
+      .bind(...params)
+      .all();
+
+    for (const t of (tasks as any[] || [])) {
+      if (t.task_type === 'DIRECT_BRIEF') continue;
+
+      const { results: assignments } = await db
+        .prepare(`SELECT status FROM task_assignments WHERE task_id = ?`)
+        .bind(t.id)
+        .all();
+
+      const assignList = (assignments as any[]) || [];
+      if (assignList.length === 0) continue;
+
+      const unapprovedCount = assignList.filter(
+        (a) => !['APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED'].includes(a.status)
+      ).length;
+
+      if (unapprovedCount > 0 && ['APPROVED', 'PUBLISHED', 'DONE', 'COMPLETED'].includes(t.status)) {
+        await db
+          .prepare("UPDATE tasks SET status = 'IN_PROGRESS' WHERE id = ?")
+          .bind(t.id)
+          .run();
+      } else if (unapprovedCount === 0 && !['APPROVED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(t.status)) {
+        await db
+          .prepare("UPDATE tasks SET status = 'APPROVED', revision_note = NULL WHERE id = ?")
+          .bind(t.id)
+          .run();
+      }
+    }
+  } catch (err) {
+    console.error('syncAndRepairTaskStatuses error:', err);
   }
 }
 

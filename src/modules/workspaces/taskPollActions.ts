@@ -3,6 +3,7 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
+import { syncAndRepairTaskStatuses } from '@/modules/tasks/actions';
 
 export interface PollTaskRow {
   id: string;
@@ -52,6 +53,7 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
   if (!session) return null;
 
   const db = await getDB();
+  await syncAndRepairTaskStatuses(db, wsId);
   const ctx = await getSessionContext(session.userId);
 
   const { results: tasksRaw } = await db
