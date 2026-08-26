@@ -244,6 +244,9 @@ export default function DashboardSidebar({
         ...(canManageSparks
           ? [{ href: '/dashboard/sparks', label: 'Sparks', icon: '✨', exact: false }]
           : []),
+        ...(canManageRoles || canManageUsers
+          ? [{ href: '/dashboard/settings/storage', label: 'Setting Storage', icon: '☁️', exact: false }]
+          : []),
       ],
     },
   ];

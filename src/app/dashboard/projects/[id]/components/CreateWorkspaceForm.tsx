@@ -158,6 +158,19 @@ export default function CreateWorkspaceForm({
         />
       </div>
 
+      {/* Google Drive Folder ID */}
+      <div>
+        <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
+          📁 Folder ID Google Drive Workspace (Opsional)
+        </label>
+        <input
+          type="text"
+          name="gdrive_folder_id"
+          placeholder="Paste Folder ID Google Drive khusus workspace ini (opsional)..."
+          className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all font-mono"
+        />
+      </div>
+
       {/* Mentor select — only for TROOPERS */}
       {wsType === 'TROOPERS' && mentors.length > 0 && (
         <div>
