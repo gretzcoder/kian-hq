@@ -37,7 +37,7 @@ export async function isCertificateAdmin(): Promise<{ authorized: boolean; userI
     ctx.can('SPARKS_MANAGE') ||
     ctx.roles.some((r) => r.toUpperCase().includes('COORDINATOR')) ||
     ctx.roles.some((r) => r.toUpperCase().includes('EXECUTIVE')) ||
-    ctx.roles.some((r) => r.toUpperCase().includes('MENTOR')) ||
+    ctx.roles.some((r) => r.toUpperCase().includes('ADMIN')) ||
     ctx.permissions.has('ADMIN_SYSTEM');
 
   return { authorized, userId: session.userId };
