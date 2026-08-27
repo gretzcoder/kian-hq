@@ -190,6 +190,7 @@ export default function DashboardSidebar({
         { href: '/dashboard/leaderboard', label: 'Leaderboard', icon: '🏆', exact: false },
         { href: '/dashboard/achievements', label: 'Achievement History', icon: '🏆', exact: false },
         { href: '/dashboard/badges',      label: 'Badge',       icon: '🏅', exact: false },
+        { href: '/dashboard/certificates', label: 'Certificate', icon: '📜', exact: false },
       ],
     },
     {
