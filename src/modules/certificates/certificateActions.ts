@@ -34,8 +34,10 @@ export async function isCertificateAdmin(): Promise<{ authorized: boolean; userI
     ctx.userType === 'STAFF' ||
     ctx.can('MANAGE') ||
     ctx.can('WORKSPACE_MANAGE') ||
-    ctx.roles.includes('COORDINATOR') ||
-    ctx.roles.includes('EXECUTIVE') ||
+    ctx.can('SPARKS_MANAGE') ||
+    ctx.roles.some((r) => r.toUpperCase().includes('COORDINATOR')) ||
+    ctx.roles.some((r) => r.toUpperCase().includes('EXECUTIVE')) ||
+    ctx.roles.some((r) => r.toUpperCase().includes('MENTOR')) ||
     ctx.permissions.has('ADMIN_SYSTEM');
 
   return { authorized, userId: session.userId };
@@ -170,15 +172,32 @@ export async function getCertificates(filter?: {
   const db = await getDB();
 
   let query = `
-    SELECT c.*, 
-           u.name as user_name, u.email as user_email, u.avatar_url as user_avatar,
+    SELECT c.id as cert_id,
+           c.user_id as user_id,
+           c.template_id as template_id,
+           c.certificate_code as certificate_code,
+           c.title as cert_title,
+           c.status as cert_status,
+           c.issue_date as cert_issue_date,
+           c.performance_metrics as cert_performance_metrics,
+           c.issued_by as cert_issued_by,
+           c.created_at as cert_created_at,
+           c.updated_at as cert_updated_at,
+           u.name as user_name,
+           u.email as user_email,
+           u.avatar_url as user_avatar,
            (SELECT r.name FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id = u.id LIMIT 1) as user_role,
-           t.name as template_name, t.layout_type as template_layout,
-           t.background_color as t_bg, t.border_style as t_border, t.accent_color as t_accent,
-           t.signatory_name as t_sig_name, t.signatory_title as t_sig_title, t.custom_subtext as t_subtext,
+           t.name as template_name,
+           t.layout_type as template_layout,
+           t.background_color as t_bg,
+           t.border_style as t_border,
+           t.accent_color as t_accent,
+           t.signatory_name as t_sig_name,
+           t.signatory_title as t_sig_title,
+           t.custom_subtext as t_subtext,
            issuer.name as issued_by_name
     FROM certificates c
-    JOIN users u ON c.user_id = u.id
+    LEFT JOIN users u ON c.user_id = u.id
     LEFT JOIN certificate_templates t ON c.template_id = t.id
     LEFT JOIN users issuer ON c.issued_by = issuer.id
   `;
@@ -216,7 +235,7 @@ export async function getCertificates(filter?: {
   return (results || []).map((r) => {
     let metrics: UserPerformanceMetrics;
     try {
-      metrics = typeof r.performance_metrics === 'string' ? JSON.parse(r.performance_metrics) : r.performance_metrics;
+      metrics = typeof r.cert_performance_metrics === 'string' ? JSON.parse(r.cert_performance_metrics) : r.cert_performance_metrics;
     } catch {
       metrics = {
         tasks_completed: 0,
@@ -230,8 +249,8 @@ export async function getCertificates(filter?: {
     }
 
     const template_data: CertificateTemplate = {
-      id: r.template_id,
-      name: r.template_name || 'Default Template',
+      id: r.template_id || 'tpl_classic_gold',
+      name: r.template_name || 'Classic Gold Honor',
       description: null,
       layout_type: r.template_layout || 'CLASSIC',
       background_color: r.t_bg || '#0f172a',
@@ -246,25 +265,25 @@ export async function getCertificates(filter?: {
     };
 
     return {
-      id: r.id,
+      id: r.cert_id,
       user_id: r.user_id,
       user_name: r.user_name || 'Anonymous User',
       user_email: r.user_email || '',
       user_avatar: r.user_avatar || null,
       user_role: r.user_role || 'Trooper',
       template_id: r.template_id,
-      template_name: r.template_name,
-      template_layout: r.template_layout,
+      template_name: r.template_name || 'Classic Gold Honor',
+      template_layout: r.template_layout || 'CLASSIC',
       template_data,
       certificate_code: r.certificate_code,
-      title: r.title,
-      status: r.status,
-      issue_date: r.issue_date,
+      title: r.cert_title || 'Certificate of Achievement',
+      status: r.cert_status || 'DRAFT',
+      issue_date: r.cert_issue_date,
       performance_metrics: metrics,
-      issued_by: r.issued_by,
+      issued_by: r.cert_issued_by,
       issued_by_name: r.issued_by_name || 'Coordinator',
-      created_at: r.created_at,
-      updated_at: r.updated_at,
+      created_at: r.cert_created_at,
+      updated_at: r.cert_updated_at,
     };
   });
 }
@@ -277,15 +296,32 @@ export async function getCertificateByCode(certificateCode: string): Promise<Cer
   const db = await getDB();
 
   const query = `
-    SELECT c.*, 
-           u.name as user_name, u.email as user_email, u.avatar_url as user_avatar,
+    SELECT c.id as cert_id,
+           c.user_id as user_id,
+           c.template_id as template_id,
+           c.certificate_code as certificate_code,
+           c.title as cert_title,
+           c.status as cert_status,
+           c.issue_date as cert_issue_date,
+           c.performance_metrics as cert_performance_metrics,
+           c.issued_by as cert_issued_by,
+           c.created_at as cert_created_at,
+           c.updated_at as cert_updated_at,
+           u.name as user_name,
+           u.email as user_email,
+           u.avatar_url as user_avatar,
            (SELECT r.name FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id = u.id LIMIT 1) as user_role,
-           t.name as template_name, t.layout_type as template_layout,
-           t.background_color as t_bg, t.border_style as t_border, t.accent_color as t_accent,
-           t.signatory_name as t_sig_name, t.signatory_title as t_sig_title, t.custom_subtext as t_subtext,
+           t.name as template_name,
+           t.layout_type as template_layout,
+           t.background_color as t_bg,
+           t.border_style as t_border,
+           t.accent_color as t_accent,
+           t.signatory_name as t_sig_name,
+           t.signatory_title as t_sig_title,
+           t.custom_subtext as t_subtext,
            issuer.name as issued_by_name
     FROM certificates c
-    JOIN users u ON c.user_id = u.id
+    LEFT JOIN users u ON c.user_id = u.id
     LEFT JOIN certificate_templates t ON c.template_id = t.id
     LEFT JOIN users issuer ON c.issued_by = issuer.id
     WHERE c.certificate_code = ?
@@ -297,7 +333,7 @@ export async function getCertificateByCode(certificateCode: string): Promise<Cer
 
   let metrics: UserPerformanceMetrics;
   try {
-    metrics = typeof row.performance_metrics === 'string' ? JSON.parse(row.performance_metrics) : row.performance_metrics;
+    metrics = typeof row.cert_performance_metrics === 'string' ? JSON.parse(row.cert_performance_metrics) : row.cert_performance_metrics;
   } catch {
     metrics = {
       tasks_completed: 0,
@@ -311,8 +347,8 @@ export async function getCertificateByCode(certificateCode: string): Promise<Cer
   }
 
   const template_data: CertificateTemplate = {
-    id: row.template_id,
-    name: row.template_name || 'Default Template',
+    id: row.template_id || 'tpl_classic_gold',
+    name: row.template_name || 'Classic Gold Honor',
     description: null,
     layout_type: row.template_layout || 'CLASSIC',
     background_color: row.t_bg || '#0f172a',
@@ -327,25 +363,25 @@ export async function getCertificateByCode(certificateCode: string): Promise<Cer
   };
 
   return {
-    id: row.id,
+    id: row.cert_id,
     user_id: row.user_id,
     user_name: row.user_name || 'Anonymous User',
     user_email: row.user_email || '',
     user_avatar: row.user_avatar || null,
     user_role: row.user_role || 'Trooper',
     template_id: row.template_id,
-    template_name: row.template_name,
-    template_layout: row.template_layout,
+    template_name: row.template_name || 'Classic Gold Honor',
+    template_layout: row.template_layout || 'CLASSIC',
     template_data,
     certificate_code: row.certificate_code,
-    title: row.title,
-    status: row.status,
-    issue_date: row.issue_date,
+    title: row.cert_title || 'Certificate of Achievement',
+    status: row.cert_status || 'DRAFT',
+    issue_date: row.cert_issue_date,
     performance_metrics: metrics,
-    issued_by: row.issued_by,
+    issued_by: row.cert_issued_by,
     issued_by_name: row.issued_by_name || 'Coordinator',
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    created_at: row.cert_created_at,
+    updated_at: row.cert_updated_at,
   };
 }
 
