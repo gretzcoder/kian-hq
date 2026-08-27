@@ -47,7 +47,7 @@ export async function isCertificateAdmin(): Promise<{ authorized: boolean; userI
 export async function getUserMetricsSummary(userId: string): Promise<UserPerformanceMetrics> {
   const db = await getDB();
 
-  const [taskRes, userRes, badgesRes, wsRes] = await Promise.all([
+  const [taskRes, sparksRes, badgesRes, wsRes] = await Promise.all([
     // Completed tasks count
     db
       .prepare(
@@ -59,11 +59,16 @@ export async function getUserMetricsSummary(userId: string): Promise<UserPerform
       .bind(userId)
       .first<{ cnt: number }>(),
 
-    // User sparks balance
+    // User calculated total sparks
     db
-      .prepare(`SELECT sparks_balance, name FROM users WHERE id = ?`)
-      .bind(userId)
-      .first<{ sparks_balance: number; name: string }>(),
+      .prepare(
+        `SELECT (
+           COALESCE((SELECT SUM(sparks) FROM task_assignments WHERE user_id = ? AND status = 'APPROVED'), 0) +
+           COALESCE((SELECT SUM(sparks) FROM sparks_adjustments WHERE user_id = ?), 0)
+         ) as total_sparks`
+      )
+      .bind(userId, userId)
+      .first<{ total_sparks: number }>(),
 
     // Unlocked badges
     db
@@ -89,7 +94,7 @@ export async function getUserMetricsSummary(userId: string): Promise<UserPerform
   ]);
 
   const tasksCompleted = Number(taskRes?.cnt || 0);
-  const sparksEarned = Number(userRes?.sparks_balance || 0);
+  const sparksEarned = Number(sparksRes?.total_sparks || 0);
   const badgeList = (badgesRes?.results || []).map((b) => ({
     name: b.name,
     icon_url: b.icon_url,
