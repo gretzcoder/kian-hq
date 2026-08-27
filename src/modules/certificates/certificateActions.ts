@@ -422,7 +422,8 @@ export async function generateCertificateForUser(
              updated_at = ?
          WHERE id = ?`
       )
-      .bind(templateId, JSON.stringify(metrics), status, adminUserId, now, existing.id);
+      .bind(templateId, JSON.stringify(metrics), status, adminUserId, now, existing.id)
+      .run();
 
     return { success: true, certificateCode: existing.certificate_code };
   } else {
@@ -448,7 +449,8 @@ export async function generateCertificateForUser(
         adminUserId,
         now,
         now
-      );
+      )
+      .run();
 
     return { success: true, certificateCode: certCode };
   }
@@ -504,7 +506,8 @@ export async function publishCertificates(
   for (const id of certificateIds) {
     await db
       .prepare(`UPDATE certificates SET status = ?, updated_at = ? WHERE id = ?`)
-      .bind(newStatus, now, id);
+      .bind(newStatus, now, id)
+      .run();
     updatedCount++;
   }
 
@@ -549,7 +552,8 @@ export async function saveCertificateTemplate(
         template.custom_subtext || 'Sertifikat ini diberikan sebagai bentuk penghargaan resmi.',
         now,
         template.id
-      );
+      )
+      .run();
   } else {
     await db
       .prepare(
@@ -570,7 +574,8 @@ export async function saveCertificateTemplate(
         template.custom_subtext || 'Sertifikat ini diberikan sebagai bentuk penghargaan resmi.',
         now,
         now
-      );
+      )
+      .run();
   }
 
   return { success: true };
