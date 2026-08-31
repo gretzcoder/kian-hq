@@ -9,6 +9,7 @@ interface EditProfileButtonProps {
     email?: string;
     username?: string;
     university?: string;
+    student_id_number?: string;
     study_program?: string;
     semester?: string;
     whatsapp_number?: string;

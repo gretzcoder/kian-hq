@@ -76,10 +76,10 @@ export function AchievementHistoryModal({
 
       // Period Filter Check (Weekly / Monthly)
       if (periodFilter === 'WEEKLY') {
-        const isWeekly = item.period.toLowerCase().includes('week') || item.title.toLowerCase().includes('weekly');
+        const isWeekly = item.period.toLowerCase().includes('week') || item.title.toLowerCase().includes('weekly') || item.achievementType.toUpperCase().includes('WEEKLY');
         if (!isWeekly) return false;
       } else if (periodFilter === 'MONTHLY') {
-        const isMonthly = !item.period.toLowerCase().includes('week') || item.title.toLowerCase().includes('monthly');
+        const isMonthly = (!item.period.toLowerCase().includes('week') && !item.title.toLowerCase().includes('weekly')) || item.title.toLowerCase().includes('monthly') || item.achievementType.toUpperCase().includes('MONTHLY');
         if (!isMonthly) return false;
       }
 

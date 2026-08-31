@@ -83,6 +83,29 @@ export async function normalizeWhatsappNumber(phone: string | null | undefined):
 }
 
 /**
+ * Fetch full profile details for current logged in user.
+ */
+export async function getMyProfileAction() {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Tidak terautentikasi.' };
+
+  const db = await getDB();
+  const profile = await db.prepare(`
+    SELECT
+      id, email, username, name, status, user_type, created_at,
+      university, student_id_number, study_program, semester,
+      whatsapp_number, avatar_url, main_roles, custom_role,
+      tools, portfolio_url, department, bio
+    FROM users
+    WHERE id = ?
+  `).bind(session.userId).first();
+
+  if (!profile) return { success: false, error: 'Profil tidak ditemukan.' };
+
+  return { success: true, profile };
+}
+
+/**
  * Update complete OJT user profile data.
  * Updates D1 database and KV session.
  */
@@ -222,6 +245,7 @@ export async function updateOjtProfile(payload: {
           email = COALESCE(?, email),
           username = COALESCE(?, username),
           university = ?,
+          student_id_number = ?,
           study_program = ?,
           semester = ?,
           whatsapp_number = ?,
@@ -239,6 +263,7 @@ export async function updateOjtProfile(payload: {
         email || null,
         username || null,
         finalUniversity,
+        finalStudentId,
         finalStudyProgram,
         finalSemester,
         normalizedWhatsapp,

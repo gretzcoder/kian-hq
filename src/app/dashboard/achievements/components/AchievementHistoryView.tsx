@@ -58,10 +58,10 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
 
       // Period Filter Check (Weekly / Monthly)
       if (periodFilter === 'WEEKLY') {
-        const isWeekly = item.period.toLowerCase().includes('week') || item.title.toLowerCase().includes('weekly');
+        const isWeekly = item.period.toLowerCase().includes('week') || item.title.toLowerCase().includes('weekly') || item.achievementType.toUpperCase().includes('WEEKLY');
         if (!isWeekly) return false;
       } else if (periodFilter === 'MONTHLY') {
-        const isMonthly = !item.period.toLowerCase().includes('week') || item.title.toLowerCase().includes('monthly');
+        const isMonthly = (!item.period.toLowerCase().includes('week') && !item.title.toLowerCase().includes('weekly')) || item.title.toLowerCase().includes('monthly') || item.achievementType.toUpperCase().includes('MONTHLY');
         if (!isMonthly) return false;
       }
 
@@ -76,12 +76,12 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
       if (categoryFilter === 'PRODUCTIVE') return catUpper === 'PRODUCTIVE' || titleUpper.includes('PRODUCTIVE');
       if (categoryFilter === 'QUALITY') return catUpper === 'QUALITY' || titleUpper.includes('QUALITY');
       if (categoryFilter === 'WORKSPACE') return catUpper === 'WORKSPACE' || titleUpper.includes('WORKSPACE');
-      if (categoryFilter === 'MENTOR') return catUpper === 'MENTOR' || titleUpper.includes('MENTOR');
-      if (categoryFilter === 'TEAM_LEADER') return catUpper === 'TEAM_LEADER' || titleUpper.includes('TEAM LEADER') || titleUpper.includes('LEADER');
-      if (categoryFilter === 'DESIGNER') return catUpper === 'DESIGNER' || titleUpper.includes('DESIGN');
-      if (categoryFilter === 'VIDEO_EDITOR') return catUpper === 'VIDEO_EDITOR' || titleUpper.includes('EDITOR') || titleUpper.includes('VIDEO');
-      if (categoryFilter === 'PLANNER') return catUpper === 'PLANNER' || titleUpper.includes('PLANNER');
-      if (categoryFilter === 'RESEARCHER') return catUpper === 'RESEARCHER' || titleUpper.includes('RESEARCH');
+      if (categoryFilter === 'MENTOR') return catUpper === 'MENTOR' || catUpper.includes('MENTOR') || titleUpper.includes('MENTOR');
+      if (categoryFilter === 'TEAM_LEADER') return catUpper === 'TEAM_LEADER' || catUpper.includes('LEADER') || titleUpper.includes('LEADER');
+      if (categoryFilter === 'DESIGNER') return catUpper === 'DESIGNER' || catUpper.includes('DESIGN') || titleUpper.includes('DESIGN');
+      if (categoryFilter === 'VIDEO_EDITOR') return catUpper === 'VIDEO_EDITOR' || catUpper.includes('EDITOR') || titleUpper.includes('VIDEO');
+      if (categoryFilter === 'PLANNER') return catUpper === 'PLANNER' || catUpper.includes('PLAN') || titleUpper.includes('PLANNER');
+      if (categoryFilter === 'RESEARCHER') return catUpper === 'RESEARCHER' || catUpper.includes('RESEARCH') || titleUpper.includes('RESEARCH');
 
       return true;
     });
