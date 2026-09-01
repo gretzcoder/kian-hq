@@ -17,6 +17,8 @@ import {
 
 
 
+let badgeColumnsEnsured = false;
+
 /**
  * Global Evaluator: Auto-awards badges to users who satisfy task/workspace/achievement requirements
  */
@@ -25,9 +27,12 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
   const now = Date.now();
 
   try {
-    // 0. Ensure D1 columns exist
-    try { await db.prepare("ALTER TABLE badges ADD COLUMN is_continuous_earning INTEGER DEFAULT 0").run(); } catch {}
-    try { await db.prepare("ALTER TABLE user_badges ADD COLUMN claim_count INTEGER DEFAULT 1").run(); } catch {}
+    // 0. Ensure D1 columns exist (run once)
+    if (!badgeColumnsEnsured) {
+      try { await db.prepare("ALTER TABLE badges ADD COLUMN is_continuous_earning INTEGER DEFAULT 0").run(); } catch {}
+      try { await db.prepare("ALTER TABLE user_badges ADD COLUMN claim_count INTEGER DEFAULT 1").run(); } catch {}
+      badgeColumnsEnsured = true;
+    }
 
     // 1. Fetch active badges with requirements
     const { results: rawBadges } = await db
@@ -516,7 +521,8 @@ export async function getAllBadgesWithUserProgress(): Promise<{
 
     // 6. Fetch achievement history records for requirement checking
     const { results: allAchievementsRaw } = await db
-      .prepare('SELECT user_id, category, period, earned_at, rank FROM achievement_history')
+      .prepare('SELECT user_id, category, period, earned_at, rank FROM achievement_history WHERE user_id = ?')
+      .bind(session.userId)
       .all();
     const userAchievementsList = (allAchievementsRaw as any[]) || [];
 

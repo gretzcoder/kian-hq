@@ -39,8 +39,12 @@ export interface UserAchievementSummary {
   color: string;
 }
 
+let tableEnsured = false;
+let lastSyncTs = 0;
+
 /** Ensure achievement_history table exists */
 export async function ensureAchievementHistoryTable() {
+  if (tableEnsured) return;
   try {
     const db = await getDB();
     await db.prepare(`
@@ -61,6 +65,7 @@ export async function ensureAchievementHistoryTable() {
 
     await db.prepare(`CREATE INDEX IF NOT EXISTS idx_achievement_history_user ON achievement_history(user_id)`).run();
     await db.prepare(`CREATE INDEX IF NOT EXISTS idx_achievement_history_category ON achievement_history(category)`).run();
+    tableEnsured = true;
   } catch (err) {
     console.error('ensureAchievementHistoryTable error:', err);
   }
@@ -70,7 +75,7 @@ export async function ensureAchievementHistoryTable() {
 export async function getAchievementHistoryAction(categoryFilter = 'ALL', userIdFilter = '') {
   try {
     await ensureAchievementHistoryTable();
-    await syncLeaderboardAchievements();
+    await syncLeaderboardAchievements(false);
 
     const db = await getDB();
     let query = `
@@ -122,7 +127,7 @@ export async function getAchievementHistoryAction(categoryFilter = 'ALL', userId
 export async function getUserAchievementStatsAction(userId: string) {
   try {
     await ensureAchievementHistoryTable();
-    await syncLeaderboardAchievements();
+    await syncLeaderboardAchievements(false);
 
     const db = await getDB();
     const { results } = await db.prepare(`
@@ -237,10 +242,17 @@ export async function getUserStreakBadgeMapAction(): Promise<Record<string, stri
 }
 
 /** Seed & Dynamically Sync Top 3 Leaderboard Winners into achievement_history */
-export async function syncLeaderboardAchievements() {
+export async function syncLeaderboardAchievements(force = false) {
   try {
-    const db = await getDB();
     const nowSec = Math.floor(Date.now() / 1000);
+
+    // Throttle sync to once per 10 minutes unless forced
+    if (!force && lastSyncTs > 0 && nowSec - lastSyncTs < 600) {
+      return;
+    }
+    lastSyncTs = nowSec;
+
+    const db = await getDB();
     const weekLabel = getWeekPeriodLabel();
     const saturdayTs = getWeeklySaturdayTimestamp();
     const monthLabel = getMonthPeriodLabel();
