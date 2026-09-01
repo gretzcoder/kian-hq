@@ -39,6 +39,7 @@ export function AchievementHistoryModal({
   }, [initialCategory]);
 
   const [categoryFilter, setCategoryFilter] = useState<string>(normalizedCat);
+  const [groupFilter, setGroupFilter] = useState<'ALL' | 'TROOPERS' | 'MENTOR'>('ALL');
   const [periodFilter, setPeriodFilter] = useState<'ALL' | 'WEEKLY' | 'MONTHLY'>('ALL');
   const [search, setSearch] = useState<string>('');
 
@@ -73,6 +74,16 @@ export function AchievementHistoryModal({
 
       if (!matchesSearch) return false;
 
+      // Group Filter Check (Semua / Troopers / Mentor)
+      const isMentor =
+        item.title.toLowerCase().includes('(mentor)') ||
+        item.achievementType.toUpperCase().includes('MENTOR') ||
+        (item.userRole && item.userRole.toUpperCase().includes('MENTOR')) ||
+        item.category.toUpperCase() === 'MENTOR';
+
+      if (groupFilter === 'TROOPERS' && isMentor) return false;
+      if (groupFilter === 'MENTOR' && !isMentor) return false;
+
       // Period Filter Check (Weekly / Monthly)
       if (periodFilter === 'WEEKLY') {
         const isWeekly = item.period.toLowerCase().includes('week') || item.title.toLowerCase().includes('weekly') || item.achievementType.toUpperCase().includes('WEEKLY');
@@ -102,7 +113,7 @@ export function AchievementHistoryModal({
 
       return true;
     });
-  }, [initialData, categoryFilter, periodFilter, search]);
+  }, [initialData, categoryFilter, groupFilter, periodFilter, search]);
 
   if (!isOpen) return null;
 
@@ -153,25 +164,48 @@ export function AchievementHistoryModal({
               <span className="absolute left-3 top-2.5 text-xs text-zinc-400">🔍</span>
             </div>
 
-            {/* Period Switcher */}
-            <div className="grid grid-cols-3 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shrink-0">
-              {[
-                { id: 'ALL', label: 'Semua' },
-                { id: 'WEEKLY', label: '🗓️ Weekly' },
-                { id: 'MONTHLY', label: '📅 Monthly' },
-              ].map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => setPeriodFilter(p.id as any)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    periodFilter === p.id
-                      ? 'bg-purple-600 text-white shadow-xs'
-                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Group Switcher */}
+              <div className="grid grid-cols-3 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shrink-0">
+                {[
+                  { id: 'ALL', label: '🌐 Semua' },
+                  { id: 'TROOPERS', label: '🚀 Troopers' },
+                  { id: 'MENTOR', label: '🎓 Mentor' },
+                ].map((g) => (
+                  <button
+                    key={g.id}
+                    onClick={() => setGroupFilter(g.id as any)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      groupFilter === g.id
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    }`}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Period Switcher */}
+              <div className="grid grid-cols-3 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shrink-0">
+                {[
+                  { id: 'ALL', label: 'Semua' },
+                  { id: 'WEEKLY', label: '🗓️ Weekly' },
+                  { id: 'MONTHLY', label: '📅 Monthly' },
+                ].map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setPeriodFilter(p.id as any)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      periodFilter === p.id
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

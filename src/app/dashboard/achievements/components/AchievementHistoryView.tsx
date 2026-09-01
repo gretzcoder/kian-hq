@@ -27,6 +27,7 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
   }, [initialCategory]);
 
   const [categoryFilter, setCategoryFilter] = useState<string>(normalizedInitialCat);
+  const [groupFilter, setGroupFilter] = useState<'ALL' | 'TROOPERS' | 'MENTOR'>('ALL');
   const [periodFilter, setPeriodFilter] = useState<'ALL' | 'WEEKLY' | 'MONTHLY'>('ALL');
   const [search, setSearch] = useState<string>('');
 
@@ -53,6 +54,16 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
         item.period.toLowerCase().includes(q);
 
       if (!matchesSearch) return false;
+
+      // Group Filter Check (Semua / Troopers / Mentor)
+      const isMentor =
+        item.title.toLowerCase().includes('(mentor)') ||
+        item.achievementType.toUpperCase().includes('MENTOR') ||
+        (item.userRole && item.userRole.toUpperCase().includes('MENTOR')) ||
+        item.category.toUpperCase() === 'MENTOR';
+
+      if (groupFilter === 'TROOPERS' && isMentor) return false;
+      if (groupFilter === 'MENTOR' && !isMentor) return false;
 
       // Period Filter Check (Weekly / Monthly)
       if (periodFilter === 'WEEKLY') {
@@ -83,7 +94,7 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
 
       return true;
     });
-  }, [initialData, categoryFilter, periodFilter, search]);
+  }, [initialData, categoryFilter, groupFilter, periodFilter, search]);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 w-full min-w-0">
@@ -103,7 +114,28 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Group Filter Switcher (Semua / Troopers / Mentor) */}
+          <div className="grid grid-cols-3 p-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
+            {[
+              { id: 'ALL', label: '🌐 Semua' },
+              { id: 'TROOPERS', label: '🚀 Troopers' },
+              { id: 'MENTOR', label: '🎓 Mentor' },
+            ].map((g) => (
+              <button
+                key={g.id}
+                onClick={() => setGroupFilter(g.id as any)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  groupFilter === g.id
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs'
+                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                }`}
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+
           {/* Period Filter Switcher */}
           <div className="grid grid-cols-3 p-1 bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs">
             {[
