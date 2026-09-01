@@ -55,7 +55,6 @@ export function AchievementHistoryModal({
     { id: 'PRODUCTIVE', label: '⚡ Most Productive' },
     { id: 'QUALITY', label: '🎯 High Quality' },
     { id: 'WORKSPACE', label: '🏢 Top Workspaces' },
-    { id: 'MENTOR', label: '🥇 Top Mentors' },
     { id: 'TEAM_LEADER', label: '👑 Team Leaders' },
     { id: 'DESIGNER', label: '🎨 Designers' },
     { id: 'VIDEO_EDITOR', label: '🎬 Video Editors' },

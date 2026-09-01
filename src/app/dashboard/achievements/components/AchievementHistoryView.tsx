@@ -14,7 +14,6 @@ interface AchievementHistoryViewProps {
 export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }: AchievementHistoryViewProps) {
   const normalizedInitialCat = useMemo(() => {
     const raw = initialCategory.toUpperCase();
-    if (raw.includes('MENTOR')) return 'MENTOR';
     if (raw.includes('DESIGN')) return 'DESIGNER';
     if (raw.includes('EDITOR') || raw.includes('VIDEO')) return 'VIDEO_EDITOR';
     if (raw.includes('PLAN')) return 'PLANNER';
@@ -37,7 +36,6 @@ export function AchievementHistoryView({ initialData, initialCategory = 'ALL' }:
     { id: 'PRODUCTIVE', label: '⚡ Most Productive' },
     { id: 'QUALITY', label: '🎯 High Quality' },
     { id: 'WORKSPACE', label: '🏢 Top Workspaces' },
-    { id: 'MENTOR', label: '🥇 Top Mentors' },
     { id: 'TEAM_LEADER', label: '👑 Team Leaders' },
     { id: 'DESIGNER', label: '🎨 Designers' },
     { id: 'VIDEO_EDITOR', label: '🎬 Video Editors' },
