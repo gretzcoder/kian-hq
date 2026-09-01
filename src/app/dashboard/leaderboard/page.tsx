@@ -9,7 +9,7 @@ import { WorkspaceLeaderboardView } from '@/modules/leaderboard/components/Works
 import { CoordinatorLeaderboardView } from '@/modules/leaderboard/components/CoordinatorLeaderboardView';
 
 interface LeaderboardPageProps {
-  searchParams: Promise<{ category?: string; period?: string }>;
+  searchParams: Promise<{ category?: string; period?: string; group?: string }>;
 }
 
 const CATEGORIES = [
@@ -17,12 +17,16 @@ const CATEGORIES = [
   { id: 'productive', label: '⚡ Most Productive', icon: '⚡' },
   { id: 'quality', label: '🎯 High Quality', icon: '🎯' },
   { id: 'workspace', label: '🏢 Top Workspaces', icon: '🏢' },
-  { id: 'role_mentor_troopers', label: '🎖️ Top Mentors', icon: '🎖️' },
   { id: 'role_leader', label: '👑 Top Team Leaders', icon: '👑' },
   { id: 'role_designer', label: '🎨 Top Designers', icon: '🎨' },
   { id: 'role_editor', label: '🎬 Top Video Editors', icon: '🎬' },
   { id: 'role_planner', label: '📋 Top Planners', icon: '📋' },
   { id: 'role_researcher', label: '🔍 Top Researchers', icon: '🔍' },
+];
+
+const GROUPS = [
+  { id: 'troopers', label: '🚀 Troopers' },
+  { id: 'mentor', label: '🎓 Mentor' },
 ];
 
 const PERIODS = [
@@ -42,11 +46,12 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
 
   const activeCategory = (params.category || 'overall') as any;
   const activePeriod = (params.period || 'week') as any;
+  const activeGroup = (params.group || 'troopers') as any;
 
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
   const canManageSparks = ctx.can('SPARKS_MANAGE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
 
-  const leaderboardResult = await getLeaderboardData(activeCategory, activePeriod);
+  const leaderboardResult = await getLeaderboardData(activeCategory, activePeriod, activeGroup);
 
   return (
     <div className="space-y-8">
@@ -61,20 +66,39 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
           </p>
         </div>
 
-        {/* Period Selector (Segmented Pill) */}
-        <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 self-start sm:self-auto w-full sm:w-auto">
-          {PERIODS.map((p) => (
-            <Link
-              key={p.id}
-              href={`/dashboard/leaderboard?category=${activeCategory}&period=${p.id}`}
-              className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activePeriod === p.id
-                ? 'bg-purple-600 text-white shadow-sm'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                }`}
-            >
-              {p.label}
-            </Link>
-          ))}
+        {/* Controls: Group Selector & Period Selector */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 self-start sm:self-auto w-full sm:w-auto">
+          {/* Group Selector (Troopers vs Mentor) */}
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 flex-1 sm:flex-none">
+            {GROUPS.map((g) => (
+              <Link
+                key={g.id}
+                href={`/dashboard/leaderboard?category=${activeCategory}&period=${activePeriod}&group=${g.id}`}
+                className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activeGroup === g.id
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                  }`}
+              >
+                {g.label}
+              </Link>
+            ))}
+          </div>
+
+          {/* Period Selector (Segmented Pill) */}
+          <div className="flex items-center gap-1 bg-zinc-100 dark:bg-zinc-900/80 p-1 rounded-2xl border border-zinc-200/80 dark:border-zinc-800 flex-1 sm:flex-none">
+            {PERIODS.map((p) => (
+              <Link
+                key={p.id}
+                href={`/dashboard/leaderboard?category=${activeCategory}&period=${p.id}&group=${activeGroup}`}
+                className={`flex-1 sm:flex-none text-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${activePeriod === p.id
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                  }`}
+              >
+                {p.label}
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -83,6 +107,7 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
         categories={CATEGORIES}
         activeCategory={activeCategory}
         activePeriod={activePeriod}
+        activeGroup={activeGroup}
       />
 
       {/* Desktop Pills */}
@@ -90,7 +115,7 @@ export default async function LeaderboardPage({ searchParams }: LeaderboardPageP
         {CATEGORIES.map((cat) => (
           <Link
             key={cat.id}
-            href={`/dashboard/leaderboard?category=${cat.id}&period=${activePeriod}`}
+            href={`/dashboard/leaderboard?category=${cat.id}&period=${activePeriod}&group=${activeGroup}`}
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all shrink-0 border ${activeCategory === cat.id
               ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-transparent shadow-md shadow-purple-500/20'
               : 'bg-white dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'

@@ -6,12 +6,14 @@ interface LeaderboardCategorySelectProps {
   categories: Array<{ id: string; label: string }>;
   activeCategory: string;
   activePeriod: string;
+  activeGroup?: string;
 }
 
 export default function LeaderboardCategorySelect({
   categories,
   activeCategory,
   activePeriod,
+  activeGroup = 'troopers',
 }: LeaderboardCategorySelectProps) {
   const router = useRouter();
 
@@ -21,7 +23,7 @@ export default function LeaderboardCategorySelect({
         <select
           value={activeCategory}
           onChange={(e) => {
-            router.push(`/dashboard/leaderboard?category=${e.target.value}&period=${activePeriod}`);
+            router.push(`/dashboard/leaderboard?category=${e.target.value}&period=${activePeriod}&group=${activeGroup}`);
           }}
           className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 font-extrabold text-xs rounded-2xl pl-4 pr-10 py-3 appearance-none focus:outline-none focus:border-purple-500 shadow-sm transition-all"
         >

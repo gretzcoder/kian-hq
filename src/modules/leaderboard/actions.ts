@@ -120,7 +120,8 @@ export async function getLeaderboardData(
     | 'role_planner'
     | 'role_researcher'
     | 'role_leader',
-  period: 'month' | 'week' | 'all' = 'week'
+  period: 'month' | 'week' | 'all' = 'week',
+  group: 'troopers' | 'mentor' = 'troopers'
 ) {
   const db = await getDB();
   const session = await getSession();
@@ -172,7 +173,7 @@ export async function getLeaderboardData(
     if (category === 'role_researcher') roleFilter = "AND ta.assignment_role = 'RESEARCHER'";
 
     let userWhereClause = '';
-    if (category === 'role_mentor_troopers') {
+    if (group === 'mentor' || category === 'role_mentor_troopers') {
       userWhereClause = `
         WHERE u.id IN (
           SELECT ur.user_id
@@ -199,7 +200,7 @@ export async function getLeaderboardData(
       `;
     }
 
-    const includeMentorBriefs = !['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
+    const includeMentorBriefs = (group === 'mentor' || category === 'role_mentor_troopers') && !['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
     const isRoleCategory = ['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
 
     const { results: settingsRows } = await db
@@ -307,7 +308,7 @@ export async function getLeaderboardData(
       const aRoles = (r.accountRoles || '').toUpperCase();
       const taskRoles = (r.roles || '').toUpperCase();
 
-      if (category === 'role_mentor_troopers') {
+      if (group === 'mentor' || category === 'role_mentor_troopers') {
         primaryRole = 'MENTOR';
       } else if (category === 'role_designer') {
         primaryRole = 'DESIGNER';
@@ -369,6 +370,36 @@ export async function getLeaderboardData(
     const tcPersonal = buildTimeClause('tap');
     const tcWorkspace = buildTimeClause('taw');
 
+    let leaderUserFilter = '';
+    if (group === 'mentor') {
+      leaderUserFilter = `
+        AND (
+          u.id IN (
+            SELECT ur.user_id
+            FROM user_roles ur
+            JOIN roles r ON ur.role_id = r.id
+            WHERE r.id = 'role_mentor_troopers' OR r.id = 'role_mentor' OR r.name LIKE '%MENTOR%'
+          ) OR u.user_type = 'MENTOR'
+        )
+      `;
+    } else {
+      leaderUserFilter = `
+        AND u.id NOT IN (
+          SELECT ur.user_id
+          FROM user_roles ur
+          JOIN roles r ON ur.role_id = r.id
+          WHERE r.id IN ('role_coordinator', 'role_executive') OR r.name IN ('COORDINATOR', 'EXECUTIVE', 'KOORDINATOR')
+        )
+        AND u.id NOT IN (
+          SELECT ur2.user_id
+          FROM user_roles ur2
+          JOIN roles r2 ON ur2.role_id = r2.id
+          WHERE r2.id = 'role_mentor_troopers' OR r2.id = 'role_mentor' OR r2.name LIKE '%MENTOR%'
+        )
+        AND u.user_type != 'MENTOR'
+      `;
+    }
+
     const query = `
       WITH workspace_totals AS (
         -- Total sparks semua anggota di setiap workspace
@@ -409,7 +440,7 @@ export async function getLeaderboardData(
       JOIN workspaces ws ON wm.workspace_id = ws.id AND ws.deleted_at IS NULL
       LEFT JOIN workspace_totals wt ON wt.workspace_id = ws.id
       LEFT JOIN personal_sparks  ps ON ps.user_id = u.id AND ps.workspace_id = ws.id
-      WHERE wm.team_role = 'LEADER'
+      WHERE wm.team_role = 'LEADER' ${leaderUserFilter}
       GROUP BY u.id
       ORDER BY totalSparks DESC
     `;
@@ -425,7 +456,7 @@ export async function getLeaderboardData(
         tasksCompleted: Number(r.tasksCompleted) || 0,
         zeroRevisionCount: Number(r.zeroRevisionCount) || 0,
         onTimeCount: Number(r.onTimeCount) || 0,
-        primaryRole: 'LEADER',
+        primaryRole: group === 'mentor' ? 'MENTOR' : 'LEADER',
         // Extra fields for history modal breakdown
         personalSparks: Math.round(Number(r.personalSparks) || 0),
         workspaceSparks: Math.round(Number(r.workspaceSparks) || 0),
@@ -441,6 +472,11 @@ export async function getLeaderboardData(
   //    Score = Total Sparks seluruh anggota di workspace
   // ─────────────────────────────────────────────────────────────────────────────
   if (category === 'workspace') {
+    let wsTypeFilter = "AND (ws.workspace_type IS NULL OR ws.workspace_type = 'TROOPERS')";
+    if (group === 'mentor') {
+      wsTypeFilter = "AND ws.workspace_type = 'MENTOR'";
+    }
+
     const query = `
       WITH workspace_sparks AS (
         SELECT
@@ -471,7 +507,7 @@ export async function getLeaderboardData(
       LEFT JOIN workspace_sparks ws_sparks ON ws.id = ws_sparks.workspace_id
       LEFT JOIN workspace_members_count wmc ON ws.id = wmc.workspace_id
       LEFT JOIN workspace_members wm_me ON ws.id = wm_me.workspace_id AND wm_me.user_id = ?
-      WHERE ws.deleted_at IS NULL AND (ws.workspace_type IS NULL OR ws.workspace_type = 'TROOPERS')
+      WHERE ws.deleted_at IS NULL ${wsTypeFilter}
     `;
 
     const { results } = await db.prepare(query).bind(currentUserId).all();
@@ -490,8 +526,6 @@ export async function getLeaderboardData(
 
     return { type: 'workspace' as const, data: ranked };
   }
-
-
 
   return { type: 'individual' as const, data: [] };
 }
