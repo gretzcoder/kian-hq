@@ -78,6 +78,8 @@ export async function getAchievementHistoryAction(categoryFilter = 'ALL', userId
     await syncLeaderboardAchievements(false);
 
     const db = await getDB();
+    const nowSec = Math.floor(Date.now() / 1000);
+
     let query = `
       SELECT 
         ah.id,
@@ -97,16 +99,17 @@ export async function getAchievementHistoryAction(categoryFilter = 'ALL', userId
       JOIN users u ON ah.user_id = u.id
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
-      WHERE u.id NOT IN (
-        SELECT ur2.user_id
-        FROM user_roles ur2
-        JOIN roles r2 ON ur2.role_id = r2.id
-        WHERE r2.id IN ('role_coordinator', 'role_executive') OR r2.name IN ('COORDINATOR', 'EXECUTIVE', 'KOORDINATOR')
-      )
-      AND u.email NOT LIKE '%admin@kian.com%'
+      WHERE ah.earned_at <= ?
+        AND u.id NOT IN (
+          SELECT ur2.user_id
+          FROM user_roles ur2
+          JOIN roles r2 ON ur2.role_id = r2.id
+          WHERE r2.id IN ('role_coordinator', 'role_executive') OR r2.name IN ('COORDINATOR', 'EXECUTIVE', 'KOORDINATOR')
+        )
+        AND u.email NOT LIKE '%admin@kian.com%'
     `;
 
-    const params: any[] = [];
+    const params: any[] = [nowSec];
 
     if (userIdFilter) {
       query += ` AND ah.user_id = ?`;
@@ -130,12 +133,14 @@ export async function getUserAchievementStatsAction(userId: string) {
     await syncLeaderboardAchievements(false);
 
     const db = await getDB();
+    const nowSec = Math.floor(Date.now() / 1000);
+
     const { results } = await db.prepare(`
       SELECT achievement_type, title, category, rank, score, period, earned_at
       FROM achievement_history
-      WHERE user_id = ?
+      WHERE user_id = ? AND earned_at <= ?
       ORDER BY earned_at DESC
-    `).bind(userId).all();
+    `).bind(userId, nowSec).all();
 
     const rows = (results as any[]) || [];
     const map: Record<string, {
@@ -253,6 +258,11 @@ export async function syncLeaderboardAchievements(force = false) {
     lastSyncTs = nowSec;
 
     const db = await getDB();
+    // Clean up any invalid future achievement history records (e.g. unclosed ongoing periods)
+    try {
+      await db.prepare('DELETE FROM achievement_history WHERE earned_at > ?').bind(nowSec).run();
+    } catch {}
+
     const weekLabel = getWeekPeriodLabel();
     const saturdayTs = getWeeklySaturdayTimestamp();
     const monthLabel = getMonthPeriodLabel();
@@ -289,6 +299,7 @@ export async function syncLeaderboardAchievements(force = false) {
     const groups: Array<'troopers' | 'mentor'> = ['troopers', 'mentor'];
 
     for (const p of periods) {
+      if (p.earnedTs > nowSec) continue; // Skip unclosed ongoing periods
       for (const cat of leaderboardCategories) {
         for (const grp of groups) {
           try {
