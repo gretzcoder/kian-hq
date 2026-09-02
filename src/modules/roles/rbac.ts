@@ -72,10 +72,24 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
  * Retrieves the role names for a given user.
  * (Useful for dashboard context labels, NOT for RBAC logic.)
  */
+const rolesMemoryCache = new Map<string, { data: string[]; ts: number }>();
+const userTypeMemoryCache = new Map<string, { data: 'STAFF' | 'OJT' | 'EXTERNAL'; ts: number }>();
+const MEMORY_CACHE_TTL_MS = 60_000; // 60 seconds
+
+/**
+ * Retrieves the role names for a given user.
+ * (Useful for dashboard context labels, NOT for RBAC logic.)
+ */
 export async function getUserRoles(userId: string): Promise<string[]> {
   const simRole = await getActiveSimulatedRole();
   if (simRole) {
     return [simRole.roleName];
+  }
+
+  const now = Date.now();
+  const cached = rolesMemoryCache.get(userId);
+  if (cached && now - cached.ts < MEMORY_CACHE_TTL_MS) {
+    return cached.data;
   }
 
   const db = await getDB();
@@ -88,7 +102,9 @@ export async function getUserRoles(userId: string): Promise<string[]> {
       `)
       .bind(userId)
       .all();
-    return results.map((r: any) => r.name as string);
+    const roles = results.map((r: any) => r.name as string);
+    rolesMemoryCache.set(userId, { data: roles, ts: now });
+    return roles;
   } catch (err) {
     console.error('getUserRoles failed:', err);
     return [];
@@ -142,13 +158,21 @@ export async function getUserType(userId: string): Promise<'STAFF' | 'OJT' | 'EX
     return simRole.userType;
   }
 
+  const now = Date.now();
+  const cached = userTypeMemoryCache.get(userId);
+  if (cached && now - cached.ts < MEMORY_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   const db = await getDB();
   try {
     const user = await db
       .prepare('SELECT user_type FROM users WHERE id = ?')
       .bind(userId)
       .first() as { user_type: string } | null;
-    return (user?.user_type as 'STAFF' | 'OJT' | 'EXTERNAL') || 'STAFF';
+    const uType = (user?.user_type as 'STAFF' | 'OJT' | 'EXTERNAL') || 'STAFF';
+    userTypeMemoryCache.set(userId, { data: uType, ts: now });
+    return uType;
   } catch (err) {
     console.error('getUserType failed:', err);
     return 'STAFF';
@@ -260,6 +284,8 @@ export async function getSessionContext(userId: string): Promise<{
  * Must be called after any role or permission change.
  */
 export async function clearPermissionsCache(userId: string): Promise<void> {
+  rolesMemoryCache.delete(userId);
+  userTypeMemoryCache.delete(userId);
   const kv = await getKV();
   const cacheKey = `user:permissions:${userId}`;
   try {
@@ -274,6 +300,8 @@ export async function clearPermissionsCache(userId: string): Promise<void> {
  * Call after role_permissions matrix changes.
  */
 export async function invalidateCacheForRole(roleId: string): Promise<void> {
+  rolesMemoryCache.clear();
+  userTypeMemoryCache.clear();
   try {
     const db = await getDB();
     const kv = await getKV();

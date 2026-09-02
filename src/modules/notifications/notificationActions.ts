@@ -51,9 +51,9 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
     ctx.permissions.has('ADMIN_SYSTEM');
 
   const [annRaw, wsRaw, reviewRaw] = await Promise.all([
-    // All announcement timestamps — no LIMIT
+    // Recent announcement timestamps (LIMIT 50)
     db
-      .prepare('SELECT created_at FROM announcements ORDER BY created_at DESC')
+      .prepare('SELECT created_at FROM announcements ORDER BY created_at DESC LIMIT 50')
       .all(),
 
     // Per-workspace latest activity

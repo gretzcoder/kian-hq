@@ -372,7 +372,8 @@ export async function getLeaderboardData(
       items.sort((a, b) => b.totalSparks - a.totalSparks || b.tasksCompleted - a.tasksCompleted);
     }
 
-    const streakMap = await getUserStreakBadgeMapAction();
+    const targetUserIds = items.map((item) => item.userId);
+    const streakMap = await getUserStreakBadgeMapAction(targetUserIds);
     const ranked: LeaderboardUser[] = items.map((item, idx) => ({
       rank: idx + 1,
       ...item,

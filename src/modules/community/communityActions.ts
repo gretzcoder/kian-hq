@@ -150,53 +150,73 @@ export async function getCommunityChannels(): Promise<{
   const workChannels: CommunityChannel[] = [];
   const generalChannels: CommunityChannel[] = [];
   let defaultChannelId: string | null = null;
-
   const allChannelsList: CommunityChannel[] = [];
+
+  // Batch fetch read states & last messages
+  const readsMap = new Map<string, string>();
+  if (session && channels.length > 0) {
+    const { results: reads } = await db
+      .prepare(
+        `SELECT channel_id, last_read_at FROM community_channel_reads WHERE user_id = ?`
+      )
+      .bind(session.userId)
+      .all();
+    for (const r of (reads || []) as any[]) {
+      readsMap.set(r.channel_id, r.last_read_at);
+    }
+  }
+
+  const lastMsgsMap = new Map<string, { message: string; created_at: string }>();
+  const unreadCountsMap = new Map<string, number>();
+
+  if (channels.length > 0) {
+    const chIds = channels.map((c) => c.id);
+    const placeholders = chIds.map(() => '?').join(',');
+
+    // Batch fetch unread counts
+    if (session) {
+      for (const ch of channels) {
+        const lastRead = readsMap.get(ch.id) || '1970-01-01 00:00:00';
+        const countRes = (await db
+          .prepare(
+            `SELECT COUNT(*) as count FROM community_messages
+             WHERE channel_id = ? AND created_at > ?`
+          )
+          .bind(ch.id, lastRead)
+          .first()) as { count: number } | null;
+        unreadCountsMap.set(ch.id, countRes?.count || 0);
+      }
+    }
+
+    // Batch fetch latest message per channel
+    const { results: latestMsgs } = await db
+      .prepare(
+        `SELECT cm.channel_id, cm.message, cm.created_at
+         FROM community_messages cm
+         INNER JOIN (
+           SELECT channel_id, MAX(created_at) as max_created
+           FROM community_messages
+           WHERE channel_id IN (${placeholders})
+           GROUP BY channel_id
+         ) sub ON cm.channel_id = sub.channel_id AND cm.created_at = sub.max_created`
+      )
+      .bind(...chIds)
+      .all();
+
+    for (const lm of (latestMsgs || []) as any[]) {
+      lastMsgsMap.set(lm.channel_id, { message: lm.message, created_at: lm.created_at });
+    }
+  }
 
   for (const ch of channels) {
     if (ch.is_default === 1 && !defaultChannelId) {
       defaultChannelId = ch.id;
     }
 
-    let unreadCount = 0;
-    let lastMessage = '';
-    let lastMessageAt = '';
-
-    if (session) {
-      const readState = (await db
-        .prepare(
-          `SELECT last_read_at FROM community_channel_reads
-           WHERE channel_id = ? AND user_id = ?`
-        )
-        .bind(ch.id, session.userId)
-        .first()) as { last_read_at: string } | null;
-
-      const lastRead = readState?.last_read_at || '1970-01-01 00:00:00';
-
-      const countRes = (await db
-        .prepare(
-          `SELECT COUNT(*) as count FROM community_messages
-           WHERE channel_id = ? AND created_at > ?`
-        )
-        .bind(ch.id, lastRead)
-        .first()) as { count: number } | null;
-
-      unreadCount = countRes?.count || 0;
-    }
-
-    const lastMsgRes = (await db
-      .prepare(
-        `SELECT message, created_at FROM community_messages
-         WHERE channel_id = ?
-         ORDER BY created_at DESC LIMIT 1`
-      )
-      .bind(ch.id)
-      .first()) as { message: string; created_at: string } | null;
-
-    if (lastMsgRes) {
-      lastMessage = lastMsgRes.message;
-      lastMessageAt = lastMsgRes.created_at;
-    }
+    const unreadCount = unreadCountsMap.get(ch.id) || 0;
+    const lastMsgRes = lastMsgsMap.get(ch.id);
+    const lastMessage = lastMsgRes?.message || '';
+    const lastMessageAt = lastMsgRes?.created_at || '';
 
     const item: CommunityChannel = {
       ...ch,
@@ -253,7 +273,6 @@ export async function getCommunityMessages(
 ): Promise<CommunityMessage[]> {
   const session = await getSession();
   const db = await getDB();
-  await ensureCommunityThreadColumns(db);
 
   const msgsRaw = (await db
     .prepare(
@@ -303,6 +322,93 @@ export async function getCommunityMessages(
   }
 
   const rawList = msgsRaw.results || [];
+  if (rawList.length === 0) return [];
+
+  const msgIds = rawList.map((m) => m.id);
+  const parentIds = Array.from(new Set(rawList.map((m) => m.parent_id).filter(Boolean))) as string[];
+  const rootIds = rawList.filter((m) => m.is_thread_root === 1 || m.thread_name).map((m) => m.id);
+
+  // 1. Batch fetch reactions
+  const reactionsMap = new Map<string, Map<string, { count: number; userReacted: boolean }>>();
+  if (msgIds.length > 0) {
+    const placeholders = msgIds.map(() => '?').join(',');
+    const { results: rxResults } = await db
+      .prepare(
+        `SELECT message_id, emoji, user_id FROM community_message_reactions
+         WHERE message_id IN (${placeholders})`
+      )
+      .bind(...msgIds)
+      .all();
+
+    for (const r of (rxResults || []) as any[]) {
+      if (!reactionsMap.has(r.message_id)) reactionsMap.set(r.message_id, new Map());
+      const msgRx = reactionsMap.get(r.message_id)!;
+      const existing = msgRx.get(r.emoji) || { count: 0, userReacted: false };
+      existing.count += 1;
+      if (session && r.user_id === session.userId) existing.userReacted = true;
+      msgRx.set(r.emoji, existing);
+    }
+  }
+
+  // 2. Batch fetch parent replies
+  const parentMap = new Map<string, { id: string; user_name: string; message: string }>();
+  if (parentIds.length > 0) {
+    const placeholders = parentIds.map(() => '?').join(',');
+    const { results: parentResults } = await db
+      .prepare(
+        `SELECT m.id, m.message, u.name as user_name
+         FROM community_messages m
+         LEFT JOIN users u ON m.user_id = u.id
+         WHERE m.id IN (${placeholders})`
+      )
+      .bind(...parentIds)
+      .all();
+
+    for (const p of (parentResults || []) as any[]) {
+      parentMap.set(p.id, {
+        id: p.id,
+        user_name: p.user_name || 'User',
+        message: p.message,
+      });
+    }
+  }
+
+  // 3. Batch fetch thread info
+  const threadInfoMap = new Map<string, CommunityMessage['thread_info']>();
+  if (rootIds.length > 0) {
+    const placeholders = rootIds.map(() => '?').join(',');
+    const { results: threadResults } = await db
+      .prepare(
+        `SELECT m.thread_root_id, m.created_at, m.message, u.name as user_name
+         FROM community_messages m
+         LEFT JOIN users u ON m.user_id = u.id
+         WHERE m.thread_root_id IN (${placeholders})
+         ORDER BY m.created_at DESC`
+      )
+      .bind(...rootIds)
+      .all();
+
+    const grouped = new Map<string, any[]>();
+    for (const tr of (threadResults || []) as any[]) {
+      if (!grouped.has(tr.thread_root_id)) grouped.set(tr.thread_root_id, []);
+      grouped.get(tr.thread_root_id)!.push(tr);
+    }
+
+    for (const [rId, repliesList] of grouped.entries()) {
+      const latest = repliesList[0];
+      threadInfoMap.set(rId, {
+        reply_count: repliesList.length,
+        last_reply_at: latest?.created_at,
+        last_reply_user_name: latest?.user_name || 'Member',
+        last_reply_snippet: latest?.message
+          ? latest.message.length > 45
+            ? latest.message.substring(0, 45) + '...'
+            : latest.message
+          : undefined,
+      });
+    }
+  }
+
   const result: CommunityMessage[] = [];
 
   for (const m of rawList) {
@@ -319,78 +425,17 @@ export async function getCommunityMessages(
       else if (rName.includes('OJT')) roleColor = '#06b6d4';
     }
 
-    const reactionsRaw = (await db
-      .prepare(
-        `SELECT emoji, user_id FROM community_message_reactions
-         WHERE message_id = ?`
-      )
-      .bind(m.id)
-      .all()) as {
-      results: Array<{ emoji: string; user_id: string }>;
-    };
+    const msgRxMap = reactionsMap.get(m.id);
+    const reactions: CommunityReaction[] = msgRxMap
+      ? Array.from(msgRxMap.entries()).map(([emoji, data]) => ({
+          emoji,
+          count: data.count,
+          userReacted: data.userReacted,
+        }))
+      : [];
 
-    const reactionMap = new Map<string, { count: number; userReacted: boolean }>();
-    for (const r of reactionsRaw.results || []) {
-      const existing = reactionMap.get(r.emoji) || { count: 0, userReacted: false };
-      existing.count += 1;
-      if (session && r.user_id === session.userId) {
-        existing.userReacted = true;
-      }
-      reactionMap.set(r.emoji, existing);
-    }
-
-    const reactions: CommunityReaction[] = Array.from(reactionMap.entries()).map(
-      ([emoji, data]) => ({
-        emoji,
-        count: data.count,
-        userReacted: data.userReacted,
-      })
-    );
-
-    let replyTo: CommunityMessage['reply_to'] = undefined;
-    if (m.parent_id) {
-      const parentRaw = (await db
-        .prepare(
-          `SELECT m.id, m.message, u.name as user_name
-           FROM community_messages m
-           LEFT JOIN users u ON m.user_id = u.id
-           WHERE m.id = ?`
-        )
-        .bind(m.parent_id)
-        .first()) as { id: string; message: string; user_name?: string } | null;
-
-      if (parentRaw) {
-        replyTo = {
-          id: parentRaw.id,
-          user_name: parentRaw.user_name || 'User',
-          message: parentRaw.message,
-        };
-      }
-    }
-
-    let threadInfo: CommunityMessage['thread_info'] = undefined;
-    if (m.is_thread_root === 1 || m.thread_name) {
-      const threadRepliesRaw = (await db
-        .prepare(
-          `SELECT m.created_at, m.message, u.name as user_name
-           FROM community_messages m
-           LEFT JOIN users u ON m.user_id = u.id
-           WHERE m.thread_root_id = ?
-           ORDER BY m.created_at DESC`
-        )
-        .bind(m.id)
-        .all()) as { results: Array<{ created_at: string; message: string; user_name?: string }> };
-
-      const repliesList = threadRepliesRaw.results || [];
-      const latest = repliesList[0];
-
-      threadInfo = {
-        reply_count: repliesList.length,
-        last_reply_at: latest?.created_at,
-        last_reply_user_name: latest?.user_name || 'Member',
-        last_reply_snippet: latest?.message ? (latest.message.length > 45 ? latest.message.substring(0, 45) + '...' : latest.message) : undefined,
-      };
-    }
+    const replyTo = m.parent_id ? parentMap.get(m.parent_id) : undefined;
+    const threadInfo = threadInfoMap.get(m.id);
 
     result.push({
       id: m.id,

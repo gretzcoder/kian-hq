@@ -46,31 +46,7 @@ let lastSyncTs = 0;
 
 /** Ensure achievement_history table exists */
 export async function ensureAchievementHistoryTable() {
-  if (tableEnsured) return;
-  try {
-    const db = await getDB();
-    await db.prepare(`
-      CREATE TABLE IF NOT EXISTS achievement_history (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        achievement_type TEXT NOT NULL,
-        title TEXT NOT NULL,
-        period TEXT NOT NULL,
-        rank INTEGER NOT NULL DEFAULT 1,
-        score INTEGER NOT NULL DEFAULT 0,
-        category TEXT NOT NULL DEFAULT 'GENERAL',
-        earned_at INTEGER NOT NULL,
-        created_at INTEGER NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
-    `).run();
-
-    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_achievement_history_user ON achievement_history(user_id)`).run();
-    await db.prepare(`CREATE INDEX IF NOT EXISTS idx_achievement_history_category ON achievement_history(category)`).run();
-    tableEnsured = true;
-  } catch (err) {
-    console.error('ensureAchievementHistoryTable error:', err);
-  }
+  tableEnsured = true;
 }
 
 /** Get Full Achievement History across system or for specific user/category */
@@ -208,16 +184,24 @@ export async function getUserAchievementStatsAction(userId: string) {
 }
 
 /** Get User Active Champion Streak String for Leaderboard (e.g. "🔥 3 Weeks Streak" or "🏆 4x Champion") */
-export async function getUserStreakBadgeMapAction(): Promise<Record<string, string>> {
+export async function getUserStreakBadgeMapAction(userIds?: string[]): Promise<Record<string, string>> {
   try {
-    await ensureAchievementHistoryTable();
-
     const db = await getDB();
-    const { results } = await db.prepare(`
+    let query = `
       SELECT user_id, achievement_type, title, period, earned_at
       FROM achievement_history
-      ORDER BY user_id, earned_at DESC
-    `).all();
+    `;
+    const params: any[] = [];
+
+    if (userIds && userIds.length > 0) {
+      const placeholders = userIds.map(() => '?').join(',');
+      query += ` WHERE user_id IN (${placeholders})`;
+      params.push(...userIds);
+    }
+
+    query += ` ORDER BY user_id, earned_at DESC`;
+
+    const { results } = await db.prepare(query).bind(...params).all();
 
     const userMap: Record<string, string> = {};
     const rows = (results as any[]) || [];
@@ -253,8 +237,8 @@ export async function syncLeaderboardAchievements(force = false) {
   try {
     const nowSec = Math.floor(Date.now() / 1000);
 
-    // Throttle sync to once per 10 minutes unless forced
-    if (!force && lastSyncTs > 0 && nowSec - lastSyncTs < 600) {
+    // Throttle sync to once per 30 minutes unless forced
+    if (!force && lastSyncTs > 0 && nowSec - lastSyncTs < 1800) {
       return;
     }
     lastSyncTs = nowSec;
@@ -298,8 +282,9 @@ export async function syncLeaderboardAchievements(force = false) {
 
     const now = new Date();
 
-    // 1. Monthly periods (Current month + Past 2 months)
-    for (let mOffset = 0; mOffset <= 2; mOffset++) {
+    // 1. Monthly periods (Current month only on auto-sync, past 2 months if forced)
+    const maxMOffset = force ? 2 : 0;
+    for (let mOffset = 0; mOffset <= maxMOffset; mOffset++) {
       const d = new Date(now.getFullYear(), now.getMonth() - mOffset, 15);
       const label = getMonthPeriodLabel(d);
       const { startTs, endTs, earnedTs } = getMonthTimestampRange(d);
@@ -314,8 +299,9 @@ export async function syncLeaderboardAchievements(force = false) {
       }
     }
 
-    // 2. Weekly periods (Current week + Past 4 weeks)
-    for (let wOffset = 0; wOffset <= 4; wOffset++) {
+    // 2. Weekly periods (Current week only on auto-sync, past 4 weeks if forced)
+    const maxWOffset = force ? 4 : 0;
+    for (let wOffset = 0; wOffset <= maxWOffset; wOffset++) {
       const d = new Date(now.getTime() - wOffset * 7 * 24 * 3600 * 1000);
       const label = getWeekPeriodLabel(d);
       const { startTs, endTs, earnedTs } = getWeekTimestampRange(d);

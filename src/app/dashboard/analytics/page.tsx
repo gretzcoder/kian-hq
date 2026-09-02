@@ -509,4 +509,4 @@ export default async function AnalyticsPage() {
 }
 
 export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 60;
