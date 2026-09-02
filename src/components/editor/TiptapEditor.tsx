@@ -608,9 +608,11 @@ export function DocxDocumentViewer({
   roleName?: string;
   badgeText?: string;
 }) {
-  if (!content) return null;
+  if (content === null || content === undefined) return null;
+  const strContent = typeof content === 'string' ? content : String(content);
+  if (!strContent.trim()) return null;
 
-  const contentClean = content
+  const contentClean = strContent
     .replace(/^\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]\s*/i, '')
     .replace(/^\[DIRECT_BRIEF\]\s*/i, '')
     .trim();
