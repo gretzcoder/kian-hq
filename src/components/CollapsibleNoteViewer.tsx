@@ -22,11 +22,9 @@ export function CollapsibleNoteViewer({
 }: CollapsibleNoteViewerProps) {
   const [expanded, setExpanded] = useState(false);
 
-  if (content === null || content === undefined) return null;
-  const strContent = typeof content === 'string' ? content : String(content);
-  if (!strContent.trim()) return null;
+  if (!content || !content.trim()) return null;
 
-  const trimmed = strContent.trim();
+  const trimmed = content.trim();
   const isHtml = trimmed.includes('<');
   const isLong =
     trimmed.length > 180 ||

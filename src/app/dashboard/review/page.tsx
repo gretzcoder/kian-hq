@@ -278,7 +278,7 @@ export default async function ReviewPage() {
               {/* Appreciation / Catatan Improvement Viewer */}
               {r.appreciation_note && (
                 <CollapsibleNoteViewer
-                  content={String(r.appreciation_note)}
+                  content={r.appreciation_note}
                   badgeLabel="✨ Catatan Improvement Mentor"
                   type="APPRECIATION"
                 />
@@ -287,7 +287,7 @@ export default async function ReviewPage() {
               {/* Revision Note Viewer */}
               {r.revision_note && (
                 <CollapsibleNoteViewer
-                  content={String(r.revision_note)}
+                  content={r.revision_note}
                   badgeLabel="💬 Catatan Revisi Evaluator"
                   type="REVISION"
                 />
@@ -301,7 +301,6 @@ export default async function ReviewPage() {
                 isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.task_created_by === session.userId && (r as any).mentor_approved === 0}
                 creatorName={r.creator_name}
                 isStaffOrCoord={isCoordinator}
-                isTaskMentor={Boolean(r.task_created_by === session.userId || (r as any).is_mentor === 1)}
                 mentorApproved={(r as any).mentor_approved ?? 0}
                 coordinatorApproved={(r as any).coordinator_approved ?? 0}
                 isMentorWs={(r as any).workspace_type === 'MENTOR'}

@@ -428,7 +428,7 @@ export async function getRecentConversationsAction(
                 (
                   SELECT COUNT(*)
                   FROM community_messages cm_unread
-                  LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cc.id AND ccr.user_id = ?
+                  LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cm_unread.channel_id AND ccr.user_id = ?
                   WHERE cm_unread.channel_id = cc.id
                     AND cm_unread.user_id != ?
                     AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm_unread.created_at)
@@ -586,6 +586,40 @@ async function ensureDMDeletedForColumn(db: any) {
     if (!existingCols.has('edit_count')) {
       await db.prepare("ALTER TABLE direct_messages ADD COLUMN edit_count INTEGER DEFAULT 0").run();
     }
+  } catch {}
+
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS community_channels (
+        id TEXT PRIMARY KEY,
+        slug TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        description TEXT,
+        category TEXT NOT NULL DEFAULT 'GENERAL',
+        icon TEXT NOT NULL DEFAULT '💬',
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS community_messages (
+        id TEXT PRIMARY KEY,
+        channel_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        message TEXT NOT NULL,
+        attachment_url TEXT,
+        parent_id TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `).run();
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS community_channel_reads (
+        channel_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        last_read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (channel_id, user_id)
+      )
+    `).run();
   } catch {}
 }
 
