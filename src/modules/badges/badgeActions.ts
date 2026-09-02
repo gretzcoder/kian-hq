@@ -22,7 +22,7 @@ let badgeColumnsEnsured = false;
 /**
  * Safely parse date string (YYYY-MM-DD, DD/MM/YYYY, or ISO) to WIB start timestamp (seconds)
  */
-export function parseCutoffTimestamp(dateStr?: string | null): number {
+export async function parseCutoffTimestamp(dateStr?: string | null): Promise<number> {
   if (!dateStr || !dateStr.trim()) return 0;
   const str = dateStr.trim();
   let year: number, month: number, day: number;
