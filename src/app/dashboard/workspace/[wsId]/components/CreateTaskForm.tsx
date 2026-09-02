@@ -24,7 +24,7 @@ export default function CreateTaskForm({
   members = [],
 }: CreateTaskFormProps) {
   const [loading, setLoading] = useState(false);
-  const [outputType, setOutputType] = useState<'DESIGN' | 'VIDEO'>('DESIGN');
+  const [outputType, setOutputType] = useState<'DESIGN' | 'VIDEO' | 'OTHER'>('DESIGN');
   const [isDirectBrief, setIsDirectBrief] = useState(false);
   const [categories, setCategories] = useState<string[]>(['Desain Feed Post 1', 'Desain Feed Post 2']);
   const [priority, setPriority] = useState<'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
@@ -198,16 +198,16 @@ export default function CreateTaskForm({
         </div>
       )}
 
-      {/* Required Output Type Selector (Design vs Video) */}
+      {/* Required Output Type Selector (Design vs Video vs Other) */}
       <div>
         <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-2">
           Jenis Output Karya <span className="text-red-500">*</span>
         </label>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             type="button"
             onClick={() => setOutputType('DESIGN')}
-            className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${outputType === 'DESIGN'
+            className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${outputType === 'DESIGN'
                 ? 'bg-purple-500/10 border-purple-500 text-purple-700 dark:text-purple-300 font-bold ring-2 ring-purple-500/20 shadow-sm'
                 : 'bg-zinc-50/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
               }`}
@@ -222,7 +222,7 @@ export default function CreateTaskForm({
           <button
             type="button"
             onClick={() => setOutputType('VIDEO')}
-            className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all ${outputType === 'VIDEO'
+            className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${outputType === 'VIDEO'
                 ? 'bg-pink-500/10 border-pink-500 text-pink-700 dark:text-pink-300 font-bold ring-2 ring-pink-500/20 shadow-sm'
                 : 'bg-zinc-50/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
               }`}
@@ -231,6 +231,21 @@ export default function CreateTaskForm({
             <div>
               <p className="text-xs font-extrabold">Video Task</p>
               <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">Reels, TikTok, Shorts, Longform</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setOutputType('OTHER')}
+            className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${outputType === 'OTHER'
+                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-300 font-bold ring-2 ring-emerald-500/20 shadow-sm'
+                : 'bg-zinc-50/50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+              }`}
+          >
+            <span className="text-2xl">📌</span>
+            <div>
+              <p className="text-xs font-extrabold">Other Task</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">Dokumen, Copywriting, Admin, Dll</p>
             </div>
           </button>
         </div>
@@ -387,7 +402,7 @@ export default function CreateTaskForm({
         disabled={loading}
         className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold py-3.5 rounded-xl transition-all duration-300 shadow-[0_4px_16px_rgba(147,51,234,0.15)] hover:shadow-[0_4px_20px_rgba(147,51,234,0.25)] active:scale-[0.98] disabled:opacity-60"
       >
-        {loading ? 'Membuat Tugas...' : `Buat Tugas (${outputType === 'DESIGN' ? '🎨 Design' : '🎬 Video'})`}
+        {loading ? 'Membuat Tugas...' : `Buat Tugas (${outputType === 'DESIGN' ? '🎨 Design' : outputType === 'VIDEO' ? '🎬 Video' : '📌 Other'})`}
       </button>
     </form>
   );

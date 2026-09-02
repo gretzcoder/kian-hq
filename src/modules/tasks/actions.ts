@@ -115,8 +115,8 @@ export async function createTask(workspaceId: string, formData: FormData) {
     return { success: false, error: 'Tenggat waktu (Deadline) wajib diisi.' };
   }
 
-  if (!['DESIGN', 'VIDEO'].includes(outputType)) {
-    return { success: false, error: 'Jenis output karya wajib dipilih (Design atau Video).' };
+  if (!['DESIGN', 'VIDEO', 'OTHER'].includes(outputType)) {
+    return { success: false, error: 'Jenis output karya wajib dipilih (Design, Video, atau Other).' };
   }
 
   const isDirectBrief = (formData.get('isDirectBrief') as string) === 'true' || (formData.get('briefSource') as string) === 'DIRECT_COORDINATOR';
@@ -173,9 +173,11 @@ export async function createTask(workspaceId: string, formData: FormData) {
       )
       .run();
 
-    const defaultRole = outputType === 'VIDEO' ? 'VIDEO_EDITOR' : 'DESIGNER';
+    const defaultRole = outputType === 'VIDEO' ? 'VIDEO_EDITOR' : outputType === 'OTHER' ? 'CREATOR' : 'DESIGNER';
     const stepRoles = outputType === 'VIDEO'
       ? ['RESEARCHER', 'PLANNER', 'VIDEO_EDITOR']
+      : outputType === 'OTHER'
+      ? ['RESEARCHER', 'PLANNER', 'CREATOR']
       : ['RESEARCHER', 'PLANNER', 'DESIGNER'];
 
     if (assigneeUserId && assigneeUserId.trim()) {
@@ -755,7 +757,7 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const roleValue = selectedCategory && selectedCategory.trim() ? selectedCategory.trim() : (task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : 'DESIGNER');
+  const roleValue = selectedCategory && selectedCategory.trim() ? selectedCategory.trim() : (task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : task.task_type === 'OTHER' ? 'CREATOR' : 'DESIGNER');
 
   if (!assignment) {
     const newId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;

@@ -447,10 +447,13 @@ export default function TaskActions({
 
   // Render OJT rundown flow
   const renderOJTRundown = () => {
-    // Filter steps strictly based on task_type (DESIGN vs VIDEO)
+    // Filter steps strictly based on task_type (DESIGN vs VIDEO vs OTHER)
     const isVideoTask = taskType === 'VIDEO';
+    const isOtherTask = taskType === 'OTHER';
     const allowedStepRoles = isVideoTask
       ? ['RESEARCHER', 'PLANNER', 'VIDEO_EDITOR']
+      : isOtherTask
+      ? ['RESEARCHER', 'PLANNER', 'CREATOR']
       : ['RESEARCHER', 'PLANNER', 'DESIGNER'];
 
     const steps = [

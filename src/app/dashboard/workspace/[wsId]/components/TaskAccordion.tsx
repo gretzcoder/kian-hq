@@ -390,13 +390,15 @@ export default function TaskAccordion({
                     <span className={`text-[9px] font-black uppercase tracking-widest ${pCfg.color}`}>
                       {pCfg.label}
                     </span>
-                    {/* Output Type Badge (Design vs Video) */}
+                    {/* Output Type Badge (Design vs Video vs Other) */}
                     <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border flex items-center gap-1 ${
                       task.task_type === 'VIDEO'
                         ? 'text-pink-600 dark:text-pink-400 bg-pink-500/10 border-pink-500/20'
+                        : task.task_type === 'OTHER'
+                        ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
                         : 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20'
                     }`}>
-                      {task.task_type === 'VIDEO' ? '🎬 Video Task' : '🎨 Design Task'}
+                      {task.task_type === 'VIDEO' ? '🎬 Video Task' : task.task_type === 'OTHER' ? '📌 Other Task' : '🎨 Design Task'}
                     </span>
                     {(task.task_type === 'DIRECT_BRIEF' || (task.description && task.description.includes('[DIRECT_BRIEF]'))) && (
                       <span className="text-[9px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
