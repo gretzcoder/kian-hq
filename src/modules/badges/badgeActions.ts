@@ -20,6 +20,81 @@ import {
 let badgeColumnsEnsured = false;
 
 /**
+ * Safely parse date string (YYYY-MM-DD, DD/MM/YYYY, or ISO) to WIB start timestamp (seconds)
+ */
+export function parseCutoffTimestamp(dateStr?: string | null): number {
+  if (!dateStr || !dateStr.trim()) return 0;
+  const str = dateStr.trim();
+  let year: number, month: number, day: number;
+
+  if (str.includes('/')) {
+    const parts = str.split('/');
+    if (parts[0].length === 4) {
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      day = parseInt(parts[2], 10);
+    } else {
+      day = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      year = parseInt(parts[2], 10);
+    }
+  } else if (str.includes('-')) {
+    const parts = str.split('-');
+    if (parts[0].length === 4) {
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      day = parseInt(parts[2], 10);
+    } else {
+      day = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      year = parseInt(parts[2], 10);
+    }
+  } else {
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? 0 : Math.floor(d.getTime() / 1000);
+  }
+
+  if (isNaN(year) || isNaN(month) || isNaN(day)) return 0;
+  const utcMs = Date.UTC(year, month, day, 0, 0, 0) - 7 * 3600 * 1000;
+  return Math.floor(utcMs / 1000);
+}
+
+/**
+ * Filter achievements for a badge condition considering cutoff date, rank 1 requirement, and closed periods
+ */
+function filterAchievementsForCondition(achievements: any[], cond: any, nowSec: number): any[] {
+  const catKey = cond.category;
+  const periodType = cond.periodType || 'ANY';
+
+  return achievements.filter((a) => {
+    // 1. Must be a completed/earned achievement up to now (earned_at <= nowSec)
+    const itemEarnedSec = typeof a.earned_at === 'number' && a.earned_at > 10000000000
+      ? Math.floor(a.earned_at / 1000)
+      : Number(a.earned_at) || 0;
+    if (itemEarnedSec > nowSec) return false;
+
+    // 2. Category check
+    if (catKey !== 'ALL' && a.category !== catKey) return false;
+
+    // 3. Rank check: for CHAMPION or specific title requirement, must be rank 1 unless maxRank specified
+    const maxRankAllowed = typeof cond.maxRank === 'number' ? cond.maxRank : 1;
+    if (typeof a.rank === 'number' && a.rank > maxRankAllowed) return false;
+
+    // 4. Period type check (WEEKLY vs MONTHLY)
+    if (periodType === 'WEEKLY' && !a.period.toLowerCase().includes('week')) return false;
+    if (periodType === 'MONTHLY' && a.period.toLowerCase().includes('week')) return false;
+
+    // 5. Cutoff date check
+    if (cond.startDate) {
+      const startTs = parseCutoffTimestamp(cond.startDate);
+      if (startTs > 0 && itemEarnedSec < startTs) return false;
+    }
+
+    return true;
+  });
+}
+
+/**
  * Global Evaluator: Auto-awards badges to users who satisfy task/workspace/achievement requirements
  */
 export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise<number> {
@@ -216,21 +291,8 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
           let minSatisfiedSets = Infinity;
 
           for (const cond of conditions) {
-            const catKey = cond.category;
-            const periodType = cond.periodType || 'ANY';
             const conditionType = cond.conditionType || 'COUNT';
-
-            const filtered = achievements.filter((a) => {
-              if (catKey !== 'ALL' && a.category !== catKey) return false;
-              if (periodType === 'WEEKLY' && !a.period.toLowerCase().includes('week')) return false;
-              if (periodType === 'MONTHLY' && a.period.toLowerCase().includes('week')) return false;
-              if (cond.startDate) {
-                const startTs = Math.floor(new Date(`${cond.startDate}T00:00:00Z`).getTime() / 1000);
-                const itemEarnedSec = typeof a.earned_at === 'number' && a.earned_at > 10000000000 ? Math.floor(a.earned_at / 1000) : Number(a.earned_at);
-                if (itemEarnedSec < startTs) return false;
-              }
-              return true;
-            });
+            const filtered = filterAchievementsForCondition(achievements, cond, Math.floor(now / 1000));
 
             if (conditionType === 'COUNT') {
               const totalCount = filtered.length;
@@ -249,6 +311,12 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
           }
 
           if (minSatisfiedSets === Infinity || minSatisfiedSets < 1) {
+            // Revoke unearned badge grants if previously auto-awarded in error
+            if (existingUB) {
+              await db.prepare("DELETE FROM user_badges WHERE id = ? AND (awarded_by = 'SYSTEM_AUTO' OR awarded_by IS NULL)").bind(existingUB.id).run();
+              await db.prepare("DELETE FROM sparks_adjustments WHERE user_id = ? AND badge_id = ? AND category = 'BADGE_REWARD'").bind(userId, badgeId).run();
+              userBadgeInfoMap.delete(key);
+            }
             continue;
           }
 
@@ -614,17 +682,8 @@ export async function getAllBadgesWithUserProgress(): Promise<{
           const periodName = cond.periodType === 'WEEKLY' ? 'Weekly' : cond.periodType === 'MONTHLY' ? 'Monthly' : 'Semua Periode';
           const dateNotice = cond.startDate ? ` [Cutoff: ≥ ${cond.startDate}]` : '';
 
-          const filteredMyAch = myAchievements.filter((a) => {
-            if (cond.category !== 'ALL' && a.category !== cond.category) return false;
-            if (cond.periodType === 'WEEKLY' && !a.period.toLowerCase().includes('week')) return false;
-            if (cond.periodType === 'MONTHLY' && a.period.toLowerCase().includes('week')) return false;
-            if (cond.startDate) {
-              const startTs = Math.floor(new Date(`${cond.startDate}T00:00:00Z`).getTime() / 1000);
-              const itemEarnedSec = typeof a.earned_at === 'number' && a.earned_at > 10000000000 ? Math.floor(a.earned_at / 1000) : Number(a.earned_at);
-              if (itemEarnedSec < startTs) return false;
-            }
-            return true;
-          });
+          const nowSec = Math.floor(Date.now() / 1000);
+          const filteredMyAch = filterAchievementsForCondition(myAchievements, cond, nowSec);
 
           let currentVal = 0;
           if (cond.conditionType === 'COUNT') {
