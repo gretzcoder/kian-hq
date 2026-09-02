@@ -131,7 +131,7 @@ export function SparksMultiplierFloatingBadge() {
                 <span>📌 Custom Task Event Multipliers:</span>
                 <span>{data.customTaskMultipliersCount} task(s)</span>
               </div>
-              {data.activeMultiplierTasks.slice(0, 2).map((t) => (
+              {data.activeMultiplierTasks.slice(0, 5).map((t) => (
                 <div key={t.id} className="flex items-center justify-between text-[10px] text-zinc-300 truncate gap-1">
                   <span className="truncate">• {t.title}</span>
                   <span className="font-bold text-amber-400 font-mono shrink-0">{t.multiplier}x</span>

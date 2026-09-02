@@ -43,17 +43,33 @@ export async function getSparksMultipliersData(): Promise<SparksMultipliersState
     if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
   }
 
-  // Fetch tasks with custom multipliers (> 1.0)
+  const nowMs = Date.now();
+  const nowSec = Math.floor(nowMs / 1000);
+
+  // Fetch tasks with custom multipliers (> 1.0) that are active and not expired / completed
   const { results: taskRows } = await db
-    .prepare("SELECT id, title, task_type, sparks_multiplier FROM tasks WHERE sparks_multiplier > 1.0 AND status != 'DELETED'")
+    .prepare(`
+      SELECT id, title, task_type, sparks_multiplier, deadline, extended_deadline, status
+      FROM tasks
+      WHERE sparks_multiplier > 1.0
+        AND status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED', 'DELETED')
+    `)
     .all();
 
-  const activeMultiplierTasks = ((taskRows || []) as any[]).map((t) => ({
-    id: t.id,
-    title: t.title,
-    outputType: t.task_type || 'GENERAL',
-    multiplier: Number(t.sparks_multiplier) || 1.0,
-  }));
+  const activeMultiplierTasks = ((taskRows || []) as any[])
+    .filter((t) => {
+      const activeDeadline = Math.max(Number(t.extended_deadline) || 0, Number(t.deadline) || 0);
+      if (!activeDeadline) return true; // No deadline means ongoing/active
+      const isMs = activeDeadline > 10000000000;
+      const now = isMs ? nowMs : nowSec;
+      return activeDeadline >= now;
+    })
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      outputType: t.task_type || 'GENERAL',
+      multiplier: Number(t.sparks_multiplier) || 1.0,
+    }));
 
   return {
     designMultiplier,
