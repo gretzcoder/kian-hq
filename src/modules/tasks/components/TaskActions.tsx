@@ -598,7 +598,7 @@ export default function TaskActions({
                   <div className="flex items-center gap-1.5 flex-wrap shrink-0">
                     {primaryAssign?.sparks !== undefined && primaryAssign.sparks > 0 && (
                       <span className="text-[10px] font-black bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                        <span>✨</span> {primaryAssign.sparks} Sparks
+                        <span>✨</span> {primaryAssign.sparks} Sparks {taskType === 'OTHER' ? '(Apresiasi)' : ''}
                       </span>
                     )}
                     {primaryAssign && getDeadlineBadge(Math.max(taskExtendedDeadline || 0, taskDeadline || 0, primaryAssign.deadline || 0) || null, isApproved ?? false)}

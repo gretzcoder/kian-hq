@@ -78,6 +78,7 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
     .all();
 
   let taskSparks = 0;
+  let taskAppreciationSparks = 0;
   let tasksCompleted = 0;
   let assessmentSparks = 0;
   let assessmentsCount = 0;
@@ -98,6 +99,17 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
   for (const r of taRows as any[]) {
     tasksCompleted += 1;
     const raw = Number(r.sparks) || 8;
+
+    if (r.task_type === 'OTHER') {
+      // For OTHER category tasks, score/points awarded are treated as APPRECIATION sparks
+      taskAppreciationSparks += raw;
+      appreciationSparks += raw;
+      appreciationCount += 1;
+      const roleKey = r.role || 'CREATOR';
+      roleSparksMap[roleKey] = (roleSparksMap[roleKey] || 0) + raw;
+      continue;
+    }
+
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
     const isDesign = r.role === 'DESIGNER' || r.task_type === 'DESIGN' || (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN'));
     const isVideo = r.role === 'VIDEO_EDITOR' || r.task_type === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
@@ -138,7 +150,7 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
     }
   }
 
-  const rawTotal = taskSparks + assessmentSparks + netAdjustments;
+  const rawTotal = taskSparks + assessmentSparks + taskAppreciationSparks + netAdjustments;
   const totalSparks = Math.max(0, rawTotal);
 
   return {

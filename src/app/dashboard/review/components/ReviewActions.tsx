@@ -382,7 +382,7 @@ export default function ReviewActions({
             <>
               <div className="flex items-center justify-between">
                 <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
-                  ✨ Berikan Creative Sparks (1 - 10)
+                  {taskType === 'OTHER' ? '✨ Berikan Sparks Apresiasi (1 - 10)' : '✨ Berikan Creative Sparks (1 - 10)'}
                 </label>
                 <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${currentSparkMeta.color}`}>
                   {currentSparkMeta.emoji} {currentSparkMeta.label} ({sparks}/10)
@@ -437,7 +437,7 @@ export default function ReviewActions({
               disabled={loading}
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all shadow-md shadow-emerald-500/20 active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5"
             >
-              {loading ? 'Menyimpan...' : isAssessmentMentorStep ? '✓ ACC Mentor & Kirim Catatan Improvement' : canAwardBadge ? `Kirim ${sparks} ✨ & Setujui` : '✓ ACC & Kirim Catatan Improvement'}
+              {loading ? 'Menyimpan...' : isAssessmentMentorStep ? '✓ ACC Mentor & Kirim Catatan Improvement' : canAwardBadge ? (taskType === 'OTHER' ? `Kirim ${sparks} ✨ Apresiasi & Setujui` : `Kirim ${sparks} ✨ & Setujui`) : '✓ ACC & Kirim Catatan Improvement'}
             </button>
           </div>
         </div>
