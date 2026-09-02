@@ -121,36 +121,57 @@ export async function getLeaderboardData(
     | 'role_researcher'
     | 'role_leader',
   period: 'month' | 'week' | 'all' = 'week',
-  group: 'troopers' | 'mentor' = 'troopers'
+  group: 'troopers' | 'mentor' = 'troopers',
+  customDateRange?: { startTs: number; endTs?: number }
 ) {
   const db = await getDB();
   const session = await getSession();
   const currentUserId = session?.userId || '';
 
-  const periodStartTs = await getLeaderboardPeriodStartTimestamp(period);
+  let periodStartTs = 0;
+  let periodEndTs = 0;
+
+  if (customDateRange) {
+    periodStartTs = customDateRange.startTs;
+    periodEndTs = customDateRange.endTs || 0;
+  } else {
+    periodStartTs = await getLeaderboardPeriodStartTimestamp(period);
+  }
 
   /** Build a WHERE time-range fragment for a given table alias. */
   const buildTimeClause = (alias: string): string => {
+    let clause = '';
     if (periodStartTs > 0) {
-      return `AND COALESCE(${alias}.reviewed_at, ${alias}.submitted_at) >= ${periodStartTs}`;
+      clause += ` AND COALESCE(${alias}.reviewed_at, ${alias}.submitted_at) >= ${periodStartTs}`;
     }
-    return '';
+    if (periodEndTs > 0) {
+      clause += ` AND COALESCE(${alias}.reviewed_at, ${alias}.submitted_at) <= ${periodEndTs}`;
+    }
+    return clause;
   };
 
   /** Build a WHERE time-range fragment for tasks table. */
   const buildTaskTimeClause = (alias: string): string => {
+    let clause = '';
     if (periodStartTs > 0) {
-      return `AND COALESCE(${alias}.start_at, ${alias}.created_at) >= ${periodStartTs}`;
+      clause += ` AND COALESCE(${alias}.start_at, ${alias}.created_at) >= ${periodStartTs}`;
     }
-    return '';
+    if (periodEndTs > 0) {
+      clause += ` AND COALESCE(${alias}.start_at, ${alias}.created_at) <= ${periodEndTs}`;
+    }
+    return clause;
   };
 
   /** Build a WHERE time-range fragment for sparks_adjustments table. */
   const buildAdjustmentTimeClause = (alias: string): string => {
+    let clause = '';
     if (periodStartTs > 0) {
-      return `AND ${alias}.created_at >= ${periodStartTs}`;
+      clause += ` AND ${alias}.created_at >= ${periodStartTs}`;
     }
-    return '';
+    if (periodEndTs > 0) {
+      clause += ` AND ${alias}.created_at <= ${periodEndTs}`;
+    }
+    return clause;
   };
 
   const timeClause = buildTimeClause('ta');

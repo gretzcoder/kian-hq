@@ -8,6 +8,8 @@ import {
   getMonthPeriodLabel,
   getWeeklySaturdayTimestamp,
   getMonthlyLastDayTimestamp,
+  getMonthTimestampRange,
+  getWeekTimestampRange,
 } from './utils';
 import { getLeaderboardData } from '@/modules/leaderboard/actions';
 
@@ -263,11 +265,6 @@ export async function syncLeaderboardAchievements(force = false) {
       await db.prepare('DELETE FROM achievement_history WHERE earned_at > ?').bind(nowSec).run();
     } catch {}
 
-    const weekLabel = getWeekPeriodLabel();
-    const saturdayTs = getWeeklySaturdayTimestamp();
-    const monthLabel = getMonthPeriodLabel();
-    const monthlyTs = getMonthlyLastDayTimestamp();
-
     const leaderboardCategories: Array<{
       id:
         | 'overall'
@@ -291,19 +288,60 @@ export async function syncLeaderboardAchievements(force = false) {
       { id: 'role_researcher', categoryKey: 'RESEARCHER', labelName: 'Researcher' },
     ];
 
-    const periods: Array<{ periodType: 'week' | 'month'; periodLabel: string; earnedTs: number }> = [
-      { periodType: 'week', periodLabel: weekLabel, earnedTs: saturdayTs },
-      { periodType: 'month', periodLabel: monthLabel, earnedTs: monthlyTs },
-    ];
+    const periodsToSync: Array<{
+      periodType: 'week' | 'month';
+      periodLabel: string;
+      earnedTs: number;
+      startTs: number;
+      endTs: number;
+    }> = [];
+
+    const now = new Date();
+
+    // 1. Monthly periods (Current month + Past 2 months)
+    for (let mOffset = 0; mOffset <= 2; mOffset++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - mOffset, 15);
+      const label = getMonthPeriodLabel(d);
+      const { startTs, endTs, earnedTs } = getMonthTimestampRange(d);
+      if (!periodsToSync.some((p) => p.periodLabel === label)) {
+        periodsToSync.push({
+          periodType: 'month',
+          periodLabel: label,
+          earnedTs,
+          startTs,
+          endTs,
+        });
+      }
+    }
+
+    // 2. Weekly periods (Current week + Past 4 weeks)
+    for (let wOffset = 0; wOffset <= 4; wOffset++) {
+      const d = new Date(now.getTime() - wOffset * 7 * 24 * 3600 * 1000);
+      const label = getWeekPeriodLabel(d);
+      const { startTs, endTs, earnedTs } = getWeekTimestampRange(d);
+      if (!periodsToSync.some((p) => p.periodLabel === label)) {
+        periodsToSync.push({
+          periodType: 'week',
+          periodLabel: label,
+          earnedTs,
+          startTs,
+          endTs,
+        });
+      }
+    }
 
     const groups: Array<'troopers' | 'mentor'> = ['troopers', 'mentor'];
 
-    for (const p of periods) {
+    for (const p of periodsToSync) {
       if (p.earnedTs > nowSec) continue; // Skip unclosed ongoing periods
+
       for (const cat of leaderboardCategories) {
         for (const grp of groups) {
           try {
-            const lbResult = await getLeaderboardData(cat.id, p.periodType, grp);
+            const lbResult = await getLeaderboardData(cat.id, p.periodType, grp, {
+              startTs: p.startTs,
+              endTs: p.endTs,
+            });
             const topItems = (lbResult.data || []).slice(0, 3);
 
             for (let i = 0; i < topItems.length; i++) {
@@ -389,10 +427,10 @@ async function seedPastAchievementHistory(db: any) {
   try {
     const { count } = (await db.prepare(`
       SELECT COUNT(*) as count FROM achievement_history
-      WHERE period LIKE 'Week 1%' OR period LIKE 'Week 2%' OR period LIKE 'Week 3%' OR period LIKE '%2026' AND period NOT LIKE 'Week 4%'
+      WHERE period = 'Aug 2026'
     `).first()) as any || { count: 0 };
 
-    if (count > 5) return; // Past history already exists
+    if (count > 0) return; // August history already exists
 
     // Fetch active users to generate realistic past achievements
     const { results: users } = await db.prepare(`
@@ -407,9 +445,11 @@ async function seedPastAchievementHistory(db: any) {
     if (!users || users.length === 0) return;
 
     const pastPeriods = [
+      { label: 'Week 4 Aug 2026', earnedAt: Math.floor(new Date('2026-08-29T12:00:00Z').getTime() / 1000), isWeekly: true },
       { label: 'Week 3 Aug 2026', earnedAt: Math.floor(new Date('2026-08-22T12:00:00Z').getTime() / 1000), isWeekly: true },
       { label: 'Week 2 Aug 2026', earnedAt: Math.floor(new Date('2026-08-15T12:00:00Z').getTime() / 1000), isWeekly: true },
       { label: 'Week 1 Aug 2026', earnedAt: Math.floor(new Date('2026-08-08T12:00:00Z').getTime() / 1000), isWeekly: true },
+      { label: 'Aug 2026', earnedAt: Math.floor(new Date('2026-08-31T12:00:00Z').getTime() / 1000), isWeekly: false },
       { label: 'Jul 2026', earnedAt: Math.floor(new Date('2026-07-31T12:00:00Z').getTime() / 1000), isWeekly: false },
     ];
 

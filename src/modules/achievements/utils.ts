@@ -171,3 +171,31 @@ export function getMonthlyLastDayTimestamp(d = new Date()): number {
   const date = new Date(Date.UTC(year, month, lastDay, 12, 0, 0));
   return Math.floor(date.getTime() / 1000);
 }
+
+/** Get WIB start, end, and earned timestamps for a given month date */
+export function getMonthTimestampRange(d = new Date()): { startTs: number; endTs: number; earnedTs: number } {
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const startTs = Math.floor((Date.UTC(year, month, 1, 0, 0, 0) - 7 * 3600 * 1000) / 1000);
+  const endTs = Math.floor((Date.UTC(year, month + 1, 1, 0, 0, 0) - 7 * 3600 * 1000) / 1000) - 1;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const earnedTs = Math.floor(Date.UTC(year, month, lastDay, 12, 0, 0) / 1000);
+  return { startTs, endTs, earnedTs };
+}
+
+/** Get WIB start, end, and earned timestamps for a given week date */
+export function getWeekTimestampRange(d = new Date()): { startTs: number; endTs: number; earnedTs: number } {
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const dayOfMonth = d.getDate();
+  const weekNum = Math.min(4, Math.ceil(dayOfMonth / 7));
+
+  const startDay = (weekNum - 1) * 7 + 1;
+  const endDay = weekNum === 4 ? new Date(year, month + 1, 0).getDate() : weekNum * 7;
+
+  const startTs = Math.floor((Date.UTC(year, month, startDay, 0, 0, 0) - 7 * 3600 * 1000) / 1000);
+  const endTs = Math.floor((Date.UTC(year, month, endDay, 23, 59, 59) - 7 * 3600 * 1000) / 1000);
+  const earnedTs = getWeeklySaturdayTimestamp(d);
+
+  return { startTs, endTs, earnedTs };
+}
