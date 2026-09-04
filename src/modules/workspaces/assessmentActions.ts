@@ -391,49 +391,46 @@ export async function approveAssessmentTask(
       .bind(taskId)
       .all();
 
-    if (existingAssignments && existingAssignments.length > 0) {
-      await db
-        .prepare("UPDATE task_assignments SET status = 'ASSIGNED', start_at = ? WHERE task_id = ? AND result_url IS NULL")
-        .bind(updatedStartAt, taskId)
-        .run();
-    } else {
-      // Mass-assign to all Trooper / OJT members
-      const { results: ojtMembers } = await db
-        .prepare(`
-          SELECT DISTINCT u.id AS user_id
-          FROM users u
-          JOIN workspace_members wm ON u.id = wm.user_id
-          WHERE wm.workspace_id = ?
-            AND wm.team_role != 'LEADER'
-            AND (u.user_type IS NULL OR u.user_type != 'STAFF')
-            AND u.status = 'ACTIVE'
-            AND u.id NOT IN (
-              SELECT ur.user_id
-              FROM user_roles ur
-              JOIN roles r ON ur.role_id = r.id
-              WHERE r.id IN ('role_mentor_troopers', 'role_mentor')
-                 OR UPPER(r.name) LIKE '%MENTOR%'
-            )
-            AND u.id NOT IN (
-              SELECT ojt_coordinator_id
-              FROM workspaces
-              WHERE id = ? AND ojt_coordinator_id IS NOT NULL
-            )
-        `)
-        .bind(workspaceId, workspaceId)
-        .all();
+    await db
+      .prepare("UPDATE task_assignments SET status = 'ASSIGNED', start_at = ? WHERE task_id = ? AND result_url IS NULL")
+      .bind(updatedStartAt, taskId)
+      .run();
 
-      for (const m of ojtMembers as { user_id: string }[]) {
-        const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-        await db
-          .prepare(`
-            INSERT OR IGNORE INTO task_assignments
-              (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
-            VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-          `)
-          .bind(assignId, taskId, m.user_id, execType, session.userId, task.deadline, updatedStartAt)
-          .run();
-      }
+    // Mass-assign to all Trooper / OJT members who don't have an assignment yet
+    const { results: ojtMembers } = await db
+      .prepare(`
+        SELECT DISTINCT u.id AS user_id
+        FROM users u
+        JOIN workspace_members wm ON u.id = wm.user_id
+        WHERE wm.workspace_id = ?
+          AND (u.user_type IS NULL OR u.user_type != 'STAFF')
+          AND u.status = 'ACTIVE'
+          AND u.id NOT IN (
+            SELECT ur.user_id
+            FROM user_roles ur
+            JOIN roles r ON ur.role_id = r.id
+            WHERE r.id IN ('role_mentor_troopers', 'role_mentor')
+               OR UPPER(r.name) LIKE '%MENTOR%'
+          )
+          AND u.id NOT IN (
+            SELECT ojt_coordinator_id
+            FROM workspaces
+            WHERE id = ? AND ojt_coordinator_id IS NOT NULL
+          )
+      `)
+      .bind(workspaceId, workspaceId)
+      .all();
+
+    for (const m of ojtMembers as { user_id: string }[]) {
+      const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+      await db
+        .prepare(`
+          INSERT OR IGNORE INTO task_assignments
+            (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+          VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+        `)
+        .bind(assignId, taskId, m.user_id, execType, session.userId, task.deadline, updatedStartAt)
+        .run();
     }
 
     await logWorkflowEvent({
@@ -1226,6 +1223,54 @@ export async function repairAssessmentTaskStatuses(db: any, workspaceId?: string
              OR coordinator_approved = 1
         )
     `).bind(...params).run();
+
+    // Auto-heal missing task assignments for approved assessment tasks
+    const wsCondition = workspaceId ? 'AND t.workspace_id = ?' : '';
+    const wsParams = workspaceId ? [workspaceId] : [];
+    const { results: approvedTasks } = await db.prepare(`
+      SELECT t.id, t.workspace_id, t.exec_type, t.created_by, t.deadline, t.start_at
+      FROM tasks t
+      WHERE (t.task_type = 'ASSESSMENT' OR EXISTS (SELECT 1 FROM workspaces w WHERE w.id = t.workspace_id AND w.workspace_type = 'ASSESSMENT'))
+        AND t.status = 'APPROVED'
+        ${wsCondition}
+    `).bind(...wsParams).all();
+
+    if (approvedTasks && approvedTasks.length > 0) {
+      for (const t of approvedTasks as any[]) {
+        const { results: missingMembers } = await db.prepare(`
+          SELECT DISTINCT u.id AS user_id
+          FROM users u
+          JOIN workspace_members wm ON u.id = wm.user_id
+          WHERE wm.workspace_id = ?
+            AND (u.user_type IS NULL OR u.user_type != 'STAFF')
+            AND u.status = 'ACTIVE'
+            AND u.id NOT IN (
+              SELECT ur.user_id
+              FROM user_roles ur
+              JOIN roles r ON ur.role_id = r.id
+              WHERE r.id IN ('role_mentor_troopers', 'role_mentor')
+                 OR UPPER(r.name) LIKE '%MENTOR%'
+            )
+            AND u.id NOT IN (
+              SELECT ojt_coordinator_id
+              FROM workspaces
+              WHERE id = ? AND ojt_coordinator_id IS NOT NULL
+            )
+            AND u.id NOT IN (
+              SELECT user_id FROM task_assignments WHERE task_id = ?
+            )
+        `).bind(t.workspace_id, t.workspace_id, t.id).all();
+
+        for (const m of (missingMembers || []) as { user_id: string }[]) {
+          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+          await db.prepare(`
+            INSERT OR IGNORE INTO task_assignments
+              (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+            VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+          `).bind(assignId, t.id, m.user_id, t.exec_type || 'DESIGNER', t.created_by, t.deadline, t.start_at).run();
+        }
+      }
+    }
   } catch (err) {
     console.error('repairAssessmentTaskStatuses error:', err);
   }

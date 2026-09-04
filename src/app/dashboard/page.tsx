@@ -132,6 +132,11 @@ export default async function DashboardPage() {
         LEFT JOIN users u_creator ON t.created_by = u_creator.id
         WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
           AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+          AND (
+            ((t.task_type = 'ASSESSMENT' OR ws.workspace_type = 'ASSESSMENT') AND t.status = 'APPROVED')
+            OR
+            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'DRAFT', 'BRIEF_PENDING', 'WAITING_REVIEW'))
+          )
         ORDER BY ta.submitted_at ASC, t.deadline ASC
         LIMIT 150
       `).all(),
@@ -212,6 +217,11 @@ export default async function DashboardPage() {
         WHERE (ta.user_id = ? OR t.created_by = ?)
           AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
           AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+          AND (
+            ((t.task_type = 'ASSESSMENT' OR ws.workspace_type = 'ASSESSMENT') AND t.status = 'APPROVED')
+            OR
+            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'DRAFT', 'BRIEF_PENDING', 'WAITING_REVIEW'))
+          )
         ORDER BY t.deadline ASC
         LIMIT 30
       `).bind(session.userId, session.userId).all(),
@@ -246,6 +256,11 @@ export default async function DashboardPage() {
         WHERE (t.created_by = ? OR ws.created_by = ?) AND ta.user_id != ?
           AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
           AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+          AND (
+            ((t.task_type = 'ASSESSMENT' OR ws.workspace_type = 'ASSESSMENT') AND t.status = 'APPROVED')
+            OR
+            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'DRAFT', 'BRIEF_PENDING', 'WAITING_REVIEW'))
+          )
         ORDER BY t.deadline ASC
         LIMIT 50
       `).bind(session.userId, session.userId, session.userId).all(),
@@ -320,6 +335,11 @@ export default async function DashboardPage() {
         LEFT JOIN users u_creator ON t.created_by = u_creator.id
         WHERE ta.user_id = ? AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
           AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+          AND (
+            ((t.task_type = 'ASSESSMENT' OR ws.workspace_type = 'ASSESSMENT') AND t.status = 'APPROVED')
+            OR
+            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'DRAFT', 'BRIEF_PENDING', 'WAITING_REVIEW'))
+          )
         ORDER BY t.deadline ASC
         LIMIT 25
       `).bind(session.userId).all(),

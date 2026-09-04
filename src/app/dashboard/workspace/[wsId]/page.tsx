@@ -212,10 +212,10 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const tasks = isManagerUser
     ? allTasks
     : allTasks.filter((t) => {
-      if (t.start_at && t.start_at > now) return false;
       if (t.task_type === 'ASSESSMENT' || workspace.workspace_type === 'ASSESSMENT') {
         return t.status === 'APPROVED';
       }
+      if (t.start_at && t.start_at > now) return false;
       return true;
     });
 
