@@ -1,6 +1,7 @@
 'use server';
 
 import { getSession } from '@/modules/auth/session';
+import { getSessionContext } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
 import { sendPushNotificationToUser } from '@/modules/notifications/pushActions';
@@ -257,6 +258,7 @@ export async function getRecentConversationsAction(
   if (!session) return { success: false, error: 'Unauthorized' };
 
   const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
   await ensureDMDeletedForColumn(db);
   const list: ConversationItem[] = [];
   let totalUnread = 0;
@@ -332,9 +334,9 @@ export async function getRecentConversationsAction(
 
   // 2. Fetch Workspace Chats (Shows all accessible workspace chats for current user)
   try {
-    const { results: wsChats } = await db
-      .prepare(
-        `SELECT ws.id AS workspace_id,
+    const isGlobalManager = ctx.userType === 'STAFF' || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE');
+    const wsQuery = isGlobalManager
+      ? `SELECT ws.id AS workspace_id,
                 ws.name AS ws_name,
                 wc.id AS last_msg_id,
                 wc.user_id AS last_sender_id,
@@ -346,6 +348,33 @@ export async function getRecentConversationsAction(
                   FROM workspace_chats wc_unread
                   WHERE wc_unread.workspace_id = ws.id
                     AND wc_unread.user_id != ?
+                    AND wc_unread.created_at > (strftime('%s', 'now') - 604800)
+                    AND NOT EXISTS (
+                      SELECT 1 FROM workspace_chat_reads wcr
+                      WHERE wcr.chat_id = wc_unread.id AND wcr.user_id = ?
+                    )
+                ) AS unread_count
+         FROM workspaces ws
+         LEFT JOIN workspace_chats wc ON wc.id = (
+           SELECT id FROM workspace_chats WHERE workspace_id = ws.id ORDER BY created_at DESC LIMIT 1
+         )
+         LEFT JOIN users u ON wc.user_id = u.id
+         WHERE ws.deleted_at IS NULL
+         ORDER BY COALESCE(wc.created_at, ws.created_at) DESC
+         LIMIT 30`
+      : `SELECT ws.id AS workspace_id,
+                ws.name AS ws_name,
+                wc.id AS last_msg_id,
+                wc.user_id AS last_sender_id,
+                wc.message AS last_message,
+                wc.created_at AS last_created_at,
+                u.name AS last_sender_name,
+                (
+                  SELECT COUNT(*)
+                  FROM workspace_chats wc_unread
+                  WHERE wc_unread.workspace_id = ws.id
+                    AND wc_unread.user_id != ?
+                    AND wc_unread.created_at > (strftime('%s', 'now') - 604800)
                     AND NOT EXISTS (
                       SELECT 1 FROM workspace_chat_reads wcr
                       WHERE wcr.chat_id = wc_unread.id AND wcr.user_id = ?
@@ -362,25 +391,15 @@ export async function getRecentConversationsAction(
              OR EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
              OR EXISTS (SELECT 1 FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id AND ta.user_id = ?)
              OR EXISTS (SELECT 1 FROM project_coordinators WHERE project_id = ws.project_id AND user_id = ?)
-             OR EXISTS (
-               SELECT 1 FROM user_roles ur
-               JOIN roles r ON ur.role_id = r.id
-               WHERE ur.user_id = ? AND r.name IN ('ADMIN', 'EXECUTIVE', 'MANAGER', 'STAFF')
-             )
            )
          ORDER BY COALESCE(wc.created_at, ws.created_at) DESC
-         LIMIT 30`
-      )
-      .bind(
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId,
-        session.userId
-      )
-      .all();
+         LIMIT 30`;
+
+    const wsBindings = isGlobalManager
+      ? [session.userId, session.userId]
+      : [session.userId, session.userId, session.userId, session.userId, session.userId, session.userId];
+
+    const { results: wsChats } = await db.prepare(wsQuery).bind(...wsBindings).all();
 
     (wsChats as any[]).forEach((r) => {
       const wsId = r.workspace_id;
@@ -432,6 +451,7 @@ export async function getRecentConversationsAction(
                   LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cc.id AND ccr.user_id = ?
                   WHERE cm_unread.channel_id = cc.id
                     AND cm_unread.user_id != ?
+                    AND cm_unread.created_at > datetime('now', '-7 days')
                     AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm_unread.created_at)
                 ) AS unread_count
          FROM community_channels cc

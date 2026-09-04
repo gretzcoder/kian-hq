@@ -63,26 +63,11 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
             `SELECT ws.id AS wsId,
                MAX(
                  ws.created_at,
-                 COALESCE(t.max_t, 0),
-                 COALESCE(wc.max_wc, 0),
-                 COALESCE(ta.max_ta, 0)
+                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id AND status != 'DELETED'), 0),
+                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0)
                ) AS latestTs
              FROM workspaces ws
-             LEFT JOIN (
-               SELECT workspace_id, MAX(created_at) AS max_t
-               FROM tasks WHERE status != 'DELETED' AND created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
-             ) t ON ws.id = t.workspace_id
-             LEFT JOIN (
-               SELECT workspace_id, MAX(created_at) AS max_wc
-               FROM workspace_chats WHERE created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
-             ) wc ON ws.id = wc.workspace_id
-             LEFT JOIN (
-               SELECT t.workspace_id, MAX(ta.created_at) AS max_ta
-               FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
-               WHERE t.status != 'DELETED' AND ta.created_at > (strftime('%s', 'now') - 2592000) GROUP BY t.workspace_id
-             ) ta ON ws.id = ta.workspace_id
-             WHERE ws.deleted_at IS NULL
-             GROUP BY ws.id`
+             WHERE ws.deleted_at IS NULL`
           )
           .all()
       : db
@@ -90,33 +75,18 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
             `SELECT ws.id AS wsId,
                MAX(
                  ws.created_at,
-                 COALESCE(t.max_t, 0),
-                 COALESCE(wc.max_wc, 0),
-                 COALESCE(ta.max_ta, 0)
+                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id AND status != 'DELETED'), 0),
+                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0)
                ) AS latestTs
              FROM workspaces ws
-             LEFT JOIN (
-               SELECT workspace_id, MAX(created_at) AS max_t
-               FROM tasks WHERE status != 'DELETED' AND created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
-             ) t ON ws.id = t.workspace_id
-             LEFT JOIN (
-               SELECT workspace_id, MAX(created_at) AS max_wc
-               FROM workspace_chats WHERE created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
-             ) wc ON ws.id = wc.workspace_id
-             LEFT JOIN (
-               SELECT t.workspace_id, MAX(ta.created_at) AS max_ta
-               FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
-               WHERE ta.user_id = ? AND t.status != 'DELETED' AND ta.created_at > (strftime('%s', 'now') - 2592000) GROUP BY t.workspace_id
-             ) ta ON ws.id = ta.workspace_id
              WHERE ws.deleted_at IS NULL
                AND (
                  EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
                  OR ws.ojt_coordinator_id = ?
                  OR ws.workspace_type = 'ASSESSMENT'
-               )
-             GROUP BY ws.id`
+               )`
           )
-          .bind(session.userId, session.userId, session.userId, session.userId)
+          .bind(session.userId, session.userId)
           .all(),
 
     // Pending review assignments query
@@ -428,7 +398,7 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
            OR (we.entity_type = 'task' AND we.entity_id = t.id)
          )
          LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-         WHERE (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT' OR LOWER(we.note) LIKE '%reminder%')
+         WHERE (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
            AND (we.triggered_by IS NULL OR we.triggered_by != ?)
            AND (
              (we.entity_type = 'task_assignment' AND ta.user_id = ?)

@@ -61,8 +61,8 @@ export function ThreadSidePanel({
       setLoading(true);
       fetchDetails().finally(() => setLoading(false));
 
-      // Polling for realtime thread replies (10 sec)
-      const interval = setInterval(fetchDetails, 10_000);
+      // Polling for realtime thread replies (20 sec)
+      const interval = setInterval(fetchDetails, 20_000);
       return () => clearInterval(interval);
     } else {
       setDetails(null);

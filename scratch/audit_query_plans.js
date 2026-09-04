@@ -62,30 +62,63 @@ const testQueries = [
               AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm.created_at)`,
   },
   {
-    name: 'Sidebar Activity Summary (30-day window)',
+    name: 'Sidebar Activity Summary (Optimized Scalar Subquery)',
     query: `SELECT ws.id AS wsId,
               MAX(
                 ws.created_at,
-                COALESCE(t.max_t, 0),
-                COALESCE(wc.max_wc, 0),
-                COALESCE(ta.max_ta, 0)
+                COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id AND status != 'DELETED'), 0),
+                COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0)
               ) AS latestTs
             FROM workspaces ws
-            LEFT JOIN (
-              SELECT workspace_id, MAX(created_at) AS max_t
-              FROM tasks WHERE status != 'DELETED' AND created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
-            ) t ON ws.id = t.workspace_id
-            LEFT JOIN (
-              SELECT workspace_id, MAX(created_at) AS max_wc
-              FROM workspace_chats WHERE created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
-            ) wc ON ws.id = wc.workspace_id
-            LEFT JOIN (
-              SELECT t.workspace_id, MAX(ta.created_at) AS max_ta
-              FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
-              WHERE t.status != 'DELETED' AND ta.created_at > (strftime('%s', 'now') - 2592000) GROUP BY t.workspace_id
-            ) ta ON ws.id = ta.workspace_id
-            WHERE ws.deleted_at IS NULL
-            GROUP BY ws.id`,
+            WHERE ws.deleted_at IS NULL`,
+  },
+  {
+    name: 'Project Timeline Workflow Events (Clean 4-Branch UNION ALL)',
+    query: `SELECT we.id, we.entity_type, we.entity_id, we.from_status, we.to_status, we.note, we.created_at, u.name AS user_name
+      FROM (
+        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
+        FROM workflow_events
+        WHERE entity_type = 'project' AND entity_id = ?
+
+        UNION ALL
+
+        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
+        FROM workflow_events
+        WHERE entity_type = 'brief' AND entity_id IN (SELECT id FROM content_briefs WHERE project_id = ?)
+
+        UNION ALL
+
+        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
+        FROM workflow_events
+        WHERE entity_type = 'workspace' AND entity_id IN (SELECT id FROM workspaces WHERE project_id = ?)
+
+        UNION ALL
+
+        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
+        FROM workflow_events
+        WHERE entity_type = 'task' AND entity_id IN (SELECT id FROM tasks WHERE project_id = ?)
+      ) we
+      LEFT JOIN users u ON we.triggered_by = u.id
+      ORDER BY we.created_at DESC
+      LIMIT 50`,
+  },
+  {
+    name: 'Workflow Events Reminder Query (Optimized Status Index)',
+    query: `SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
+                u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
+                t.workspace_id AS wsId, ws.name AS wsName
+         FROM workflow_events we
+         LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+         LEFT JOIN task_assignments ta ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
+         LEFT JOIN tasks t ON (
+           (we.entity_type = 'task_assignment' AND ta.task_id = t.id)
+           OR (we.entity_type = 'task' AND we.entity_id = t.id)
+         )
+         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+         WHERE (we.to_status = 'REMINDER_SENT' OR we.from_status = 'REMINDER_SENT')
+           AND (we.triggered_by IS NULL OR we.triggered_by = 'usr_test')
+         ORDER BY we.created_at DESC
+         LIMIT 15`,
   },
   {
     name: 'Workspace Chat Fetch (Latest 100 limit)',

@@ -148,19 +148,11 @@ export default async function ProjectDetailPage({ params }: PageProps) {
         SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
         FROM workflow_events
         WHERE entity_type = 'task' AND entity_id IN (SELECT id FROM tasks WHERE project_id = ?)
-
-        UNION ALL
-
-        SELECT id, entity_type, entity_id, from_status, to_status, note, created_at, triggered_by
-        FROM workflow_events
-        WHERE entity_type = 'task_assignment' AND entity_id IN (
-            SELECT ta.id FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.project_id = ?
-        )
       ) we
       LEFT JOIN users u ON we.triggered_by = u.id
       ORDER BY we.created_at DESC
       LIMIT 50
-    `).bind(projectId, projectId, projectId, projectId, projectId).all(),
+    `).bind(projectId, projectId, projectId, projectId).all(),
     db.prepare(`
       SELECT u.id, u.name, u.email
       FROM project_coordinators pc
