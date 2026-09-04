@@ -16,6 +16,7 @@ export interface AssessmentTaskRow {
   deadline?: number | null;
   start_at?: number | null;
   exec_type: string; // DESIGNER | VIDEO_EDITOR (the assignment_role used)
+  assessment_category?: string | null; // INDIVIDUAL | GROUP
   revision_note?: string | null;
   sparks?: number | null;
 }
@@ -26,6 +27,7 @@ export interface AssessmentSubmissionRow {
   user_id: string;
   user_name: string | null;
   assignment_role: string;
+  group_name?: string | null; // e.g. 'Kelompok 1'
   status: string;
   result_url: string | null;
   revision_note: string | null;
@@ -80,11 +82,13 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
     return { success: false, error: 'Hanya mentor atau koordinator yang dapat membuat assessment.' };
   }
 
-  const title       = (formData.get('title') as string)?.trim();
-  const description = (formData.get('description') as string)?.trim() || null;
-  const execType    = (formData.get('exec_type') as string) || 'DESIGNER';
-  const deadlineStr = formData.get('deadline') as string | null;
-  const startAtStr  = (formData.get('start_at') as string) || (formData.get('startAt') as string);
+  const title              = (formData.get('title') as string)?.trim();
+  const description        = (formData.get('description') as string)?.trim() || null;
+  const execType           = (formData.get('exec_type') as string) || 'DESIGNER';
+  const assessmentCategory = (formData.get('assessment_category') as string) === 'GROUP' ? 'GROUP' : 'INDIVIDUAL';
+  const groupDataRaw       = formData.get('group_data') as string | null;
+  const deadlineStr        = formData.get('deadline') as string | null;
+  const startAtStr         = (formData.get('start_at') as string) || (formData.get('startAt') as string);
 
   if (!title) return { success: false, error: 'Judul assessment wajib diisi.' };
 
@@ -106,53 +110,78 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
     // 1. Create task
     await db
       .prepare(`
-        INSERT INTO tasks (id, workspace_id, project_id, title, description, status, priority, task_type, deadline, start_at, created_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'NORMAL', 'ASSESSMENT', ?, ?, ?, strftime('%s', 'now'))
+        INSERT INTO tasks (id, workspace_id, project_id, title, description, status, priority, task_type, assessment_category, deadline, start_at, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'NORMAL', 'ASSESSMENT', ?, ?, ?, ?, strftime('%s', 'now'))
       `)
-      .bind(taskId, workspaceId, ws.project_id, title, description, initialStatus, deadline, startAt, session.userId)
+      .bind(taskId, workspaceId, ws.project_id, title, description, initialStatus, assessmentCategory, deadline, startAt, session.userId)
       .run();
 
-    // 2. Create task_assignments for all Trooper / OJT members with the selected execType (e.g. VIDEO_EDITOR / DESIGNER).
-    // If created by Coordinator, status is 'ASSIGNED'. If created by Mentor, status is 'WAITING_REVIEW'.
-    const { results: ojtMembers } = await db
-      .prepare(`
-        SELECT DISTINCT u.id AS user_id
-        FROM users u
-        JOIN workspace_members wm ON u.id = wm.user_id
-        WHERE wm.workspace_id = ?
-          AND wm.team_role != 'LEADER'
-          AND (u.user_type IS NULL OR u.user_type != 'STAFF')
-          AND u.status = 'ACTIVE'
-          AND u.id NOT IN (
-            SELECT ur.user_id
-            FROM user_roles ur
-            JOIN roles r ON ur.role_id = r.id
-            WHERE r.id IN ('role_mentor_troopers', 'role_mentor')
-               OR UPPER(r.name) LIKE '%MENTOR%'
-          )
-          AND u.id NOT IN (
-            SELECT ojt_coordinator_id
-            FROM workspaces
-            WHERE id = ? AND ojt_coordinator_id IS NOT NULL
-          )
-      `)
-      .bind(workspaceId, workspaceId)
-      .all();
-
-    // OJT member task assignments are always initialized to 'ASSIGNED' (Belum Submit).
-    // The parent task itself has status 'WAITING_REVIEW' if created by Mentor, or 'APPROVED' if created by Coordinator.
     const assignmentInitialStatus = 'ASSIGNED';
+    let assignedUserIds: string[] = [];
 
-    for (const m of ojtMembers as { user_id: string }[]) {
-      const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-      await db
+    if (assessmentCategory === 'GROUP' && groupDataRaw) {
+      // Parse group_data: Array<{ name: string; userIds: string[] }>
+      let groups: Array<{ name: string; userIds: string[] }> = [];
+      try {
+        groups = JSON.parse(groupDataRaw);
+      } catch (err) {
+        console.error('Failed to parse group_data JSON:', err);
+      }
+
+      for (const grp of groups) {
+        if (!grp.userIds || grp.userIds.length === 0) continue;
+        for (const uId of grp.userIds) {
+          assignedUserIds.push(uId);
+          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+          await db
+            .prepare(`
+              INSERT OR IGNORE INTO task_assignments
+                (id, task_id, user_id, assignment_role, group_name, assigned_by, status, deadline, start_at, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
+            `)
+            .bind(assignId, taskId, uId, execType, grp.name, session.userId, assignmentInitialStatus, deadline, startAt)
+            .run();
+        }
+      }
+    } else {
+      // INDIVIDUAL mode: Create task_assignments for all Trooper / OJT members
+      const { results: ojtMembers } = await db
         .prepare(`
-          INSERT OR IGNORE INTO task_assignments
-            (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
+          SELECT DISTINCT u.id AS user_id
+          FROM users u
+          JOIN workspace_members wm ON u.id = wm.user_id
+          WHERE wm.workspace_id = ?
+            AND wm.team_role != 'LEADER'
+            AND (u.user_type IS NULL OR u.user_type != 'STAFF')
+            AND u.status = 'ACTIVE'
+            AND u.id NOT IN (
+              SELECT ur.user_id
+              FROM user_roles ur
+              JOIN roles r ON ur.role_id = r.id
+              WHERE r.id IN ('role_mentor_troopers', 'role_mentor')
+                 OR UPPER(r.name) LIKE '%MENTOR%'
+            )
+            AND u.id NOT IN (
+              SELECT ojt_coordinator_id
+              FROM workspaces
+              WHERE id = ? AND ojt_coordinator_id IS NOT NULL
+            )
         `)
-        .bind(assignId, taskId, m.user_id, execType, session.userId, assignmentInitialStatus, deadline, startAt)
-        .run();
+        .bind(workspaceId, workspaceId)
+        .all();
+
+      for (const m of ojtMembers as { user_id: string }[]) {
+        assignedUserIds.push(m.user_id);
+        const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+        await db
+          .prepare(`
+            INSERT OR IGNORE INTO task_assignments
+              (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
+          `)
+          .bind(assignId, taskId, m.user_id, execType, session.userId, assignmentInitialStatus, deadline, startAt)
+          .run();
+      }
     }
 
     await logWorkflowEvent({
@@ -391,9 +420,9 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
 
   // Security: only the assigned user can submit
   const assignment = await db
-    .prepare('SELECT id, task_id, user_id, status FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, user_id, group_name, status FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as { id: string; task_id: string; user_id: string; status: string } | null;
+    .first() as { id: string; task_id: string; user_id: string; group_name: string | null; status: string } | null;
 
   if (!assignment) return { success: false, error: 'Assignment tidak ditemukan.' };
   if (assignment.user_id !== session.userId) return { success: false, error: 'Forbidden.' };
@@ -401,9 +430,9 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
 
   // Validate parent task approval, start date & deadline
   const parentTask = await db
-    .prepare('SELECT status, start_at, deadline, extended_deadline FROM tasks WHERE id = ?')
+    .prepare('SELECT status, start_at, deadline, extended_deadline, assessment_category FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { status: string; start_at: number | null; deadline: number | null; extended_deadline: number | null } | null;
+    .first() as { status: string; start_at: number | null; deadline: number | null; extended_deadline: number | null; assessment_category: string | null } | null;
 
   if (!parentTask || parentTask.status !== 'APPROVED') {
     return { success: false, error: 'Assessment ini belum disetujui / ACC oleh Koordinator.' };
@@ -420,15 +449,28 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
   }
 
   try {
-    await db
-      .prepare(`
-        UPDATE task_assignments
-        SET status = 'WAITING_REVIEW', result_url = ?, submitted_at = strftime('%s', 'now'),
-            revision_note = NULL, mentor_approved = 0, coordinator_approved = 0, lead_approved = 0
-        WHERE id = ?
-      `)
-      .bind(resultUrl.trim(), assignmentId)
-      .run();
+    const isGroup = parentTask.assessment_category === 'GROUP' && assignment.group_name;
+    if (isGroup) {
+      await db
+        .prepare(`
+          UPDATE task_assignments
+          SET status = 'WAITING_REVIEW', result_url = ?, submitted_at = strftime('%s', 'now'),
+              revision_note = NULL, mentor_approved = 0, coordinator_approved = 0, lead_approved = 0
+          WHERE task_id = ? AND group_name = ?
+        `)
+        .bind(resultUrl.trim(), assignment.task_id, assignment.group_name)
+        .run();
+    } else {
+      await db
+        .prepare(`
+          UPDATE task_assignments
+          SET status = 'WAITING_REVIEW', result_url = ?, submitted_at = strftime('%s', 'now'),
+              revision_note = NULL, mentor_approved = 0, coordinator_approved = 0, lead_approved = 0
+          WHERE id = ?
+        `)
+        .bind(resultUrl.trim(), assignmentId)
+        .run();
+    }
 
     await logWorkflowEvent({
       entityType: 'task_assignment',
@@ -469,17 +511,18 @@ export async function approveAssessmentSubmission(
 
   // Fetch the assignment and its parent task
   const assignment = await db
-    .prepare('SELECT id, task_id, mentor_approved FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, group_name, mentor_approved FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as { id: string; task_id: string; mentor_approved: number } | null;
+    .first() as { id: string; task_id: string; group_name: string | null; mentor_approved: number } | null;
 
   if (!assignment) return { success: false, error: 'Assignment tidak ditemukan.' };
 
   const task = await db
-    .prepare('SELECT created_by FROM tasks WHERE id = ?')
+    .prepare('SELECT created_by, assessment_category FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { created_by: string | null } | null;
+    .first() as { created_by: string | null; assessment_category: string | null } | null;
 
+  const isGroup = task?.assessment_category === 'GROUP' && assignment.group_name;
   const isTaskCreator = task?.created_by != null && task.created_by === session.userId;
   const noteValue = appreciationNote?.trim() || null;
 
@@ -490,19 +533,35 @@ export async function approveAssessmentSubmission(
     }
 
     try {
-      await db
-        .prepare(`
-          UPDATE task_assignments
-          SET coordinator_approved = 1,
-              sparks = ?,
-              status = 'APPROVED',
-              appreciation_note = COALESCE(?, appreciation_note),
-              revision_note = NULL,
-              reviewed_at = strftime('%s', 'now')
-          WHERE id = ?
-        `)
-        .bind(sparksAmount, noteValue, assignmentId)
-        .run();
+      if (isGroup) {
+        await db
+          .prepare(`
+            UPDATE task_assignments
+            SET coordinator_approved = 1,
+                sparks = ?,
+                status = 'APPROVED',
+                appreciation_note = COALESCE(?, appreciation_note),
+                revision_note = NULL,
+                reviewed_at = strftime('%s', 'now')
+            WHERE task_id = ? AND group_name = ?
+          `)
+          .bind(sparksAmount, noteValue, assignment.task_id, assignment.group_name)
+          .run();
+      } else {
+        await db
+          .prepare(`
+            UPDATE task_assignments
+            SET coordinator_approved = 1,
+                sparks = ?,
+                status = 'APPROVED',
+                appreciation_note = COALESCE(?, appreciation_note),
+                revision_note = NULL,
+                reviewed_at = strftime('%s', 'now')
+            WHERE id = ?
+          `)
+          .bind(sparksAmount, noteValue, assignmentId)
+          .run();
+      }
 
       await logWorkflowEvent({
         entityType: 'task_assignment',
@@ -533,17 +592,31 @@ export async function approveAssessmentSubmission(
   // Step 1: Creator mentor approval (no sparks, sets mentor_approved + lead_approved)
   if (isTaskCreator) {
     try {
-      await db
-        .prepare(`
-          UPDATE task_assignments
-          SET mentor_approved = 1,
-              lead_approved = 1,
-              appreciation_note = COALESCE(?, appreciation_note),
-              reviewed_at = strftime('%s', 'now')
-          WHERE id = ?
-        `)
-        .bind(noteValue, assignmentId)
-        .run();
+      if (isGroup) {
+        await db
+          .prepare(`
+            UPDATE task_assignments
+            SET mentor_approved = 1,
+                lead_approved = 1,
+                appreciation_note = COALESCE(?, appreciation_note),
+                reviewed_at = strftime('%s', 'now')
+            WHERE task_id = ? AND group_name = ?
+          `)
+          .bind(noteValue, assignment.task_id, assignment.group_name)
+          .run();
+      } else {
+        await db
+          .prepare(`
+            UPDATE task_assignments
+            SET mentor_approved = 1,
+                lead_approved = 1,
+                appreciation_note = COALESCE(?, appreciation_note),
+                reviewed_at = strftime('%s', 'now')
+            WHERE id = ?
+          `)
+          .bind(noteValue, assignmentId)
+          .run();
+      }
 
       await logWorkflowEvent({
         entityType: 'task_assignment',
@@ -589,16 +662,16 @@ export async function approveAssessmentMentorStep(
   const db = await getDB();
 
   const assignment = await db
-    .prepare('SELECT id, task_id FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, group_name FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as { id: string; task_id: string } | null;
+    .first() as { id: string; task_id: string; group_name: string | null } | null;
 
   if (!assignment) return { success: false, error: 'Assignment tidak ditemukan.' };
 
   const task = await db
-    .prepare('SELECT created_by, workspace_id FROM tasks WHERE id = ?')
+    .prepare('SELECT created_by, workspace_id, assessment_category FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { created_by: string | null; workspace_id: string | null } | null;
+    .first() as { created_by: string | null; workspace_id: string | null; assessment_category: string | null } | null;
 
   if (!task) return { success: false, error: 'Task tidak ditemukan.' };
 
@@ -606,19 +679,35 @@ export async function approveAssessmentMentorStep(
     return { success: false, error: 'Hanya mentor pembuat tugas assessment yang berhak melakukan ACC Mentor.' };
   }
 
+  const isGroup = task.assessment_category === 'GROUP' && assignment.group_name;
+  const cleanNote = note?.trim() || null;
+
   try {
-    const cleanNote = note && note.trim() !== '' ? note.trim() : null;
-    await db
-      .prepare(`
-        UPDATE task_assignments
-        SET mentor_approved = 1,
-            lead_approved = 1,
-            appreciation_note = COALESCE(?, appreciation_note),
-            reviewed_at = strftime('%s', 'now')
-        WHERE id = ?
-      `)
-      .bind(cleanNote, assignmentId)
-      .run();
+    if (isGroup) {
+      await db
+        .prepare(`
+          UPDATE task_assignments
+          SET mentor_approved = 1,
+              lead_approved = 1,
+              appreciation_note = COALESCE(?, appreciation_note),
+              reviewed_at = strftime('%s', 'now')
+          WHERE task_id = ? AND group_name = ?
+        `)
+        .bind(cleanNote, assignment.task_id, assignment.group_name)
+        .run();
+    } else {
+      await db
+        .prepare(`
+          UPDATE task_assignments
+          SET mentor_approved = 1,
+              lead_approved = 1,
+              appreciation_note = COALESCE(?, appreciation_note),
+              reviewed_at = strftime('%s', 'now')
+          WHERE id = ?
+        `)
+        .bind(cleanNote, assignmentId)
+        .run();
+    }
 
     await logWorkflowEvent({
       entityType: 'task_assignment',
@@ -658,29 +747,18 @@ export async function requestAssessmentRevision(
   const ctx = await getSessionContext(session.userId);
 
   const assignment = await db
-    .prepare('SELECT id, task_id, status FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, group_name, status FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as { id: string; task_id: string; status: string } | null;
+    .first() as { id: string; task_id: string; group_name: string | null; status: string } | null;
 
   if (!assignment) return { success: false, error: 'Penugasan tidak ditemukan.' };
 
   const task = await db
-    .prepare('SELECT id, workspace_id, created_by FROM tasks WHERE id = ?')
+    .prepare('SELECT id, workspace_id, created_by, assessment_category FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; workspace_id: string | null; created_by: string | null } | null;
+    .first() as { id: string; workspace_id: string | null; created_by: string | null; assessment_category: string | null } | null;
 
   const targetWsId = workspaceId || task?.workspace_id || '';
-
-  const isTaskCreator = task?.created_by != null && task.created_by === session.userId;
-  const isMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
-  const isCoordinator =
-    ctx.userType === 'STAFF' &&
-    (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
-
-  if (!isTaskCreator && !isMentorRole && !isCoordinator && !ctx.can('REQUEST_REVISION')) {
-    return { success: false, error: 'Forbidden: Anda tidak berhak meminta revisi tugas ini.' };
-  }
-
   try {
     const nextStatus = 'REVISION_REQUESTED';
 

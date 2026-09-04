@@ -49,6 +49,7 @@ interface TaskRow {
   sparks_multiplier?: number | null;
   created_by?: string | null;
   creator_name?: string | null;
+  assessment_category?: string | null;
 }
 
 interface AssignmentRow {
@@ -66,6 +67,7 @@ interface AssignmentRow {
   mentor_approved: number;
   coordinator_approved: number;
   sparks: number | null;
+  group_name?: string | null;
 }
 
 export interface WorkspaceMemberSimple {
@@ -231,14 +233,72 @@ function formatIndonesiaDatetimeInput(ts: number | null | undefined): string {
 function CreateAssessmentTaskForm({
   workspaceId,
   onCreated,
+  allWorkspaceMembers = [],
 }: {
   workspaceId: string;
   onCreated: () => void;
+  allWorkspaceMembers?: WorkspaceMemberSimple[];
 }) {
   const [open,        setOpen]        = useState(false);
   const [description, setDescription] = useState('');
+  const [category,    setCategory]    = useState<'INDIVIDUAL' | 'GROUP'>('INDIVIDUAL');
+  const [groups,      setGroups]      = useState<Array<{ id: string; name: string; userIds: string[] }>>([
+    { id: 'g_1', name: 'Kelompok 1', userIds: [] },
+    { id: 'g_2', name: 'Kelompok 2', userIds: [] },
+  ]);
   const [error,       setError]       = useState<string | null>(null);
   const [pending, startTransition]    = useTransition();
+
+  // Filter available troopers (non-staff / non-mentor members)
+  const availableTroopers = allWorkspaceMembers;
+
+  const handleAddGroup = () => {
+    setGroups((prev) => [
+      ...prev,
+      { id: `g_${Date.now()}_${Math.random()}`, name: `Kelompok ${prev.length + 1}`, userIds: [] },
+    ]);
+  };
+
+  const handleRemoveGroup = (groupId: string) => {
+    if (groups.length <= 1) return;
+    setGroups((prev) => prev.filter((g) => g.id !== groupId));
+  };
+
+  const handleGroupNameChange = (groupId: string, name: string) => {
+    setGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, name } : g))
+    );
+  };
+
+  const handleToggleTrooperInGroup = (groupId: string, userId: string) => {
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (g.id === groupId) {
+          const exists = g.userIds.includes(userId);
+          return {
+            ...g,
+            userIds: exists ? g.userIds.filter((id) => id !== userId) : [...g.userIds, userId],
+          };
+        } else {
+          // Remove from other group so a trooper belongs to 1 group at a time
+          return { ...g, userIds: g.userIds.filter((id) => id !== userId) };
+        }
+      })
+    );
+  };
+
+  const handleAutoDistributeTroopers = () => {
+    if (availableTroopers.length === 0 || groups.length === 0) return;
+    const trooperIds = availableTroopers.map((t) => t.userId || t.id || '').filter(Boolean);
+    const updatedGroups = groups.map((g) => ({ ...g, userIds: [] as string[] }));
+
+    trooperIds.forEach((uId, idx) => {
+      const targetGrpIdx = idx % updatedGroups.length;
+      updatedGroups[targetGrpIdx].userIds.push(uId);
+    });
+
+    setGroups(updatedGroups);
+  };
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -249,12 +309,21 @@ function CreateAssessmentTaskForm({
       return;
     }
 
+    if (category === 'GROUP') {
+      const emptyGroup = groups.find((g) => g.userIds.length === 0);
+      if (emptyGroup) {
+        setError(`Kelompok "${emptyGroup.name}" belum memiliki anggota. Pilih minimal 1 anggota per kelompok.`);
+        return;
+      }
+    }
+
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       const res = await createAssessmentTask(workspaceId, fd);
       if (res.success) {
         setOpen(false);
         setDescription('');
+        setCategory('INDIVIDUAL');
         onCreated();
       } else {
         setError(res.error ?? 'Gagal membuat assessment');
@@ -362,10 +431,147 @@ function CreateAssessmentTaskForm({
                   </div>
                 </div>
 
+                {/* Kategori Assessment Mode */}
+                <div>
+                  <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
+                    Kategori Peserta Assessment <span className="text-red-500">*</span>
+                  </label>
+                  <input type="hidden" name="assessment_category" value={category} />
+                  {category === 'GROUP' && (
+                    <input type="hidden" name="group_data" value={JSON.stringify(groups.map((g) => ({ name: g.name, userIds: g.userIds })))} />
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                    {[
+                      { value: 'INDIVIDUAL', icon: '👤', label: 'Individu', desc: 'Seluruh Troopers di-assign tugas ini secara mandiri' },
+                      { value: 'GROUP', icon: '👥', label: 'Kelompok', desc: 'Bagi Troopers menjadi beberapa kelompok kerja tim' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setCategory(opt.value as 'INDIVIDUAL' | 'GROUP')}
+                        className={`flex flex-col text-left gap-1 border rounded-2xl p-4 cursor-pointer transition-all ${
+                          category === opt.value
+                            ? 'border-purple-500 bg-purple-500/10 dark:bg-purple-500/15 ring-1 ring-purple-500'
+                            : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl">{opt.icon}</span>
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${category === opt.value ? 'border-purple-600 bg-purple-600' : 'border-zinc-300 dark:border-zinc-700'}`}>
+                            {category === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                        </div>
+                        <span className="text-xs font-black text-zinc-900 dark:text-zinc-100 mt-1">{opt.label}</span>
+                        <span className="text-[10px] text-zinc-400 leading-tight">{opt.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* If GROUP mode is selected */}
+                  {category === 'GROUP' && (
+                    <div className="space-y-4 border border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/5 rounded-2xl p-4 sm:p-5">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-500/10 pb-3">
+                        <div>
+                          <h4 className="text-xs font-black text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                            <span>👥</span> Custom Pembagian Kelompok
+                          </h4>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            Tentukan jumlah kelompok & pilih anggota Troopers untuk setiap kelompok.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleAutoDistributeTroopers}
+                            className="px-3 py-1.5 text-[11px] font-bold bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-300 rounded-xl transition-all border border-purple-500/20 flex items-center gap-1 cursor-pointer"
+                          >
+                            <span>⚡</span> Acak / Bagi Rata
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAddGroup}
+                            className="px-3 py-1.5 text-[11px] font-bold bg-purple-600 text-white hover:bg-purple-500 rounded-xl transition-all shadow-sm cursor-pointer"
+                          >
+                            + Tambah Kelompok
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Group Cards List */}
+                      <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                        {groups.map((grp, gIdx) => (
+                          <div key={grp.id} className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl p-3.5 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-1">
+                                <span className="text-xs font-black text-purple-500">#{gIdx + 1}</span>
+                                <input
+                                  type="text"
+                                  value={grp.name}
+                                  onChange={(e) => handleGroupNameChange(grp.id, e.target.value)}
+                                  placeholder={`Kelompok ${gIdx + 1}`}
+                                  className="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-bold text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-purple-500 text-zinc-900 dark:text-zinc-100 w-44 sm:w-56"
+                                />
+                                <span className="text-[10px] font-bold text-zinc-400">
+                                  ({grp.userIds.length} Anggota)
+                                </span>
+                              </div>
+                              {groups.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveGroup(grp.id)}
+                                  className="text-xs text-rose-500 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-500/10 transition-all cursor-pointer"
+                                  title="Hapus Kelompok"
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Troopers Selection List */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 max-h-[160px] overflow-y-auto pr-1">
+                              {availableTroopers.map((trooper) => {
+                                const uId = trooper.userId || trooper.id || '';
+                                const isChecked = grp.userIds.includes(uId);
+                                const assignedOtherGrp = groups.find((g) => g.id !== grp.id && g.userIds.includes(uId));
+
+                                return (
+                                  <label
+                                    key={uId}
+                                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                                      isChecked
+                                        ? 'border-purple-500 bg-purple-500/10 font-bold text-purple-900 dark:text-purple-200'
+                                        : assignedOtherGrp
+                                        ? 'border-zinc-200 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/40 text-zinc-400 opacity-60'
+                                        : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 hover:border-purple-300 text-zinc-700 dark:text-zinc-300'
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => handleToggleTrooperInGroup(grp.id, uId)}
+                                      className="accent-purple-600 rounded w-3.5 h-3.5"
+                                    />
+                                    <span className="truncate flex-1">{trooper.name}</span>
+                                    {assignedOtherGrp && !isChecked && (
+                                      <span className="text-[9px] text-zinc-400 bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 rounded-md">
+                                        {assignedOtherGrp.name}
+                                      </span>
+                                    )}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Exec Type */}
                 <div>
                   <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
-                    Tipe Eksekusi / Kategori <span className="text-red-500">*</span>
+                    Tipe Eksekusi <span className="text-red-500">*</span>
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
@@ -393,14 +599,14 @@ function CreateAssessmentTaskForm({
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="px-5 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400"
+                  className="px-5 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-all text-zinc-600 dark:text-zinc-400 cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={pending}
-                  className="px-6 py-2.5 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20 disabled:opacity-60 active:scale-[0.98]"
+                  className="px-6 py-2.5 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-purple-500/20 disabled:opacity-60 active:scale-[0.98] cursor-pointer"
                 >
                   {pending ? 'Mengirim Ajuan...' : '📩 Buat & Ajukan ke Koordinator'}
                 </button>
@@ -1478,7 +1684,17 @@ function MentorTaskCard({
               <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2.5 py-1 rounded-xl">
                 {execLabel}
               </span>
-              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">Assessment</span>
+              {task.assessment_category === 'GROUP' ? (
+                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                  <span>👥</span>
+                  <span>Assessment Kelompok</span>
+                </span>
+              ) : (
+                <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                  <span>👤</span>
+                  <span>Assessment Individu</span>
+                </span>
+              )}
               {task.sparks_multiplier && task.sparks_multiplier > 1.0 && (
                 <span
                   onClick={(e) => {
@@ -1812,6 +2028,44 @@ function MentorTaskCard({
           )}
           {assignments.length === 0 ? (
             <p className="text-xs text-zinc-400 text-center py-4">Belum ada peserta yang di-assign.</p>
+          ) : task.assessment_category === 'GROUP' ? (
+            (() => {
+              const groupMap: Record<string, AssignmentRow[]> = {};
+              assignments.forEach((a) => {
+                const gName = a.group_name || 'Kelompok Tim';
+                if (!groupMap[gName]) groupMap[gName] = [];
+                groupMap[gName].push(a);
+              });
+              return Object.entries(groupMap).map(([gName, gAssignments]) => (
+                <div key={gName} className="border border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/5 rounded-2xl p-3.5 space-y-3">
+                  <div className="flex items-center justify-between border-b border-purple-500/10 pb-2">
+                    <span className="text-xs font-black text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                      <span>👥</span> {gName} ({gAssignments.length} Anggota)
+                    </span>
+                    <span className="text-[10px] font-bold text-zinc-400 truncate max-w-[50%]">
+                      {gAssignments.map((m) => m.user_name ?? 'OJT User').join(', ')}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {gAssignments.map((a) => (
+                      <MentorSubmissionCard
+                        key={a.id}
+                        assignment={a}
+                        reactions={reactionsMap?.[a.id] ?? []}
+                        workspaceId={workspaceId}
+                        isCoordinator={isCoordinator}
+                        canManage={canManage}
+                        currentUserId={currentUserId}
+                        taskCreatedBy={task.created_by}
+                        taskStartAt={task.start_at}
+                        taskDeadline={task.deadline}
+                        taskExtendedDeadline={task.extended_deadline}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ));
+            })()
           ) : (
             assignments.map((a) => (
               <MentorSubmissionCard
@@ -1880,6 +2134,17 @@ function OJTTaskCard({
             <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2.5 py-1 rounded-xl">
               {execLabel}
             </span>
+            {task.assessment_category === 'GROUP' ? (
+              <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                <span>👥</span>
+                <span>Assessment Kelompok {assignment.group_name ? `(${assignment.group_name})` : ''}</span>
+              </span>
+            ) : (
+              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                <span>👤</span>
+                <span>Assessment Individu</span>
+              </span>
+            )}
             {task.deadline && (
               <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2.5 py-1 rounded-xl flex items-center gap-1">
                 <span>⏰ Deadline:</span>
@@ -2062,6 +2327,7 @@ export function AssessmentPanel({
           <CreateAssessmentTaskForm
             workspaceId={workspaceId}
             onCreated={() => setReload((p) => p + 1)}
+            allWorkspaceMembers={allWorkspaceMembers}
           />
         </div>
       )}

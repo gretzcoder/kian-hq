@@ -40,6 +40,7 @@ interface TaskRow {
   created_at: number;
   created_by?: string | null;
   task_type: string;
+  assessment_category?: string | null;
   parent_task_id: string | null;
   revision_note?: string | null;
   sparks?: number | null;
@@ -50,6 +51,7 @@ interface AssignmentRow {
   task_id: string;
   user_id: string;
   assignment_role: string;
+  group_name?: string | null;
   status: string;
   result_url: string | null;
   revision_note: string | null;
@@ -121,7 +123,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
     db.prepare("SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1").bind(projectId).first(),
     db.prepare(`
-      SELECT t.id, t.title, t.description, t.status, t.priority, t.deadline, t.extended_deadline, t.start_at, t.created_at, t.task_type, t.parent_task_id, t.revision_note, t.sparks, t.sparks_multiplier, t.created_by, u.name as creator_name
+      SELECT t.id, t.title, t.description, t.status, t.priority, t.deadline, t.extended_deadline, t.start_at, t.created_at, t.task_type, t.assessment_category, t.parent_task_id, t.revision_note, t.sparks, t.sparks_multiplier, t.created_by, u.name as creator_name
       FROM tasks t
       LEFT JOIN users u ON t.created_by = u.id
       WHERE t.workspace_id = ? AND t.status != 'DELETED'
@@ -222,7 +224,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     ? await Promise.all([
       db
         .prepare(`
-            SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
+            SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role, ta.group_name,
                    ta.status, ta.result_url,
                    COALESCE(ta.revision_note, (SELECT note FROM workflow_events WHERE (entity_id = ta.id OR entity_id = ta.task_id) AND (to_status = 'REVISION_REQUESTED' OR to_status = 'REVISION') AND note IS NOT NULL AND note != '' ORDER BY created_at DESC LIMIT 1)) AS revision_note,
                    COALESCE(ta.appreciation_note, (SELECT note FROM workflow_events WHERE entity_id = ta.id AND to_status IN ('APPROVED', 'DONE', 'PUBLISHED') AND note IS NOT NULL AND note != '' AND note NOT LIKE 'Result submitted%' ORDER BY created_at DESC LIMIT 1)) AS appreciation_note,
