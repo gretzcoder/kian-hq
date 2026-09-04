@@ -20,15 +20,23 @@ export interface ActiveSimulatedRole {
 
 const VIEW_AS_ROLE_COOKIE = 'view_as_role';
 
+const viewAsAuthMemoryCache = new Map<string, { data: boolean; ts: number }>();
+let availableRolesMemoryCache: { data: ViewAsRoleItem[]; ts: number } | null = null;
+const CACHE_TTL_MS = 60_000;
+
 /**
  * Checks if the currently logged-in real user is authorized to use "View As Role".
- * Queries D1 directly to prevent circular dependency with RBAC functions.
  */
 export async function isAuthorizedForViewAs(): Promise<boolean> {
   const session = await getSession();
   if (!session) return false;
 
   const realUserId = session.realUserId || session.userId;
+  const now = Date.now();
+  const cached = viewAsAuthMemoryCache.get(realUserId);
+  if (cached && now - cached.ts < CACHE_TTL_MS) {
+    return cached.data;
+  }
 
   const db = await getDB();
   try {
@@ -47,7 +55,7 @@ export async function isAuthorizedForViewAs(): Promise<boolean> {
     const perms = (results || []).map((r: any) => String(r.perm_name));
     const roles = (results || []).map((r: any) => String(r.role_name).toUpperCase());
 
-    return (
+    const isAuth = (
       perms.includes('VIEW_AS_ROLE') ||
       perms.includes('ADMIN_ROLES') ||
       perms.includes('ADMIN_USERS') ||
@@ -55,6 +63,9 @@ export async function isAuthorizedForViewAs(): Promise<boolean> {
       roles.includes('EXECUTIVE') ||
       roles.includes('COORDINATOR')
     );
+
+    viewAsAuthMemoryCache.set(realUserId, { data: isAuth, ts: now });
+    return isAuth;
   } catch (err) {
     console.error('isAuthorizedForViewAs check failed:', err);
     return false;
@@ -67,6 +78,11 @@ export async function isAuthorizedForViewAs(): Promise<boolean> {
 export async function getAvailableRolesForViewAs(): Promise<ViewAsRoleItem[]> {
   const isAuth = await isAuthorizedForViewAs();
   if (!isAuth) return [];
+
+  const now = Date.now();
+  if (availableRolesMemoryCache && now - availableRolesMemoryCache.ts < CACHE_TTL_MS) {
+    return availableRolesMemoryCache.data;
+  }
 
   const db = await getDB();
   try {
@@ -84,6 +100,7 @@ export async function getAvailableRolesForViewAs(): Promise<ViewAsRoleItem[]> {
       };
     });
 
+    availableRolesMemoryCache = { data: roles, ts: now };
     return roles;
   } catch (err) {
     console.error('getAvailableRolesForViewAs failed:', err);

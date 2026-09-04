@@ -20,11 +20,21 @@ export interface ImpersonateUserItem {
   roleName: string;
 }
 
+const impersonationAuthMemoryCache = new Map<string, { data: boolean; ts: number }>();
+const availableUsersMemoryCache = new Map<string, { data: ImpersonateUserItem[]; ts: number }>();
+const CACHE_TTL_MS = 60_000;
+
 /**
  * Checks if a real user is authorized to perform user impersonation.
  */
 export async function isAuthorizedForImpersonation(realUserId: string): Promise<boolean> {
   if (!realUserId) return false;
+
+  const now = Date.now();
+  const cached = impersonationAuthMemoryCache.get(realUserId);
+  if (cached && now - cached.ts < CACHE_TTL_MS) {
+    return cached.data;
+  }
 
   const db = await getDB();
   try {
@@ -43,12 +53,15 @@ export async function isAuthorizedForImpersonation(realUserId: string): Promise<
     const perms = (results || []).map((r: any) => String(r.perm_name));
     const roles = (results || []).map((r: any) => String(r.role_name).toUpperCase());
 
-    return (
+    const isAuth = (
       perms.includes('ADMIN_USERS') ||
       perms.includes('ADMIN_SYSTEM') ||
       roles.includes('EXECUTIVE') ||
       roles.includes('COORDINATOR')
     );
+
+    impersonationAuthMemoryCache.set(realUserId, { data: isAuth, ts: now });
+    return isAuth;
   } catch (err) {
     console.error('isAuthorizedForImpersonation check failed:', err);
     return false;
@@ -63,6 +76,12 @@ export async function getAvailableUsersForImpersonation(): Promise<ImpersonateUs
   if (!session) return [];
 
   const currentUserId = session.realUserId || session.userId;
+  const now = Date.now();
+  const cached = availableUsersMemoryCache.get(currentUserId);
+  if (cached && now - cached.ts < CACHE_TTL_MS) {
+    return cached.data;
+  }
+
   const db = await getDB();
   try {
     const { results } = await db
@@ -77,12 +96,15 @@ export async function getAvailableUsersForImpersonation(): Promise<ImpersonateUs
       .bind(currentUserId)
       .all();
 
-    return (results || []).map((u: any) => ({
+    const userItems = (results || []).map((u: any) => ({
       id: u.id,
       name: u.name,
       email: u.email,
       roleName: u.role_name || 'Member',
     }));
+
+    availableUsersMemoryCache.set(currentUserId, { data: userItems, ts: now });
+    return userItems;
   } catch (err) {
     console.error('getAvailableUsersForImpersonation failed:', err);
     return [];

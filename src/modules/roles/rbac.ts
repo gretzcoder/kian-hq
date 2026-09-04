@@ -4,9 +4,12 @@ import { getActiveSimulatedRole } from './viewAsRoleActions';
 
 const PERMISSIONS_CACHE_TTL = 3600; // 1 hour
 
+const permissionsMemoryCache = new Map<string, { data: string[]; ts: number }>();
+const MEMORY_CACHE_TTL_MS = 60_000; // 60 seconds
+
 /**
  * Retrieves the list of permission names for a given user.
- * Uses Cloudflare KV as a fast cache layer before querying D1.
+ * Uses in-memory cache and Cloudflare KV before querying D1.
  */
 export async function getUserPermissions(userId: string): Promise<string[]> {
   const simRole = await getActiveSimulatedRole();
@@ -29,12 +32,22 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
     }
   }
 
+  const now = Date.now();
+  const memoryCached = permissionsMemoryCache.get(userId);
+  if (memoryCached && now - memoryCached.ts < MEMORY_CACHE_TTL_MS) {
+    return memoryCached.data;
+  }
+
   const kv = await getKV();
   const cacheKey = `user:permissions:${userId}`;
 
   try {
     const cached = await kv.get(cacheKey);
-    if (cached) return JSON.parse(cached) as string[];
+    if (cached) {
+      const perms = JSON.parse(cached) as string[];
+      permissionsMemoryCache.set(userId, { data: perms, ts: now });
+      return perms;
+    }
   } catch (err) {
     console.error('KV Permissions Cache read error:', err);
   }
@@ -53,6 +66,7 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
       .all();
 
     const permissions = results.map((r: any) => r.permission_name as string);
+    permissionsMemoryCache.set(userId, { data: permissions, ts: now });
 
     try {
       await kv.put(cacheKey, JSON.stringify(permissions), {
@@ -75,7 +89,6 @@ export async function getUserPermissions(userId: string): Promise<string[]> {
  */
 const rolesMemoryCache = new Map<string, { data: string[]; ts: number }>();
 const userTypeMemoryCache = new Map<string, { data: 'STAFF' | 'OJT' | 'EXTERNAL'; ts: number }>();
-const MEMORY_CACHE_TTL_MS = 60_000; // 60 seconds
 
 /**
  * Retrieves the role names for a given user.

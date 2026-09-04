@@ -29,6 +29,9 @@ export interface NotificationFeedItem {
   color: string;
 }
 
+const sidebarCountsMemoryCache = new Map<string, { data: SidebarCounts; ts: number }>();
+const SIDEBAR_CACHE_TTL_MS = 30_000; // 30 seconds
+
 /**
  * Server action polled by DashboardSidebar every 60s.
  * Returns fresh notification counts without a full page reload.
@@ -36,6 +39,12 @@ export interface NotificationFeedItem {
 export async function getSidebarCounts(): Promise<SidebarCounts | null> {
   const session = await getSession();
   if (!session) return null;
+
+  const now = Date.now();
+  const cached = sidebarCountsMemoryCache.get(session.userId);
+  if (cached && now - cached.ts < SIDEBAR_CACHE_TTL_MS) {
+    return cached.data;
+  }
 
   const db = await getDB();
   const ctx = await getSessionContext(session.userId);
@@ -139,7 +148,7 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
     pendingReviewCount = validReviews.length;
   }
 
-  return {
+  const res: SidebarCounts = {
     announcementTimestamps: (annRaw.results as any[]).map((r) => r.created_at as number),
     workspaceData: (wsRaw.results as any[]).map((r) => ({
       wsId: r.wsId as string,
@@ -147,6 +156,9 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
     })),
     pendingReviewCount,
   };
+
+  sidebarCountsMemoryCache.set(session.userId, { data: res, ts: now });
+  return res;
 }
 
 /**
