@@ -399,29 +399,38 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
   try {
     const { results: reminderEvents } = await db
       .prepare(
-        `SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
-                u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
-                t.workspace_id AS wsId, ws.name AS wsName
-         FROM workflow_events we
-         LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
-         LEFT JOIN task_assignments ta ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
-         LEFT JOIN tasks t ON (
-           (we.entity_type = 'task_assignment' AND ta.task_id = t.id)
-           OR (we.entity_type = 'task' AND we.entity_id = t.id)
+        `SELECT * FROM (
+           SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
+                  u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
+                  t.workspace_id AS wsId, ws.name AS wsName
+           FROM task_assignments ta
+           JOIN workflow_events we ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
+           JOIN tasks t ON ta.task_id = t.id
+           LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+           LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+           WHERE ta.user_id = ?
+             AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
+             AND (we.triggered_by IS NULL OR we.triggered_by != ?)
+             AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+
+           UNION ALL
+
+           SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
+                  u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
+                  t.workspace_id AS wsId, ws.name AS wsName
+           FROM tasks t
+           JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id)
+           LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+           LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+           WHERE (t.created_by = ? OR EXISTS (SELECT 1 FROM task_assignments WHERE task_id = t.id AND user_id = ?))
+             AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
+             AND (we.triggered_by IS NULL OR we.triggered_by != ?)
+             AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
          )
-         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-         WHERE (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
-           AND (we.triggered_by IS NULL OR we.triggered_by != ?)
-           AND (
-             (we.entity_type = 'task_assignment' AND ta.user_id = ?)
-             OR (we.entity_type = 'task' AND t.created_by = ?)
-             OR (we.entity_type = 'task' AND EXISTS (SELECT 1 FROM task_assignments WHERE task_id = t.id AND user_id = ?))
-           )
-           AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-         ORDER BY we.created_at DESC
+         ORDER BY created_at DESC
          LIMIT 15`
       )
-      .bind(session.userId, session.userId, session.userId, session.userId)
+      .bind(session.userId, session.userId, session.userId, session.userId, session.userId)
       .all();
 
     for (const r of reminderEvents as any[]) {

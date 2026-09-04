@@ -148,7 +148,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
       WHERE u.status = 'ACTIVE'
-      GROUP BY u.id
+      GROUP BY u.id, u.name
       ORDER BY u.name ASC
     `).all(),
     getWorkspaceChats(wsId),

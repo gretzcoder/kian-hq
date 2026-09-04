@@ -1214,13 +1214,16 @@ export async function repairAssessmentTaskStatuses(db: any, workspaceId?: string
       WHERE task_type = 'ASSESSMENT'
         AND status = 'WAITING_REVIEW'
         ${wsClause}
-        AND id IN (
-          SELECT DISTINCT task_id
-          FROM task_assignments
-          WHERE result_url IS NOT NULL
-             OR status IN ('WAITING_REVIEW', 'APPROVED', 'REVISION_REQUESTED')
-             OR mentor_approved = 1
-             OR coordinator_approved = 1
+        AND EXISTS (
+          SELECT 1
+          FROM task_assignments ta
+          WHERE ta.task_id = tasks.id
+            AND (
+              ta.result_url IS NOT NULL
+              OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'REVISION_REQUESTED')
+              OR ta.mentor_approved = 1
+              OR ta.coordinator_approved = 1
+            )
         )
     `).bind(...params).run();
 

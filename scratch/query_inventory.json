@@ -1,0 +1,2717 @@
+[
+  {
+    "file": "src\\app\\api\\auth\\debug\\route.ts",
+    "line": 12,
+    "sql": "SELECT COUNT(*) as count FROM users"
+  },
+  {
+    "file": "src\\app\\api\\auth\\login\\route.ts",
+    "line": 35,
+    "sql": "SELECT id, email, username, name, status, password_hash FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?"
+  },
+  {
+    "file": "src\\app\\api\\auth\\signup\\route.ts",
+    "line": 48,
+    "sql": "SELECT id, email, username FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?"
+  },
+  {
+    "file": "src\\app\\api\\auth\\signup\\route.ts",
+    "line": 66,
+    "sql": "SELECT COUNT(*) as count FROM users"
+  },
+  {
+    "file": "src\\app\\api\\auth\\signup\\route.ts",
+    "line": 71,
+    "sql": "INSERT INTO users (id, email, username, name, status, password_hash) VALUES (?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\app\\api\\auth\\signup\\route.ts",
+    "line": 76,
+    "sql": "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 43,
+    "sql": "SELECT status, COUNT(*) as count FROM projects GROUP BY status"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 46,
+    "sql": "SELECT t.status, COUNT(*) as count FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) GROUP BY t.status"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 49,
+    "sql": "SELECT COUNT(*) as count FROM workspaces WHERE deleted_at IS NULL"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 52,
+    "sql": "SELECT COUNT(*) as count FROM users WHERE status = 'ACTIVE'"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 55,
+    "sql": "SELECT t.title, p.name as project_name, t.deadline, u.name as assigned_name FROM tasks t JOIN projects p ON t.project_id = p.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id LEFT JOIN task_assignments ta ON t.id = ta.task_id AND ta.assignment_role = 'PIC' LEFT JOIN users u ON ta.user_id = u.id WHERE t.deadline IS NOT NULL AND t.deadline < ? AND t.status NOT IN ('COMPLETED', 'APPROVED', 'DELETED') AND (ws.id IS NULL OR ws.deleted_at IS NULL) ORDER BY t.deadline ASC LIMIT 10"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 71,
+    "sql": "SELECT u.name, SUM(CASE WHEN ta.status = 'APPROVED' OR t.status IN ('COMPLETED', 'APPROVED') THEN 1 ELSE 0 END) as completed, COUNT(ta.id) as total, COALESCE(SUM(CASE WHEN ta.status = 'APPROVED' THEN ta.sparks ELSE 0 END), 0) as sparks FROM users u JOIN task_assignments ta ON ta.user_id = u.id JOIN tasks t ON ta.task_id = t.id AND t.status != 'DELETED' LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE u.status = 'ACTIVE' AND (ws.id IS NULL OR ws.deleted_at IS NULL) GROUP BY u.id, u.name HAVING COUNT(ta.id) > 0 ORDER BY completed DESC, sparks DESC LIMIT 8"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 88,
+    "sql": "SELECT intent_detected, tokens_used, model_used, timestamp FROM ai_token_logs WHERE timestamp > ? ORDER BY timestamp DESC LIMIT 20"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 97,
+    "sql": "SELECT CAST((? - t.created_at) / 604800000 AS INTEGER) as week, COUNT(*) as count FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.created_at > ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) GROUP BY week ORDER BY week ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 107,
+    "sql": "SELECT COUNT(*) as count FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status IN ('COMPLETED', 'APPROVED') AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) AND t.created_at > ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 114,
+    "sql": "SELECT COALESCE(SUM(ta.sparks), 0) as total_sparks FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) AND ta.status = 'APPROVED'"
+  },
+  {
+    "file": "src\\app\\dashboard\\analytics\\page.tsx",
+    "line": 123,
+    "sql": "SELECT status, COUNT(*) as count FROM content_briefs GROUP BY status"
+  },
+  {
+    "file": "src\\app\\dashboard\\announcements\\page.tsx",
+    "line": 42,
+    "sql": "SELECT a.id, a.title, a.content, a.created_at, a.created_by as author_id, u.name as author_name, u.avatar_url as author_avatar FROM announcements a LEFT JOIN users u ON a.created_by = u.id ORDER BY a.created_at DESC"
+  },
+  {
+    "file": "src\\app\\dashboard\\announcements\\page.tsx",
+    "line": 48,
+    "sql": "SELECT c.id, c.announcement_id, c.user_id, c.parent_id, c.content, c.created_at, u.name as user_name, u.avatar_url as user_avatar FROM announcement_comments c LEFT JOIN users u ON c.user_id = u.id ORDER BY c.created_at ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\announcements\\page.tsx",
+    "line": 54,
+    "sql": "SELECT announcement_id, emoji, COUNT(*) as count, MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as user_reacted FROM announcement_reactions GROUP BY announcement_id, emoji"
+  },
+  {
+    "file": "src\\app\\dashboard\\kb\\page.tsx",
+    "line": 79,
+    "sql": "SELECT kc.*, COUNT(ki.id) AS item_count FROM knowledge_categories kc LEFT JOIN knowledge_items ki ON ki.category_id = kc.id GROUP BY kc.id ORDER BY kc.sort_order ASC, kc.created_at ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\kb\\page.tsx",
+    "line": 97,
+    "sql": "SELECT ki.*, u.name AS created_by_name FROM knowledge_items ki LEFT JOIN users u ON ki.created_by = u.id WHERE ki.category_id = ? ORDER BY ki.sort_order ASC, ki.created_at ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\layout.tsx",
+    "line": 62,
+    "sql": "SELECT onboarding_completed, feature_tour_completed, avatar_url FROM users WHERE id = ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\layout.tsx",
+    "line": 91,
+    "sql": "SELECT 1 FROM project_coordinators WHERE user_id = ? LIMIT 1"
+  },
+  {
+    "file": "src\\app\\dashboard\\page.tsx",
+    "line": 50,
+    "sql": "SELECT COUNT(ta.id) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED') AND ta.result_url IS NOT NULL AND TRIM(ta.result_url) != '' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\app\\dashboard\\page.tsx",
+    "line": 51,
+    "sql": "SELECT COUNT(*) as count FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status IN ('TODO', 'IN_PROGRESS', 'REVISION') AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\app\\dashboard\\page.tsx",
+    "line": 52,
+    "sql": "SELECT COUNT(*) as count FROM users WHERE user_type = 'OJT'"
+  },
+  {
+    "file": "src\\app\\dashboard\\page.tsx",
+    "line": 53,
+    "sql": "SELECT id, title, content, created_at, created_by FROM announcements ORDER BY created_at DESC LIMIT 3"
+  },
+  {
+    "file": "src\\app\\dashboard\\permissions\\page.tsx",
+    "line": 47,
+    "sql": "SELECT id, name, description, color FROM roles ORDER BY CASE WHEN id = 'role_executive' OR name = 'EXECUTIVE' THEN 1 WHEN id = 'role_coordinator' OR name = 'COORDINATOR' THEN 2 WHEN id = 'role_mentor_troopers' OR name = 'MENTOR TROOPERS' THEN 3 WHEN id = 'role_creator' OR name = 'CREATOR' THEN 4 WHEN id = 'role_troopers' OR name = 'TROOPERS' THEN 5 WHEN id = 'role_collaborator' OR name = 'COLLABORATOR' THEN 6 ELSE 7 END, name ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\permissions\\page.tsx",
+    "line": 60,
+    "sql": "SELECT id, name, description FROM permissions ORDER BY CASE name WHEN 'ADMIN_SYSTEM' THEN 1 WHEN 'ADMIN_USERS' THEN 2 WHEN 'ADMIN_ROLES' THEN 3 WHEN 'VIEW_AS_ROLE' THEN 4 WHEN 'PROJECT_CREATE' THEN 5 WHEN 'PROJECT_MANAGE' THEN 6 WHEN 'WORKSPACE_MANAGE' THEN 7 WHEN 'WORKSPACE_MEMBER' THEN 8 WHEN 'TASK_CREATE' THEN 9 WHEN 'TASK_ASSIGN' THEN 10 WHEN 'TASK_REVIEW' THEN 11 WHEN 'TASK_EXECUTE' THEN 12 WHEN 'BRIEF_REVIEW' THEN 13 WHEN 'KB_MANAGE' THEN 14 WHEN 'ANNOUNCEMENT_POST' THEN 15 WHEN 'USE_AI' THEN 16 WHEN 'EXPORT_DATA' THEN 17 ELSE 18 END"
+  },
+  {
+    "file": "src\\app\\dashboard\\permissions\\page.tsx",
+    "line": 84,
+    "sql": "SELECT role_id, permission_id FROM role_permissions"
+  },
+  {
+    "file": "src\\app\\dashboard\\permissions\\page.tsx",
+    "line": 86,
+    "sql": "SELECT role_id, COUNT(*) as count FROM user_roles GROUP BY role_id"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 81,
+    "sql": "SELECT u.id, u.email, u.name, u.status, u.user_type, u.created_at, r.name as role_name, u.university, u.study_program, u.semester, u.whatsapp_number, u.avatar_url, u.main_roles, u.custom_role, u.tools, u.portfolio_url, u.department, u.bio FROM users u LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE u.id = ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 92,
+    "sql": "SELECT ta.status, COUNT(*) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) GROUP BY ta.status"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 101,
+    "sql": "SELECT ta.assignment_role, COUNT(*) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) GROUP BY ta.assignment_role ORDER BY count DESC"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 111,
+    "sql": "SELECT ta.id as assignment_id, t.title as task_title, ta.assignment_role, ta.status, ta.created_at, ta.deadline, ws.name as workspace_name, p.name as project_name FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id LEFT JOIN projects p ON t.project_id = p.id WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ORDER BY ta.created_at DESC LIMIT 8"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 130,
+    "sql": "SELECT COUNT(DISTINCT t.workspace_id) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 138,
+    "sql": "SELECT COUNT(DISTINCT t.project_id) as count FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 146,
+    "sql": "SELECT we.note, ta.assignment_role, ta.id as entity_id FROM workflow_events we JOIN task_assignments ta ON we.entity_id = ta.id JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) AND (we.note LIKE '%[Sparks:%' OR we.note LIKE '%[Badge:%')"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 155,
+    "sql": "SELECT ta.id, ta.sparks, ta.assignment_role FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = ? AND ta.status = 'APPROVED' AND ta.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 163,
+    "sql": "SELECT t.id, t.sparks FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.created_by = ? AND t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\app\\dashboard\\profile\\page.tsx",
+    "line": 170,
+    "sql": "SELECT id, type, sparks, category, note FROM sparks_adjustments WHERE user_id = ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\page.tsx",
+    "line": 27,
+    "sql": "SELECT * FROM projects ORDER BY created_at DESC"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\page.tsx",
+    "line": 29,
+    "sql": "SELECT id, name, email FROM users WHERE status = 'ACTIVE' ORDER BY email ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\page.tsx",
+    "line": 44,
+    "sql": "SELECT title FROM content_briefs WHERE id = ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\[id]\\page.tsx",
+    "line": 78,
+    "sql": "SELECT * FROM projects WHERE id = ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\[id]\\page.tsx",
+    "line": 97,
+    "sql": "SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\[id]\\page.tsx",
+    "line": 98,
+    "sql": "SELECT ws.id, ws.name, ws.description, ws.status, COUNT(t.id) as task_count FROM workspaces ws LEFT JOIN tasks t ON t.workspace_id = ws.id WHERE ws.project_id = ? AND ws.deleted_at IS NULL GROUP BY ws.id ORDER BY ws.created_at ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\[id]\\page.tsx",
+    "line": 107,
+    "sql": "SELECT t.*, u.name as assigned_name, u.email as assigned_email, c.name as creator_name FROM tasks t LEFT JOIN task_assignments ta ON t.id = ta.task_id AND ta.assignment_role = 'PIC' LEFT JOIN users u ON ta.user_id = u.id LEFT JOIN users c ON t.created_by = c.id WHERE t.project_id = ? AND (t.workspace_id IS NULL) ORDER BY t.created_at ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\[id]\\page.tsx",
+    "line": 116,
+    "sql": "SELECT DISTINCT u.id, u.name, u.email FROM users u JOIN user_roles ur ON u.id = ur.user_id JOIN roles r ON ur.role_id = r.id WHERE u.status = 'ACTIVE' AND (r.id = 'role_mentor_troopers' OR r.name = 'MENTOR TROOPERS') ORDER BY u.name ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\[id]\\page.tsx",
+    "line": 125,
+    "sql": "SELECT id, audience, objectives, key_messages, visual_style, status FROM content_briefs WHERE project_id = ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\[id]\\page.tsx",
+    "line": 156,
+    "sql": "SELECT u.id, u.name, u.email FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? ORDER BY u.name ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\projects\\[id]\\page.tsx",
+    "line": 163,
+    "sql": "SELECT id, name, email FROM users WHERE status = \"ACTIVE\" ORDER BY name ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\review\\page.tsx",
+    "line": 112,
+    "sql": "SELECT id, name FROM users WHERE id IN (${placeholders})"
+  },
+  {
+    "file": "src\\app\\dashboard\\users\\page.tsx",
+    "line": 49,
+    "sql": "SELECT id, name FROM roles ORDER BY name ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\users\\page.tsx",
+    "line": 58,
+    "sql": "SELECT id, name, email, avatar_url, created_at FROM users WHERE status = 'PENDING' ORDER BY created_at ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\page.tsx",
+    "line": 68,
+    "sql": "SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name, (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role, COALESCE( (SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), (SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), ws.created_at ) AS latest_activity_ts FROM workspaces ws JOIN projects p ON ws.project_id = p.id WHERE ws.deleted_at IS NULL ORDER BY ws.created_at DESC"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\page.tsx",
+    "line": 85,
+    "sql": "SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name, (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role, COALESCE( (SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), (SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), ws.created_at ) AS latest_activity_ts FROM workspaces ws JOIN projects p ON ws.project_id = p.id WHERE ( EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) OR ws.ojt_coordinator_id = ? OR EXISTS (SELECT 1 FROM project_coordinators WHERE project_id = ws.project_id AND user_id = ?) OR (? AND ws.workspace_type = 'ASSESSMENT') ) AND ws.deleted_at IS NULL ORDER BY ws.created_at DESC"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\page.tsx",
+    "line": 139,
+    "sql": "SELECT DISTINCT p.id, p.name, p.description, p.status FROM projects p JOIN project_coordinators pc ON p.id = pc.project_id WHERE pc.user_id = ? ORDER BY p.created_at DESC"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 92,
+    "sql": "SELECT ws.*, u.name as creator_name, m.name as mentor_name FROM workspaces ws LEFT JOIN users u ON ws.created_by = u.id LEFT JOIN users m ON ws.ojt_coordinator_id = m.id WHERE ws.id = ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 123,
+    "sql": "SELECT id, name FROM projects WHERE id = ?"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 124,
+    "sql": "SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 125,
+    "sql": "SELECT t.id, t.title, t.description, t.required_outputs, t.status, t.priority, t.deadline, t.extended_deadline, t.start_at, t.created_at, t.task_type, t.assessment_category, t.assigned_mentors, t.parent_task_id, t.revision_note, t.sparks, t.sparks_multiplier, t.created_by, u.name as creator_name FROM tasks t LEFT JOIN users u ON t.created_by = u.id WHERE t.workspace_id = ? AND t.status != 'DELETED' ORDER BY CASE WHEN t.deadline IS NULL THEN 1 ELSE 0 END ASC, t.deadline ASC, t.created_at ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 135,
+    "sql": "SELECT wm.user_id as userId, u.name as userName, u.email as userEmail, wm.team_role as teamRole, u.user_type as userType, u.avatar_url as avatarUrl FROM workspace_members wm JOIN users u ON wm.user_id = u.id WHERE wm.workspace_id = ? ORDER BY wm.created_at ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 143,
+    "sql": "SELECT u.id, u.name, u.email, u.user_type as userType, GROUP_CONCAT(DISTINCT r.name) AS roleNames, GROUP_CONCAT(DISTINCT r.id) AS roleIds FROM users u LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE u.status = 'ACTIVE' GROUP BY u.id ORDER BY u.name ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 156,
+    "sql": "SELECT DISTINCT u.id, u.name, u.email FROM users u JOIN user_roles ur ON u.id = ur.user_id JOIN roles r ON ur.role_id = r.id WHERE u.status = 'ACTIVE' AND (r.id = 'role_mentor_troopers' OR r.name = 'MENTOR TROOPERS') ORDER BY u.name ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 165,
+    "sql": "SELECT ur.user_id as userId, r.id as roleId, r.name as roleName FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id IN ( SELECT user_id FROM workspace_members WHERE workspace_id = ? )"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 173,
+    "sql": "SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ? LIMIT 1"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 226,
+    "sql": "SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role, ta.group_name, ta.status, ta.result_url, ta.revision_note, ta.appreciation_note, ta.submitted_at, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved, ta.sparks, ta.deadline, u.name as user_name FROM task_assignments ta LEFT JOIN users u ON ta.user_id = u.id WHERE ta.task_id IN (${tasks.map(() => '?').join(',')}) ORDER BY ta.created_at ASC"
+  },
+  {
+    "file": "src\\app\\dashboard\\workspace\\[wsId]\\page.tsx",
+    "line": 241,
+    "sql": "SELECT r.assignment_id, r.emoji, COUNT(*) as count, MAX(CASE WHEN r.user_id = ? THEN 1 ELSE 0 END) as user_reacted FROM assessment_submission_reactions r JOIN task_assignments ta ON r.assignment_id = ta.id WHERE ta.task_id IN (${tasks.map(() => '?').join(',')}) GROUP BY r.assignment_id, r.emoji"
+  },
+  {
+    "file": "src\\modules\\achievements\\actions.ts",
+    "line": 99,
+    "sql": "SELECT achievement_type, title, category, rank, score, period, earned_at FROM achievement_history WHERE user_id = ? AND earned_at <= ? ORDER BY earned_at DESC"
+  },
+  {
+    "file": "src\\modules\\achievements\\actions.ts",
+    "line": 253,
+    "sql": "DELETE FROM achievement_history WHERE earned_at > ?"
+  },
+  {
+    "file": "src\\modules\\achievements\\actions.ts",
+    "line": 364,
+    "sql": "SELECT id FROM achievement_history WHERE achievement_type = ? AND period = ?"
+  },
+  {
+    "file": "src\\modules\\achievements\\actions.ts",
+    "line": 370,
+    "sql": "UPDATE achievement_history SET user_id = ?, title = ?, score = ?, earned_at = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\achievements\\actions.ts",
+    "line": 383,
+    "sql": "INSERT INTO achievement_history (id, user_id, achievement_type, title, period, rank, score, category, earned_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\achievements\\actions.ts",
+    "line": 418,
+    "sql": "SELECT COUNT(*) as count FROM achievement_history WHERE period = 'Aug 2026'"
+  },
+  {
+    "file": "src\\modules\\achievements\\actions.ts",
+    "line": 426,
+    "sql": "SELECT id, name FROM users WHERE email NOT LIKE '%admin%' AND id NOT IN ( SELECT user_id FROM user_roles JOIN roles ON user_roles.role_id = roles.id WHERE roles.id IN ('role_coordinator', 'role_executive') ) LIMIT 10"
+  },
+  {
+    "file": "src\\modules\\achievements\\actions.ts",
+    "line": 480,
+    "sql": "SELECT id FROM achievement_history WHERE category = ? AND period = ? AND rank = ?"
+  },
+  {
+    "file": "src\\modules\\ai-assistant\\actions.ts",
+    "line": 113,
+    "sql": "SELECT name, description, status, deadline FROM projects LIMIT 10"
+  },
+  {
+    "file": "src\\modules\\ai-assistant\\actions.ts",
+    "line": 137,
+    "sql": "SELECT title, category, content FROM knowledge_base LIMIT 5"
+  },
+  {
+    "file": "src\\modules\\ai-assistant\\actions.ts",
+    "line": 151,
+    "sql": "SELECT r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?"
+  },
+  {
+    "file": "src\\modules\\ai-assistant\\actions.ts",
+    "line": 203,
+    "sql": "INSERT INTO ai_token_logs (id, user_id, intent_detected, tokens_used, model_used) VALUES (?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 31,
+    "sql": "INSERT INTO announcements (id, title, content, created_by) VALUES (?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 38,
+    "sql": "SELECT id FROM users WHERE status = 'ACTIVE' AND id != ?"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 81,
+    "sql": "DELETE FROM announcements WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 112,
+    "sql": "INSERT INTO announcement_comments (id, announcement_id, user_id, parent_id, content) VALUES (?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 136,
+    "sql": "SELECT user_id FROM announcement_comments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 147,
+    "sql": "DELETE FROM announcement_comments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 170,
+    "sql": "SELECT 1 FROM announcement_reactions WHERE announcement_id = ? AND user_id = ? AND emoji = ?"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 176,
+    "sql": "DELETE FROM announcement_reactions WHERE announcement_id = ? AND user_id = ? AND emoji = ?"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 181,
+    "sql": "INSERT INTO announcement_reactions (announcement_id, user_id, emoji) VALUES (?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 204,
+    "sql": "SELECT a.id, a.title, a.content, a.created_at, a.created_by, u.name as author_name, u.avatar_url as author_avatar FROM announcements a LEFT JOIN users u ON a.created_by = u.id ORDER BY a.created_at DESC LIMIT 20"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 221,
+    "sql": "SELECT ac.id, ac.announcement_id, ac.user_id, ac.parent_id, ac.content, ac.created_at, u.name as user_name, u.avatar_url as user_avatar FROM announcement_comments ac LEFT JOIN users u ON ac.user_id = u.id WHERE ac.announcement_id IN (${placeholders}) ORDER BY ac.created_at ASC"
+  },
+  {
+    "file": "src\\modules\\announcements\\actions.ts",
+    "line": 229,
+    "sql": "SELECT announcement_id, emoji, COUNT(*) as count, MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as user_reacted FROM announcement_reactions WHERE announcement_id IN (${placeholders}) GROUP BY announcement_id, emoji"
+  },
+  {
+    "file": "src\\modules\\auth\\actions.ts",
+    "line": 43,
+    "sql": "SELECT id, email, username FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?"
+  },
+  {
+    "file": "src\\modules\\auth\\actions.ts",
+    "line": 65,
+    "sql": "SELECT COUNT(*) as count FROM users"
+  },
+  {
+    "file": "src\\modules\\auth\\actions.ts",
+    "line": 71,
+    "sql": "INSERT INTO users (id, email, username, name, status, password_hash) VALUES (?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\auth\\actions.ts",
+    "line": 76,
+    "sql": "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)"
+  },
+  {
+    "file": "src\\modules\\auth\\actions.ts",
+    "line": 141,
+    "sql": "SELECT id, email, username, name, status, password_hash FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?"
+  },
+  {
+    "file": "src\\modules\\auth\\session.ts",
+    "line": 50,
+    "sql": "SELECT id, name, email, avatar_url FROM users WHERE id = ? AND status = \"ACTIVE\""
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 120,
+    "sql": "ALTER TABLE badges ADD COLUMN is_continuous_earning INTEGER DEFAULT 0"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 121,
+    "sql": "ALTER TABLE user_badges ADD COLUMN claim_count INTEGER DEFAULT 1"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 127,
+    "sql": "SELECT id, name, category, requirement_type, requirement_data, is_continuous_earning, sparks_reward FROM badges WHERE requirement_type IN ('TASK', 'WORKSPACE', 'ACHIEVEMENT')"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 141,
+    "sql": "SELECT ta.user_id, ta.task_id FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.status IN ('APPROVED', 'DONE', 'PUBLISHED') AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${userClause}"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 168,
+    "sql": "SELECT t.id, t.workspace_id FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 190,
+    "sql": "SELECT user_id, badge_id FROM user_badges ${ubClause}"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 228,
+    "sql": "INSERT OR IGNORE INTO user_badges (id, user_id, badge_id, awarded_by, awarded_at, claim_count) VALUES (?, ?, ?, 'SYSTEM_AUTO', ?, 1)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 252,
+    "sql": "SELECT ah.user_id, ah.category, ah.period, ah.earned_at, ah.rank FROM achievement_history ah JOIN users u ON ah.user_id = u.id WHERE u.status = 'ACTIVE' ${achClause} ORDER BY ah.user_id, ah.earned_at ASC"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 275,
+    "sql": "SELECT id, user_id, badge_id, claim_count FROM user_badges ${ubClause}"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 329,
+    "sql": "DELETE FROM user_badges WHERE id = ? AND (awarded_by = 'SYSTEM_AUTO' OR awarded_by IS NULL)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 330,
+    "sql": "DELETE FROM sparks_adjustments WHERE user_id = ? AND badge_id = ? AND category = 'BADGE_REWARD'"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 339,
+    "sql": "INSERT OR IGNORE INTO user_badges (id, user_id, badge_id, awarded_by, awarded_at, claim_count, claimed_at) VALUES (?, ?, ?, 'SYSTEM_AUTO', ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 347,
+    "sql": "INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at, badge_id) VALUES (?, ?, 'APPRECIATION', ?, 'BADGE_REWARD', ?, 'SYSTEM_AUTO', strftime('%s', 'now'), ?)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 358,
+    "sql": "UPDATE user_badges SET claim_count = ?, claimed_at = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 435,
+    "sql": "UPDATE sparks_adjustments SET sparks = ( SELECT b.sparks_reward FROM badges b WHERE b.id = sparks_adjustments.badge_id ) WHERE category = 'BADGE_REWARD' AND badge_id IS NOT NULL AND badge_id IN (SELECT id FROM badges) AND sparks != (SELECT b.sparks_reward FROM badges b WHERE b.id = sparks_adjustments.badge_id)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 447,
+    "sql": "UPDATE sparks_adjustments SET badge_id = ( SELECT b.id FROM badges b WHERE sparks_adjustments.note LIKE '%' || b.name || '%' LIMIT 1 ), sparks = ( SELECT b.sparks_reward FROM badges b WHERE sparks_adjustments.note LIKE '%' || b.name || '%' LIMIT 1 ) WHERE category = 'BADGE_REWARD' AND (badge_id IS NULL OR badge_id = '') AND EXISTS ( SELECT 1 FROM badges b WHERE sparks_adjustments.note LIKE '%' || b.name || '%' )"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 463,
+    "sql": "UPDATE user_badges SET claimed_at = ( SELECT COALESCE(sa.created_at * 1000, strftime('%s', 'now') * 1000) FROM sparks_adjustments sa WHERE sa.user_id = user_badges.user_id AND sa.category = 'BADGE_REWARD' AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%') LIMIT 1 ) WHERE claimed_at IS NULL AND EXISTS ( SELECT 1 FROM sparks_adjustments sa WHERE sa.user_id = user_badges.user_id AND sa.category = 'BADGE_REWARD' AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%') )"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 483,
+    "sql": "UPDATE user_badges SET awarded_at = ( SELECT sa.created_at * 1000 FROM sparks_adjustments sa WHERE sa.user_id = user_badges.user_id AND sa.category = 'BADGE_REWARD' AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%') ORDER BY sa.created_at ASC LIMIT 1 ) WHERE EXISTS ( SELECT 1 FROM sparks_adjustments sa WHERE sa.user_id = user_badges.user_id AND sa.category = 'BADGE_REWARD' AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%') AND (sa.created_at * 1000) < user_badges.awarded_at )"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 505,
+    "sql": "SELECT * FROM badges ORDER BY created_at DESC"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 510,
+    "sql": "SELECT badge_id, awarded_at, claimed_at, claim_count FROM user_badges WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 512,
+    "sql": "SELECT badge_id, note FROM sparks_adjustments WHERE user_id = ? AND category = 'BADGE_REWARD'"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 530,
+    "sql": "SELECT ub.badge_id, ub.user_id, ub.awarded_at, ub.awarded_by, u.name AS user_name, u.email AS user_email, u.user_type, u.avatar_url FROM user_badges ub JOIN users u ON ub.user_id = u.id WHERE u.status = 'ACTIVE' ORDER BY ub.awarded_at DESC"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 559,
+    "sql": "SELECT ta.task_id, ta.status AS assignment_status, t.status AS task_status, t.workspace_id FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 580,
+    "sql": "SELECT t.id, t.title, t.workspace_id, t.status FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 595,
+    "sql": "SELECT id, name FROM workspaces WHERE deleted_at IS NULL"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 605,
+    "sql": "SELECT user_id, category, period, earned_at, rank FROM achievement_history WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 740,
+    "sql": "INSERT OR IGNORE INTO user_badges (id, user_id, badge_id, awarded_by, awarded_at) VALUES (?, ?, ?, 'SYSTEM_AUTO', ?)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 873,
+    "sql": "INSERT INTO badges (id, name, category, icon_url, description, requirement_type, requirement_data, is_continuous_earning, sparks_reward, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 930,
+    "sql": "SELECT name, icon_url FROM badges WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 968,
+    "sql": "UPDATE badges SET name = ?, category = ?, icon_url = ?, description = ?, requirement_type = ?, requirement_data = ?, is_continuous_earning = ?, sparks_reward = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 977,
+    "sql": "UPDATE sparks_adjustments SET badge_id = ?, sparks = ? WHERE category = 'BADGE_REWARD' AND (badge_id = ? OR note LIKE '%' || ? || '%' OR note LIKE '%' || ? || '%')"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 986,
+    "sql": "UPDATE sparks_adjustments SET note = 'Claim Reward Badge: ' || ? WHERE category = 'BADGE_REWARD' AND (badge_id = ? OR note LIKE '%' || ? || '%' OR note LIKE '%' || ? || '%')"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 995,
+    "sql": "UPDATE user_badges SET claimed_at = ( SELECT COALESCE(sa.created_at * 1000, strftime('%s', 'now') * 1000) FROM sparks_adjustments sa WHERE sa.user_id = user_badges.user_id AND sa.category = 'BADGE_REWARD' AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || ? || '%' OR sa.note LIKE '%' || ? || '%') LIMIT 1 ) WHERE badge_id = ? AND claimed_at IS NULL AND EXISTS ( SELECT 1 FROM sparks_adjustments sa WHERE sa.user_id = user_badges.user_id AND sa.category = 'BADGE_REWARD' AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || ? || '%' OR sa.note LIKE '%' || ? || '%') )"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1047,
+    "sql": "DELETE FROM user_badges WHERE badge_id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1048,
+    "sql": "DELETE FROM badges WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1086,
+    "sql": "SELECT name, sparks_reward FROM badges WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1096,
+    "sql": "INSERT OR IGNORE INTO user_badges (id, user_id, badge_id, awarded_by, awarded_at) VALUES (?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1124,
+    "sql": "SELECT t.id, t.title, ws.name AS workspace_name FROM tasks t JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.status != 'DELETED' AND ws.deleted_at IS NULL ORDER BY t.created_at DESC LIMIT 200"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1134,
+    "sql": "SELECT id, name FROM workspaces WHERE deleted_at IS NULL ORDER BY name ASC"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1141,
+    "sql": "SELECT u.id, u.name, u.email, u.user_type AS userType, GROUP_CONCAT(DISTINCT r.name) AS roleNames FROM users u LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE u.status = 'ACTIVE' GROUP BY u.id ORDER BY u.name ASC"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1186,
+    "sql": "SELECT id, claimed_at FROM user_badges WHERE user_id = ? AND badge_id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1214,
+    "sql": "SELECT id FROM sparks_adjustments WHERE user_id = ? AND category = 'BADGE_REWARD' AND (badge_id = ? OR note LIKE '%' || ? || '%')"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1226,
+    "sql": "UPDATE user_badges SET claimed_at = ? WHERE user_id = ? AND badge_id = ?"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1231,
+    "sql": "UPDATE sparks_adjustments SET badge_id = ? WHERE id = ? AND (badge_id IS NULL OR badge_id = '')"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1247,
+    "sql": "INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at, badge_id) VALUES (?, ?, 'APPRECIATION', ?, 'BADGE_REWARD', ?, ?, strftime('%s', 'now'), ?)"
+  },
+  {
+    "file": "src\\modules\\badges\\badgeActions.ts",
+    "line": 1268,
+    "sql": "SELECT b.*, ub.awarded_at, ub.claimed_at FROM user_badges ub JOIN badges b ON ub.badge_id = b.id WHERE ub.user_id = ? ORDER BY ub.awarded_at DESC"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 55,
+    "sql": "SELECT COUNT(DISTINCT ta.id) as cnt FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE ta.user_id = ? AND ta.status IN ('APPROVED', 'DONE', 'SUBMITTED')"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 66,
+    "sql": "SELECT ( COALESCE((SELECT SUM(sparks) FROM task_assignments WHERE user_id = ? AND status = 'APPROVED'), 0) + COALESCE((SELECT SUM(sparks) FROM sparks_adjustments WHERE user_id = ?), 0) ) as total_sparks"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 77,
+    "sql": "SELECT b.name, b.icon_url FROM user_badges ub JOIN badges b ON ub.badge_id = b.id WHERE ub.user_id = ? ORDER BY ub.awarded_at DESC"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 89,
+    "sql": "SELECT COUNT(DISTINCT workspace_id) as cnt FROM workspace_members WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 138,
+    "sql": "SELECT * FROM certificate_templates ORDER BY created_at ASC"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 149,
+    "sql": "SELECT u.id, u.name, u.email, u.avatar_url, (SELECT r.name FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE ur.user_id = u.id LIMIT 1) as role FROM users u ORDER BY u.name ASC"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 406,
+    "sql": "SELECT id, certificate_code FROM certificates WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 416,
+    "sql": "UPDATE certificates SET template_id = ?, performance_metrics = ?, status = ?, issued_by = ?, updated_at = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 435,
+    "sql": "INSERT INTO certificates ( id, user_id, template_id, certificate_code, title, status, issue_date, performance_metrics, issued_by, created_at, updated_at ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 472,
+    "sql": "SELECT id FROM users"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 508,
+    "sql": "UPDATE certificates SET status = ?, updated_at = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 532,
+    "sql": "SELECT id FROM certificate_templates WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 538,
+    "sql": "UPDATE certificate_templates SET name = ?, description = ?, layout_type = ?, background_color = ?, border_style = ?, accent_color = ?, signatory_name = ?, signatory_title = ?, custom_subtext = ?, updated_at = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\certificates\\certificateActions.ts",
+    "line": 559,
+    "sql": "INSERT INTO certificate_templates ( id, name, description, layout_type, background_color, border_style, accent_color, signatory_name, signatory_title, custom_subtext, is_active, created_at, updated_at ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 121,
+    "sql": "SELECT id, name, icon, sort_order FROM community_categories ORDER BY sort_order ASC, name ASC"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 130,
+    "sql": "SELECT id, slug, name, description, category, category_id, icon, sort_order, COALESCE(is_default, 0) as is_default FROM community_channels ORDER BY sort_order ASC, name ASC"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 159,
+    "sql": "SELECT channel_id, last_read_at FROM community_channel_reads WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 181,
+    "sql": "SELECT COUNT(*) as count FROM community_messages WHERE channel_id = ? AND created_at > ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 193,
+    "sql": "SELECT cm.channel_id, cm.message, cm.created_at FROM community_messages cm INNER JOIN ( SELECT channel_id, MAX(created_at) as max_created FROM community_messages WHERE channel_id IN (${placeholders}) GROUP BY channel_id ) sub ON cm.channel_id = sub.channel_id AND cm.created_at = sub.max_created"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 249,
+    "sql": "PRAGMA table_info(community_messages)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 253,
+    "sql": "ALTER TABLE community_messages ADD COLUMN thread_name TEXT"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 256,
+    "sql": "ALTER TABLE community_messages ADD COLUMN is_thread_root INTEGER DEFAULT 0"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 259,
+    "sql": "ALTER TABLE community_messages ADD COLUMN thread_root_id TEXT"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 262,
+    "sql": "ALTER TABLE community_messages ADD COLUMN pinned_answer_id TEXT"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 278,
+    "sql": "SELECT m.id, m.channel_id, m.user_id, m.message, m.attachment_url, m.parent_id, m.created_at, m.thread_name, m.is_thread_root, m.thread_root_id, m.pinned_answer_id, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar, r.name as user_role_name, r.description as user_role_color FROM community_messages m LEFT JOIN users u ON m.user_id = u.id LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE m.channel_id = ? AND (m.thread_root_id IS NULL OR m.thread_root_id = '') ORDER BY m.created_at ASC LIMIT ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 315,
+    "sql": "INSERT INTO community_channel_reads (channel_id, user_id, last_read_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(channel_id, user_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 336,
+    "sql": "SELECT message_id, emoji, user_id FROM community_message_reactions WHERE message_id IN (${placeholders})"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 358,
+    "sql": "SELECT m.id, m.message, u.name as user_name FROM community_messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.id IN (${placeholders})"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 381,
+    "sql": "SELECT m.thread_root_id, m.created_at, m.message, u.name as user_name FROM community_messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.thread_root_id IN (${placeholders}) ORDER BY m.created_at DESC"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 480,
+    "sql": "SELECT u.id, u.name, u.email, u.avatar_url, u.user_type, r.id as role_id, r.name as role_name, r.description as role_color FROM users u LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id ORDER BY r.name ASC, u.name ASC"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 502,
+    "sql": "SELECT user_id, max(last_read_at) as last_active FROM community_channel_reads GROUP BY user_id"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 506,
+    "sql": "SELECT user_id, max(created_at) as last_active FROM community_messages GROUP BY user_id"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 610,
+    "sql": "INSERT INTO community_messages (id, channel_id, user_id, message, attachment_url, parent_id, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 628,
+    "sql": "SELECT name FROM community_channels WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 637,
+    "sql": "SELECT id, name, email FROM users"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 673,
+    "sql": "SELECT id FROM users WHERE id != ? AND (status IS NULL OR status = 'ACTIVE')"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 711,
+    "sql": "SELECT id FROM community_message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 720,
+    "sql": "DELETE FROM community_message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 730,
+    "sql": "INSERT INTO community_message_reactions (id, message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 763,
+    "sql": "DELETE FROM community_message_reactions WHERE message_id IN (SELECT id FROM community_messages WHERE channel_id = ?)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 770,
+    "sql": "DELETE FROM community_messages WHERE channel_id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 805,
+    "sql": "DELETE FROM community_message_reactions WHERE message_id IN ( SELECT m.id FROM community_messages m JOIN community_channels c ON m.channel_id = c.id WHERE c.category = ? OR c.category_id = ? )"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 817,
+    "sql": "DELETE FROM community_messages WHERE channel_id IN (SELECT id FROM community_channels WHERE category = ? OR category_id = ?)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 862,
+    "sql": "SELECT COALESCE(MAX(sort_order), 0) as max_order FROM community_categories"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 869,
+    "sql": "INSERT INTO community_categories (id, name, icon, sort_order) VALUES (?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 905,
+    "sql": "UPDATE community_categories SET name = ?, icon = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 935,
+    "sql": "DELETE FROM community_categories WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 955,
+    "sql": "SELECT id, sort_order FROM community_categories ORDER BY sort_order ASC, name ASC"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 969,
+    "sql": "UPDATE community_categories SET sort_order = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1012,
+    "sql": "SELECT COALESCE(MAX(sort_order), 0) as max_order FROM community_channels WHERE category = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1020,
+    "sql": "INSERT INTO community_channels (id, slug, name, description, category, icon, sort_order, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, 0)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1059,
+    "sql": "UPDATE community_channels SET name = ?, slug = ?, description = ?, icon = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1091,
+    "sql": "DELETE FROM community_channel_reads WHERE channel_id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1092,
+    "sql": "DELETE FROM community_channels WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1095,
+    "sql": "SELECT id FROM community_channels WHERE is_default = 1 LIMIT 1"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1097,
+    "sql": "UPDATE community_channels SET is_default = 1 WHERE rowid = (SELECT MIN(rowid) FROM community_channels)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1118,
+    "sql": "SELECT category, sort_order FROM community_channels WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1122,
+    "sql": "SELECT id, sort_order FROM community_channels WHERE category = ? ORDER BY sort_order ASC, name ASC"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1137,
+    "sql": "UPDATE community_channels SET sort_order = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1167,
+    "sql": "UPDATE community_channels SET is_default = 0"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1168,
+    "sql": "UPDATE community_channels SET is_default = 1 WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1206,
+    "sql": "SELECT id, channel_id, message, thread_name FROM community_messages WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1216,
+    "sql": "UPDATE community_messages SET is_thread_root = 1, thread_name = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1261,
+    "sql": "INSERT INTO community_messages (id, channel_id, user_id, message, attachment_url, is_thread_root, thread_name, created_at) VALUES (?, ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1285,
+    "sql": "SELECT m.id, m.channel_id, m.user_id, m.message, m.attachment_url, m.parent_id, m.created_at, m.thread_name, m.is_thread_root, m.pinned_answer_id, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar, r.name as user_role_name, r.description as user_role_color FROM community_messages m LEFT JOIN users u ON m.user_id = u.id LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE m.id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1308,
+    "sql": "SELECT emoji, user_id FROM community_message_reactions WHERE message_id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1345,
+    "sql": "SELECT m.id, m.channel_id, m.user_id, m.message, m.attachment_url, m.parent_id, m.created_at, m.thread_name, m.is_thread_root, m.pinned_answer_id, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar, r.name as user_role_name, r.description as user_role_color FROM community_messages m LEFT JOIN users u ON m.user_id = u.id LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE m.thread_root_id = ? ORDER BY m.created_at ASC"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1369,
+    "sql": "SELECT m.id, m.channel_id, m.user_id, m.message, m.attachment_url, m.parent_id, m.created_at, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar, r.name as user_role_name, r.description as user_role_color FROM community_messages m LEFT JOIN users u ON m.user_id = u.id LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE m.id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1409,
+    "sql": "SELECT id, channel_id, user_id, thread_name FROM community_messages WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1419,
+    "sql": "INSERT INTO community_messages (id, channel_id, user_id, message, attachment_url, thread_root_id, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1468,
+    "sql": "SELECT id, pinned_answer_id FROM community_messages WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1479,
+    "sql": "UPDATE community_messages SET pinned_answer_id = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\community\\communityActions.ts",
+    "line": 1515,
+    "sql": "SELECT m.id, m.channel_id, m.message, m.thread_name, m.pinned_answer_id, m.created_at, u.name as author_name, u.avatar_url as author_avatar, (SELECT COUNT(*) FROM community_messages WHERE thread_root_id = m.id) as reply_count, (SELECT created_at FROM community_messages WHERE thread_root_id = m.id ORDER BY created_at DESC LIMIT 1) as last_reply_at FROM community_messages m LEFT JOIN users u ON m.user_id = u.id WHERE m.channel_id = ? AND (m.is_thread_root = 1 OR (m.thread_name IS NOT NULL AND m.thread_name != '')) ORDER BY COALESCE(last_reply_at, m.created_at) DESC"
+  },
+  {
+    "file": "src\\modules\\content-brief\\actions.ts",
+    "line": 47,
+    "sql": "INSERT INTO content_briefs (id, title, audience, objectives, key_messages, visual_style, created_by, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'DRAFT')"
+  },
+  {
+    "file": "src\\modules\\content-brief\\actions.ts",
+    "line": 96,
+    "sql": "SELECT id, project_id, status FROM content_briefs WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\content-brief\\actions.ts",
+    "line": 113,
+    "sql": "UPDATE content_briefs SET title = COALESCE(?, title), audience = ?, objectives = ?, key_messages = ?, visual_style = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\content-brief\\actions.ts",
+    "line": 170,
+    "sql": "UPDATE content_briefs SET status = 'WAITING_REVIEW', submitted_at = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\content-brief\\actions.ts",
+    "line": 227,
+    "sql": "UPDATE content_briefs SET status = 'LOCKED', approved_by = ?, approved_at = ?, locked_at = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\content-brief\\actions.ts",
+    "line": 284,
+    "sql": "UPDATE content_briefs SET status = 'DRAFT', revision_note = ?, approved_by = NULL, approved_at = NULL, locked_at = NULL WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\content-brief\\actions.ts",
+    "line": 390,
+    "sql": "UPDATE content_briefs SET status = 'ARCHIVED' WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 73,
+    "sql": "SELECT status FROM friendships WHERE ((user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)) AND status = 'ACCEPTED'"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 86,
+    "sql": "INSERT INTO direct_messages (id, sender_id, receiver_id, message, attachment_url, reply_to_id, reactions, status, is_request, created_at) VALUES (?, ?, ?, ?, ?, ?, '[]', 'SENT', ?, ?)"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 154,
+    "sql": "SELECT id, name, email, avatar_url, user_type FROM users WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 174,
+    "sql": "UPDATE direct_messages SET status = 'READ' WHERE sender_id = ? AND receiver_id = ? AND status != 'READ'"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 183,
+    "sql": "SELECT dm.*, u.name AS sender_name FROM direct_messages dm JOIN users u ON dm.sender_id = u.id WHERE (dm.sender_id = ? AND dm.receiver_id = ?) OR (dm.sender_id = ? AND dm.receiver_id = ?) ORDER BY dm.created_at ASC"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 269,
+    "sql": "SELECT dm.*, u.id AS partner_id, u.name AS partner_name, u.email AS partner_email, u.avatar_url AS partner_avatar, u.user_type AS partner_user_type FROM direct_messages dm JOIN users u ON (CASE WHEN dm.sender_id = ? THEN dm.receiver_id ELSE dm.sender_id END) = u.id WHERE (dm.sender_id = ? OR dm.receiver_id = ?) AND (dm.deleted_for IS NULL OR dm.deleted_for NOT LIKE ?) ORDER BY dm.created_at DESC LIMIT 100"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 284,
+    "sql": "SELECT user_id, friend_id FROM friendships WHERE (user_id = ? OR friend_id = ?) AND status = 'ACCEPTED'"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 440,
+    "sql": "SELECT cc.id AS channel_id, cc.name AS channel_name, cm.id AS last_msg_id, cm.user_id AS last_sender_id, cm.message AS last_message, cm.created_at AS last_created_at, u.name AS last_sender_name, ( SELECT COUNT(*) FROM community_messages cm_unread LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cc.id AND ccr.user_id = ? WHERE cm_unread.channel_id = cc.id AND cm_unread.user_id != ? AND cm_unread.created_at > datetime('now', '-7 days') AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm_unread.created_at) ) AS unread_count FROM community_channels cc LEFT JOIN community_messages cm ON cm.id = ( SELECT id FROM community_messages WHERE channel_id = cc.id ORDER BY created_at DESC LIMIT 1 ) LEFT JOIN users u ON cm.user_id = u.id ORDER BY COALESCE(cm.created_at, cc.created_at) DESC LIMIT 20"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 540,
+    "sql": "SELECT reactions FROM direct_messages WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 564,
+    "sql": "UPDATE direct_messages SET reactions = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 584,
+    "sql": "UPDATE direct_messages SET is_request = 0 WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 616,
+    "sql": "SELECT sender_id, created_at, edit_count FROM direct_messages WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 635,
+    "sql": "UPDATE direct_messages SET message = ?, edit_count = COALESCE(edit_count, 0) + 1, is_edited = 1 WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 640,
+    "sql": "UPDATE direct_messages SET message = ?, is_edited = 1 WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 661,
+    "sql": "SELECT sender_id, created_at FROM direct_messages WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 669,
+    "sql": "SELECT user_type FROM users WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 683,
+    "sql": "DELETE FROM direct_messages WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 701,
+    "sql": "SELECT id, deleted_for FROM direct_messages WHERE id = ? AND (sender_id = ? OR receiver_id = ?)"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 717,
+    "sql": "UPDATE direct_messages SET deleted_for = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 736,
+    "sql": "SELECT id, deleted_for FROM direct_messages WHERE (sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?)"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 773,
+    "sql": "INSERT INTO community_channel_reads (channel_id, user_id, last_read_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT (channel_id, user_id) DO UPDATE SET last_read_at = CURRENT_TIMESTAMP"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 795,
+    "sql": "SELECT id FROM workspace_chats WHERE workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 803,
+    "sql": "INSERT OR REPLACE INTO workspace_chat_reads (chat_id, user_id, read_at) VALUES (?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 828,
+    "sql": "SELECT COUNT(*) AS cnt FROM direct_messages WHERE receiver_id = ? AND status != 'READ'"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 833,
+    "sql": "SELECT COUNT(*) AS cnt FROM workspace_chats wc JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = ? LEFT JOIN workspace_chat_reads wcr ON wcr.chat_id = wc.id AND wcr.user_id = ? WHERE wc.user_id != ? AND wc.created_at > (strftime('%s', 'now') - 604800) AND wcr.chat_id IS NULL"
+  },
+  {
+    "file": "src\\modules\\direct-messages\\dmActions.ts",
+    "line": 846,
+    "sql": "SELECT COUNT(*) AS cnt FROM community_messages cm LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cm.channel_id AND ccr.user_id = ? WHERE cm.user_id != ? AND cm.created_at > datetime('now', '-7 days') AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm.created_at)"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 61,
+    "sql": "INSERT INTO executive_feedbacks (id, user_id, category, message, status, created_at) VALUES (?, ?, ?, ?, 'PENDING', strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 81,
+    "sql": "SELECT f.*, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar, u2.name as sparks_given_by_name FROM executive_feedbacks f JOIN users u ON f.user_id = u.id LEFT JOIN users u2 ON f.sparks_given_by = u2.id ORDER BY f.created_at DESC LIMIT 100"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 105,
+    "sql": "SELECT r.*, u.name as user_name, u.email as user_email, u.avatar_url as user_avatar, pu.name as parent_user_name FROM executive_feedback_replies r JOIN users u ON r.user_id = u.id LEFT JOIN executive_feedback_replies pr ON r.parent_id = pr.id LEFT JOIN users pu ON pr.user_id = pu.id WHERE r.feedback_id IN (${fbPlaceholders}) ORDER BY r.created_at ASC"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 132,
+    "sql": "SELECT r.target_id, r.emoji, r.user_id, u.name as user_name FROM executive_feedback_reactions r JOIN users u ON r.user_id = u.id WHERE r.target_type = 'FEEDBACK' AND r.target_id IN (${fbPlaceholders})"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 148,
+    "sql": "SELECT r.target_id, r.emoji, r.user_id, u.name as user_name FROM executive_feedback_reactions r JOIN users u ON r.user_id = u.id WHERE r.target_type = 'REPLY' AND r.target_id IN (${replyPlaceholders})"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 231,
+    "sql": "INSERT INTO executive_feedback_replies (id, feedback_id, parent_id, user_id, message, created_at) VALUES (?, ?, ?, ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 253,
+    "sql": "SELECT id FROM executive_feedback_reactions WHERE target_type = ? AND target_id = ? AND user_id = ? AND emoji = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 262,
+    "sql": "DELETE FROM executive_feedback_reactions WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 268,
+    "sql": "INSERT INTO executive_feedback_reactions (id, target_type, target_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 302,
+    "sql": "SELECT id, user_id, category, sparks_given FROM executive_feedbacks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 319,
+    "sql": "INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at) VALUES (?, ?, 'APPRECIATION', ?, 'APPRECIATION', ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 328,
+    "sql": "UPDATE executive_feedbacks SET sparks_given = ?, sparks_given_by = ?, sparks_adjustment_id = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 355,
+    "sql": "SELECT id, sparks_given_by, sparks_adjustment_id FROM executive_feedbacks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 369,
+    "sql": "UPDATE executive_feedbacks SET sparks_given = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 376,
+    "sql": "UPDATE sparks_adjustments SET sparks = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 396,
+    "sql": "SELECT id, feedback_id, user_id, message FROM executive_feedback_replies WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 433,
+    "sql": "DELETE FROM executive_feedback_reactions WHERE target_type = 'REPLY' AND target_id = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 439,
+    "sql": "DELETE FROM executive_feedback_replies WHERE parent_id = ?"
+  },
+  {
+    "file": "src\\modules\\feedback\\actions.ts",
+    "line": 445,
+    "sql": "DELETE FROM executive_feedback_replies WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\friends\\friendActions.ts",
+    "line": 45,
+    "sql": "SELECT id, user_id, friend_id, status FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)"
+  },
+  {
+    "file": "src\\modules\\friends\\friendActions.ts",
+    "line": 85,
+    "sql": "SELECT id, status FROM friendships WHERE (user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)"
+  },
+  {
+    "file": "src\\modules\\friends\\friendActions.ts",
+    "line": 101,
+    "sql": "INSERT INTO friendships (id, user_id, friend_id, status, created_at, updated_at) VALUES (?, ?, ?, 'PENDING', ?, ?)"
+  },
+  {
+    "file": "src\\modules\\friends\\friendActions.ts",
+    "line": 136,
+    "sql": "UPDATE friendships SET status = 'ACCEPTED', updated_at = ? WHERE friend_id = ? AND user_id = ? AND status = 'PENDING'"
+  },
+  {
+    "file": "src\\modules\\friends\\friendActions.ts",
+    "line": 150,
+    "sql": "DELETE FROM friendships WHERE friend_id = ? AND user_id = ? AND status = 'PENDING'"
+  },
+  {
+    "file": "src\\modules\\friends\\friendActions.ts",
+    "line": 158,
+    "sql": "DELETE FROM friendships WHERE user_id = ? AND friend_id = ? AND status = 'PENDING'"
+  },
+  {
+    "file": "src\\modules\\friends\\friendActions.ts",
+    "line": 166,
+    "sql": "DELETE FROM friendships WHERE ((user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?))"
+  },
+  {
+    "file": "src\\modules\\friends\\friendActions.ts",
+    "line": 194,
+    "sql": "SELECT f.id AS friendship_id, f.user_id, f.friend_id, f.status, f.created_at, u.id AS partner_id, u.name, u.email, u.avatar_url, u.user_type FROM friendships f JOIN users u ON (CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END) = u.id WHERE (f.user_id = ? OR f.friend_id = ?) AND u.status = 'ACTIVE'"
+  },
+  {
+    "file": "src\\modules\\friends\\friendActions.ts",
+    "line": 235,
+    "sql": "SELECT id, name, email, avatar_url, user_type FROM users WHERE status = 'ACTIVE' LIMIT 50"
+  },
+  {
+    "file": "src\\modules\\knowledge-base\\actions.ts",
+    "line": 28,
+    "sql": "INSERT INTO knowledge_base (id, title, content, category, created_by) VALUES (?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\knowledge-base\\actions.ts",
+    "line": 58,
+    "sql": "INSERT INTO knowledge_categories (id, name, description, icon, created_by) VALUES (?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\knowledge-base\\actions.ts",
+    "line": 75,
+    "sql": "DELETE FROM knowledge_categories WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\knowledge-base\\actions.ts",
+    "line": 103,
+    "sql": "INSERT INTO knowledge_items (id, category_id, title, url, description, created_by) VALUES (?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\knowledge-base\\actions.ts",
+    "line": 120,
+    "sql": "DELETE FROM knowledge_items WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\leaderboard\\actions.ts",
+    "line": 598,
+    "sql": "SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')"
+  },
+  {
+    "file": "src\\modules\\leaderboard\\actions.ts",
+    "line": 630,
+    "sql": "SELECT ta.id AS assignmentId, t.title AS taskTitle, t.task_type AS taskType, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier, ta.assignment_role AS assignmentRole, ws.name AS workspaceName, p.name AS projectName, COALESCE(ta.sparks, 8) AS rawSparks, COALESCE(ta.reviewed_at, ta.submitted_at) AS reviewedAt, ta.revision_note AS revisionNote, CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRevision, CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id JOIN projects p ON t.project_id = p.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ${idClause} AND ta.status = 'APPROVED' ${timeClause} ${roleFilter} ORDER BY COALESCE(ta.reviewed_at, ta.submitted_at) DESC"
+  },
+  {
+    "file": "src\\modules\\leaderboard\\actions.ts",
+    "line": 659,
+    "sql": "SELECT t.id AS assignmentId, t.title AS taskTitle, 'MENTOR' AS assignmentRole, ws.name AS workspaceName, p.name AS projectName, t.sparks AS rawSparks, COALESCE(t.start_at, t.created_at) AS reviewedAt, t.revision_note AS revisionNote FROM tasks t JOIN projects p ON t.project_id = p.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.created_by = ? AND t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL ORDER BY COALESCE(t.start_at, t.created_at) DESC"
+  },
+  {
+    "file": "src\\modules\\leaderboard\\actions.ts",
+    "line": 746,
+    "sql": "SELECT sa.id, sa.type, sa.sparks, sa.category, sa.note, sa.created_at, u.name AS adminName FROM sparks_adjustments sa LEFT JOIN users u ON sa.created_by = u.id WHERE sa.user_id = ? ${saTimeClause} ORDER BY sa.created_at DESC"
+  },
+  {
+    "file": "src\\modules\\menu\\menuTagActions.ts",
+    "line": 120,
+    "sql": "SELECT p.id, p.name FROM projects p WHERE p.status != 'DELETED' ORDER BY p.name ASC"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 65,
+    "sql": "SELECT created_at FROM announcements ORDER BY created_at DESC LIMIT 50"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 71,
+    "sql": "SELECT ws.id AS wsId, MAX( ws.created_at, COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id AND status != 'DELETED'), 0), COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0) ) AS latestTs FROM workspaces ws WHERE ws.deleted_at IS NULL"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 83,
+    "sql": "SELECT ws.id AS wsId, MAX( ws.created_at, COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id AND status != 'DELETED'), 0), COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0) ) AS latestTs FROM workspaces ws WHERE ws.deleted_at IS NULL AND ( EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) OR ws.ojt_coordinator_id = ? OR ws.workspace_type = 'ASSESSMENT' )"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 104,
+    "sql": "SELECT ta.id, ta.user_id AS creator_id, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved, t.task_type, t.created_by AS task_created_by, t.workspace_id, ws.workspace_type, p.name AS project_name, EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AS is_lead, (EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?) OR EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?) OR t.created_by = ?) AS is_mentor FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id JOIN projects p ON t.project_id = p.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED') AND ta.result_url IS NOT NULL AND TRIM(ta.result_url) != '' AND t.status != 'DELETED' AND (ws.deleted_at IS NULL OR ws.id IS NULL)"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 183,
+    "sql": "SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 195,
+    "sql": "SELECT ta.id, ta.status, ta.assignment_role AS role, ta.sparks, ta.revision_note, t.task_type, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier, COALESCE(ta.reviewed_at, ta.submitted_at, ta.created_at) AS ts, t.id AS taskId, t.title AS taskTitle, t.workspace_id AS wsId, ws.name AS wsName, p.name AS pName FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id JOIN projects p ON t.project_id = p.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ORDER BY COALESCE(ta.reviewed_at, ta.submitted_at, ta.created_at) DESC LIMIT 15"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 285,
+    "sql": "SELECT ta.id, ta.assignment_role, ta.submitted_at, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved, t.id AS taskId, t.title AS taskTitle, t.task_type AS taskType, t.created_by AS taskCreatedBy, t.workspace_id AS wsId, ws.name AS wsName, ws.workspace_type AS wsType, p.name AS projectName, u.name AS assigneeName, EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AS is_lead FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id JOIN projects p ON t.project_id = p.id JOIN users u ON ta.user_id = u.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED') AND ta.result_url IS NOT NULL AND TRIM(ta.result_url) != '' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ORDER BY ta.submitted_at DESC LIMIT 30"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 344,
+    "sql": "SELECT id, title, created_at FROM announcements ORDER BY created_at DESC LIMIT 3"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 363,
+    "sql": "SELECT sa.id, sa.type, sa.sparks, sa.note, sa.created_at, u.name AS adminName FROM sparks_adjustments sa LEFT JOIN users u ON sa.created_by = u.id WHERE sa.user_id = ? ORDER BY sa.created_at DESC LIMIT 5"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 401,
+    "sql": "SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at, u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle, t.workspace_id AS wsId, ws.name AS wsName FROM workflow_events we LEFT JOIN users u_sender ON we.triggered_by = u_sender.id LEFT JOIN task_assignments ta ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id) LEFT JOIN tasks t ON ( (we.entity_type = 'task_assignment' AND ta.task_id = t.id) OR (we.entity_type = 'task' AND we.entity_id = t.id) ) LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT') AND (we.triggered_by IS NULL OR we.triggered_by != ?) AND ( (we.entity_type = 'task_assignment' AND ta.user_id = ?) OR (we.entity_type = 'task' AND t.created_by = ?) OR (we.entity_type = 'task' AND EXISTS (SELECT 1 FROM task_assignments WHERE task_id = t.id AND user_id = ?)) ) AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ORDER BY we.created_at DESC LIMIT 15"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 462,
+    "sql": "SELECT notification_id FROM user_read_notifications WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\notifications\\notificationActions.ts",
+    "line": 490,
+    "sql": "INSERT INTO user_read_notifications (user_id, notification_id, read_at) VALUES (?, ?, ?) ON CONFLICT(user_id, notification_id) DO UPDATE SET read_at = excluded.read_at"
+  },
+  {
+    "file": "src\\modules\\notifications\\pushActions.ts",
+    "line": 39,
+    "sql": "SELECT notify_chat, notify_community_chat, notify_mention, notify_task, notify_deadline, notify_announcement FROM user_notification_settings WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\notifications\\pushActions.ts",
+    "line": 103,
+    "sql": "INSERT INTO user_notification_settings (user_id, notify_chat, notify_community_chat, notify_mention, notify_task, notify_deadline, notify_announcement, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET notify_chat = excluded.notify_chat, notify_community_chat = excluded.notify_community_chat, notify_mention = excluded.notify_mention, notify_task = excluded.notify_task, notify_deadline = excluded.notify_deadline, notify_announcement = excluded.notify_announcement, updated_at = excluded.updated_at"
+  },
+  {
+    "file": "src\\modules\\notifications\\pushActions.ts",
+    "line": 152,
+    "sql": "INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, p256dh = excluded.p256dh, auth = excluded.auth, updated_at = excluded.updated_at"
+  },
+  {
+    "file": "src\\modules\\notifications\\pushActions.ts",
+    "line": 183,
+    "sql": "DELETE FROM push_subscriptions WHERE endpoint = ?"
+  },
+  {
+    "file": "src\\modules\\notifications\\pushActions.ts",
+    "line": 211,
+    "sql": "SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\permissions\\actions.ts",
+    "line": 27,
+    "sql": "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)"
+  },
+  {
+    "file": "src\\modules\\permissions\\actions.ts",
+    "line": 61,
+    "sql": "DELETE FROM role_permissions WHERE role_id = ? AND permission_id = ?"
+  },
+  {
+    "file": "src\\modules\\permissions\\actions.ts",
+    "line": 95,
+    "sql": "INSERT INTO roles (id, name, description, color) VALUES (?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\permissions\\actions.ts",
+    "line": 130,
+    "sql": "UPDATE roles SET name = ?, description = ?, color = COALESCE(?, color) WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\permissions\\actions.ts",
+    "line": 171,
+    "sql": "DELETE FROM role_permissions WHERE role_id = ?"
+  },
+  {
+    "file": "src\\modules\\permissions\\actions.ts",
+    "line": 173,
+    "sql": "DELETE FROM user_roles WHERE role_id = ?"
+  },
+  {
+    "file": "src\\modules\\permissions\\actions.ts",
+    "line": 175,
+    "sql": "DELETE FROM roles WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\profile\\actions.ts",
+    "line": 22,
+    "sql": "UPDATE users SET name = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\profile\\actions.ts",
+    "line": 93,
+    "sql": "SELECT id, email, username, name, status, user_type, created_at, university, student_id_number, study_program, semester, whatsapp_number, avatar_url, main_roles, custom_role, tools, portfolio_url, department, bio FROM users WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\profile\\actions.ts",
+    "line": 166,
+    "sql": "SELECT id FROM users WHERE email = ? AND id != ?"
+  },
+  {
+    "file": "src\\modules\\profile\\actions.ts",
+    "line": 177,
+    "sql": "SELECT id FROM users WHERE (username = ? OR email = ?) AND id != ?"
+  },
+  {
+    "file": "src\\modules\\profile\\actions.ts",
+    "line": 201,
+    "sql": "UPDATE users SET name = ?, email = COALESCE(?, email), username = COALESCE(?, username), university = ?, student_id_number = ?, study_program = ?, semester = ?, whatsapp_number = ?, avatar_url = ?, main_roles = ?, custom_role = ?, tools = ?, portfolio_url = ?, department = ?, bio = ?, onboarding_completed = 1 WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\profile\\actions.ts",
+    "line": 242,
+    "sql": "UPDATE users SET name = ?, email = COALESCE(?, email), username = COALESCE(?, username), university = ?, student_id_number = ?, study_program = ?, semester = ?, whatsapp_number = ?, avatar_url = ?, main_roles = ?, custom_role = ?, tools = ?, portfolio_url = ?, department = ?, bio = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\profile\\actions.ts",
+    "line": 322,
+    "sql": "SELECT password_hash FROM users WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\profile\\actions.ts",
+    "line": 338,
+    "sql": "UPDATE users SET password_hash = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\profile\\actions.ts",
+    "line": 352,
+    "sql": "UPDATE users SET feature_tour_completed = 1 WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 40,
+    "sql": "INSERT INTO projects (id, name, description, ojt_coordinator_id) VALUES (?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 49,
+    "sql": "INSERT OR IGNORE INTO project_coordinators (project_id, user_id) VALUES (?, ?)"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 66,
+    "sql": "SELECT id, status FROM content_briefs WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 72,
+    "sql": "UPDATE content_briefs SET status = 'PROJECT_CREATED' WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 128,
+    "sql": "UPDATE projects SET name = ?, description = ?, ojt_coordinator_id = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 137,
+    "sql": "DELETE FROM project_coordinators WHERE project_id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 149,
+    "sql": "UPDATE projects SET name = ?, description = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 189,
+    "sql": "UPDATE projects SET ojt_coordinator_id = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 194,
+    "sql": "UPDATE workspaces SET ojt_coordinator_id = ? WHERE project_id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 239,
+    "sql": "DELETE FROM task_assignments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 248,
+    "sql": "DELETE FROM tasks WHERE project_id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 254,
+    "sql": "DELETE FROM workspaces WHERE project_id = ?"
+  },
+  {
+    "file": "src\\modules\\projects\\actions.ts",
+    "line": 260,
+    "sql": "DELETE FROM projects WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 20,
+    "sql": "SELECT DISTINCT p.name AS permission_name FROM permissions p JOIN role_permissions rp ON p.id = rp.permission_id WHERE rp.role_id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 58,
+    "sql": "SELECT DISTINCT p.name AS permission_name FROM permissions p JOIN role_permissions rp ON p.id = rp.permission_id JOIN user_roles ur ON rp.role_id = ur.role_id WHERE ur.user_id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 112,
+    "sql": "SELECT r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 174,
+    "sql": "SELECT user_type FROM users WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 196,
+    "sql": "SELECT ojt_coordinator_id FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 217,
+    "sql": "SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 313,
+    "sql": "SELECT user_id FROM user_roles WHERE role_id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 338,
+    "sql": "SELECT ojt_coordinator_id, project_id, workspace_type FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 358,
+    "sql": "SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ? LIMIT 1"
+  },
+  {
+    "file": "src\\modules\\roles\\rbac.ts",
+    "line": 365,
+    "sql": "SELECT 1 FROM tasks WHERE workspace_id = ? AND created_by = ? AND status != \"DELETED\" LIMIT 1"
+  },
+  {
+    "file": "src\\modules\\roles\\viewAsRoleActions.ts",
+    "line": 44,
+    "sql": "SELECT p.name AS perm_name, r.name AS role_name FROM user_roles ur JOIN roles r ON ur.role_id = r.id LEFT JOIN role_permissions rp ON r.id = rp.role_id LEFT JOIN permissions p ON rp.permission_id = p.id WHERE ur.user_id = ?"
+  },
+  {
+    "file": "src\\modules\\roles\\viewAsRoleActions.ts",
+    "line": 90,
+    "sql": "SELECT id, name, description FROM roles ORDER BY id ASC"
+  },
+  {
+    "file": "src\\modules\\sparks\\calculator.ts",
+    "line": 38,
+    "sql": "SELECT ta.id, ta.sparks, ta.assignment_role AS role, t.task_type, t.title AS taskTitle, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier, CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev, CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.user_id = ? AND ta.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\modules\\sparks\\calculator.ts",
+    "line": 53,
+    "sql": "SELECT t.id, COALESCE(t.sparks, 0) AS sparks FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.created_by = ? AND t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)"
+  },
+  {
+    "file": "src\\modules\\sparks\\calculator.ts",
+    "line": 64,
+    "sql": "SELECT sa.type, sa.sparks FROM sparks_adjustments sa WHERE sa.user_id = ?"
+  },
+  {
+    "file": "src\\modules\\sparks\\multiplierActions.ts",
+    "line": 43,
+    "sql": "SELECT id, title, task_type, sparks_multiplier, deadline, extended_deadline, status FROM tasks WHERE sparks_multiplier > 1.0 AND status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED', 'DELETED')"
+  },
+  {
+    "file": "src\\modules\\sparks\\multiplierActions.ts",
+    "line": 87,
+    "sql": "UPDATE tasks SET sparks_multiplier = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\sparks\\multiplierActions.ts",
+    "line": 113,
+    "sql": "INSERT INTO system_settings (key, value, updated_by, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = excluded.updated_at"
+  },
+  {
+    "file": "src\\modules\\sparks\\settingsCache.ts",
+    "line": 22,
+    "sql": "SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 68,
+    "sql": "SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 79,
+    "sql": "SELECT ta.user_id AS userId, ta.sparks, ta.assignment_role AS role, t.task_type, t.title AS taskTitle, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier, CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev, CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE ta.status = 'APPROVED' AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${timeClauseTA}"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 91,
+    "sql": "SELECT t.created_by AS userId, COALESCE(t.sparks, 0) AS sparks FROM tasks t LEFT JOIN workspaces ws ON t.workspace_id = ws.id WHERE t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${timeClauseT}"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 99,
+    "sql": "SELECT sa.user_id AS userId, sa.type, sa.sparks, sa.category FROM sparks_adjustments sa WHERE 1=1 ${timeClauseSA}"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 106,
+    "sql": "SELECT u.id AS userId, u.name AS userName, u.email AS userEmail, u.user_type AS userType, GROUP_CONCAT(DISTINCT r.name) AS roleNames FROM users u LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE u.status = 'ACTIVE' GROUP BY u.id"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 257,
+    "sql": "INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at) VALUES (?, ?, 'APPRECIATION', ?, 'APPRECIATION', ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 303,
+    "sql": "INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at) VALUES (?, ?, 'RESET', ?, 'ALL', ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 343,
+    "sql": "SELECT COALESCE(SUM(ABS(sparks)), 0) AS totalResetAmount FROM sparks_adjustments WHERE user_id = ? AND type = 'RESET'"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 362,
+    "sql": "SELECT COALESCE(SUM(sparks), 0) AS totalRestoredAmount FROM sparks_adjustments WHERE user_id = ? AND type = 'RESTORE'"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 387,
+    "sql": "SELECT ta.sparks, ta.assignment_role AS role, CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev, CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE ta.user_id = ? AND ta.status = 'APPROVED' AND t.status != 'DELETED'"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 408,
+    "sql": "SELECT COALESCE(sparks, 0) AS sparks FROM tasks WHERE created_by = ? AND task_type = 'ASSESSMENT' AND status = 'APPROVED' AND sparks IS NOT NULL"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 421,
+    "sql": "SELECT COALESCE(sparks, 0) AS sparks FROM sparks_adjustments WHERE user_id = ? AND type = 'APPRECIATION'"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 456,
+    "sql": "INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at) VALUES (?, ?, 'RESTORE', ?, ?, ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 493,
+    "sql": "SELECT user_id, type, sparks FROM sparks_adjustments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 501,
+    "sql": "DELETE FROM sparks_adjustments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 534,
+    "sql": "DELETE FROM sparks_adjustments WHERE user_id = ? AND type = 'APPRECIATION'"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 539,
+    "sql": "DELETE FROM sparks_adjustments WHERE user_id = ? AND type IN ('RESET', 'RESTORE')"
+  },
+  {
+    "file": "src\\modules\\sparks\\sparksActions.ts",
+    "line": 544,
+    "sql": "DELETE FROM sparks_adjustments WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 37,
+    "sql": "SELECT user_id, status FROM task_assignments WHERE task_id = ? AND assignment_role = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 88,
+    "sql": "SELECT id, project_id, ojt_coordinator_id, workspace_type FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 155,
+    "sql": "INSERT INTO tasks (id, project_id, workspace_id, title, description, status, priority, created_by, deadline, start_at, task_type, parent_task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 188,
+    "sql": "INSERT OR IGNORE INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at) VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 199,
+    "sql": "SELECT DISTINCT u.id AS user_id FROM users u JOIN workspace_members wm ON u.id = wm.user_id WHERE wm.workspace_id = ? AND wm.team_role != 'LEADER' AND (u.user_type IS NULL OR u.user_type != 'STAFF') AND u.status = 'ACTIVE'"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 225,
+    "sql": "SELECT DISTINCT u.id AS user_id FROM users u JOIN workspace_members wm ON u.id = wm.user_id WHERE wm.workspace_id = ? AND u.status = 'ACTIVE'"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 262,
+    "sql": "SELECT user_id FROM workspace_members WHERE workspace_id = ? AND user_id != ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 310,
+    "sql": "SELECT id, project_id, workspace_id FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 327,
+    "sql": "INSERT INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, deadline) VALUES (?, ?, ?, ?, ?, 'DRAFT', ?)"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 444,
+    "sql": "SELECT ta.id, t.project_id, t.workspace_id FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE ta.id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 457,
+    "sql": "DELETE FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 487,
+    "sql": "SELECT id, task_id, user_id, status FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 498,
+    "sql": "SELECT id, parent_task_id, project_id, workspace_id, status FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 504,
+    "sql": "SELECT status FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 550,
+    "sql": "SELECT id, task_id, user_id, status, assignment_role FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 565,
+    "sql": "SELECT id, project_id, workspace_id, status, task_type, parent_task_id, start_at, deadline, extended_deadline FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 594,
+    "sql": "SELECT ta.id, u.name as user_name FROM task_assignments ta JOIN users u ON ta.user_id = u.id WHERE ta.task_id = ? AND ta.id != ? AND (ta.assignment_role = ? OR ta.assignment_role = ?) AND (ta.result_url IS NOT NULL OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED', 'RESUBMITTED', 'SUBMITTED'))"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 632,
+    "sql": "SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 639,
+    "sql": "SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 650,
+    "sql": "UPDATE task_assignments SET status = ?, result_url = ?, submitted_at = ?, revision_note = NULL, assignment_role = ?, lead_approved = CASE WHEN ? THEN 1 ELSE 0 END, mentor_approved = CASE WHEN ? THEN 1 ELSE 0 END, coordinator_approved = CASE WHEN ? THEN 1 ELSE 0 END WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 724,
+    "sql": "SELECT id, workspace_id, task_type FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 732,
+    "sql": "SELECT id, status FROM task_assignments WHERE task_id = ? AND user_id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 739,
+    "sql": "SELECT ta.id, u.name as user_name FROM task_assignments ta JOIN users u ON ta.user_id = u.id WHERE ta.task_id = ? AND ta.user_id != ? AND (ta.assignment_role = ? OR ta.assignment_role = ?) AND (ta.result_url IS NOT NULL OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED', 'RESUBMITTED', 'SUBMITTED'))"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 765,
+    "sql": "INSERT INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, result_url, submitted_at, created_at) VALUES (?, ?, ?, ?, ?, 'WAITING_REVIEW', ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 800,
+    "sql": "SELECT id, user_id, task_id, status, assignment_role, lead_approved, mentor_approved, coordinator_approved FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 816,
+    "sql": "SELECT id, title, project_id, workspace_id, status, task_type, created_by FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 850,
+    "sql": "SELECT workspace_type FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 907,
+    "sql": "UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, sparks = ?, appreciation_note = COALESCE(?, appreciation_note), revision_note = NULL WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 912,
+    "sql": "UPDATE task_assignments SET status = ?, reviewed_at = ?, lead_approved = ?, mentor_approved = ?, coordinator_approved = ?, appreciation_note = COALESCE(?, appreciation_note), revision_note = NULL WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 937,
+    "sql": "SELECT id FROM task_assignments WHERE task_id = ? AND status NOT IN ('APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED')"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 943,
+    "sql": "UPDATE tasks SET status = ?, revision_note = NULL WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 957,
+    "sql": "UPDATE tasks SET status = 'IN_PROGRESS' WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 964,
+    "sql": "UPDATE tasks SET status = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 993,
+    "sql": "SELECT id, task_id, assignment_role FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1000,
+    "sql": "SELECT workspace_id, task_type, created_by FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1032,
+    "sql": "UPDATE task_assignments SET sparks = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1060,
+    "sql": "SELECT id, user_id, task_id, status, assignment_role FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1119,
+    "sql": "UPDATE task_assignments SET status = ?, revision_note = ?, reviewed_at = ?, lead_approved = 0, mentor_approved = 0, coordinator_approved = 0 WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1199,
+    "sql": "UPDATE tasks SET title = ?, description = ?, priority = ?, deadline = ?, start_at = ?, task_type = ?, parent_task_id = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1209,
+    "sql": "UPDATE tasks SET extended_deadline = NULL WHERE id = ? AND (extended_deadline IS NOT NULL AND extended_deadline <= ?)"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1215,
+    "sql": "UPDATE task_assignments SET deadline = ?, start_at = ? WHERE task_id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1249,
+    "sql": "SELECT project_id, workspace_id FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1263,
+    "sql": "DELETE FROM workflow_events WHERE entity_id = ? OR entity_id IN (SELECT id FROM task_assignments WHERE task_id = ?)"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1264,
+    "sql": "DELETE FROM task_assignments WHERE task_id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1265,
+    "sql": "DELETE FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1295,
+    "sql": "SELECT id, task_id, status, assignment_role FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1302,
+    "sql": "SELECT id, project_id, workspace_id, status, task_type, created_by FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1408,
+    "sql": "SELECT id, project_id, workspace_id, status FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1417,
+    "sql": "UPDATE task_assignments SET status = ?, revision_note = NULL, result_url = NULL, submitted_at = NULL WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1475,
+    "sql": "SELECT ta.id, ta.task_id, ta.user_id, ta.status, t.title AS task_title, t.created_by, t.workspace_id, u_assignee.name AS assignee_name, u_creator.name AS creator_name, ws.name AS workspace_name FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id LEFT JOIN users u_assignee ON ta.user_id = u_assignee.id LEFT JOIN users u_creator ON t.created_by = u_creator.id WHERE ta.id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1499,
+    "sql": "SELECT name FROM users WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1541,
+    "sql": "SELECT ta.id, ta.status, t.title AS task_title, t.workspace_id, u_assignee.name AS assignee_name, ws.ojt_coordinator_id FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN workspaces ws ON t.workspace_id = ws.id LEFT JOIN users u_assignee ON ta.user_id = u_assignee.id WHERE ta.id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1560,
+    "sql": "SELECT id FROM users WHERE user_type = 'STAFF' AND status = 'ACTIVE' LIMIT 1"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1626,
+    "sql": "SELECT ta.id, ta.task_id, ta.user_id, ta.status, t.title AS task_title, t.workspace_id, u_assignee.name AS assignee_name, u_creator.name AS creator_name FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id LEFT JOIN users u_assignee ON ta.user_id = u_assignee.id LEFT JOIN users u_creator ON t.created_by = u_creator.id WHERE ta.id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1703,
+    "sql": "SELECT t.id, t.title, t.workspace_id, t.created_by, u_creator.name AS creator_name FROM tasks t LEFT JOIN users u_creator ON t.created_by = u_creator.id WHERE t.id = ? AND t.status != 'DELETED'"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1716,
+    "sql": "SELECT ta.id, ta.user_id, ta.status, u.name AS user_name FROM task_assignments ta LEFT JOIN users u ON ta.user_id = u.id WHERE ta.task_id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1828,
+    "sql": "SELECT id, workspace_id, created_by, deadline, extended_deadline FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1850,
+    "sql": "UPDATE tasks SET extended_deadline = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1856,
+    "sql": "UPDATE task_assignments SET deadline = ? WHERE task_id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1896,
+    "sql": "SELECT id, status, task_type FROM tasks ${wsClause}"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1904,
+    "sql": "SELECT status FROM task_assignments WHERE task_id = ?"
+  },
+  {
+    "file": "src\\modules\\tasks\\actions.ts",
+    "line": 1922,
+    "sql": "UPDATE tasks SET status = 'APPROVED', revision_note = NULL WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\users\\actions.ts",
+    "line": 28,
+    "sql": "DELETE FROM user_roles WHERE user_id = ?"
+  },
+  {
+    "file": "src\\modules\\users\\actions.ts",
+    "line": 29,
+    "sql": "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)"
+  },
+  {
+    "file": "src\\modules\\users\\actions.ts",
+    "line": 33,
+    "sql": "UPDATE users SET user_type = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\users\\actions.ts",
+    "line": 70,
+    "sql": "UPDATE users SET status = 'ACTIVE', user_type = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\users\\actions.ts",
+    "line": 112,
+    "sql": "DELETE FROM users WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\users\\actions.ts",
+    "line": 176,
+    "sql": "UPDATE users SET status = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\users\\actions.ts",
+    "line": 208,
+    "sql": "UPDATE users SET password_hash = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\users\\impersonationActions.ts",
+    "line": 42,
+    "sql": "SELECT p.name AS perm_name, r.name AS role_name FROM user_roles ur JOIN roles r ON ur.role_id = r.id LEFT JOIN role_permissions rp ON r.id = rp.role_id LEFT JOIN permissions p ON rp.permission_id = p.id WHERE ur.user_id = ?"
+  },
+  {
+    "file": "src\\modules\\users\\impersonationActions.ts",
+    "line": 88,
+    "sql": "SELECT u.id, u.name, u.email, r.name as role_name FROM users u LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE u.status = 'ACTIVE' AND u.id != ? ORDER BY u.name ASC"
+  },
+  {
+    "file": "src\\modules\\users\\impersonationActions.ts",
+    "line": 135,
+    "sql": "SELECT id, name, email FROM users WHERE id = ? AND status = \"ACTIVE\""
+  },
+  {
+    "file": "src\\modules\\workflow\\events.ts",
+    "line": 27,
+    "sql": "INSERT INTO workflow_events (id, entity_type, entity_id, from_status, to_status, triggered_by, note) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\workflow\\events.ts",
+    "line": 58,
+    "sql": "SELECT we.id, we.entity_type, we.entity_id, we.from_status, we.to_status, we.note, we.created_at, u.name AS triggered_by_name FROM workflow_events we LEFT JOIN users u ON we.triggered_by = u.id WHERE we.entity_type = ? AND we.entity_id = ? ORDER BY we.created_at ASC"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 25,
+    "sql": "SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 53,
+    "sql": "INSERT INTO workspaces (id, project_id, name, description, status, created_by, workspace_type, created_at) VALUES (?, ?, ?, ?, 'ACTIVE', ?, 'ASSESSMENT', strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 62,
+    "sql": "SELECT DISTINCT u.id FROM users u LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id WHERE ( LOWER(r.name) LIKE '%trooper%' OR LOWER(r.name) LIKE '%ojt%' OR r.id = 'role_troopers' OR u.user_type = 'OJT' ) AND u.status = 'ACTIVE'"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 79,
+    "sql": "INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at) VALUES (?, ?, 'MEMBER', strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 90,
+    "sql": "INSERT INTO workspaces (id, project_id, name, description, status, created_by, ojt_coordinator_id, workspace_type, created_at) VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, 'MENTOR', strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 98,
+    "sql": "SELECT DISTINCT u.id FROM users u JOIN user_roles ur ON u.id = ur.user_id JOIN roles r ON ur.role_id = r.id WHERE u.status = 'ACTIVE' AND (r.id IN ('role_mentor_troopers', 'role_mentor') OR UPPER(r.name) LIKE '%MENTOR%')"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 118,
+    "sql": "INSERT INTO workspaces (id, project_id, name, description, status, created_by, ojt_coordinator_id, workspace_type, created_at) VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, 'TROOPERS', strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 180,
+    "sql": "SELECT project_id, workspace_type FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 191,
+    "sql": "UPDATE workspaces SET name = ?, description = ?, ojt_coordinator_id = ?, workspace_type = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 282,
+    "sql": "SELECT id, project_id, status FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 292,
+    "sql": "UPDATE workspaces SET status = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 325,
+    "sql": "SELECT ojt_coordinator_id FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 332,
+    "sql": "SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 379,
+    "sql": "SELECT id FROM users WHERE email = ? OR id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 385,
+    "sql": "INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role) VALUES (?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 466,
+    "sql": "DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 473,
+    "sql": "INSERT INTO workspace_members (workspace_id, user_id, team_role) VALUES (?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 478,
+    "sql": "SELECT project_id FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 519,
+    "sql": "DELETE FROM task_assignments WHERE user_id = ? AND task_id IN (SELECT id FROM tasks WHERE workspace_id = ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 558,
+    "sql": "SELECT id, project_id, ojt_coordinator_id, deleted_at FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 587,
+    "sql": "DELETE FROM task_assignments WHERE task_id IN (SELECT id FROM tasks WHERE workspace_id = ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 596,
+    "sql": "UPDATE tasks SET status = 'DELETED', sparks = NULL WHERE workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\actions.ts",
+    "line": 606,
+    "sql": "UPDATE workspaces SET deleted_at = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 72,
+    "sql": "SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 112,
+    "sql": "SELECT project_id FROM workspaces WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 127,
+    "sql": "INSERT INTO tasks (id, workspace_id, project_id, title, description, required_outputs, status, priority, task_type, assessment_category, assigned_mentors, deadline, start_at, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'NORMAL', 'ASSESSMENT', ?, ?, ?, ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 151,
+    "sql": "INSERT OR IGNORE INTO task_assignments (id, task_id, user_id, assignment_role, group_name, assigned_by, status, deadline, start_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 162,
+    "sql": "SELECT DISTINCT u.id AS user_id FROM users u JOIN workspace_members wm ON u.id = wm.user_id WHERE wm.workspace_id = ? AND wm.team_role != 'LEADER' AND (u.user_type IS NULL OR u.user_type != 'STAFF') AND u.status = 'ACTIVE' AND u.id NOT IN ( SELECT ur.user_id FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE r.id IN ('role_mentor_troopers', 'role_mentor') OR UPPER(r.name) LIKE '%MENTOR%' ) AND u.id NOT IN ( SELECT ojt_coordinator_id FROM workspaces WHERE id = ? AND ojt_coordinator_id IS NOT NULL )"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 190,
+    "sql": "INSERT OR IGNORE INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 272,
+    "sql": "SELECT title, status, created_by, assigned_mentors FROM tasks WHERE id = ? AND workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 304,
+    "sql": "UPDATE tasks SET description = ?, required_outputs = ?, status = 'WAITING_REVIEW', revision_note = NULL WHERE id = ? AND workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 353,
+    "sql": "SELECT id, deadline, status, start_at FROM tasks WHERE id = ? AND workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 384,
+    "sql": "UPDATE tasks SET status = 'APPROVED', start_at = ?, sparks = ?, revision_note = NULL WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 390,
+    "sql": "SELECT id FROM task_assignments WHERE task_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 395,
+    "sql": "UPDATE task_assignments SET status = 'ASSIGNED', start_at = ? WHERE task_id = ? AND result_url IS NULL"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 401,
+    "sql": "SELECT DISTINCT u.id AS user_id FROM users u JOIN workspace_members wm ON u.id = wm.user_id WHERE wm.workspace_id = ? AND (u.user_type IS NULL OR u.user_type != 'STAFF') AND u.status = 'ACTIVE' AND u.id NOT IN ( SELECT ur.user_id FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE r.id IN ('role_mentor_troopers', 'role_mentor') OR UPPER(r.name) LIKE '%MENTOR%' ) AND u.id NOT IN ( SELECT ojt_coordinator_id FROM workspaces WHERE id = ? AND ojt_coordinator_id IS NOT NULL )"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 427,
+    "sql": "INSERT OR IGNORE INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at) VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 481,
+    "sql": "UPDATE tasks SET status = 'REVISION_REQUESTED', revision_note = ? WHERE id = ? AND workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 521,
+    "sql": "SELECT id, task_id, user_id, group_name, status FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 531,
+    "sql": "SELECT status, start_at, deadline, extended_deadline, assessment_category FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 553,
+    "sql": "UPDATE task_assignments SET status = 'WAITING_REVIEW', result_url = ?, submitted_at = strftime('%s', 'now'), revision_note = NULL, mentor_approved = 0, coordinator_approved = 0, lead_approved = 0 WHERE task_id = ? AND group_name = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 563,
+    "sql": "UPDATE task_assignments SET status = 'WAITING_REVIEW', result_url = ?, submitted_at = strftime('%s', 'now'), revision_note = NULL, mentor_approved = 0, coordinator_approved = 0, lead_approved = 0 WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 612,
+    "sql": "SELECT id, task_id, group_name, mentor_approved FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 619,
+    "sql": "SELECT created_by, assessment_category FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 636,
+    "sql": "UPDATE task_assignments SET coordinator_approved = 1, sparks = ?, status = 'APPROVED', appreciation_note = COALESCE(?, appreciation_note), revision_note = NULL, reviewed_at = strftime('%s', 'now') WHERE task_id = ? AND group_name = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 650,
+    "sql": "UPDATE task_assignments SET coordinator_approved = 1, sparks = ?, status = 'APPROVED', appreciation_note = COALESCE(?, appreciation_note), revision_note = NULL, reviewed_at = strftime('%s', 'now') WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 675,
+    "sql": "SELECT workspace_id FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 695,
+    "sql": "UPDATE task_assignments SET mentor_approved = 1, lead_approved = 1, appreciation_note = COALESCE(?, appreciation_note), reviewed_at = strftime('%s', 'now') WHERE task_id = ? AND group_name = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 707,
+    "sql": "UPDATE task_assignments SET mentor_approved = 1, lead_approved = 1, appreciation_note = COALESCE(?, appreciation_note), reviewed_at = strftime('%s', 'now') WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 763,
+    "sql": "SELECT id, task_id, group_name FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 770,
+    "sql": "SELECT created_by, workspace_id, assessment_category FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 848,
+    "sql": "SELECT id, task_id, group_name, status FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 855,
+    "sql": "SELECT id, workspace_id, created_by, assessment_category FROM tasks WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 864,
+    "sql": "UPDATE task_assignments SET status = ?, revision_note = ?, reviewed_at = strftime('%s', 'now'), mentor_approved = 0, coordinator_approved = 0 WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 949,
+    "sql": "SELECT status, created_by FROM tasks WHERE id = ? AND workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 965,
+    "sql": "UPDATE tasks SET title = ?, description = ?, required_outputs = ?, deadline = ?, start_at = ?, assigned_mentors = ?, assessment_category = ?, status = ?, revision_note = NULL WHERE id = ? AND workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 975,
+    "sql": "UPDATE tasks SET extended_deadline = NULL WHERE id = ? AND (extended_deadline IS NOT NULL AND extended_deadline <= ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 981,
+    "sql": "UPDATE task_assignments SET assignment_role = ?, deadline = ?, start_at = ? WHERE task_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1021,
+    "sql": "SELECT created_by FROM tasks WHERE id = ? AND workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1034,
+    "sql": "UPDATE tasks SET status = 'DELETED', sparks = NULL WHERE id = ? AND workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1039,
+    "sql": "DELETE FROM task_assignments WHERE task_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1077,
+    "sql": "SELECT 1 FROM assessment_submission_reactions WHERE assignment_id = ? AND user_id = ? AND emoji = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1083,
+    "sql": "DELETE FROM assessment_submission_reactions WHERE assignment_id = ? AND user_id = ? AND emoji = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1088,
+    "sql": "INSERT INTO assessment_submission_reactions (assignment_id, user_id, emoji) VALUES (?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1133,
+    "sql": "DELETE FROM task_assignments WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1177,
+    "sql": "SELECT deadline, start_at FROM tasks WHERE id = ? AND workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1187,
+    "sql": "INSERT INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at) VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1211,
+    "sql": "UPDATE tasks SET status = 'APPROVED', revision_note = NULL WHERE task_type = 'ASSESSMENT' AND status = 'WAITING_REVIEW' ${wsClause} AND id IN ( SELECT DISTINCT task_id FROM task_assignments WHERE result_url IS NOT NULL OR status IN ('WAITING_REVIEW', 'APPROVED', 'REVISION_REQUESTED') OR mentor_approved = 1 OR coordinator_approved = 1 )"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1230,
+    "sql": "SELECT t.id, t.workspace_id, t.exec_type, t.created_by, t.deadline, t.start_at FROM tasks t WHERE (t.task_type = 'ASSESSMENT' OR EXISTS (SELECT 1 FROM workspaces w WHERE w.id = t.workspace_id AND w.workspace_type = 'ASSESSMENT')) AND t.status = 'APPROVED' ${wsCondition}"
+  },
+  {
+    "file": "src\\modules\\workspaces\\assessmentActions.ts",
+    "line": 1240,
+    "sql": "SELECT DISTINCT u.id AS user_id FROM users u JOIN workspace_members wm ON u.id = wm.user_id WHERE wm.workspace_id = ? AND (u.user_type IS NULL OR u.user_type != 'STAFF') AND u.status = 'ACTIVE' AND u.id NOT IN ( SELECT ur.user_id FROM user_roles ur JOIN roles r ON ur.role_id = r.id WHERE r.id IN ('role_mentor_troopers', 'role_mentor') OR UPPER(r.name) LIKE '%MENTOR%' ) AND u.id NOT IN ( SELECT ojt_coordinator_id FROM workspaces WHERE id = ? AND ojt_coordinator_id IS NOT NULL ) AND u.id NOT IN ( SELECT user_id FROM task_assignments WHERE task_id = ? )"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 75,
+    "sql": "INSERT INTO workspace_chats (id, workspace_id, user_id, message, parent_id, attachment_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 84,
+    "sql": "INSERT OR REPLACE INTO workspace_chat_reads (chat_id, user_id, read_at) VALUES (?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 94,
+    "sql": "INSERT OR REPLACE INTO workspace_user_presence (user_id, workspace_id, last_seen_at, is_typing) VALUES (?, ?, ?, 0)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 104,
+    "sql": "SELECT DISTINCT target_users.id AS user_id, target_users.name FROM ( SELECT wm.user_id AS id, u.name FROM workspace_members wm JOIN users u ON wm.user_id = u.id WHERE wm.workspace_id = ? AND wm.user_id != ? AND (u.status IS NULL OR u.status = 'ACTIVE') UNION SELECT ws.ojt_coordinator_id AS id, u.name FROM workspaces ws JOIN users u ON ws.ojt_coordinator_id = u.id WHERE ws.id = ? AND ws.ojt_coordinator_id != ? AND (u.status IS NULL OR u.status = 'ACTIVE') UNION SELECT ta.user_id AS id, u.name FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id JOIN users u ON ta.user_id = u.id WHERE t.workspace_id = ? AND ta.user_id != ? AND (u.status IS NULL OR u.status = 'ACTIVE') ) target_users"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 198,
+    "sql": "SELECT user_id, created_at FROM workspace_chats WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 213,
+    "sql": "UPDATE workspace_chats SET message = ?, edit_count = COALESCE(edit_count, 0) + 1, edited_at = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 218,
+    "sql": "UPDATE workspace_chats SET message = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 242,
+    "sql": "SELECT user_id FROM workspace_chats WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 253,
+    "sql": "DELETE FROM workspace_chats WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 274,
+    "sql": "SELECT r.name, u.user_type, wm.team_role FROM users u LEFT JOIN user_roles ur ON u.id = ur.user_id LEFT JOIN roles r ON ur.role_id = r.id LEFT JOIN workspace_members wm ON wm.workspace_id = ? AND wm.user_id = u.id WHERE u.id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 298,
+    "sql": "SELECT is_pinned FROM workspace_chats WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 306,
+    "sql": "UPDATE workspace_chats SET is_pinned = 0, pinned_by = NULL WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 311,
+    "sql": "UPDATE workspace_chats SET is_pinned = 1, pinned_by = ? WHERE id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 360,
+    "sql": "DELETE FROM workspace_chats WHERE workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 385,
+    "sql": "SELECT id FROM workspace_chat_reactions WHERE chat_id = ? AND user_id = ? AND emoji = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 391,
+    "sql": "DELETE FROM workspace_chat_reactions WHERE chat_id = ? AND user_id = ? AND emoji = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 397,
+    "sql": "INSERT INTO workspace_chat_reactions (id, chat_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 424,
+    "sql": "SELECT wc.id FROM workspace_chats wc LEFT JOIN workspace_chat_reads wcr ON wc.id = wcr.chat_id AND wcr.user_id = ? WHERE wc.workspace_id = ? AND wcr.chat_id IS NULL AND wc.user_id != ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 434,
+    "sql": "INSERT OR IGNORE INTO workspace_chat_reads (chat_id, user_id, read_at) VALUES (?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 466,
+    "sql": "INSERT OR REPLACE INTO workspace_user_presence (user_id, workspace_id, last_seen_at, is_typing) VALUES (?, ?, ?, ?)"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 494,
+    "sql": "SELECT wup.user_id, wup.last_seen_at, wup.is_typing, u.name AS user_name FROM workspace_user_presence wup JOIN users u ON wup.user_id = u.id WHERE wup.workspace_id = ?"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 549,
+    "sql": "SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.parent_id, wc.attachment_url, wc.created_at, u.name AS user_name, u.avatar_url AS user_avatar, u.user_type, p_wc.message AS reply_message, p_u.name AS reply_user_name, wm.team_role AS user_role FROM workspace_chats wc LEFT JOIN users u ON wc.user_id = u.id LEFT JOIN workspace_chats p_wc ON wc.parent_id = p_wc.id LEFT JOIN users p_u ON p_wc.user_id = p_u.id LEFT JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = wc.user_id WHERE wc.workspace_id = ? ORDER BY wc.created_at DESC LIMIT 100"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 580,
+    "sql": "SELECT wcr.chat_id, wcr.emoji, wcr.user_id, u.name AS user_name FROM workspace_chat_reactions wcr LEFT JOIN users u ON wcr.user_id = u.id WHERE wcr.chat_id IN (${placeholders})"
+  },
+  {
+    "file": "src\\modules\\workspaces\\chatActions.ts",
+    "line": 601,
+    "sql": "SELECT wcr.chat_id, wcr.user_id, u.name AS user_name FROM workspace_chat_reads wcr LEFT JOIN users u ON wcr.user_id = u.id WHERE wcr.chat_id IN (${placeholders})"
+  },
+  {
+    "file": "src\\modules\\workspaces\\taskPollActions.ts",
+    "line": 60,
+    "sql": "SELECT id, title, description, status, priority, deadline, start_at, created_at, task_type, parent_task_id, revision_note, sparks, sparks_multiplier FROM tasks WHERE workspace_id = ? AND status != 'DELETED' ORDER BY CASE WHEN deadline IS NULL THEN 1 ELSE 0 END ASC, deadline ASC, created_at ASC"
+  },
+  {
+    "file": "src\\modules\\workspaces\\taskPollActions.ts",
+    "line": 90,
+    "sql": "SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role, ta.status, ta.result_url, ta.revision_note, ta.appreciation_note, ta.submitted_at, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved, ta.sparks, ta.deadline, u.name as user_name FROM task_assignments ta LEFT JOIN users u ON ta.user_id = u.id WHERE ta.task_id IN (${tasks.map(() => '?').join(',')}) ORDER BY ta.created_at ASC"
+  }
+]
