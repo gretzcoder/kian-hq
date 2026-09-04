@@ -78,12 +78,8 @@ export async function getAchievementHistoryAction(categoryFilter = 'ALL', userId
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
       WHERE ah.earned_at <= ?
-        AND u.id NOT IN (
-          SELECT ur2.user_id
-          FROM user_roles ur2
-          JOIN roles r2 ON ur2.role_id = r2.id
-          WHERE r2.id IN ('role_coordinator', 'role_executive') OR r2.name IN ('COORDINATOR', 'EXECUTIVE', 'KOORDINATOR')
-        )
+        AND (r.id IS NULL OR r.id NOT IN ('role_coordinator', 'role_executive'))
+        AND (r.name IS NULL OR r.name NOT IN ('COORDINATOR', 'EXECUTIVE', 'KOORDINATOR'))
         AND u.email NOT LIKE '%admin@kian.com%'
     `;
 

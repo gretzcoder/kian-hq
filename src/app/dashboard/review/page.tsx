@@ -43,8 +43,6 @@ export default async function ReviewPage() {
 
   const db = await getDB();
 
-  const isLeaderQuery = `EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER')`;
-  const isMentorQuery = `(EXISTS (SELECT 1 FROM workspaces WHERE id = t.workspace_id AND ojt_coordinator_id = ?) OR EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?) OR t.created_by = ?)`;
   const isCoordinator =
     (ctx.userType === 'STAFF' &&
       (ctx.roles.includes('COORDINATOR') ||
@@ -175,12 +173,12 @@ export default async function ReviewPage() {
       t.extended_deadline,
       tu.name          AS task_creator_name,
       t.workspace_id,
+      t.project_id,
       ws.name          AS workspace_name,
       ws.workspace_type AS workspace_type,
+      ws.ojt_coordinator_id,
       p.name           AS project_name,
-      u.name           AS creator_name,
-      ${isLeaderQuery} AS is_leader,
-      ${isMentorQuery} AS is_mentor
+      u.name           AS creator_name
     FROM task_assignments ta
     JOIN tasks t       ON ta.task_id = t.id
     JOIN projects p    ON t.project_id = p.id
@@ -193,9 +191,26 @@ export default async function ReviewPage() {
       AND t.status != 'DELETED'
       AND (ws.id IS NULL OR ws.deleted_at IS NULL)
     ORDER BY ta.submitted_at ASC
-  `).bind(session.userId, session.userId, session.userId, session.userId).all();
+  `).all();
 
-  const allReviews = rawReviews as unknown as (ReviewRow & {
+  const reviewRows = (rawReviews as any[]) || [];
+  let leaderWsSet = new Set<string>();
+  let coordProjSet = new Set<string>();
+
+  if (reviewRows.length > 0) {
+    const [leadRows, coordRows] = await Promise.all([
+      db.prepare(`SELECT workspace_id FROM workspace_members WHERE user_id = ? AND team_role = 'LEADER'`).bind(session.userId).all(),
+      db.prepare(`SELECT project_id FROM project_coordinators WHERE user_id = ?`).bind(session.userId).all(),
+    ]);
+    leaderWsSet = new Set(((leadRows.results as any[]) || []).map((r) => r.workspace_id));
+    coordProjSet = new Set(((coordRows.results as any[]) || []).map((r) => r.project_id));
+  }
+
+  const allReviews = reviewRows.map((r) => ({
+    ...r,
+    is_leader: r.workspace_id ? (leaderWsSet.has(r.workspace_id) ? 1 : 0) : 0,
+    is_mentor: (r.ojt_coordinator_id === session.userId || (r.project_id && coordProjSet.has(r.project_id)) || r.task_created_by === session.userId) ? 1 : 0,
+  })) as unknown as (ReviewRow & {
     lead_approved: number;
     mentor_approved: number;
     coordinator_approved: number;
