@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { getKV, getDB } from '@/db/client';
 import { isAuthorizedForImpersonation } from '@/modules/users/impersonationActions';
@@ -17,7 +18,7 @@ export interface SessionUser {
  * Retrieves the current session from cookies, Cloudflare KV, and checks user impersonation state.
  * Must be called in Server Components, Server Actions, or Route Handlers.
  */
-export async function getSession(): Promise<SessionUser | null> {
+export const getSession = cache(async function getSession(): Promise<SessionUser | null> {
   try {
     const cookieStore = await cookies();
     const sessionId = cookieStore.get('session_id')?.value;
@@ -70,4 +71,4 @@ export async function getSession(): Promise<SessionUser | null> {
     console.error('getSession error:', error);
     return null;
   }
-}
+});

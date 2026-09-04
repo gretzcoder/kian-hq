@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { getDB, getKV } from '@/db/client';
 import { getActiveSimulatedRole } from './viewAsRoleActions';
 
@@ -245,7 +246,7 @@ export async function getLocalWorkspaceRoles(
  * Batch-fetch permissions + roles in a single call.
  * Use at page level to avoid multiple round-trips to KV/D1.
  */
-export async function getSessionContext(userId: string): Promise<{
+export const getSessionContext = cache(async function getSessionContext(userId: string): Promise<{
   can: (permission: string) => boolean;
   permissions: Set<string>;
   roles: string[];
@@ -277,7 +278,7 @@ export async function getSessionContext(userId: string): Promise<{
     userType: simRole ? simRole.userType : userType,
     simulatedRole: simRole ? { roleId: simRole.roleId, roleName: simRole.roleName, userType: simRole.userType } : null,
   };
-}
+});
 
 /**
  * Clears the KV permissions cache for a user.
