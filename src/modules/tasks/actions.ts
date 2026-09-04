@@ -1893,12 +1893,17 @@ export async function syncAndRepairTaskStatuses(db: any, workspaceId?: string) {
     const params = workspaceId ? [workspaceId] : [];
 
     const { results: tasks } = await db
-      .prepare(`SELECT id, status, task_type FROM tasks ${wsClause}`)
+      .prepare(`
+        SELECT t.id, t.status, t.task_type, ws.workspace_type
+        FROM tasks t
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        ${wsClause}
+      `)
       .bind(...params)
       .all();
 
     for (const t of (tasks as any[] || [])) {
-      if (t.task_type === 'DIRECT_BRIEF') continue;
+      if (t.task_type === 'ASSESSMENT' || t.task_type === 'DIRECT_BRIEF' || t.workspace_type === 'ASSESSMENT') continue;
 
       const { results: assignments } = await db
         .prepare(`SELECT status FROM task_assignments WHERE task_id = ?`)

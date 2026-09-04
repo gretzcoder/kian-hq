@@ -1211,8 +1211,9 @@ export async function repairAssessmentTaskStatuses(db: any, workspaceId?: string
     await db.prepare(`
       UPDATE tasks
       SET status = 'APPROVED', revision_note = NULL
-      WHERE task_type = 'ASSESSMENT'
-        AND status = 'WAITING_REVIEW'
+      WHERE (task_type = 'ASSESSMENT' OR EXISTS (SELECT 1 FROM workspaces w WHERE w.id = tasks.workspace_id AND w.workspace_type = 'ASSESSMENT'))
+        AND status IN ('WAITING_REVIEW', 'IN_PROGRESS')
+        AND (description IS NOT NULL AND TRIM(description) != '')
         ${wsClause}
         AND EXISTS (
           SELECT 1
@@ -1220,7 +1221,7 @@ export async function repairAssessmentTaskStatuses(db: any, workspaceId?: string
           WHERE ta.task_id = tasks.id
             AND (
               ta.result_url IS NOT NULL
-              OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'REVISION_REQUESTED')
+              OR ta.status IN ('ASSIGNED', 'WAITING_REVIEW', 'APPROVED', 'REVISION_REQUESTED')
               OR ta.mentor_approved = 1
               OR ta.coordinator_approved = 1
             )
