@@ -417,7 +417,7 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
                   u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
                   t.workspace_id AS wsId, ws.name AS wsName
            FROM task_assignments ta
-           JOIN workflow_events we ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
+           CROSS JOIN workflow_events we ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
            JOIN tasks t ON ta.task_id = t.id
            LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
            LEFT JOIN workspaces ws ON t.workspace_id = ws.id
@@ -432,7 +432,7 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
                   u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
                   t.workspace_id AS wsId, ws.name AS wsName
            FROM tasks t
-           JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id)
+           CROSS JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id)
            LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
            LEFT JOIN workspaces ws ON t.workspace_id = ws.id
            WHERE t.created_by = ?
@@ -447,7 +447,7 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
                   t.workspace_id AS wsId, ws.name AS wsName
            FROM task_assignments ta
            JOIN tasks t ON ta.task_id = t.id
-           JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id)
+           CROSS JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id)
            LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
            LEFT JOIN workspaces ws ON t.workspace_id = ws.id
            WHERE ta.user_id = ?
