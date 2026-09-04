@@ -14,3 +14,10 @@ CREATE INDEX IF NOT EXISTS idx_direct_messages_receiver_created ON direct_messag
 -- 4. Index workspace_chats and community_messages by container and created_at
 CREATE INDEX IF NOT EXISTS idx_workspace_chats_ws_created_id ON workspace_chats(workspace_id, created_at DESC, id);
 CREATE INDEX IF NOT EXISTS idx_community_messages_chan_created_id ON community_messages(channel_id, created_at DESC, id);
+
+-- 5. Index users by status and created_at
+CREATE INDEX IF NOT EXISTS idx_users_status_created ON users(status, created_at DESC);
+
+-- 6. Index achievement_history by user_id and earned_at
+CREATE INDEX IF NOT EXISTS idx_achievement_history_user_earned ON achievement_history(user_id, earned_at DESC);
+

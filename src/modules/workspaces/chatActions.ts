@@ -570,47 +570,50 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
   }
 
   const reactionsMap = new Map<string, Map<string, { count: number; hasReacted: boolean; userNames: string[] }>>();
-  try {
-    const rxRaw = await db
-      .prepare(
-        `SELECT wcr.chat_id, wcr.emoji, wcr.user_id, u.name AS user_name
-         FROM workspace_chat_reactions wcr
-         JOIN workspace_chats wc ON wcr.chat_id = wc.id
-         LEFT JOIN users u ON wcr.user_id = u.id
-         WHERE wc.workspace_id = ?`
-      )
-      .bind(workspaceId)
-      .all();
-    for (const r of (rxRaw.results || []) as any[]) {
-      if (!reactionsMap.has(r.chat_id)) reactionsMap.set(r.chat_id, new Map());
-      const chatRx = reactionsMap.get(r.chat_id)!;
-      if (!chatRx.has(r.emoji)) chatRx.set(r.emoji, { count: 0, hasReacted: false, userNames: [] });
-      const entry = chatRx.get(r.emoji)!;
-      entry.count += 1;
-      if (r.user_id === session.userId) entry.hasReacted = true;
-      if (r.user_name) entry.userNames.push(r.user_name);
-    }
-  } catch {}
-
   const readsMap = new Map<string, { count: number; names: string[] }>();
-  try {
-    const readsRaw = await db
-      .prepare(
-        `SELECT wcr.chat_id, wcr.user_id, u.name AS user_name
-         FROM workspace_chat_reads wcr
-         JOIN workspace_chats wc ON wcr.chat_id = wc.id
-         LEFT JOIN users u ON wcr.user_id = u.id
-         WHERE wc.workspace_id = ?`
-      )
-      .bind(workspaceId)
-      .all();
-    for (const r of (readsRaw.results || []) as any[]) {
-      if (!readsMap.has(r.chat_id)) readsMap.set(r.chat_id, { count: 0, names: [] });
-      const entry = readsMap.get(r.chat_id)!;
-      entry.count += 1;
-      if (r.user_name && r.user_id !== session.userId) entry.names.push(r.user_name);
-    }
-  } catch {}
+
+  const msgIds = msgsRaw.map((m) => m.id);
+  if (msgIds.length > 0) {
+    const placeholders = msgIds.map(() => '?').join(',');
+    try {
+      const rxRaw = await db
+        .prepare(
+          `SELECT wcr.chat_id, wcr.emoji, wcr.user_id, u.name AS user_name
+           FROM workspace_chat_reactions wcr
+           LEFT JOIN users u ON wcr.user_id = u.id
+           WHERE wcr.chat_id IN (${placeholders})`
+        )
+        .bind(...msgIds)
+        .all();
+      for (const r of (rxRaw.results || []) as any[]) {
+        if (!reactionsMap.has(r.chat_id)) reactionsMap.set(r.chat_id, new Map());
+        const chatRx = reactionsMap.get(r.chat_id)!;
+        if (!chatRx.has(r.emoji)) chatRx.set(r.emoji, { count: 0, hasReacted: false, userNames: [] });
+        const entry = chatRx.get(r.emoji)!;
+        entry.count += 1;
+        if (r.user_id === session.userId) entry.hasReacted = true;
+        if (r.user_name) entry.userNames.push(r.user_name);
+      }
+    } catch {}
+
+    try {
+      const readsRaw = await db
+        .prepare(
+          `SELECT wcr.chat_id, wcr.user_id, u.name AS user_name
+           FROM workspace_chat_reads wcr
+           LEFT JOIN users u ON wcr.user_id = u.id
+           WHERE wcr.chat_id IN (${placeholders})`
+        )
+        .bind(...msgIds)
+        .all();
+      for (const r of (readsRaw.results || []) as any[]) {
+        if (!readsMap.has(r.chat_id)) readsMap.set(r.chat_id, { count: 0, names: [] });
+        const entry = readsMap.get(r.chat_id)!;
+        entry.count += 1;
+        if (r.user_name && r.user_id !== session.userId) entry.names.push(r.user_name);
+      }
+    } catch {}
+  }
 
   const now = Math.floor(Date.now() / 1000);
   const stickerRegex = /^\[sticker:(.*?):(.*?):(.*?)]$/;

@@ -94,12 +94,25 @@ function filterAchievementsForCondition(achievements: any[], cond: any, nowSec: 
   });
 }
 
+const badgeEvaluationThrottleMap = new Map<string, number>();
+const BADGE_EVAL_THROTTLE_MS = 180_000; // 3 minutes
+
 /**
  * Global Evaluator: Auto-awards badges to users who satisfy task/workspace/achievement requirements
  */
 export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise<number> {
-  const db = await getDB();
+  const session = await getSession();
+  const userId = targetUserId || session?.userId;
+  if (!userId) return 0;
+
   const now = Date.now();
+  const lastEval = badgeEvaluationThrottleMap.get(userId) || 0;
+  if (now - lastEval < BADGE_EVAL_THROTTLE_MS) {
+    return 0;
+  }
+  badgeEvaluationThrottleMap.set(userId, now);
+
+  const db = await getDB();
 
   try {
     // 0. Ensure D1 columns exist (run once)

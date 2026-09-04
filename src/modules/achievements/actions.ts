@@ -183,8 +183,9 @@ export async function getUserAchievementStatsAction(userId: string) {
   }
 }
 
-/** Get User Active Champion Streak String for Leaderboard (e.g. "🔥 3 Weeks Streak" or "🏆 4x Champion") */
 export async function getUserStreakBadgeMapAction(userIds?: string[]): Promise<Record<string, string>> {
+  if (userIds && userIds.length === 0) return {};
+
   try {
     const db = await getDB();
     let query = `
@@ -197,6 +198,9 @@ export async function getUserStreakBadgeMapAction(userIds?: string[]): Promise<R
       const placeholders = userIds.map(() => '?').join(',');
       query += ` WHERE user_id IN (${placeholders})`;
       params.push(...userIds);
+    } else {
+      // Limit to recent achievements to prevent full table scans when no userIds provided
+      query += ` WHERE earned_at > (strftime('%s', 'now') - 2592000)`;
     }
 
     query += ` ORDER BY user_id, earned_at DESC`;

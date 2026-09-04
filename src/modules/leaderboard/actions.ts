@@ -4,6 +4,10 @@ import { getDB } from '@/db/client';
 import { getSession } from '@/modules/auth/session';
 import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
 import { getUserStreakBadgeMapAction } from '@/modules/achievements/actions';
+import { getCategoryMultipliers } from '@/modules/sparks/settingsCache';
+
+const leaderboardCache = new Map<string, { data: any; ts: number }>();
+const LEADERBOARD_CACHE_TTL_MS = 60_000; // 60s memory SWR cache
 
 export interface LeaderboardUser {
   rank: number;
@@ -124,9 +128,15 @@ export async function getLeaderboardData(
   group: 'troopers' | 'mentor' = 'troopers',
   customDateRange?: { startTs: number; endTs?: number }
 ) {
-  const db = await getDB();
   const session = await getSession();
   const currentUserId = session?.userId || '';
+  const cacheKey = `${category}:${period}:${group}:${customDateRange ? `${customDateRange.startTs}-${customDateRange.endTs}` : ''}:${currentUserId}`;
+  const cached = leaderboardCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < LEADERBOARD_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const db = await getDB();
 
   let periodStartTs = 0;
   let periodEndTs = 0;
@@ -224,16 +234,7 @@ export async function getLeaderboardData(
     const includeMentorBriefs = (group === 'mentor' || category === 'role_mentor_troopers') && !['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
     const isRoleCategory = ['role_designer', 'role_editor', 'role_planner', 'role_researcher'].includes(category);
 
-    const { results: settingsRows } = await db
-      .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-      .all();
-
-    let designMultiplier = 1.0;
-    let videoMultiplier = 1.0;
-    for (const row of (settingsRows || []) as any[]) {
-      if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-      if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-    }
+    const { designMultiplier, videoMultiplier } = await getCategoryMultipliers();
 
     const query = `
       WITH user_task_sparks AS (
@@ -380,7 +381,9 @@ export async function getLeaderboardData(
       streakBadge: streakMap[item.userId] || null,
     }));
 
-    return { type: 'individual' as const, data: ranked };
+    const resObj = { type: 'individual' as const, data: ranked };
+    leaderboardCache.set(cacheKey, { data: resObj, ts: Date.now() });
+    return resObj;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -486,7 +489,9 @@ export async function getLeaderboardData(
       .filter((u) => u.totalSparks > 0)
       .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
-    return { type: 'individual' as const, data: ranked };
+    const resObj = { type: 'individual' as const, data: ranked };
+    leaderboardCache.set(cacheKey, { data: resObj, ts: Date.now() });
+    return resObj;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -546,10 +551,14 @@ export async function getLeaderboardData(
       .sort((a, b) => b.totalSparks - a.totalSparks || b.tasksCompleted - a.tasksCompleted)
       .map((ws, idx) => ({ ...ws, rank: idx + 1 }));
 
-    return { type: 'workspace' as const, data: ranked };
+    const resObj = { type: 'workspace' as const, data: ranked };
+    leaderboardCache.set(cacheKey, { data: resObj, ts: Date.now() });
+    return resObj;
   }
 
-  return { type: 'individual' as const, data: [] };
+  const defaultObj = { type: 'individual' as const, data: [] };
+  leaderboardCache.set(cacheKey, { data: defaultObj, ts: Date.now() });
+  return defaultObj;
 }
 
 export interface SparksHistoryItem {
