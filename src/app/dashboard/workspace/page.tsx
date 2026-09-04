@@ -67,14 +67,11 @@ export default async function WorkspacePage() {
       if (isGlobalWorkspaceManager) {
         return db.prepare(`
           SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
-                 (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role,
-                 COALESCE(
-                   (SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id),
-                   (SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id),
-                   ws.created_at
-                 ) AS latest_activity_ts
+                 wm.team_role AS my_team_role,
+                 ws.created_at AS latest_activity_ts
           FROM workspaces ws
           JOIN projects p ON ws.project_id = p.id
+          LEFT JOIN workspace_members wm ON (ws.id = wm.workspace_id AND wm.user_id = ?)
           WHERE ws.deleted_at IS NULL
           ORDER BY ws.created_at DESC
         `).bind(session.userId).all();
@@ -84,23 +81,20 @@ export default async function WorkspacePage() {
 
       return db.prepare(`
         SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
-               (SELECT team_role FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?) AS my_team_role,
-               COALESCE(
-                 (SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id),
-                 (SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id),
-                 ws.created_at
-               ) AS latest_activity_ts
+               wm.team_role AS my_team_role,
+               ws.created_at AS latest_activity_ts
         FROM workspaces ws
         JOIN projects p ON ws.project_id = p.id
+        LEFT JOIN workspace_members wm ON (ws.id = wm.workspace_id AND wm.user_id = ?)
         WHERE (
-            EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
+            wm.workspace_id IS NOT NULL
             OR ws.ojt_coordinator_id = ?
-            OR EXISTS (SELECT 1 FROM project_coordinators WHERE project_id = ws.project_id AND user_id = ?)
-            OR (? AND ws.workspace_type = 'ASSESSMENT')
+            OR EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = ws.project_id AND pc.user_id = ?)
+            OR (? = 1 AND ws.workspace_type = 'ASSESSMENT')
           )
           AND ws.deleted_at IS NULL
         ORDER BY ws.created_at DESC
-      `).bind(session.userId, session.userId, session.userId, session.userId, (hasMentorRole || ctx.userType === 'STAFF') ? 1 : 0).all();
+      `).bind(session.userId, session.userId, session.userId, (hasMentorRole || ctx.userType === 'STAFF') ? 1 : 0).all();
     }),
     // 2. All active assignments for the current user
     getDB().then((db) => db.prepare(`
