@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { getRecentConversationsAction } from '../dmActions';
+import { getUnreadSummaryAction } from '../dmActions';
 
 export interface ActiveChatSession {
   partnerId: string;
@@ -49,20 +49,22 @@ export function FloatingMessengerProvider({ children }: { children: React.ReactN
   const [focusedChatId, setFocusedChatId] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const refreshUnread = async () => {
+  const refreshUnread = useCallback(async () => {
+    if (typeof document !== 'undefined' && document.hidden) return;
     try {
-      const res = await getRecentConversationsAction('ALL');
+      const res = await getUnreadSummaryAction();
       if (res.success && typeof res.totalUnread === 'number') {
         setUnreadCount(res.totalUnread);
       }
     } catch {}
-  };
+  }, []);
 
   useEffect(() => {
     refreshUnread();
-    const interval = setInterval(refreshUnread, 8000);
+    const interval = setInterval(refreshUnread, 45_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshUnread]);
+
 
   const openChat = useCallback((partnerUserId: string, partnerName?: string, partnerAvatar?: string | null) => {
     if (!partnerUserId) return;

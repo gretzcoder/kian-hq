@@ -278,7 +278,7 @@ export function WorkspaceChatRoom({
       }
     };
 
-    const interval = setInterval(pollChatAndPresence, 2500);
+    const interval = setInterval(pollChatAndPresence, 8000);
     return () => {
       isMounted = false;
       clearInterval(interval);

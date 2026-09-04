@@ -56,19 +56,33 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
       .prepare('SELECT created_at FROM announcements ORDER BY created_at DESC LIMIT 50')
       .all(),
 
-    // Per-workspace latest activity
+    // Per-workspace latest activity — flat GROUP BY LEFT JOINs for high D1 performance
     (isGlobalManager || ctx.roles.some((r) => r.toUpperCase().includes('MENTOR')))
       ? db
           .prepare(
             `SELECT ws.id AS wsId,
                MAX(
                  ws.created_at,
-                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
-                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0),
-                 COALESCE((SELECT MAX(ta.created_at) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id), 0)
+                 COALESCE(t.max_t, 0),
+                 COALESCE(wc.max_wc, 0),
+                 COALESCE(ta.max_ta, 0)
                ) AS latestTs
              FROM workspaces ws
-             WHERE ws.deleted_at IS NULL`
+             LEFT JOIN (
+               SELECT workspace_id, MAX(created_at) AS max_t
+               FROM tasks WHERE status != 'DELETED' GROUP BY workspace_id
+             ) t ON ws.id = t.workspace_id
+             LEFT JOIN (
+               SELECT workspace_id, MAX(created_at) AS max_wc
+               FROM workspace_chats GROUP BY workspace_id
+             ) wc ON ws.id = wc.workspace_id
+             LEFT JOIN (
+               SELECT t.workspace_id, MAX(ta.created_at) AS max_ta
+               FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
+               WHERE t.status != 'DELETED' GROUP BY t.workspace_id
+             ) ta ON ws.id = ta.workspace_id
+             WHERE ws.deleted_at IS NULL
+             GROUP BY ws.id`
           )
           .all()
       : db
@@ -76,17 +90,31 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
             `SELECT ws.id AS wsId,
                MAX(
                  ws.created_at,
-                 COALESCE((SELECT MAX(created_at) FROM tasks WHERE workspace_id = ws.id), 0),
-                 COALESCE((SELECT MAX(created_at) FROM workspace_chats WHERE workspace_id = ws.id), 0),
-                 COALESCE((SELECT MAX(ta.created_at) FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id WHERE t.workspace_id = ws.id AND ta.user_id = ?), 0)
+                 COALESCE(t.max_t, 0),
+                 COALESCE(wc.max_wc, 0),
+                 COALESCE(ta.max_ta, 0)
                ) AS latestTs
              FROM workspaces ws
+             LEFT JOIN (
+               SELECT workspace_id, MAX(created_at) AS max_t
+               FROM tasks WHERE status != 'DELETED' GROUP BY workspace_id
+             ) t ON ws.id = t.workspace_id
+             LEFT JOIN (
+               SELECT workspace_id, MAX(created_at) AS max_wc
+               FROM workspace_chats GROUP BY workspace_id
+             ) wc ON ws.id = wc.workspace_id
+             LEFT JOIN (
+               SELECT t.workspace_id, MAX(ta.created_at) AS max_ta
+               FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
+               WHERE ta.user_id = ? AND t.status != 'DELETED' GROUP BY t.workspace_id
+             ) ta ON ws.id = ta.workspace_id
              WHERE ws.deleted_at IS NULL
                AND (
                  EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ?)
                  OR ws.ojt_coordinator_id = ?
                  OR ws.workspace_type = 'ASSESSMENT'
-               )`
+               )
+             GROUP BY ws.id`
           )
           .bind(session.userId, session.userId, session.userId, session.userId)
           .all(),

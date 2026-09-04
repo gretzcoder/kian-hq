@@ -89,7 +89,7 @@ export default function AnnouncementsFeed({
       }
     };
 
-    const interval = setInterval(pollUpdates, 4000);
+    const interval = setInterval(pollUpdates, 30_000);
     return () => {
       isMounted = false;
       clearInterval(interval);

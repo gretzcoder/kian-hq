@@ -272,7 +272,8 @@ export async function getRecentConversationsAction(
          JOIN users u ON (CASE WHEN dm.sender_id = ? THEN dm.receiver_id ELSE dm.sender_id END) = u.id
          WHERE (dm.sender_id = ? OR dm.receiver_id = ?)
            AND (dm.deleted_for IS NULL OR dm.deleted_for NOT LIKE ?)
-         ORDER BY dm.created_at DESC`
+         ORDER BY dm.created_at DESC
+         LIMIT 100`
       )
       .bind(session.userId, session.userId, session.userId, `%"${session.userId}"%`)
       .all();
@@ -788,4 +789,56 @@ export async function markWorkspaceChatReadAction(workspaceId: string): Promise<
   }
 
   return { success: true };
+}
+
+/**
+ * Lightweight fast unread summary counter action for floating messenger badge.
+ * Returns only total unread count using indexed queries, minimizing D1 rows read.
+ */
+export async function getUnreadSummaryAction(): Promise<{ success: boolean; totalUnread: number }> {
+  const session = await getSession();
+  if (!session) return { success: false, totalUnread: 0 };
+
+  const db = await getDB();
+  const userId = session.userId;
+
+  try {
+    const [dmRes, wsRes, commRes] = await Promise.all([
+      db
+        .prepare(`SELECT COUNT(*) AS cnt FROM direct_messages WHERE receiver_id = ? AND status != 'READ'`)
+        .bind(userId)
+        .first<{ cnt: number }>(),
+
+      db
+        .prepare(
+          `SELECT COUNT(*) AS cnt
+           FROM workspace_chats wc
+           JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = ?
+           LEFT JOIN workspace_chat_reads wcr ON wcr.chat_id = wc.id AND wcr.user_id = ?
+           WHERE wc.user_id != ? AND wcr.chat_id IS NULL`
+        )
+        .bind(userId, userId, userId)
+        .first<{ cnt: number }>(),
+
+      db
+        .prepare(
+          `SELECT COUNT(*) AS cnt
+           FROM community_messages cm
+           LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cm.channel_id AND ccr.user_id = ?
+           WHERE cm.user_id != ? AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm.created_at)`
+        )
+        .bind(userId, userId)
+        .first<{ cnt: number }>(),
+    ]);
+
+    const total =
+      (Number(dmRes?.cnt) || 0) +
+      (Number(wsRes?.cnt) || 0) +
+      (Number(commRes?.cnt) || 0);
+
+    return { success: true, totalUnread: total };
+  } catch (err) {
+    console.error('Error fetching unread summary:', err);
+    return { success: false, totalUnread: 0 };
+  }
 }

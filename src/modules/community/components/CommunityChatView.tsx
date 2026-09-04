@@ -762,10 +762,11 @@ export default function CommunityChatView({
       fetchMessages(activeChannel.id, true);
 
       const interval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
         fetchMessages(activeChannel.id, false);
         refreshChannels();
         fetchMembers();
-      }, 4000);
+      }, 10_000);
 
       return () => clearInterval(interval);
     }

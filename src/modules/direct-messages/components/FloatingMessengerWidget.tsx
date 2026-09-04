@@ -264,6 +264,7 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
 
   const fetchMessages = async () => {
     if (!partnerId) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
     try {
       const res = await getDirectMessagesAction(partnerId);
       if (res.success && res.messages) {
@@ -286,7 +287,7 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
       setLoading(true);
       Promise.all([fetchMessages(), fetchFriendship()]).finally(() => setLoading(false));
 
-      const interval = setInterval(fetchMessages, 3000);
+      const interval = setInterval(fetchMessages, 8000);
       return () => clearInterval(interval);
     }
   }, [partnerId]);

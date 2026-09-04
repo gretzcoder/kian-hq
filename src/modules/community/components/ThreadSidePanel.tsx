@@ -47,6 +47,7 @@ export function ThreadSidePanel({
 
   const fetchDetails = async () => {
     if (!threadRootId) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
     try {
       const res = await getThreadDetails(threadRootId);
       setDetails(res);
@@ -60,8 +61,8 @@ export function ThreadSidePanel({
       setLoading(true);
       fetchDetails().finally(() => setLoading(false));
 
-      // Polling for realtime thread replies (3 sec)
-      const interval = setInterval(fetchDetails, 3000);
+      // Polling for realtime thread replies (10 sec)
+      const interval = setInterval(fetchDetails, 10_000);
       return () => clearInterval(interval);
     } else {
       setDetails(null);
