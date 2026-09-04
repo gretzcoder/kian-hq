@@ -194,6 +194,31 @@ export function parseSubmittedLink(rawUrl: string): ParsedLinkInfo {
   };
 }
 
+export interface MultiOutputItem {
+  name: string;
+  url: string;
+}
+
+export function parseMultiOutputSubmissions(rawUrl: string | null | undefined): MultiOutputItem[] | null {
+  if (!rawUrl) return null;
+  const trimmed = rawUrl.trim();
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (
+        Array.isArray(parsed) &&
+        parsed.length > 0 &&
+        parsed.every(
+          (item) => typeof item === 'object' && item !== null && 'name' in item && 'url' in item
+        )
+      ) {
+        return parsed as MultiOutputItem[];
+      }
+    } catch (_e) {}
+  }
+  return null;
+}
+
 export function SubmittedLinkPreviewer({
   url,
   autoExpand = true,
@@ -203,7 +228,34 @@ export function SubmittedLinkPreviewer({
 }) {
   const [showPreview, setShowPreview] = useState(autoExpand);
   const [loaded, setLoaded] = useState(false);
+
+  const multiOutputs = parseMultiOutputSubmissions(url);
+  if (multiOutputs && multiOutputs.length > 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 text-xs font-black text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20 px-3 py-1.5 rounded-xl w-fit">
+          <span>📦</span>
+          <span>Output Hasil Pengerjaan ({multiOutputs.length} Item)</span>
+        </div>
+        <div className="space-y-3">
+          {multiOutputs.map((item, idx) => (
+            <div key={idx} className="space-y-1">
+              <div className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5 pl-1">
+                <span className="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] flex items-center justify-center font-mono font-black shrink-0">
+                  {idx + 1}
+                </span>
+                <span className="font-black text-purple-900 dark:text-purple-200">{item.name}</span>
+              </div>
+              <SubmittedLinkPreviewer url={item.url} autoExpand={autoExpand} />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   const info = parseSubmittedLink(url);
+
 
   // Render rich text HTML document report (e.g. DOCX Tiptap reports)
   if (info.type === 'HTML_DOC') {

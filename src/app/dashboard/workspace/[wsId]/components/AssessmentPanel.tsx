@@ -36,6 +36,25 @@ export interface ReactionItem {
   user_reacted: number;
 }
 
+export interface RequiredOutputItem {
+  id: string;
+  name: string;
+}
+
+export function parseRequiredOutputs(raw: string | null | undefined): RequiredOutputItem[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item: any, idx: number) => ({
+        id: item.id || `out_${idx}`,
+        name: typeof item === 'string' ? item : item.name || `Output ${idx + 1}`,
+      }));
+    }
+  } catch (_e) {}
+  return [];
+}
+
 interface TaskRow {
   id: string;
   title: string;
@@ -52,6 +71,7 @@ interface TaskRow {
   creator_name?: string | null;
   assessment_category?: string | null;
   assigned_mentors?: string | null;
+  required_outputs?: string | null;
 }
 
 interface AssignmentRow {
@@ -293,6 +313,140 @@ function formatIndonesiaDatetimeInput(ts: number | null | undefined): string {
   return wibDate.toISOString().slice(0, 16);
 }
 
+// ── Sub-component: Required Outputs Manager ────────────────────────────────────
+
+function RequiredOutputsManager({
+  outputs,
+  setOutputs,
+}: {
+  outputs: RequiredOutputItem[];
+  setOutputs: React.Dispatch<React.SetStateAction<RequiredOutputItem[]>>;
+}) {
+  const [mode, setMode] = useState<'FLEXIBLE' | 'SPECIFIC'>(
+    outputs.length > 0 ? 'SPECIFIC' : 'FLEXIBLE'
+  );
+
+  const handleModeChange = (newMode: 'FLEXIBLE' | 'SPECIFIC') => {
+    setMode(newMode);
+    if (newMode === 'FLEXIBLE') {
+      setOutputs([]);
+    } else if (outputs.length === 0) {
+      setOutputs([{ id: `out_${Date.now()}_1`, name: 'Output 1' }]);
+    }
+  };
+
+  const handleAddOutput = () => {
+    setOutputs((prev) => [
+      ...prev,
+      { id: `out_${Date.now()}_${prev.length + 1}`, name: `Output ${prev.length + 1}` },
+    ]);
+  };
+
+  const handleRemoveOutput = (id: string) => {
+    setOutputs((prev) => prev.filter((o) => o.id !== id));
+  };
+
+  const handleNameChange = (id: string, name: string) => {
+    setOutputs((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, name } : o))
+    );
+  };
+
+  return (
+    <div className="space-y-3 border border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/5 rounded-2xl p-4 sm:p-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-purple-500/10 pb-3">
+        <div>
+          <label className="block text-xs font-black text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+            <span>🎬</span> Request Jumlah & Kategori Output Submission
+          </label>
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+            Tentukan apakah Troopers mengumpulkan 1 output flexible atau beberapa karya spesifik (misal: Bumper In, Bumper Out, Looping).
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => handleModeChange('FLEXIBLE')}
+          className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+            mode === 'FLEXIBLE'
+              ? 'border-purple-500 bg-purple-500/10 ring-1 ring-purple-500 font-bold text-purple-900 dark:text-purple-200'
+              : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-purple-300'
+          }`}
+        >
+          <span className="text-xs font-black">Flexible (1 Link Output)</span>
+          <span className="text-[10px] text-zinc-500 font-normal">
+            Troopers cukup mengumpulkan 1 link utama per submit
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleModeChange('SPECIFIC')}
+          className={`p-3 rounded-xl border text-left flex flex-col gap-1 transition-all ${
+            mode === 'SPECIFIC'
+              ? 'border-purple-500 bg-purple-500/10 ring-1 ring-purple-500 font-bold text-purple-900 dark:text-purple-200'
+              : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-purple-300'
+          }`}
+        >
+          <span className="text-xs font-black">Multiple Task Output Request</span>
+          <span className="text-[10px] text-zinc-500 font-normal">
+            Mentor menentukan rincian & jumlah karya yang harus dikumpulkan
+          </span>
+        </button>
+      </div>
+
+      {mode === 'SPECIFIC' && (
+        <div className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">
+              Daftar Kategori Output ({outputs.length} Karya):
+            </span>
+            <button
+              type="button"
+              onClick={handleAddOutput}
+              className="px-3 py-1 text-[11px] font-bold bg-purple-600 text-white hover:bg-purple-500 rounded-xl transition-all shadow-xs cursor-pointer"
+            >
+              + Tambah Output
+            </button>
+          </div>
+
+          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+            {outputs.map((out, idx) => (
+              <div
+                key={out.id}
+                className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-2"
+              >
+                <span className="text-xs font-black text-purple-500 w-6 text-center">
+                  #{idx + 1}
+                </span>
+                <input
+                  type="text"
+                  value={out.name}
+                  onChange={(e) => handleNameChange(out.id, e.target.value)}
+                  placeholder="e.g. Bumper In / Bumper Out / Video Looping"
+                  className="flex-1 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs font-bold rounded-lg px-3 py-1.5 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
+                />
+                {outputs.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveOutput(out.id)}
+                    className="p-1.5 text-rose-500 hover:bg-rose-500/10 rounded-lg text-xs cursor-pointer"
+                    title="Hapus Output"
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Sub-component: Create Assessment Task Form ────────────────────────────────
 
 function CreateAssessmentTaskForm({
@@ -306,6 +460,7 @@ function CreateAssessmentTaskForm({
 }) {
   const [open,               setOpen]               = useState(false);
   const [description,        setDescription]        = useState('');
+  const [outputs,            setOutputs]            = useState<RequiredOutputItem[]>([]);
   const [selectedMentorIds,  setSelectedMentorIds]  = useState<string[]>([]);
   const [category,           setCategory]           = useState<'INDIVIDUAL' | 'GROUP'>('INDIVIDUAL');
   const [groups,             setGroups]             = useState<Array<{ id: string; name: string; userIds: string[] }>>([
@@ -402,6 +557,7 @@ function CreateAssessmentTaskForm({
       if (res.success) {
         setOpen(false);
         setDescription('');
+        setOutputs([]);
         setSelectedMentorIds([]);
         setMentorSearchTerm('');
         setTrooperSearchTerm('');
@@ -541,6 +697,10 @@ function CreateAssessmentTaskForm({
                     minHeight="min-h-[180px]"
                   />
                 </div>
+
+                {/* Request Quantities & Category Output */}
+                <input type="hidden" name="required_outputs" value={outputs.length > 0 ? JSON.stringify(outputs) : ''} />
+                <RequiredOutputsManager outputs={outputs} setOutputs={setOutputs} />
 
                 {/* Start Date & Deadline */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -781,8 +941,37 @@ function OJTSubmitForm({
   task: TaskRow;
   workspaceId: string;
 }) {
-  const [url,     setUrl]     = useState(assignment.result_url ?? '');
-  const [error,   setError]   = useState<string | null>(null);
+  const reqOutputs = parseRequiredOutputs(task.required_outputs);
+  const isMultiOutput = reqOutputs.length > 0;
+
+  const [singleUrl, setSingleUrl] = useState(() => {
+    if (!isMultiOutput && assignment.result_url) {
+      if (!assignment.result_url.trim().startsWith('[')) {
+        return assignment.result_url;
+      }
+    }
+    return '';
+  });
+
+  const [multiUrls, setMultiUrls] = useState<Record<string, string>>(() => {
+    if (isMultiOutput && assignment.result_url) {
+      try {
+        const parsed = JSON.parse(assignment.result_url);
+        if (Array.isArray(parsed)) {
+          const map: Record<string, string> = {};
+          parsed.forEach((item: any) => {
+            if (item && item.name) {
+              map[item.name] = item.url || '';
+            }
+          });
+          return map;
+        }
+      } catch (_e) {}
+    }
+    return {};
+  });
+
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline, task.extended_deadline);
@@ -792,11 +981,37 @@ function OJTSubmitForm({
     e.preventDefault();
     if (isLocked) return;
     setError(null);
+
+    let finalPayload = '';
+
+    if (isMultiOutput) {
+      const missing = reqOutputs.filter((o) => !multiUrls[o.name] || !multiUrls[o.name].trim());
+      if (missing.length > 0) {
+        setError(`Harap lengkapi seluruh link submission untuk: ${missing.map((m) => m.name).join(', ')}.`);
+        return;
+      }
+      const structured = reqOutputs.map((o) => ({
+        name: o.name,
+        url: multiUrls[o.name].trim(),
+      }));
+      finalPayload = JSON.stringify(structured);
+    } else {
+      if (!singleUrl.trim()) {
+        setError('Link hasil kerja wajib diisi.');
+        return;
+      }
+      finalPayload = singleUrl.trim();
+    }
+
     startTransition(async () => {
-      const res = await submitAssessmentWork(assignment.id, url, workspaceId);
+      const res = await submitAssessmentWork(assignment.id, finalPayload, workspaceId);
       if (!res.success) setError(res.error ?? 'Gagal submit');
     });
   };
+
+  const isFormValid = isMultiOutput
+    ? reqOutputs.every((o) => multiUrls[o.name] && multiUrls[o.name].trim())
+    : singleUrl.trim().length > 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
@@ -814,23 +1029,50 @@ function OJTSubmitForm({
         </div>
       )}
 
-      <div>
-        <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">
-          Link Hasil Kerja (Google Drive / URL) <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          required
-          disabled={isLocked}
-          placeholder={isLocked ? "Pengumpulan ditutup" : "https://drive.google.com/..."}
-          className="w-full bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm rounded-xl px-4 py-2.5 focus:outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed text-zinc-900 dark:text-zinc-100"
-        />
-      </div>
+      {isMultiOutput ? (
+        <div className="space-y-3 border border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/5 rounded-2xl p-4">
+          <label className="block text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-widest flex items-center gap-1.5">
+            <span>🎬</span> Link Submission ({reqOutputs.length} Output Diperlukan) <span className="text-red-500">*</span>
+          </label>
+          <div className="space-y-2.5">
+            {reqOutputs.map((out, idx) => (
+              <div key={out.id} className="space-y-1">
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                  <span className="text-[10px] bg-purple-500 text-white px-1.5 py-0.2 rounded-md font-mono">#{idx + 1}</span>
+                  <span>{out.name}</span>
+                </label>
+                <input
+                  type="url"
+                  value={multiUrls[out.name] || ''}
+                  onChange={(e) => setMultiUrls((prev) => ({ ...prev, [out.name]: e.target.value }))}
+                  required
+                  disabled={isLocked}
+                  placeholder={`https://drive.google.com/... (Link ${out.name})`}
+                  className="w-full bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-xs rounded-xl px-3.5 py-2 focus:outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1.5">
+            Link Hasil Kerja (Google Drive / URL) <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="url"
+            value={singleUrl}
+            onChange={(e) => setSingleUrl(e.target.value)}
+            required
+            disabled={isLocked}
+            placeholder={isLocked ? "Pengumpulan ditutup" : "https://drive.google.com/..."}
+            className="w-full bg-white dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-700 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-sm rounded-xl px-4 py-2.5 focus:outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed text-zinc-900 dark:text-zinc-100"
+          />
+        </div>
+      )}
 
       {error && (
-        <p className="text-xs text-red-500 font-bold">{error}</p>
+        <p className="text-xs text-red-500 font-bold">⚠️ {error}</p>
       )}
 
       {assignment.revision_note && (
@@ -844,10 +1086,10 @@ function OJTSubmitForm({
       {!isLocked && (
         <button
           type="submit"
-          disabled={pending || !url.trim()}
-          className="w-full py-2.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+          disabled={pending || !isFormValid}
+          className="w-full py-2.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all disabled:opacity-50 cursor-pointer shadow-md shadow-purple-500/20"
         >
-          {pending ? 'Mengumpulkan...' : assignment.status === 'WAITING_REVIEW' ? '🔄 Update Submission' : '📤 Kumpulkan'}
+          {pending ? 'Mengumpulkan...' : assignment.status === 'WAITING_REVIEW' ? '🔄 Update Submission' : '📤 Kumpulkan Submission'}
         </button>
       )}
     </form>
@@ -1396,6 +1638,7 @@ function EditAssessmentTaskModal({
   onClose: () => void;
 }) {
   const [description, setDescription] = useState(task.description ?? '');
+  const [outputs, setOutputs] = useState<RequiredOutputItem[]>(() => parseRequiredOutputs(task.required_outputs));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -1642,6 +1885,10 @@ function EditAssessmentTaskModal({
               />
             </div>
 
+            {/* Request Quantities & Category Output */}
+            <input type="hidden" name="required_outputs" value={outputs.length > 0 ? JSON.stringify(outputs) : ''} />
+            <RequiredOutputsManager outputs={outputs} setOutputs={setOutputs} />
+
             {/* Start Date & Deadline */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -1885,6 +2132,7 @@ function InputAssessmentBriefModal({
   onClose: () => void;
 }) {
   const [description, setDescription] = useState(task.description ?? '');
+  const [outputs, setOutputs] = useState<RequiredOutputItem[]>(() => parseRequiredOutputs(task.required_outputs));
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -1895,8 +2143,9 @@ function InputAssessmentBriefModal({
       return;
     }
     setError(null);
+    const reqOutputsJson = outputs.length > 0 ? JSON.stringify(outputs) : '';
     startTransition(async () => {
-      const res = await submitAssessmentBriefByMentor(task.id, workspaceId, description);
+      const res = await submitAssessmentBriefByMentor(task.id, workspaceId, description, reqOutputsJson);
       if (res.success) {
         onClose();
       } else {
@@ -1946,9 +2195,12 @@ function InputAssessmentBriefModal({
                 value={description}
                 onChange={setDescription}
                 placeholder="Jelaskan instruksi lengkap pengerjaan: output yang diharapkan, link referensi/aset, format file submit, deadline, dll..."
-                minHeight="min-h-[300px]"
+                minHeight="min-h-[250px]"
               />
             </div>
+
+            {/* Request Quantities & Category Output */}
+            <RequiredOutputsManager outputs={outputs} setOutputs={setOutputs} />
           </div>
 
           <div className="px-6 py-4 sm:px-8 border-t border-zinc-100 dark:border-zinc-800/80 shrink-0 bg-white dark:bg-[#09090b] flex items-center justify-end gap-3 rounded-b-3xl">
@@ -2309,6 +2561,12 @@ function MentorTaskCard({
                 <span>🎓</span>
                 <span className="truncate">Mentor: {assignedMentorNames}</span>
               </span>
+              {parseRequiredOutputs(task.required_outputs).length > 0 && (
+                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                  <span>🎬</span>
+                  <span>{parseRequiredOutputs(task.required_outputs).length} Outputs Requested</span>
+                </span>
+              )}
               {task.status === 'BRIEF_PENDING' ? (
                 <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
                   <span>⏳</span>
@@ -2522,16 +2780,28 @@ function MentorTaskCard({
                     </p>
                   </div>
                 </div>
-                {isCoordinator && !showBriefRevisionForm && (
-                  <button
-                    type="button"
-                    onClick={() => setShowBriefRevisionForm(true)}
-                    disabled={pendingApprove || pendingRevision}
-                    className="px-3.5 py-2 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all shrink-0"
-                  >
-                    ↩ Request Revisi Brief
-                  </button>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {isAssignedMentor && !showBriefRevisionForm && (
+                    <button
+                      type="button"
+                      onClick={() => setShowBriefInputModal(true)}
+                      className="px-3.5 py-2 text-xs font-bold bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-300 border border-purple-500/20 rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>✏️</span>
+                      <span>Edit Brief & Instruksi</span>
+                    </button>
+                  )}
+                  {isCoordinator && !showBriefRevisionForm && (
+                    <button
+                      type="button"
+                      onClick={() => setShowBriefRevisionForm(true)}
+                      disabled={pendingApprove || pendingRevision}
+                      className="px-3.5 py-2 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all shrink-0"
+                    >
+                      ↩ Request Revisi Brief
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Coordinator Review Controls: 1-10 Sparks selector */}

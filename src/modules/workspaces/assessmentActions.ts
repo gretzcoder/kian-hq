@@ -19,6 +19,7 @@ export interface AssessmentTaskRow {
   assessment_category?: string | null; // INDIVIDUAL | GROUP
   revision_note?: string | null;
   sparks?: number | null;
+  required_outputs?: string | null;
 }
 
 export interface AssessmentSubmissionRow {
@@ -91,6 +92,8 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
   const deadlineStr        = formData.get('deadline') as string | null;
   const startAtStr         = (formData.get('start_at') as string) || (formData.get('startAt') as string);
 
+  const requiredOutputsRaw  = formData.get('required_outputs') as string | null;
+
   if (!title) return { success: false, error: 'Judul assessment wajib diisi.' };
 
   let assignedMentorIds: string[] = [];
@@ -114,17 +117,18 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
 
   const taskId = `task_${crypto.randomUUID().replace(/-/g, '')}`;
   // New Flow: If created without brief, status is BRIEF_PENDING. If created with brief & by coordinator, WAITING_REVIEW or APPROVED.
-  const initialStatus = description && description.trim() ? (isCoordinator ? 'WAITING_REVIEW' : 'WAITING_REVIEW') : 'BRIEF_PENDING';
+  const initialStatus = description && description.trim() ? 'WAITING_REVIEW' : 'BRIEF_PENDING';
   const assignedMentorsJson = assignedMentorIds.length > 0 ? JSON.stringify(assignedMentorIds) : null;
+  const cleanRequiredOutputs = requiredOutputsRaw && requiredOutputsRaw.trim() ? requiredOutputsRaw.trim() : null;
 
   try {
     // 1. Create task
     await db
       .prepare(`
-        INSERT INTO tasks (id, workspace_id, project_id, title, description, status, priority, task_type, assessment_category, assigned_mentors, deadline, start_at, created_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'NORMAL', 'ASSESSMENT', ?, ?, ?, ?, ?, strftime('%s', 'now'))
+        INSERT INTO tasks (id, workspace_id, project_id, title, description, required_outputs, status, priority, task_type, assessment_category, assigned_mentors, deadline, start_at, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'NORMAL', 'ASSESSMENT', ?, ?, ?, ?, ?, strftime('%s', 'now'))
       `)
-      .bind(taskId, workspaceId, ws.project_id, title, description, initialStatus, assessmentCategory, assignedMentorsJson, deadline, startAt, session.userId)
+      .bind(taskId, workspaceId, ws.project_id, title, description, cleanRequiredOutputs, initialStatus, assessmentCategory, assignedMentorsJson, deadline, startAt, session.userId)
       .run();
 
     const assignmentInitialStatus = 'ASSIGNED';
@@ -238,7 +242,8 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
 export async function submitAssessmentBriefByMentor(
   taskId: string,
   workspaceId: string,
-  description: string
+  description: string,
+  requiredOutputs?: string | null
 ) {
   const session = await getSession();
   if (!session) return { success: false, error: 'Unauthorized' };
@@ -270,6 +275,10 @@ export async function submitAssessmentBriefByMentor(
 
   if (!task) return { success: false, error: 'Task assessment tidak ditemukan.' };
 
+  if (task.status === 'APPROVED') {
+    return { success: false, error: 'Brief assessment sudah di-ACC oleh Koordinator dan tidak dapat diubah lagi.' };
+  }
+
   if (!isCoordinator) {
     let isAssigned = false;
     if (task.assigned_mentors) {
@@ -288,14 +297,16 @@ export async function submitAssessmentBriefByMentor(
     }
   }
 
+  const cleanRequiredOutputs = requiredOutputs && requiredOutputs.trim() ? requiredOutputs.trim() : null;
+
   try {
     await db
       .prepare(`
         UPDATE tasks
-        SET description = ?, status = 'WAITING_REVIEW', revision_note = NULL
+        SET description = ?, required_outputs = ?, status = 'WAITING_REVIEW', revision_note = NULL
         WHERE id = ? AND workspace_id = ?
       `)
-      .bind(description.trim(), taskId, workspaceId)
+      .bind(description.trim(), cleanRequiredOutputs, taskId, workspaceId)
       .run();
 
     await logWorkflowEvent({
@@ -918,6 +929,9 @@ export async function updateAssessmentTask(taskId: string, workspaceId: string, 
   const deadlineStr        = formData.get('deadline') as string | null;
   const startAtStr         = (formData.get('start_at') as string) || (formData.get('startAt') as string);
 
+  const requiredOutputsRaw = formData.get('required_outputs') as string | null;
+  const cleanRequiredOutputs = requiredOutputsRaw && requiredOutputsRaw.trim() ? requiredOutputsRaw.trim() : null;
+
   if (!title) return { success: false, error: 'Judul assessment wajib diisi.' };
 
   let assignedMentorIds: string[] = [];
@@ -953,10 +967,10 @@ export async function updateAssessmentTask(taskId: string, workspaceId: string, 
     await db
       .prepare(`
         UPDATE tasks
-        SET title = ?, description = ?, deadline = ?, start_at = ?, assigned_mentors = ?, assessment_category = ?, status = ?, revision_note = NULL
+        SET title = ?, description = ?, required_outputs = ?, deadline = ?, start_at = ?, assigned_mentors = ?, assessment_category = ?, status = ?, revision_note = NULL
         WHERE id = ? AND workspace_id = ?
       `)
-      .bind(title, description, deadline, startAt, assignedMentorsJson, assessmentCategory, newStatus, taskId, workspaceId)
+      .bind(title, description, cleanRequiredOutputs, deadline, startAt, assignedMentorsJson, assessmentCategory, newStatus, taskId, workspaceId)
       .run();
 
     if (deadline) {

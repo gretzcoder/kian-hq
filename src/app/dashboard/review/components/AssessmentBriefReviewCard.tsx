@@ -11,6 +11,7 @@ export interface PendingAssessmentBrief {
   task_id: string;
   task_title: string;
   brief_description: string | null;
+  required_outputs?: string | null;
   task_priority: string;
   task_type: string;
   task_status: string;
@@ -40,6 +41,19 @@ export default function AssessmentBriefReviewCard({
 
   const [pendingAction, startTransition] = useTransition();
   const { toast } = useUI();
+
+  let requiredOutputsList: Array<{ id: string; name: string }> = [];
+  if (brief.required_outputs) {
+    try {
+      const parsed = JSON.parse(brief.required_outputs);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        requiredOutputsList = parsed.map((item, idx) => {
+          if (typeof item === 'string') return { id: `out_${idx}`, name: item };
+          return { id: item.id || `out_${idx}`, name: item.name || `Output ${idx + 1}` };
+        });
+      }
+    } catch (_e) {}
+  }
 
   const handleApprove = () => {
     if (!brief.workspace_id) return;
@@ -185,6 +199,25 @@ export default function AssessmentBriefReviewCard({
             </span>
           )}
         </div>
+
+        {requiredOutputsList.length > 0 && (
+          <div className="pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50 space-y-1.5">
+            <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1">
+              <span>📦</span> Output Wajib ({requiredOutputsList.length} Item):
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {requiredOutputsList.map((out, idx) => (
+                <span
+                  key={out.id || idx}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20"
+                >
+                  <span className="font-black text-purple-500">#{idx + 1}</span>
+                  <span>{out.name}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {brief.workspace_id && (
           <div className="pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50 flex justify-end">
