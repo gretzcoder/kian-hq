@@ -1376,6 +1376,11 @@ function MentorSubmissionCard({
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
                   r.user_reacted
                     ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold'
+                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                }`}
+              >
+                <span>{r.emoji}</span>
+                <span className="text-[10px] font-bold">{r.count}</span>
               </button>
             ))}
 
