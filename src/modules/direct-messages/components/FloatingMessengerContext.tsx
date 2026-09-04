@@ -61,8 +61,13 @@ export function FloatingMessengerProvider({ children }: { children: React.ReactN
 
   useEffect(() => {
     refreshUnread();
-    const interval = setInterval(refreshUnread, 45_000);
-    return () => clearInterval(interval);
+    const interval = setInterval(refreshUnread, 90_000);
+    const handleFocus = () => refreshUnread();
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [refreshUnread]);
 
 

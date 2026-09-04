@@ -766,7 +766,7 @@ export default function CommunityChatView({
         fetchMessages(activeChannel.id, false);
         refreshChannels();
         fetchMembers();
-      }, 10_000);
+      }, 20_000);
 
       return () => clearInterval(interval);
     }

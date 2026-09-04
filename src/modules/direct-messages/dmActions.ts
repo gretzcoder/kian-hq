@@ -815,7 +815,9 @@ export async function getUnreadSummaryAction(): Promise<{ success: boolean; tota
            FROM workspace_chats wc
            JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = ?
            LEFT JOIN workspace_chat_reads wcr ON wcr.chat_id = wc.id AND wcr.user_id = ?
-           WHERE wc.user_id != ? AND wcr.chat_id IS NULL`
+           WHERE wc.user_id != ? 
+             AND wc.created_at > (strftime('%s', 'now') - 604800)
+             AND wcr.chat_id IS NULL`
         )
         .bind(userId, userId, userId)
         .first<{ cnt: number }>(),
@@ -825,7 +827,9 @@ export async function getUnreadSummaryAction(): Promise<{ success: boolean; tota
           `SELECT COUNT(*) AS cnt
            FROM community_messages cm
            LEFT JOIN community_channel_reads ccr ON ccr.channel_id = cm.channel_id AND ccr.user_id = ?
-           WHERE cm.user_id != ? AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm.created_at)`
+           WHERE cm.user_id != ? 
+             AND cm.created_at > datetime('now', '-7 days')
+             AND (ccr.last_read_at IS NULL OR ccr.last_read_at < cm.created_at)`
         )
         .bind(userId, userId)
         .first<{ cnt: number }>(),

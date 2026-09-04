@@ -70,16 +70,16 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
              FROM workspaces ws
              LEFT JOIN (
                SELECT workspace_id, MAX(created_at) AS max_t
-               FROM tasks WHERE status != 'DELETED' GROUP BY workspace_id
+               FROM tasks WHERE status != 'DELETED' AND created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
              ) t ON ws.id = t.workspace_id
              LEFT JOIN (
                SELECT workspace_id, MAX(created_at) AS max_wc
-               FROM workspace_chats GROUP BY workspace_id
+               FROM workspace_chats WHERE created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
              ) wc ON ws.id = wc.workspace_id
              LEFT JOIN (
                SELECT t.workspace_id, MAX(ta.created_at) AS max_ta
                FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
-               WHERE t.status != 'DELETED' GROUP BY t.workspace_id
+               WHERE t.status != 'DELETED' AND ta.created_at > (strftime('%s', 'now') - 2592000) GROUP BY t.workspace_id
              ) ta ON ws.id = ta.workspace_id
              WHERE ws.deleted_at IS NULL
              GROUP BY ws.id`
@@ -97,16 +97,16 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
              FROM workspaces ws
              LEFT JOIN (
                SELECT workspace_id, MAX(created_at) AS max_t
-               FROM tasks WHERE status != 'DELETED' GROUP BY workspace_id
+               FROM tasks WHERE status != 'DELETED' AND created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
              ) t ON ws.id = t.workspace_id
              LEFT JOIN (
                SELECT workspace_id, MAX(created_at) AS max_wc
-               FROM workspace_chats GROUP BY workspace_id
+               FROM workspace_chats WHERE created_at > (strftime('%s', 'now') - 2592000) GROUP BY workspace_id
              ) wc ON ws.id = wc.workspace_id
              LEFT JOIN (
                SELECT t.workspace_id, MAX(ta.created_at) AS max_ta
                FROM task_assignments ta JOIN tasks t ON ta.task_id = t.id
-               WHERE ta.user_id = ? AND t.status != 'DELETED' GROUP BY t.workspace_id
+               WHERE ta.user_id = ? AND t.status != 'DELETED' AND ta.created_at > (strftime('%s', 'now') - 2592000) GROUP BY t.workspace_id
              ) ta ON ws.id = ta.workspace_id
              WHERE ws.deleted_at IS NULL
                AND (

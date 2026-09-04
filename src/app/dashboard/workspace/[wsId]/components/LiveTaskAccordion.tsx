@@ -5,7 +5,7 @@ import TaskAccordion from './TaskAccordion';
 import { getWorkspaceTaskData, PollTaskRow, PollAssignmentRow } from '@/modules/workspaces/taskPollActions';
 
 /** Poll interval when the tab is visible */
-const POLL_INTERVAL_MS = 15_000;
+const POLL_INTERVAL_MS = 25_000;
 
 interface UserRow {
   id: string;

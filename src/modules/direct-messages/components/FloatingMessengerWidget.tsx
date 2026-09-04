@@ -287,7 +287,7 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
       setLoading(true);
       Promise.all([fetchMessages(), fetchFriendship()]).finally(() => setLoading(false));
 
-      const interval = setInterval(fetchMessages, 8000);
+      const interval = setInterval(fetchMessages, 15_000);
       return () => clearInterval(interval);
     }
   }, [partnerId]);

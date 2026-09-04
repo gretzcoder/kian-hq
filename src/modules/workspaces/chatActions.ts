@@ -557,12 +557,13 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
          LEFT JOIN users p_u ON p_wc.user_id = p_u.id
          LEFT JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = wc.user_id
          WHERE wc.workspace_id = ?
-         ORDER BY wc.created_at ASC`
+         ORDER BY wc.created_at DESC
+         LIMIT 100`
       )
       .bind(workspaceId)
       .all();
 
-    msgsRaw = (res.results || []) as any[];
+    msgsRaw = ((res.results || []) as any[]).reverse();
   } catch (err) {
     console.error('getWorkspaceChats primary query failed:', err);
     return [];
