@@ -23,6 +23,7 @@ interface ReviewRow {
   task_type:       string | null;
   task_created_by: string | null;
   task_creator_name?: string | null;
+  assigned_mentors?:  string | null;
   workspace_id:    string | null;
   workspace_name:  string | null;
   workspace_type:  string | null;
@@ -75,6 +76,7 @@ export default async function ReviewPage() {
       t.priority       AS task_priority,
       t.task_type       AS task_type,
       t.created_by      AS task_created_by,
+      t.assigned_mentors,
       t.deadline,
       t.extended_deadline,
       tu.name          AS task_creator_name,
@@ -131,7 +133,18 @@ export default async function ReviewPage() {
 
     // ── Assessment 1-step flow ──
     if (r.task_type === 'ASSESSMENT') {
-      const isTaskMentor = (r.task_created_by != null && r.task_created_by === session.userId) || r.is_mentor === 1;
+      let isTaskMentor = false;
+      if (r.assigned_mentors) {
+        try {
+          const ids: string[] = JSON.parse(r.assigned_mentors);
+          if (Array.isArray(ids) && ids.length > 0) {
+            isTaskMentor = ids.includes(session.userId);
+          }
+        } catch (_e) {}
+      }
+      if (!isTaskMentor) {
+        isTaskMentor = (r.task_created_by != null && r.task_created_by === session.userId) || r.is_mentor === 1;
+      }
       return (isCoordinator || isTaskMentor) && r.coordinator_approved === 0;
     }
 
@@ -343,7 +356,7 @@ export default async function ReviewPage() {
                       assignmentId={r.assignment_id}
                       canRequestRevision={true}
                       taskType={r.task_type}
-                      isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.task_created_by === session.userId && (r as any).mentor_approved === 0}
+                      isAssessmentMentorStep={r.task_type === 'ASSESSMENT'}
                       creatorName={r.creator_name}
                       isStaffOrCoord={isCoordinator}
                       mentorApproved={(r as any).mentor_approved ?? 0}

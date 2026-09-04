@@ -1168,7 +1168,7 @@ function MentorSubmissionCard({
     startTransition(async () => {
       try {
         const res = await safeExecuteAction(
-          () => approveAssessmentSubmission(assignment.id, workspaceId, sparks),
+          () => approveAssessmentSubmission(assignment.id, workspaceId, sparks, accNote),
           async () => {
             const r = await fetch('/api/review/action', {
               method: 'POST',
@@ -1178,6 +1178,7 @@ function MentorSubmissionCard({
                 assignmentId: assignment.id,
                 workspaceId,
                 sparks,
+                noteText: accNote || '',
                 isAssessmentCoordStep: true,
               }),
             });
@@ -1375,11 +1376,6 @@ function MentorSubmissionCard({
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-xs font-medium transition-all active:scale-95 ${
                   r.user_reacted
                     ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300 font-bold'
-                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                }`}
-              >
-                <span>{r.emoji}</span>
-                <span className="text-[10px] font-bold">{r.count}</span>
               </button>
             ))}
 
@@ -1399,29 +1395,12 @@ function MentorSubmissionCard({
           {error && <p className="text-xs text-red-500">{error}</p>}
 
           {!isApproved && (() => {
-            const isTaskCreator = taskCreatedBy != null && taskCreatedBy === currentUserId;
-            const isMentorApproved = assignment.mentor_approved === 1;
-            const isCoordinatorApproved = assignment.coordinator_approved === 1;
+            const isEvaluator = isAssignedMentorForTask(task, currentUserId, isCoordinator);
 
-            // Show approval progress badges
             const badges = (
               <div className="flex items-center gap-2 flex-wrap mb-2">
-                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                  isMentorApproved
-                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                    : 'text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
-                }`}>
-                  {isMentorApproved ? '✓ ACC Mentor' : '⌛ Menunggu ACC Mentor'}
-                </span>
-                <span className="text-zinc-300 dark:text-zinc-600">›</span>
-                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                  isCoordinatorApproved
-                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                    : isMentorApproved
-                      ? 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 border-yellow-500/20'
-                      : 'text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700'
-                }`}>
-                  {isCoordinatorApproved ? '✓ ACC Koordinator' : isMentorApproved ? '⌛ Menunggu ACC Koordinator' : 'ACC Koordinator'}
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700">
+                  ⌛ Menunggu Penilaian Mentor
                 </span>
               </div>
             );
@@ -1430,7 +1409,6 @@ function MentorSubmissionCard({
             if (assignment.status === 'REVISION_REQUESTED') {
               return (
                 <div className="space-y-2">
-                  {badges}
                   <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs font-bold text-amber-700 dark:text-amber-300 flex items-center gap-2">
                     <span>⌛ Status: Revisi Telah Diminta. Menunggu intern mengirimkan hasil revisi terbaru.</span>
                   </div>
@@ -1438,100 +1416,24 @@ function MentorSubmissionCard({
               );
             }
 
-            // Step 1: Creator mentor sees ACC Mentor & Catatan Improvement + Request Revisi
-            if (isTaskCreator && !isMentorApproved && assignment.status === 'WAITING_REVIEW') {
+            // 1-step Mentor assessment grading & feedback
+            if (isEvaluator && (assignment.status === 'WAITING_REVIEW' || assignment.status === 'SUBMITTED' || assignment.status === 'RESUBMITTED')) {
               return (
                 <div className="space-y-2">
                   {badges}
-                  {!showRevForm && !showAccForm ? (
+                  {!showRevForm && !showSparkModal ? (
                     <div className="flex gap-2 items-center flex-wrap">
                       <button
-                        onClick={() => setShowAccForm(true)}
+                        onClick={() => setShowSparkModal(true)}
                         disabled={pending}
                         className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1.5"
                       >
-                        <span>✓ ACC Mentor & Catatan Improvement</span>
+                        <span>✓ ACC Assessment & Beri Sparks ✨</span>
                       </button>
                       <button
                         onClick={() => setShowRevForm(true)}
                         disabled={pending}
                         className="px-3.5 py-2.5 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all disabled:opacity-50"
-                      >
-                        ↩ Request Revisi
-                      </button>
-                    </div>
-                  ) : showAccForm ? (
-                    <form onSubmit={(e) => { e.preventDefault(); handleMentorAcc(accNote); }} className="space-y-2.5 p-3.5 rounded-2xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20">
-                      <label className="block text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
-                        ✨ Catatan Improvement Mentor (Opsional)
-                      </label>
-                      <textarea
-                        value={accNote}
-                        onChange={(e) => setAccNote(e.target.value)}
-                        rows={2}
-                        placeholder="Tuliskan catatan apresiasi, masukkan perbaikan, atau saran untuk peserta..."
-                        className="w-full bg-white dark:bg-zinc-900 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-zinc-900 dark:text-zinc-100 resize-none"
-                      />
-                      <div className="flex gap-2 justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setShowAccForm(false)}
-                          disabled={pending}
-                          className="px-3 py-1.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        >
-                          Batal
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={pending}
-                          className="px-4 py-1.5 text-xs font-black bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-md transition-all disabled:opacity-50"
-                        >
-                          {pending ? '...' : '✓ Kirim ACC & Catatan'}
-                        </button>
-                      </div>
-                    </form>
-                  ) : showRevForm ? (
-                    <form onSubmit={handleRevise} className="space-y-2">
-                      <textarea
-                        value={revNote}
-                        onChange={(e) => setRevNote(e.target.value)}
-                        required
-                        rows={2}
-                        placeholder="Tulis catatan revisi..."
-                        className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2 text-xs resize-none focus:outline-none focus:border-red-400 text-zinc-900 dark:text-zinc-100"
-                      />
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => setShowRevForm(false)} className="flex-1 py-1.5 text-xs border border-zinc-200 dark:border-zinc-700 rounded-lg text-zinc-500">
-                          Batal
-                        </button>
-                        <button type="submit" disabled={pending} className="flex-1 py-1.5 text-xs font-bold bg-red-500 hover:bg-red-400 text-white rounded-lg disabled:opacity-50">
-                          {pending ? '...' : 'Kirim Revisi'}
-                        </button>
-                      </div>
-                    </form>
-                  ) : null}
-                </div>
-              );
-            }
-
-            // Step 2: Coordinator sees Approve & Award Sparks (only after mentor ACC)
-            if (isCoordinator && isMentorApproved && !isCoordinatorApproved) {
-              return (
-                <div className="space-y-2">
-                  {badges}
-                  {!showRevForm && !showSparkModal ? (
-                    <div className="flex gap-2 items-center">
-                      <button
-                        onClick={() => setShowSparkModal(true)}
-                        disabled={pending}
-                        className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1.5"
-                      >
-                        <span>✓ Approve & Award Sparks ✨</span>
-                      </button>
-                      <button
-                        onClick={() => setShowRevForm(true)}
-                        disabled={pending}
-                        className="px-3.5 py-2 text-xs font-bold border border-red-500/30 text-red-600 dark:text-red-400 hover:bg-red-500/8 rounded-xl transition-all disabled:opacity-50"
                       >
                         ↩ Request Revisi
                       </button>
@@ -1565,11 +1467,35 @@ function MentorSubmissionCard({
                           );
                         })}
                       </div>
+
+                      <div className="space-y-1 pt-1">
+                        <label className="block text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-widest">
+                          ✨ Catatan Improvement Mentor (Opsional)
+                        </label>
+                        <textarea
+                          value={accNote}
+                          onChange={(e) => setAccNote(e.target.value)}
+                          rows={2}
+                          placeholder="Tuliskan catatan apresiasi, masukkan perbaikan, atau saran untuk peserta..."
+                          className="w-full bg-white dark:bg-zinc-900 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 text-zinc-900 dark:text-zinc-100 resize-none"
+                        />
+                      </div>
+
                       <div className="flex gap-2 justify-end pt-1">
-                        <button type="button" onClick={() => { setShowSparkModal(false); setError(null); }} disabled={pending} className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all">
+                        <button
+                          type="button"
+                          onClick={() => { setShowSparkModal(false); setError(null); }}
+                          disabled={pending}
+                          className="px-3 py-1.5 text-xs font-bold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-all"
+                        >
                           Batal
                         </button>
-                        <button type="button" onClick={handleApprove} disabled={pending} className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-1.5 rounded-xl transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleApprove}
+                          disabled={pending}
+                          className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-1.5 rounded-xl transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5"
+                        >
                           {pending ? 'Menyimpan...' : `Kirim ${sparks} ✨ & Setujui`}
                         </button>
                       </div>
@@ -1598,11 +1524,9 @@ function MentorSubmissionCard({
               );
             }
 
-            // Non-creator mentors or already approved: show status only
             return (
               <div className="space-y-2">
                 {badges}
-                {!isMentorApproved && (
                   <p className="text-[11px] text-zinc-500 dark:text-zinc-400 italic">
                     Menunggu ACC Mentor pembuat tugas.
                   </p>
