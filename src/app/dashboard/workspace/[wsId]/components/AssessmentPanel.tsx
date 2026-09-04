@@ -2485,7 +2485,7 @@ export function AssessmentPanel({
 
   return (
     <div className="space-y-5">
-      {/* Header + create button (mentor only) */}
+      {/* Header + create button (koordinator only) */}
       {canManage && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
@@ -2498,11 +2498,13 @@ export function AssessmentPanel({
               } menunggu review
             </p>
           </div>
-          <CreateAssessmentTaskForm
-            workspaceId={workspaceId}
-            onCreated={() => setReload((p) => p + 1)}
-            allWorkspaceMembers={allWorkspaceMembers}
-          />
+          {isCoordinator && (
+            <CreateAssessmentTaskForm
+              workspaceId={workspaceId}
+              onCreated={() => setReload((p) => p + 1)}
+              allWorkspaceMembers={allWorkspaceMembers}
+            />
+          )}
         </div>
       )}
 
@@ -2566,7 +2568,9 @@ export function AssessmentPanel({
             <p className="text-3xl mb-3">📝</p>
             <p className="text-zinc-500 font-bold dark:text-zinc-400 text-sm">Belum ada assessment.</p>
             <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-1">
-              Klik &ldquo;Buat Assessment&rdquo; untuk memberi tugas ke semua OJT sekaligus.
+              {isCoordinator
+                ? 'Klik "Buat Assessment Baru" untuk menginisiasi tugas assessment.'
+                : 'Menunggu Koordinator melakukan inisiasi assessment baru.'}
             </p>
           </div>
         )}

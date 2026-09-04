@@ -78,8 +78,8 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
     ctx.userType === 'STAFF' &&
     (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
 
-  if (!isLeader && !isCoordinator) {
-    return { success: false, error: 'Hanya mentor atau koordinator yang dapat membuat assessment.' };
+  if (!isCoordinator) {
+    return { success: false, error: 'Hanya Koordinator yang dapat melakukan inisiasi assessment baru.' };
   }
 
   const title              = (formData.get('title') as string)?.trim();
