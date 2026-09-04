@@ -51,12 +51,13 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
   // 2. Mentor Assessment Briefs
   const { results: tRows } = await db
     .prepare(`
-      SELECT t.id, COALESCE(t.sparks, 0) AS sparks
+      SELECT t.id, COALESCE(t.sparks, 0) AS sparks, t.created_by, t.assigned_mentors
       FROM tasks t
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      WHERE t.created_by = ? AND t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+      WHERE t.task_type = 'ASSESSMENT' AND t.status IN ('APPROVED', 'COMPLETED') AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        AND (t.created_by = ? OR t.assigned_mentors LIKE ?)
     `)
-    .bind(targetUserId)
+    .bind(targetUserId, `%${targetUserId}%`)
     .all();
 
   // 3. Adjustments (APPRECIATION, RESET, RESTORE)
@@ -121,10 +122,23 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
   }
 
   for (const r of tRows as any[]) {
-    assessmentsCount += 1;
-    const val = Number(r.sparks) || 0;
-    assessmentSparks += val;
-    roleSparksMap['MENTOR'] = (roleSparksMap['MENTOR'] || 0) + val;
+    let mentorIds: string[] = [];
+    if (r.assigned_mentors) {
+      try {
+        const ids = JSON.parse(r.assigned_mentors);
+        if (Array.isArray(ids) && ids.length > 0) mentorIds = ids;
+      } catch (_e) {}
+    }
+    if (mentorIds.length === 0 && r.created_by) {
+      mentorIds.push(r.created_by);
+    }
+
+    if (mentorIds.includes(targetUserId)) {
+      assessmentsCount += 1;
+      const val = Number(r.sparks) || 0;
+      assessmentSparks += val;
+      roleSparksMap['MENTOR'] = (roleSparksMap['MENTOR'] || 0) + val;
+    }
   }
 
   let netAdjustments = 0;

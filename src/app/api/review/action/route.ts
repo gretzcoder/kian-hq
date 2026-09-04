@@ -31,10 +31,8 @@ export async function POST(req: Request) {
 
     let result;
     if (actionType === 'APPROVE') {
-      if (isAssessmentCoordStep) {
+      if (isAssessmentCoordStep || isAssessmentMentorStep) {
         result = await approveAssessmentSubmission(assignmentId, workspaceId || '', sparks || 8, noteText || '');
-      } else if (isAssessmentMentorStep) {
-        result = await approveAssessmentMentorStep(assignmentId, workspaceId || '', noteText || '');
       } else {
         result = await approveAssignment(assignmentId, sparks, noteText || '');
       }

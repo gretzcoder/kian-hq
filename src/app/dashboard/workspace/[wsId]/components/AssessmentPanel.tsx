@@ -16,6 +16,7 @@ import {
   toggleAssessmentReaction,
   removeAssessmentAssignment,
   addAssessmentAssignment,
+  rateCompletedAssessmentTask,
 } from '@/modules/workspaces/assessmentActions';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
@@ -2335,6 +2336,93 @@ function AddParticipantModal({
   );
 }
 
+// ── Sub-component: Rate Completed Assessment Task (Coordinator) ────────────
+
+function RateCompletedTaskModal({
+  task,
+  workspaceId,
+  onClose,
+}: {
+  task: TaskRow;
+  workspaceId: string;
+  onClose: () => void;
+}) {
+  const [sparks, setSparks] = useState<number>(task.sparks || 8);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleRate = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await rateCompletedAssessmentTask(task.id, workspaceId, sparks);
+      if (res.success) {
+        onClose();
+      } else {
+        setError(res.error ?? 'Gagal memberikan rating');
+      }
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-2xl space-y-4 text-left" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+          <h3 className="text-base font-black text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <span>⭐</span>
+            <span>Beri Rating Sparks Mentor</span>
+          </h3>
+          <button type="button" onClick={onClose} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 text-sm cursor-pointer">✕</button>
+        </div>
+
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+          Task assessment <strong className="text-zinc-900 dark:text-zinc-100">&ldquo;{task.title}&rdquo;</strong> telah diselesaikan oleh seluruh peserta. Berikan rating Sparks (1-10) untuk Mentor bertugas.
+        </p>
+
+        {error && <p className="text-xs text-red-500 font-bold bg-red-500/10 p-2.5 rounded-xl border border-red-500/20">⚠️ {error}</p>}
+
+        <div className="space-y-2">
+          <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+            ✨ Rating Mentor Assessment (1 - 10 Sparks)
+          </label>
+          <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => {
+              const isSelected = sparks === num;
+              return (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setSparks(num)}
+                  className={`py-2 rounded-xl text-xs font-black transition-all ${
+                    isSelected
+                      ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-500/20 scale-105 ring-2 ring-purple-500/30'
+                      : 'bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
+                  }`}
+                >
+                  {num}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex gap-2 justify-end pt-3 border-t border-zinc-100 dark:border-zinc-800">
+          <button type="button" onClick={onClose} disabled={pending} className="px-4 py-2 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl text-zinc-500 cursor-pointer">
+            Batal
+          </button>
+          <button
+            type="button"
+            onClick={handleRate}
+            disabled={pending}
+            className="px-5 py-2 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl shadow-md disabled:opacity-50 cursor-pointer"
+          >
+            {pending ? 'Menyimpan...' : `Simpan ${sparks} ✨ Rating`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Sub-component: Assessment Task Card (Mentor) ──────────────────────────────
 
 function MentorTaskCard({
@@ -2362,6 +2450,7 @@ function MentorTaskCard({
   const [showSubmissions,          setShowSubmissions]          = useState(isTarget);
   const [showEditModal,            setShowEditModal]            = useState(false);
   const [showBriefInputModal,       setShowBriefInputModal]       = useState(false);
+  const [showRateCompletedModal,   setShowRateCompletedModal]   = useState(false);
   const [showConfirmDelete,        setShowConfirmDelete]        = useState(false);
   const [showAddParticipantModal,  setShowAddParticipantModal]  = useState(false);
   const [showMultiplierModal,      setShowMultiplierModal]      = useState(false);
@@ -2425,6 +2514,15 @@ function MentorTaskCard({
         isTarget ? 'border-purple-500 ring-2 ring-purple-500 shadow-xl shadow-purple-500/20' : 'border-zinc-200/80 dark:border-zinc-800/80'
       }`}
     >
+      {/* Modal Rate Completed Task */}
+      {showRateCompletedModal && (
+        <RateCompletedTaskModal
+          task={task}
+          workspaceId={workspaceId}
+          onClose={() => setShowRateCompletedModal(false)}
+        />
+      )}
+
       {/* Modal Input Brief Assessment */}
       {showBriefInputModal && (
         <InputAssessmentBriefModal
@@ -2729,6 +2827,37 @@ function MentorTaskCard({
                   <span className="px-3 py-1.5 text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl border border-zinc-200 dark:border-zinc-700 shrink-0">
                     🔒 Diisi oleh Mentor: {assignedMentorNames}
                   </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Banner for COMPLETED Assessment Task */}
+          {task.status === 'COMPLETED' && (
+            <div className="mt-3 bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl">👑</span>
+                  <div>
+                    <p className="text-xs font-black text-purple-700 dark:text-purple-300">
+                      Assessment Selesai (COMPLETED)
+                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                      Seluruh pengumpulan peserta/kelompok telah selesai & dinilai oleh mentor.
+                      {task.sparks != null
+                        ? ` Mentor bertugas telah memperoleh rating: ${task.sparks} Sparks ✨.`
+                        : ' Koordinator dapat memberikan rating (sparks) untuk mentor bertugas.'}
+                    </p>
+                  </div>
+                </div>
+                {isCoordinator && (
+                  <button
+                    type="button"
+                    onClick={() => setShowRateCompletedModal(true)}
+                    className="px-4 py-2 text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl shadow-md shrink-0 cursor-pointer"
+                  >
+                    {task.sparks != null ? `⭐ Edit Rating Mentor (${task.sparks} ✨)` : '⭐ Rate Task Mentor'}
+                  </button>
                 )}
               </div>
             </div>

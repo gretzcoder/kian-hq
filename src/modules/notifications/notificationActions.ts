@@ -416,12 +416,12 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
            SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
                   u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
                   t.workspace_id AS wsId, ws.name AS wsName
-           FROM workflow_events we
-           JOIN task_assignments ta ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
+           FROM task_assignments ta
+           JOIN workflow_events we ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
            JOIN tasks t ON ta.task_id = t.id
            LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
            LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-           WHERE ta.id IN (SELECT id FROM task_assignments WHERE user_id = ?)
+           WHERE ta.user_id = ?
              AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
              AND (we.triggered_by IS NULL OR we.triggered_by != ?)
              AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
@@ -431,11 +431,11 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
            SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
                   u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
                   t.workspace_id AS wsId, ws.name AS wsName
-           FROM workflow_events we
-           JOIN tasks t ON (we.entity_type = 'task' AND we.entity_id = t.id)
+           FROM tasks t
+           JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id)
            LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
            LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-           WHERE t.id IN (SELECT id FROM tasks WHERE created_by = ? AND status != 'DELETED')
+           WHERE t.created_by = ? AND t.status != 'DELETED'
              AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
              AND (we.triggered_by IS NULL OR we.triggered_by != ?)
              AND (ws.id IS NULL OR ws.deleted_at IS NULL)
@@ -445,11 +445,12 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
            SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
                   u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
                   t.workspace_id AS wsId, ws.name AS wsName
-           FROM workflow_events we
-           JOIN tasks t ON (we.entity_type = 'task' AND we.entity_id = t.id)
+           FROM task_assignments ta
+           JOIN tasks t ON ta.task_id = t.id
+           JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id)
            LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
            LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-           WHERE t.id IN (SELECT task_id FROM task_assignments WHERE user_id = ?)
+           WHERE ta.user_id = ?
              AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
              AND (we.triggered_by IS NULL OR we.triggered_by != ?)
              AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)

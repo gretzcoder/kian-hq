@@ -110,13 +110,11 @@ export default function ReviewActions({
     setLoading(true);
     setError(null);
     try {
-      const isAssessmentCoordStep = taskType === 'ASSESSMENT' && !isAssessmentMentorStep;
+      const isAssessmentTask = taskType === 'ASSESSMENT' || isAssessmentMentorStep;
       const res = await safeExecuteAction<any>(
         () =>
-          isAssessmentCoordStep
+          isAssessmentTask
             ? approveAssessmentSubmission(assignmentId, '', sparks, noteText.trim())
-            : isAssessmentMentorStep
-            ? approveAssessmentMentorStep(assignmentId, '', noteText.trim())
             : approveAssignment(assignmentId, sparks, noteText.trim()),
         () => callApiFallback('APPROVE')
       );
@@ -124,9 +122,7 @@ export default function ReviewActions({
         setDone(true);
         if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('kian_notif_refresh'));
         toast(
-          isAssessmentMentorStep
-            ? 'ACC Mentor & Catatan Improvement berhasil disimpan!'
-            : `Persetujuan disimpan dengan ${sparks} ✨ Creative Sparks!`,
+          `Persetujuan disimpan dengan ${sparks} ✨ Creative Sparks!`,
           'success'
         );
       } else {

@@ -237,7 +237,7 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
 
 /**
  * Mentor fills or updates brief / instructions for an assessment task.
- * Sets status to 'WAITING_REVIEW' so Coordinator can review & ACC.
+ * Automatically publishes task to troopers (sets status to 'APPROVED').
  */
 export async function submitAssessmentBriefByMentor(
   taskId: string,
@@ -275,10 +275,6 @@ export async function submitAssessmentBriefByMentor(
 
   if (!task) return { success: false, error: 'Task assessment tidak ditemukan.' };
 
-  if (task.status === 'APPROVED') {
-    return { success: false, error: 'Brief assessment sudah di-ACC oleh Koordinator dan tidak dapat diubah lagi.' };
-  }
-
   if (!isCoordinator) {
     let isAssigned = false;
     if (task.assigned_mentors) {
@@ -298,28 +294,36 @@ export async function submitAssessmentBriefByMentor(
   }
 
   const cleanRequiredOutputs = requiredOutputs && requiredOutputs.trim() ? requiredOutputs.trim() : null;
+  const now = Date.now();
 
   try {
+    // Set status directly to APPROVED (Published to Troopers)
     await db
       .prepare(`
         UPDATE tasks
-        SET description = ?, required_outputs = ?, status = 'WAITING_REVIEW', revision_note = NULL
+        SET description = ?, required_outputs = ?, status = 'APPROVED', start_at = COALESCE(start_at, ?), revision_note = NULL
         WHERE id = ? AND workspace_id = ?
       `)
-      .bind(description.trim(), cleanRequiredOutputs, taskId, workspaceId)
+      .bind(description.trim(), cleanRequiredOutputs, now, taskId, workspaceId)
+      .run();
+
+    // Activate task assignments for all assigned troopers
+    await db
+      .prepare("UPDATE task_assignments SET status = 'ASSIGNED', start_at = COALESCE(start_at, ?) WHERE task_id = ? AND result_url IS NULL")
+      .bind(now, taskId)
       .run();
 
     await logWorkflowEvent({
       entityType: 'task',
       entityId: taskId,
       fromStatus: task.status,
-      toStatus: 'WAITING_REVIEW',
+      toStatus: 'APPROVED',
       triggeredBy: session.userId,
-      note: `Mentor telah menginput brief assessment "${task.title}" dan mengajukan ke Koordinator untuk ACC`,
+      note: `Mentor telah menginput brief assessment "${task.title}". Task otomatis dipublikasikan ke Troopers.`,
     });
 
     revalidatePath(`/dashboard/workspace/${workspaceId}`);
-    return { success: true, message: '✓ Brief berhasil diisi dan diajukan ke Koordinator untuk ACC.' };
+    return { success: true, message: '✓ Brief berhasil diisi dan task otomatis dipublikasikan ke Troopers.' };
   } catch (err: any) {
     console.error('submitAssessmentBriefByMentor failed:', err);
     return { success: false, error: err.message };
@@ -591,6 +595,71 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
 // APPROVE / REVISE ASSESSMENT (Mentor / Coordinator)
 // ---------------------------------------------------------------------------
 
+/**
+ * Checks if all assignments for an assessment task are APPROVED.
+ * If all submissions are fulfilled/approved, sets task status to 'COMPLETED'.
+ */
+async function checkAndSetTaskCompletion(db: any, taskId: string, triggeredByUserId: string) {
+  try {
+    const task = await db
+      .prepare('SELECT id, workspace_id, title, assessment_category, status FROM tasks WHERE id = ?')
+      .bind(taskId)
+      .first() as { id: string; workspace_id: string; title: string; assessment_category: string | null; status: string } | null;
+
+    if (!task || task.status === 'COMPLETED' || task.status === 'DELETED') return;
+
+    const { results: assignments } = await db
+      .prepare('SELECT id, status, group_name FROM task_assignments WHERE task_id = ?')
+      .bind(taskId)
+      .all();
+
+    if (!assignments || assignments.length === 0) return;
+
+    let isAllComplete = false;
+    if (task.assessment_category === 'GROUP') {
+      const groupStatusMap = new Map<string, boolean>();
+      for (const a of assignments as any[]) {
+        const groupKey = a.group_name || a.id;
+        if (!groupStatusMap.has(groupKey)) {
+          groupStatusMap.set(groupKey, true);
+        }
+        if (a.status !== 'APPROVED') {
+          groupStatusMap.set(groupKey, false);
+        }
+      }
+      isAllComplete = Array.from(groupStatusMap.values()).every(Boolean);
+    } else {
+      isAllComplete = (assignments as any[]).every((a: any) => a.status === 'APPROVED');
+    }
+
+    if (isAllComplete) {
+      await db
+        .prepare("UPDATE tasks SET status = 'COMPLETED' WHERE id = ?")
+        .bind(taskId)
+        .run();
+
+      await logWorkflowEvent({
+        entityType: 'task',
+        entityId: taskId,
+        fromStatus: task.status,
+        toStatus: 'COMPLETED',
+        triggeredBy: triggeredByUserId,
+        note: `Seluruh pengumpulan peserta/kelompok telah disetujui. Status task assessment "${task.title}" otomatis menjadi COMPLETED.`,
+      });
+
+      if (task.workspace_id) {
+        revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
+      }
+    }
+  } catch (err) {
+    console.error('checkAndSetTaskCompletion error:', err);
+  }
+}
+
+/**
+ * Single-step Mentor assessment grading: Mentor direct approves trooper submission with Sparks.
+ * If task is GROUP category, all group members receive the exact same Sparks.
+ */
 export async function approveAssessmentSubmission(
   assignmentId: string,
   workspaceId: string,
@@ -603,182 +672,50 @@ export async function approveAssessmentSubmission(
   const db = await getDB();
   const ctx = await getSessionContext(session.userId);
 
+  const isLeaderRow = await db
+    .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+    .bind(workspaceId, session.userId)
+    .first();
+
+  const isMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isLeader = !!isLeaderRow || isMentorRole;
   const isCoordinator =
     ctx.userType === 'STAFF' &&
     (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
 
   // Fetch the assignment and its parent task
   const assignment = await db
-    .prepare('SELECT id, task_id, group_name, mentor_approved FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, group_name, status FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as { id: string; task_id: string; group_name: string | null; mentor_approved: number } | null;
+    .first() as { id: string; task_id: string; group_name: string | null; status: string } | null;
 
   if (!assignment) return { success: false, error: 'Assignment tidak ditemukan.' };
 
   const task = await db
-    .prepare('SELECT created_by, assessment_category FROM tasks WHERE id = ?')
+    .prepare('SELECT created_by, workspace_id, assessment_category, assigned_mentors FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { created_by: string | null; assessment_category: string | null } | null;
-
-  const isGroup = task?.assessment_category === 'GROUP' && assignment.group_name;
-  const isTaskCreator = task?.created_by != null && task.created_by === session.userId;
-  const noteValue = appreciationNote?.trim() || null;
-
-  // Step 2: Coordinator approval (mentor must have already approved)
-  if (isCoordinator) {
-    if (assignment.mentor_approved !== 1) {
-      return { success: false, error: 'Menunggu ACC Mentor pembuat tugas terlebih dahulu.' };
-    }
-
-    try {
-      if (isGroup) {
-        await db
-          .prepare(`
-            UPDATE task_assignments
-            SET coordinator_approved = 1,
-                sparks = ?,
-                status = 'APPROVED',
-                appreciation_note = COALESCE(?, appreciation_note),
-                revision_note = NULL,
-                reviewed_at = strftime('%s', 'now')
-            WHERE task_id = ? AND group_name = ?
-          `)
-          .bind(sparksAmount, noteValue, assignment.task_id, assignment.group_name)
-          .run();
-      } else {
-        await db
-          .prepare(`
-            UPDATE task_assignments
-            SET coordinator_approved = 1,
-                sparks = ?,
-                status = 'APPROVED',
-                appreciation_note = COALESCE(?, appreciation_note),
-                revision_note = NULL,
-                reviewed_at = strftime('%s', 'now')
-            WHERE id = ?
-          `)
-          .bind(sparksAmount, noteValue, assignmentId)
-          .run();
-      }
-
-      await logWorkflowEvent({
-        entityType: 'task_assignment',
-        entityId: assignmentId,
-        fromStatus: 'WAITING_REVIEW',
-        toStatus: 'APPROVED',
-        triggeredBy: session.userId,
-        note: `Koordinator menyetujui assessment dan memberikan ${sparksAmount} Sparks${noteValue ? ` (Note: ${noteValue})` : ''}`,
-      });
-
-      // Resolve workspaceId for revalidation
-      const wsRow = await db
-        .prepare('SELECT workspace_id FROM tasks WHERE id = ?')
-        .bind(assignment.task_id)
-        .first() as { workspace_id: string | null } | null;
-      const resolvedWsId = workspaceId || wsRow?.workspace_id || '';
-
-      revalidatePath(`/dashboard/workspace/${resolvedWsId}`);
-      revalidatePath('/dashboard/review');
-      revalidatePath('/dashboard');
-      return { success: true };
-    } catch (err: any) {
-      console.error('approveAssessmentSubmission (coordinator) failed:', err);
-      return { success: false, error: err.message };
-    }
-  }
-
-  // Step 1: Creator mentor approval (no sparks, sets mentor_approved + lead_approved)
-  if (isTaskCreator) {
-    try {
-      if (isGroup) {
-        await db
-          .prepare(`
-            UPDATE task_assignments
-            SET mentor_approved = 1,
-                lead_approved = 1,
-                appreciation_note = COALESCE(?, appreciation_note),
-                reviewed_at = strftime('%s', 'now')
-            WHERE task_id = ? AND group_name = ?
-          `)
-          .bind(noteValue, assignment.task_id, assignment.group_name)
-          .run();
-      } else {
-        await db
-          .prepare(`
-            UPDATE task_assignments
-            SET mentor_approved = 1,
-                lead_approved = 1,
-                appreciation_note = COALESCE(?, appreciation_note),
-                reviewed_at = strftime('%s', 'now')
-            WHERE id = ?
-          `)
-          .bind(noteValue, assignmentId)
-          .run();
-      }
-
-      await logWorkflowEvent({
-        entityType: 'task_assignment',
-        entityId: assignmentId,
-        fromStatus: 'WAITING_REVIEW',
-        toStatus: 'WAITING_REVIEW',
-        triggeredBy: session.userId,
-        note: 'Mentor pembuat tugas ACC submission, diteruskan ke Koordinator untuk approval & Sparks',
-      });
-
-      const wsRow = await db
-        .prepare('SELECT workspace_id FROM tasks WHERE id = ?')
-        .bind(assignment.task_id)
-        .first() as { workspace_id: string | null } | null;
-      const resolvedWsId = workspaceId || wsRow?.workspace_id || '';
-
-      revalidatePath(`/dashboard/workspace/${resolvedWsId}`);
-      revalidatePath('/dashboard/review');
-      revalidatePath('/dashboard');
-      return { success: true };
-    } catch (err: any) {
-      console.error('approveAssessmentSubmission (mentor) failed:', err);
-      return { success: false, error: err.message };
-    }
-  }
-
-  return { success: false, error: 'Anda tidak memiliki wewenang untuk menyetujui submission ini.' };
-}
-
-/**
- * Step 1: Mentor (task creator) approves an assessment submission.
- * Sets mentor_approved=1 and lead_approved=1, keeps status=WAITING_REVIEW.
- * The submission then appears in the Coordinator queue for Step 2 (Sparks).
- */
-export async function approveAssessmentMentorStep(
-  assignmentId: string,
-  workspaceId: string,
-  note?: string
-) {
-  const session = await getSession();
-  if (!session) return { success: false, error: 'Unauthorized' };
-
-  const db = await getDB();
-
-  const assignment = await db
-    .prepare('SELECT id, task_id, group_name FROM task_assignments WHERE id = ?')
-    .bind(assignmentId)
-    .first() as { id: string; task_id: string; group_name: string | null } | null;
-
-  if (!assignment) return { success: false, error: 'Assignment tidak ditemukan.' };
-
-  const task = await db
-    .prepare('SELECT created_by, workspace_id, assessment_category FROM tasks WHERE id = ?')
-    .bind(assignment.task_id)
-    .first() as { created_by: string | null; workspace_id: string | null; assessment_category: string | null } | null;
+    .first() as { created_by: string | null; workspace_id: string | null; assessment_category: string | null; assigned_mentors: string | null } | null;
 
   if (!task) return { success: false, error: 'Task tidak ditemukan.' };
 
-  if (task.created_by !== session.userId) {
-    return { success: false, error: 'Hanya mentor pembuat tugas assessment yang berhak melakukan ACC Mentor.' };
+  let isAssignedMentor = false;
+  if (task.assigned_mentors) {
+    try {
+      const ids: string[] = JSON.parse(task.assigned_mentors);
+      if (Array.isArray(ids) && ids.length > 0) isAssignedMentor = ids.includes(session.userId);
+    } catch (_e) {}
+  }
+  if (!isAssignedMentor) {
+    isAssignedMentor = task.created_by != null && task.created_by === session.userId;
+  }
+
+  if (!isCoordinator && !isLeader && !isAssignedMentor) {
+    return { success: false, error: 'Anda tidak memiliki wewenang untuk menilai submission assessment ini.' };
   }
 
   const isGroup = task.assessment_category === 'GROUP' && assignment.group_name;
-  const cleanNote = note?.trim() || null;
+  const noteValue = appreciationNote?.trim() || null;
+  const finalSparks = sparksAmount && sparksAmount >= 1 && sparksAmount <= 10 ? sparksAmount : 8;
 
   try {
     if (isGroup) {
@@ -786,37 +723,46 @@ export async function approveAssessmentMentorStep(
         .prepare(`
           UPDATE task_assignments
           SET mentor_approved = 1,
+              coordinator_approved = 1,
               lead_approved = 1,
+              sparks = ?,
+              status = 'APPROVED',
               appreciation_note = COALESCE(?, appreciation_note),
+              revision_note = NULL,
               reviewed_at = strftime('%s', 'now')
           WHERE task_id = ? AND group_name = ?
         `)
-        .bind(cleanNote, assignment.task_id, assignment.group_name)
+        .bind(finalSparks, noteValue, assignment.task_id, assignment.group_name)
         .run();
     } else {
       await db
         .prepare(`
           UPDATE task_assignments
           SET mentor_approved = 1,
+              coordinator_approved = 1,
               lead_approved = 1,
+              sparks = ?,
+              status = 'APPROVED',
               appreciation_note = COALESCE(?, appreciation_note),
+              revision_note = NULL,
               reviewed_at = strftime('%s', 'now')
           WHERE id = ?
         `)
-        .bind(cleanNote, assignmentId)
+        .bind(finalSparks, noteValue, assignmentId)
         .run();
     }
 
     await logWorkflowEvent({
       entityType: 'task_assignment',
       entityId: assignmentId,
-      fromStatus: 'WAITING_REVIEW',
-      toStatus: 'WAITING_REVIEW',
+      fromStatus: assignment.status,
+      toStatus: 'APPROVED',
       triggeredBy: session.userId,
-      note: cleanNote
-        ? `Mentor ACC dengan catatan improvement: ${cleanNote.replace(/<[^>]*>/g, '').substring(0, 100)}`
-        : 'Mentor pembuat tugas ACC submission — menunggu approval & Sparks dari Koordinator',
+      note: `Mentor menyetujui assessment dan memberikan ${finalSparks} Sparks${noteValue ? ` (Note: ${noteValue})` : ''}`,
     });
+
+    // Auto-check task completion
+    await checkAndSetTaskCompletion(db, assignment.task_id, session.userId);
 
     const resolvedWsId = workspaceId || task.workspace_id || '';
     if (resolvedWsId) {
@@ -826,7 +772,116 @@ export async function approveAssessmentMentorStep(
     revalidatePath('/dashboard');
     return { success: true };
   } catch (err: any) {
-    console.error('approveAssessmentMentorStep failed:', err);
+    console.error('approveAssessmentSubmission failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Backward-compatible helper for mentor step approval.
+ */
+export async function approveAssessmentMentorStep(
+  assignmentId: string,
+  workspaceId: string,
+  note?: string
+) {
+  return approveAssessmentSubmission(assignmentId, workspaceId, 8, note);
+}
+
+/**
+ * Coordinator rates a COMPLETED assessment task and awards sparks to the assigned mentor(s).
+ */
+export async function rateCompletedAssessmentTask(
+  taskId: string,
+  workspaceId: string,
+  sparksAmount: number
+) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  if (!sparksAmount || sparksAmount < 1 || sparksAmount > 10) {
+    return { success: false, error: 'Jumlah Sparks harus antara 1 dan 10.' };
+  }
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+
+  const isCoordinator =
+    ctx.userType === 'STAFF' &&
+    (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
+
+  if (!isCoordinator) {
+    return { success: false, error: 'Hanya Koordinator yang dapat memberikan rating/sparks pada task assessment yang selesai.' };
+  }
+
+  const task = await db
+    .prepare('SELECT id, title, description, status, created_by, assigned_mentors FROM tasks WHERE id = ? AND workspace_id = ?')
+    .bind(taskId, workspaceId)
+    .first() as { id: string; title: string; description: string | null; status: string; created_by: string | null; assigned_mentors: string | null } | null;
+
+  if (!task) return { success: false, error: 'Task assessment tidak ditemukan.' };
+
+  if (task.status !== 'COMPLETED') {
+    return { success: false, error: 'Rating Sparks hanya dapat diberikan pada task assessment yang sudah berstatus COMPLETED.' };
+  }
+
+  // Check mentor eligibility rule:
+  // Must have an assigned mentor (or mentor brief), and at least one assigned mentor must have MENTOR role
+  let mentorIds: string[] = [];
+  if (task.assigned_mentors) {
+    try {
+      mentorIds = JSON.parse(task.assigned_mentors);
+    } catch (_e) {}
+  }
+  if (mentorIds.length === 0 && task.created_by) {
+    mentorIds.push(task.created_by);
+  }
+
+  if (mentorIds.length === 0) {
+    return { success: false, error: 'Tidak ada mentor yang ditugaskan pada task ini.' };
+  }
+
+  // Check if assigned mentor(s) have MENTOR role
+  const placeholders = mentorIds.map(() => '?').join(',');
+  const { results: mentorRoles } = await db.prepare(`
+    SELECT DISTINCT ur.user_id, r.id AS role_id, r.name AS role_name, u.user_type
+    FROM users u
+    LEFT JOIN user_roles ur ON u.id = ur.user_id
+    LEFT JOIN roles r ON ur.role_id = r.id
+    WHERE u.id IN (${placeholders})
+  `).bind(...mentorIds).all();
+
+  const isAnyMentorRole = (mentorRoles as any[] || []).some((mr) => {
+    const rName = (mr.role_name || '').toUpperCase();
+    const rId = (mr.role_id || '').toUpperCase();
+    const uType = (mr.user_type || '').toUpperCase();
+    return rName.includes('MENTOR') || rId.includes('MENTOR') || uType === 'MENTOR';
+  });
+
+  if (!isAnyMentorRole) {
+    return { success: false, error: 'Mentor pada task ini bukan ber-role Mentor (collaborator/lainnya), sehingga task ini tidak perlu/tidak dapat diberikan Sparks mentor.' };
+  }
+
+  try {
+    await db
+      .prepare('UPDATE tasks SET sparks = ? WHERE id = ? AND workspace_id = ?')
+      .bind(sparksAmount, taskId, workspaceId)
+      .run();
+
+    await logWorkflowEvent({
+      entityType: 'task',
+      entityId: taskId,
+      fromStatus: 'COMPLETED',
+      toStatus: 'COMPLETED',
+      triggeredBy: session.userId,
+      note: `Koordinator memberikan rating ${sparksAmount} Sparks kepada Mentor untuk task assessment "${task.title}".`,
+    });
+
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    revalidatePath('/dashboard');
+    return { success: true, message: `✓ Rating ${sparksAmount} Sparks berhasil diberikan kepada mentor bertugas.` };
+  } catch (err: any) {
+    console.error('rateCompletedAssessmentTask failed:', err);
     return { success: false, error: err.message };
   }
 }

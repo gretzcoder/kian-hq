@@ -54,102 +54,8 @@ export default async function ReviewPage() {
     ctx.can('WORKSPACE_MANAGE') ||
     ctx.permissions.has('ADMIN_SYSTEM');
 
-  // 1. Pending Assessment Task Briefs (waiting Coordinator ACC)
-  let pendingBriefReviews: PendingAssessmentBrief[] = [];
-
-  if (isCoordinator) {
-    const { results: rawBriefs } = await db.prepare(`
-      SELECT
-        t.id             AS task_id,
-        t.title          AS task_title,
-        t.description    AS brief_description,
-        t.required_outputs,
-        t.priority       AS task_priority,
-        t.task_type,
-        t.status         AS task_status,
-        t.created_by     AS task_created_by,
-        t.assigned_mentors,
-        t.deadline,
-        t.extended_deadline,
-        tu.name          AS task_creator_name,
-        t.workspace_id,
-        ws.name          AS workspace_name,
-        ws.workspace_type,
-        p.name           AS project_name,
-        (SELECT ta.assignment_role FROM task_assignments ta WHERE ta.task_id = t.id LIMIT 1) AS exec_type
-      FROM tasks t
-      JOIN projects p         ON t.project_id = p.id
-      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-      LEFT JOIN users tu      ON t.created_by = tu.id
-      WHERE t.task_type = 'ASSESSMENT'
-        AND t.status = 'WAITING_REVIEW'
-        AND t.status != 'DELETED'
-        AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      ORDER BY t.created_at ASC
-    `).all();
-
-    const mentorIdSet = new Set<string>();
-    (rawBriefs as any[]).forEach((b) => {
-      if (b.assigned_mentors) {
-        try {
-          const ids = JSON.parse(b.assigned_mentors);
-          if (Array.isArray(ids)) {
-            ids.forEach((id: string) => mentorIdSet.add(id));
-          }
-        } catch (_e) {}
-      }
-      if (b.task_created_by) {
-        mentorIdSet.add(b.task_created_by);
-      }
-    });
-
-    const mentorNameMap: Record<string, string> = {};
-    if (mentorIdSet.size > 0) {
-      const mentorIds = Array.from(mentorIdSet);
-      const placeholders = mentorIds.map(() => '?').join(',');
-      const { results: mentorUsers } = await db.prepare(`
-        SELECT id, name FROM users WHERE id IN (${placeholders})
-      `).bind(...mentorIds).all();
-      (mentorUsers as any[]).forEach((u) => {
-        mentorNameMap[u.id] = u.name;
-      });
-    }
-
-    pendingBriefReviews = (rawBriefs as any[]).map((b) => {
-      let assignedMentorNames = b.task_creator_name || 'Mentor Bertugas';
-      if (b.assigned_mentors) {
-        try {
-          const ids: string[] = JSON.parse(b.assigned_mentors);
-          if (Array.isArray(ids) && ids.length > 0) {
-            const names = ids.map((id) => mentorNameMap[id]).filter(Boolean);
-            if (names.length > 0) {
-              assignedMentorNames = names.join(', ');
-            }
-          }
-        } catch (_e) {}
-      }
-
-      return {
-        task_id: b.task_id,
-        task_title: b.task_title,
-        brief_description: b.brief_description,
-        required_outputs: b.required_outputs,
-        task_priority: b.task_priority,
-        task_type: b.task_type,
-        task_status: b.task_status,
-        task_created_by: b.task_created_by,
-        task_creator_name: b.task_creator_name,
-        assigned_mentors: b.assigned_mentors,
-        assignedMentorNames,
-        deadline: b.deadline,
-        extended_deadline: b.extended_deadline,
-        workspace_id: b.workspace_id,
-        workspace_name: b.workspace_name,
-        project_name: b.project_name,
-        exec_type: b.exec_type || 'DESIGNER',
-      };
-    });
-  }
+  // 1. Pending Assessment Task Briefs (Brief is auto-approved upon mentor submission)
+  const pendingBriefReviews: PendingAssessmentBrief[] = [];
 
   // 2. Pending Submission Reviews (OJT / Task Assignments)
   const { results: rawReviews } = await db.prepare(`
@@ -223,15 +129,10 @@ export default async function ReviewPage() {
     // ── Exclude own submissions ──
     if (r.creator_id === session.userId) return false;
 
-    // ── Assessment 2-step flow ──
+    // ── Assessment 1-step flow ──
     if (r.task_type === 'ASSESSMENT') {
-      const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
-      // Step 1: Only the mentor who created the assessment task sees it when mentor_approved=0
-      if (isTaskCreator && r.mentor_approved === 0) return true;
-      // Step 2: Only coordinators see it when mentor_approved=1 and coordinator_approved=0
-      if (isCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
-      // All other cases: hide from queue
-      return false;
+      const isTaskMentor = (r.task_created_by != null && r.task_created_by === session.userId) || r.is_mentor === 1;
+      return (isCoordinator || isTaskMentor) && r.coordinator_approved === 0;
     }
 
     // ── Mentor Workspaces: ONLY Coordinators/Admins OR Task Creator evaluate submissions ──

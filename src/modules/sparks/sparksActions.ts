@@ -89,10 +89,10 @@ export async function getSparksManagementOverview(
 
   // 2. Fetch mentor assessment sparks
   const { results: tRows } = await db.prepare(`
-    SELECT t.created_by AS userId, COALESCE(t.sparks, 0) AS sparks
+    SELECT t.created_by AS userId, t.assigned_mentors, COALESCE(t.sparks, 0) AS sparks
     FROM tasks t
     LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-    WHERE t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${timeClauseT}
+    WHERE t.task_type = 'ASSESSMENT' AND t.status IN ('APPROVED', 'COMPLETED') AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${timeClauseT}
   `).all();
 
   // 3. Fetch sparks adjustments (APPRECIATION, RESET, RESTORE)
@@ -149,14 +149,26 @@ export async function getSparksManagementOverview(
 
   // Process Mentor Assessment Tasks
   for (const r of tRows as any[]) {
-    const userId = r.userId;
-    if (!userSparksMap[userId]) {
-      userSparksMap[userId] = { total: 0, tasks: 0, assessments: 0, appreciations: 0 };
+    let mentorIds: string[] = [];
+    if (r.assigned_mentors) {
+      try {
+        const ids = JSON.parse(r.assigned_mentors);
+        if (Array.isArray(ids) && ids.length > 0) mentorIds = ids;
+      } catch (_e) {}
     }
+    if (mentorIds.length === 0 && r.userId) {
+      mentorIds.push(r.userId);
+    }
+
     const sparksVal = Number(r.sparks) || 0;
-    userSparksMap[userId].total += sparksVal;
-    userSparksMap[userId].assessments += 1;
-    totalAssessmentSparks += sparksVal;
+    for (const mId of mentorIds) {
+      if (!userSparksMap[mId]) {
+        userSparksMap[mId] = { total: 0, tasks: 0, assessments: 0, appreciations: 0 };
+      }
+      userSparksMap[mId].total += sparksVal;
+      userSparksMap[mId].assessments += 1;
+      totalAssessmentSparks += sparksVal;
+    }
   }
 
   // Process Adjustments

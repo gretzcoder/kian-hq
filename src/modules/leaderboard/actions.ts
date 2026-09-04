@@ -274,7 +274,7 @@ export async function getLeaderboardData(
           'MENTOR' AS role
         FROM tasks t
         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-        WHERE t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${taskTimeClause}
+        WHERE t.task_type = 'ASSESSMENT' AND t.status IN ('APPROVED', 'COMPLETED') AND t.sparks IS NOT NULL AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) ${taskTimeClause}
         `
             : ''
         }
@@ -670,7 +670,7 @@ export async function getSparksHistory(
         FROM tasks t
         JOIN projects p ON t.project_id = p.id
         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-        WHERE t.created_by = ? AND t.task_type = 'ASSESSMENT' AND t.status = 'APPROVED' AND t.sparks IS NOT NULL
+        WHERE t.created_by = ? AND t.task_type = 'ASSESSMENT' AND t.status IN ('APPROVED', 'COMPLETED') AND t.sparks IS NOT NULL
         ORDER BY COALESCE(t.start_at, t.created_at) DESC
       `
       )

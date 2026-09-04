@@ -1,7 +1,7 @@
 import { getDB } from '@/db/client';
 
 let categoryMultipliersCache: { design: number; video: number; ts: number } | null = null;
-const CACHE_TTL_MS = 60_000; // 60 seconds memory TTL
+const CACHE_TTL_MS = 300_000; // 5 minutes memory TTL
 
 /**
  * Returns cached category multipliers for Design and Video tasks/roles,

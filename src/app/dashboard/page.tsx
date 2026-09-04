@@ -124,14 +124,14 @@ export default async function DashboardPage() {
           ta.coordinator_approved,
           u_creator.name AS revision_requested_by_name,
           'Koordinator/Mentor' AS revision_requested_by_role
-        FROM task_assignments ta
-        JOIN tasks t         ON ta.task_id = t.id
+        FROM tasks t
+        JOIN task_assignments ta ON t.id = ta.task_id
         JOIN projects p      ON t.project_id = p.id
         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
         LEFT JOIN users u    ON ta.user_id = u.id
         LEFT JOIN users u_creator ON t.created_by = u_creator.id
-        WHERE ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
-          AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        WHERE t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+          AND ta.status NOT IN ('APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED')
           AND (
             ((t.task_type = 'ASSESSMENT' OR ws.workspace_type = 'ASSESSMENT') AND t.status = 'APPROVED')
             OR
