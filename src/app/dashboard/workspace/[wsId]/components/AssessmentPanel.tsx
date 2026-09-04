@@ -1016,6 +1016,18 @@ function OJTSubmitForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {task.assessment_category === 'GROUP' && (
+        <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs space-y-1">
+          <div className="flex items-center gap-1.5 font-bold">
+            <span>👥</span>
+            <span>Task Assessment Kelompok {assignment.group_name ? `(${assignment.group_name})` : ''}</span>
+          </div>
+          <p className="text-[11px] text-indigo-600/90 dark:text-indigo-300/90 leading-relaxed font-medium">
+            Cukup 1 perwakilan anggota yang melakukan submit. Pengumpulan dari anggota mana pun akan mewakili seluruh kelompok.
+          </p>
+        </div>
+      )}
+
       {meta.isPastDeadline && (
         <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center gap-2">
           <span>⏰</span>
@@ -2398,11 +2410,31 @@ function MentorTaskCard({
   const [pendingRevision, startRevisionTransition] = useTransition();
 
   const isPendingCoordinatorApproval = task.status === 'WAITING_REVIEW';
-  const total     = assignments.length;
-  const submitted = task.status === 'APPROVED'
-    ? assignments.filter((a) => a.status === 'APPROVED' || a.status === 'RESUBMITTED' || (a.status === 'WAITING_REVIEW' && a.result_url != null)).length
-    : 0;
-  const approved  = assignments.filter((a) => a.status === 'APPROVED').length;
+  let total     = assignments.length;
+  let submitted = 0;
+  let approved  = 0;
+
+  if (task.assessment_category === 'GROUP' && assignments.length > 0) {
+    const groupMap: Record<string, AssignmentRow[]> = {};
+    assignments.forEach((a) => {
+      const gName = a.group_name || 'Kelompok Tim';
+      if (!groupMap[gName]) groupMap[gName] = [];
+      groupMap[gName].push(a);
+    });
+    const groupsList = Object.values(groupMap);
+    total = groupsList.length;
+    if (task.status === 'APPROVED') {
+      submitted = groupsList.filter((gRows) =>
+        gRows.some((a) => a.status === 'APPROVED' || a.status === 'RESUBMITTED' || (a.status === 'WAITING_REVIEW' && a.result_url != null))
+      ).length;
+    }
+    approved = groupsList.filter((gRows) =>
+      gRows.some((a) => a.status === 'APPROVED')
+    ).length;
+  } else if (task.status === 'APPROVED') {
+    submitted = assignments.filter((a) => a.status === 'APPROVED' || a.status === 'RESUBMITTED' || (a.status === 'WAITING_REVIEW' && a.result_url != null)).length;
+    approved = assignments.filter((a) => a.status === 'APPROVED').length;
+  }
 
   const execType = assignments[0]?.assignment_role ?? 'DESIGNER';
   const execLabel = EXEC_TYPE_LABEL[execType] ?? execType;
@@ -2656,7 +2688,7 @@ function MentorTaskCard({
           <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800/50 shrink-0">
             <div className="text-right mr-1">
               <p className="text-[10px] font-black text-zinc-500">
-                {submitted}/{total} submit
+                {submitted}/{total} {task.assessment_category === 'GROUP' ? 'kelompok submit' : 'submit'}
               </p>
               {approved > 0 && (
                 <p className="text-[10px] font-black text-emerald-600 dark:text-emerald-400">
@@ -2963,14 +2995,14 @@ function MentorTaskCard({
         className="w-full flex items-center justify-between px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 text-xs font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-all"
       >
         <span>
-          {showSubmissions ? '▲ Tutup Daftar Submission' : `▼ Lihat Semua (${total} peserta)`}
+          {showSubmissions ? '▲ Tutup Daftar Submission' : `▼ Lihat Semua (${total} ${task.assessment_category === 'GROUP' ? 'kelompok' : 'peserta'})`}
         </span>
         <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
           submitted === total
             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
             : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
         }`}>
-          {submitted === total ? '✅ Semua Submit' : `⏳ ${total - submitted} Belum`}
+          {submitted === total ? '✅ Semua Submit' : `⏳ ${total - submitted} ${task.assessment_category === 'GROUP' ? 'Kelompok ' : ''}Belum`}
         </span>
       </button>
 
@@ -2980,7 +3012,7 @@ function MentorTaskCard({
           {canManage && (
             <div className="flex items-center justify-between pb-2">
               <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">
-                Daftar Kepesertaan ({assignments.length})
+                Daftar Kepesertaan ({task.assessment_category === 'GROUP' ? `${total} Kelompok (${assignments.length} Anggota)` : `${assignments.length} Peserta`})
               </span>
               <button
                 type="button"
@@ -3002,22 +3034,23 @@ function MentorTaskCard({
                 if (!groupMap[gName]) groupMap[gName] = [];
                 groupMap[gName].push(a);
               });
-              return Object.entries(groupMap).map(([gName, gAssignments]) => (
-                <div key={gName} className="border border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/5 rounded-2xl p-3.5 space-y-3">
-                  <div className="flex items-center justify-between border-b border-purple-500/10 pb-2">
-                    <span className="text-xs font-black text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                      <span>👥</span> {gName} ({gAssignments.length} Anggota)
-                    </span>
-                    <span className="text-[10px] font-bold text-zinc-400 truncate max-w-[50%]">
-                      {gAssignments.map((m) => m.user_name ?? 'OJT User').join(', ')}
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    {gAssignments.map((a) => (
+              return Object.entries(groupMap).map(([gName, gAssignments]) => {
+                const repAssignment = gAssignments.find((a) => a.result_url != null && a.result_url.trim() !== '') || gAssignments[0];
+                return (
+                  <div key={gName} className="border border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/5 rounded-2xl p-3.5 space-y-3">
+                    <div className="flex items-center justify-between border-b border-purple-500/10 pb-2">
+                      <span className="text-xs font-black text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                        <span>👥</span> {gName} ({gAssignments.length} Anggota)
+                      </span>
+                      <span className="text-[10px] font-bold text-zinc-400 truncate max-w-[60%]" title={gAssignments.map((m) => m.user_name ?? 'OJT User').join(', ')}>
+                        Anggota: {gAssignments.map((m) => m.user_name ?? 'OJT User').join(', ')}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
                       <MentorSubmissionCard
-                        key={a.id}
-                        assignment={a}
-                        reactions={reactionsMap?.[a.id] ?? []}
+                        key={repAssignment.id}
+                        assignment={repAssignment}
+                        reactions={reactionsMap?.[repAssignment.id] ?? []}
                         workspaceId={workspaceId}
                         isCoordinator={isCoordinator}
                         canManage={canManage}
@@ -3028,10 +3061,10 @@ function MentorTaskCard({
                         taskDeadline={task.deadline}
                         taskExtendedDeadline={task.extended_deadline}
                       />
-                    ))}
+                    </div>
                   </div>
-                </div>
-              ));
+                );
+              });
             })()
           ) : (
             assignments.map((a) => (

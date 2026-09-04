@@ -13,6 +13,7 @@ import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 interface ReviewRow {
   assignment_id:   string;
   assignment_role: string;
+  group_name?:     string | null;
   result_url:      string | null;
   submitted_at:    number | null;
   appreciation_note?: string | null;
@@ -64,6 +65,7 @@ export default async function ReviewPage() {
       ta.id            AS assignment_id,
       ta.user_id       AS creator_id,
       ta.assignment_role,
+      ta.group_name,
       ta.result_url,
       ta.submitted_at,
       ta.lead_approved,
@@ -127,7 +129,7 @@ export default async function ReviewPage() {
   })[];
 
   // Filter reviews based on role-specific visibility rules
-  const reviews = allReviews.filter((r) => {
+  const rawFilteredReviews = allReviews.filter((r) => {
     // ── Exclude own submissions ──
     if (r.creator_id === session.userId) return false;
 
@@ -161,6 +163,16 @@ export default async function ReviewPage() {
     if (r.is_leader && r.lead_approved === 0) return true;
 
     return false;
+  });
+
+  const seenGroupKeys = new Set<string>();
+  const reviews = rawFilteredReviews.filter((r) => {
+    if (r.task_type === 'ASSESSMENT' && r.group_name) {
+      const groupKey = `${r.task_id}::${r.group_name}`;
+      if (seenGroupKeys.has(groupKey)) return false;
+      seenGroupKeys.add(groupKey);
+    }
+    return true;
   });
 
   const totalPendingCount = reviews.length + pendingBriefReviews.length;
@@ -288,7 +300,9 @@ export default async function ReviewPage() {
                       <div className="flex items-center justify-between gap-2 flex-wrap font-bold">
                         <span className="flex items-center gap-1.5">
                           <span>👤 Peserta:</span>
-                          <strong className="text-zinc-900 dark:text-zinc-200 font-semibold">{r.creator_name ?? 'Unknown'}</strong>
+                          <strong className="text-zinc-900 dark:text-zinc-200 font-semibold">
+                            {r.group_name ? `${r.group_name} (Perwakilan: ${r.creator_name ?? 'Unknown'})` : (r.creator_name ?? 'Unknown')}
+                          </strong>
                         </span>
                         {r.submitted_at && (
                           <span className="font-mono text-zinc-400 text-[10px]">
