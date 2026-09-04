@@ -1117,6 +1117,7 @@ function MentorSubmissionCard({
   canManage = true,
   currentUserId,
   taskCreatedBy,
+  assignedMentors,
   taskStartAt,
   taskDeadline,
   taskExtendedDeadline,
@@ -1128,6 +1129,7 @@ function MentorSubmissionCard({
   canManage?: boolean;
   currentUserId: string;
   taskCreatedBy?: string | null;
+  assignedMentors?: string | null;
   taskStartAt?: number | null;
   taskDeadline?: number | null;
   taskExtendedDeadline?: number | null;
@@ -1400,7 +1402,16 @@ function MentorSubmissionCard({
           {error && <p className="text-xs text-red-500">{error}</p>}
 
           {!isApproved && (() => {
-            const isEvaluator = isAssignedMentorForTask(task, currentUserId, isCoordinator);
+            let isEvaluator = isCoordinator;
+            if (!isEvaluator && assignedMentors) {
+              try {
+                const ids: string[] = JSON.parse(assignedMentors);
+                if (Array.isArray(ids) && ids.length > 0) isEvaluator = ids.includes(currentUserId);
+              } catch (_e) {}
+            }
+            if (!isEvaluator) {
+              isEvaluator = taskCreatedBy != null && taskCreatedBy === currentUserId;
+            }
 
             const badges = (
               <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -3012,6 +3023,7 @@ function MentorTaskCard({
                         canManage={canManage}
                         currentUserId={currentUserId}
                         taskCreatedBy={task.created_by}
+                        assignedMentors={task.assigned_mentors}
                         taskStartAt={task.start_at}
                         taskDeadline={task.deadline}
                         taskExtendedDeadline={task.extended_deadline}
@@ -3032,6 +3044,7 @@ function MentorTaskCard({
                 canManage={canManage}
                 currentUserId={currentUserId}
                 taskCreatedBy={task.created_by}
+                assignedMentors={task.assigned_mentors}
                 taskStartAt={task.start_at}
                 taskDeadline={task.deadline}
                 taskExtendedDeadline={task.extended_deadline}
