@@ -87,10 +87,20 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
   const execType           = (formData.get('exec_type') as string) || 'DESIGNER';
   const assessmentCategory = (formData.get('assessment_category') as string) === 'GROUP' ? 'GROUP' : 'INDIVIDUAL';
   const groupDataRaw       = formData.get('group_data') as string | null;
+  const assignedMentorsRaw = formData.get('assigned_mentors') as string | null;
   const deadlineStr        = formData.get('deadline') as string | null;
   const startAtStr         = (formData.get('start_at') as string) || (formData.get('startAt') as string);
 
   if (!title) return { success: false, error: 'Judul assessment wajib diisi.' };
+
+  let assignedMentorIds: string[] = [];
+  if (assignedMentorsRaw) {
+    try {
+      assignedMentorIds = JSON.parse(assignedMentorsRaw);
+    } catch (_e) {
+      assignedMentorIds = assignedMentorsRaw.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+  }
 
   const deadline = parseIndonesiaDate(deadlineStr);
   const startAt  = parseIndonesiaDate(startAtStr);
@@ -103,24 +113,24 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
   if (!ws) return { success: false, error: 'Workspace tidak ditemukan.' };
 
   const taskId = `task_${crypto.randomUUID().replace(/-/g, '')}`;
-  // If created directly by Coordinator, it's auto-approved. If created by Mentor, it goes to WAITING_REVIEW for Coordinator approval.
-  const initialStatus = isCoordinator ? 'APPROVED' : 'WAITING_REVIEW';
+  // New Flow: If created without brief, status is BRIEF_PENDING. If created with brief & by coordinator, WAITING_REVIEW or APPROVED.
+  const initialStatus = description && description.trim() ? (isCoordinator ? 'WAITING_REVIEW' : 'WAITING_REVIEW') : 'BRIEF_PENDING';
+  const assignedMentorsJson = assignedMentorIds.length > 0 ? JSON.stringify(assignedMentorIds) : null;
 
   try {
     // 1. Create task
     await db
       .prepare(`
-        INSERT INTO tasks (id, workspace_id, project_id, title, description, status, priority, task_type, assessment_category, deadline, start_at, created_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'NORMAL', 'ASSESSMENT', ?, ?, ?, ?, strftime('%s', 'now'))
+        INSERT INTO tasks (id, workspace_id, project_id, title, description, status, priority, task_type, assessment_category, assigned_mentors, deadline, start_at, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'NORMAL', 'ASSESSMENT', ?, ?, ?, ?, ?, strftime('%s', 'now'))
       `)
-      .bind(taskId, workspaceId, ws.project_id, title, description, initialStatus, assessmentCategory, deadline, startAt, session.userId)
+      .bind(taskId, workspaceId, ws.project_id, title, description, initialStatus, assessmentCategory, assignedMentorsJson, deadline, startAt, session.userId)
       .run();
 
     const assignmentInitialStatus = 'ASSIGNED';
     let assignedUserIds: string[] = [];
 
     if (assessmentCategory === 'GROUP' && groupDataRaw) {
-      // Parse group_data: Array<{ name: string; userIds: string[] }>
       let groups: Array<{ name: string; userIds: string[] }> = [];
       try {
         groups = JSON.parse(groupDataRaw);
@@ -144,7 +154,6 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
         }
       }
     } else {
-      // INDIVIDUAL mode: Create task_assignments for all Trooper / OJT members
       const { results: ojtMembers } = await db
         .prepare(`
           SELECT DISTINCT u.id AS user_id
@@ -190,23 +199,21 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
       fromStatus: null,
       toStatus: initialStatus,
       triggeredBy: session.userId,
-      note: isCoordinator
-        ? `Assessment "${title}" (${execType}) dipublikasikan oleh Koordinator dan di-assign ke OJT`
-        : `Assessment "${title}" (${execType}) diajukan oleh Mentor ke Koordinator untuk di-review`,
+      note: `Assessment "${title}" (${execType}) diinisiasi oleh Koordinator. Status: ${initialStatus}`,
     });
 
-    // Async Web Push for assigned OJT members if published directly
-    if (isCoordinator && assignedUserIds.length > 0) {
+    // Notify assigned mentor(s) via Web Push
+    if (assignedMentorIds.length > 0) {
       try {
-        sendPushNotificationToUsers(assignedUserIds, 'TASK', {
-          title: `📝 Assessment Baru: ${title}`,
-          body: description?.slice(0, 100) || `Assessment baru telah ditugaskan di workspace.`,
+        sendPushNotificationToUsers(assignedMentorIds, 'TASK', {
+          title: `📝 Ditugaskan Input Brief Assessment: ${title}`,
+          body: `Koordinator telah menugaskan Anda untuk mengisi brief & instruksi assessment.`,
           url: `/dashboard/workspace/${workspaceId}`,
           category: 'TASK',
           tag: `task_${taskId}`,
         }).catch(() => {});
       } catch (pushErr) {
-        console.error('Failed to trigger assessment Web Push:', pushErr);
+        console.error('Failed to trigger mentor push notification:', pushErr);
       }
     }
 
@@ -214,12 +221,78 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
     return {
       success: true,
       taskId,
-      message: isCoordinator
-        ? '✓ Assessment dipublikasikan & langsung di-assign ke seluruh OJT.'
-        : '📥 Assessment berhasil diajukan ke Koordinator untuk di-review & disetujui.',
+      message: assignedMentorIds.length > 0
+        ? '✓ Assessment diinisiasi. Mentor yang bertugas telah ditugaskan untuk menginput brief/instruksi.'
+        : '✓ Assessment diinisiasi. Silakan minta mentor bertugas menginput brief.',
     };
   } catch (err: any) {
     console.error('createAssessmentTask failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Mentor fills or updates brief / instructions for an assessment task.
+ * Sets status to 'WAITING_REVIEW' so Coordinator can review & ACC.
+ */
+export async function submitAssessmentBriefByMentor(
+  taskId: string,
+  workspaceId: string,
+  description: string
+) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  if (!description?.trim()) return { success: false, error: 'Brief / Instruksi Pengerjaan wajib diisi.' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+
+  const isLeaderRow = await db
+    .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+    .bind(workspaceId, session.userId)
+    .first();
+
+  const isMentorRole = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  const isLeader = !!isLeaderRow || isMentorRole;
+  const isCoordinator =
+    ctx.userType === 'STAFF' &&
+    (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE'));
+
+  if (!isLeader && !isCoordinator) {
+    return { success: false, error: 'Hanya mentor atau koordinator yang dapat menginput brief assessment.' };
+  }
+
+  const task = await db
+    .prepare('SELECT title, status, created_by FROM tasks WHERE id = ? AND workspace_id = ?')
+    .bind(taskId, workspaceId)
+    .first() as { title: string; status: string; created_by: string | null } | null;
+
+  if (!task) return { success: false, error: 'Task assessment tidak ditemukan.' };
+
+  try {
+    await db
+      .prepare(`
+        UPDATE tasks
+        SET description = ?, status = 'WAITING_REVIEW', revision_note = NULL
+        WHERE id = ? AND workspace_id = ?
+      `)
+      .bind(description.trim(), taskId, workspaceId)
+      .run();
+
+    await logWorkflowEvent({
+      entityType: 'task',
+      entityId: taskId,
+      fromStatus: task.status,
+      toStatus: 'WAITING_REVIEW',
+      triggeredBy: session.userId,
+      note: `Mentor telah menginput brief assessment "${task.title}" dan mengajukan ke Koordinator untuk ACC`,
+    });
+
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    return { success: true, message: '✓ Brief berhasil diisi dan diajukan ke Koordinator untuk ACC.' };
+  } catch (err: any) {
+    console.error('submitAssessmentBriefByMentor failed:', err);
     return { success: false, error: err.message };
   }
 }

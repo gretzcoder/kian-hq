@@ -123,7 +123,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
     db.prepare("SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1").bind(projectId).first(),
     db.prepare(`
-      SELECT t.id, t.title, t.description, t.status, t.priority, t.deadline, t.extended_deadline, t.start_at, t.created_at, t.task_type, t.assessment_category, t.parent_task_id, t.revision_note, t.sparks, t.sparks_multiplier, t.created_by, u.name as creator_name
+      SELECT t.id, t.title, t.description, t.status, t.priority, t.deadline, t.extended_deadline, t.start_at, t.created_at, t.task_type, t.assessment_category, t.assigned_mentors, t.parent_task_id, t.revision_note, t.sparks, t.sparks_multiplier, t.created_by, u.name as creator_name
       FROM tasks t
       LEFT JOIN users u ON t.created_by = u.id
       WHERE t.workspace_id = ? AND t.status != 'DELETED'

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   createAssessmentTask,
   updateAssessmentTask,
+  submitAssessmentBriefByMentor,
   submitAssessmentWork,
   approveAssessmentSubmission,
   approveAssessmentMentorStep,
@@ -50,6 +51,7 @@ interface TaskRow {
   created_by?: string | null;
   creator_name?: string | null;
   assessment_category?: string | null;
+  assigned_mentors?: string | null;
 }
 
 interface AssignmentRow {
@@ -239,17 +241,17 @@ function CreateAssessmentTaskForm({
   onCreated: () => void;
   allWorkspaceMembers?: WorkspaceMemberSimple[];
 }) {
-  const [open,        setOpen]        = useState(false);
-  const [description, setDescription] = useState('');
-  const [category,    setCategory]    = useState<'INDIVIDUAL' | 'GROUP'>('INDIVIDUAL');
-  const [groups,      setGroups]      = useState<Array<{ id: string; name: string; userIds: string[] }>>([
+  const [open,               setOpen]               = useState(false);
+  const [description,        setDescription]        = useState('');
+  const [selectedMentorIds,  setSelectedMentorIds]  = useState<string[]>([]);
+  const [category,           setCategory]           = useState<'INDIVIDUAL' | 'GROUP'>('INDIVIDUAL');
+  const [groups,             setGroups]             = useState<Array<{ id: string; name: string; userIds: string[] }>>([
     { id: 'g_1', name: 'Kelompok 1', userIds: [] },
     { id: 'g_2', name: 'Kelompok 2', userIds: [] },
   ]);
-  const [error,       setError]       = useState<string | null>(null);
-  const [pending, startTransition]    = useTransition();
+  const [error,              setError]              = useState<string | null>(null);
+  const [pending, startTransition]                  = useTransition();
 
-  // Filter available troopers (non-staff / non-mentor members)
   const availableTroopers = allWorkspaceMembers;
 
   const handleAddGroup = () => {
@@ -280,7 +282,6 @@ function CreateAssessmentTaskForm({
             userIds: exists ? g.userIds.filter((id) => id !== userId) : [...g.userIds, userId],
           };
         } else {
-          // Remove from other group so a trooper belongs to 1 group at a time
           return { ...g, userIds: g.userIds.filter((id) => id !== userId) };
         }
       })
@@ -304,8 +305,8 @@ function CreateAssessmentTaskForm({
     e.preventDefault();
     setError(null);
 
-    if (!description.replace(/<[^>]*>/g, '').trim()) {
-      setError('Brief / Instruksi Pengerjaan wajib diisi');
+    if (selectedMentorIds.length === 0) {
+      setError('Pilih minimal 1 Mentor yang bertugas menginput brief/instruksi pengerjaan.');
       return;
     }
 
@@ -323,6 +324,7 @@ function CreateAssessmentTaskForm({
       if (res.success) {
         setOpen(false);
         setDescription('');
+        setSelectedMentorIds([]);
         setCategory('INDIVIDUAL');
         onCreated();
       } else {
@@ -353,10 +355,10 @@ function CreateAssessmentTaskForm({
                 </div>
                 <div>
                   <h3 className="text-base sm:text-lg font-black text-zinc-900 dark:text-zinc-100">
-                    Ajukan Assessment Baru
+                    Inisiasi Assessment Baru
                   </h3>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Draft assessment akan diajukan ke Koordinator untuk di-review sebelum dipublikasikan ke OJT.
+                    Tentukan Mentor bertugas input brief, deadline, kategori peserta, dan tipe tugas.
                   </p>
                 </div>
               </div>
@@ -392,17 +394,57 @@ function CreateAssessmentTaskForm({
                   />
                 </div>
 
-                {/* Brief/Description */}
+                {/* Mentor Bertugas Input Brief */}
                 <div>
                   <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
-                    Brief / Instruksi Pengerjaan <span className="text-red-500">*</span>
+                    Mentor Bertugas Input Brief <span className="text-red-500">* (Bisa 1 atau lebih)</span>
+                  </label>
+                  <input type="hidden" name="assigned_mentors" value={JSON.stringify(selectedMentorIds)} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[150px] overflow-y-auto p-2 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/40">
+                    {allWorkspaceMembers.length === 0 ? (
+                      <p className="text-xs text-zinc-400 p-2 col-span-2 text-center">Belum ada anggota di workspace.</p>
+                    ) : (
+                      allWorkspaceMembers.map((m) => {
+                        const uId = m.userId || m.id || '';
+                        const isChecked = selectedMentorIds.includes(uId);
+                        return (
+                          <label
+                            key={uId}
+                            className={`flex items-center gap-2 p-2 rounded-xl text-xs cursor-pointer border transition-all ${
+                              isChecked
+                                ? 'border-purple-500 bg-purple-500/10 font-bold text-purple-900 dark:text-purple-200'
+                                : 'border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-purple-300'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setSelectedMentorIds((prev) =>
+                                  isChecked ? prev.filter((id) => id !== uId) : [...prev, uId]
+                                );
+                              }}
+                              className="accent-purple-600 rounded w-3.5 h-3.5"
+                            />
+                            <span className="truncate flex-1">{m.name}</span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* Brief/Description (Opsional saat inisiasi) */}
+                <div>
+                  <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                    Brief / Instruksi Pengerjaan <span className="text-zinc-500 font-normal">(Opsional saat inisiasi - akan diisi oleh Mentor bertugas)</span>
                   </label>
                   <input type="hidden" name="description" value={description} />
                   <TiptapEditor
                     value={description}
                     onChange={setDescription}
-                    placeholder="Jelaskan instruksi lengkap pengerjaan: output yang diharapkan, link referensi/aset, format file submit, deadline, dll..."
-                    minHeight="min-h-[260px]"
+                    placeholder="Instruksi pengerjaan dapat diisi sekarang atau diisi nanti oleh mentor bertugas..."
+                    minHeight="min-h-[180px]"
                   />
                 </div>
 
@@ -1397,6 +1439,96 @@ function EditAssessmentTaskModal({
   );
 }
 
+// ── Sub-component: Input Assessment Brief Modal ─────────────────────────────
+
+function InputAssessmentBriefModal({
+  task,
+  workspaceId,
+  onClose,
+}: {
+  task: TaskRow;
+  workspaceId: string;
+  onClose: () => void;
+}) {
+  const [description, setDescription] = useState(task.description ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!description.replace(/<[^>]*>/g, '').trim()) {
+      setError('Brief / Instruksi Pengerjaan wajib diisi.');
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      const res = await submitAssessmentBriefByMentor(task.id, workspaceId, description);
+      if (res.success) {
+        onClose();
+      } else {
+        setError(res.error ?? 'Gagal menginput brief.');
+      }
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-4xl max-h-[92vh] bg-white dark:bg-[#09090b] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl shadow-2xl flex flex-col my-auto overflow-hidden text-left" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 sm:px-8 sm:py-5 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800/80 shrink-0 bg-zinc-50/50 dark:bg-zinc-900/30">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl font-bold">
+              ✍️
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-zinc-900 dark:text-zinc-100">
+                Input Brief Assessment: {task.title}
+              </h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Isi instruksi pengerjaan lengkap untuk diajukan ke Koordinator (ACC).
+              </p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="w-9 h-9 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 flex items-center justify-center text-base">✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="p-6 sm:p-8 overflow-y-auto space-y-6 flex-1">
+            {error && (
+              <p className="text-xs text-red-600 dark:text-red-400 bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 font-medium">
+                ⚠️ {error}
+              </p>
+            )}
+            {task.revision_note && (
+              <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs space-y-1">
+                <span className="font-black flex items-center gap-1"><span>↩</span> Catatan Revisi dari Koordinator:</span>
+                <p className="text-xs">{task.revision_note}</p>
+              </div>
+            )}
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                Brief / Instruksi Pengerjaan Lengkap <span className="text-red-500">*</span>
+              </label>
+              <TiptapEditor
+                value={description}
+                onChange={setDescription}
+                placeholder="Jelaskan instruksi lengkap pengerjaan: output yang diharapkan, link referensi/aset, format file submit, deadline, dll..."
+                minHeight="min-h-[300px]"
+              />
+            </div>
+          </div>
+
+          <div className="px-6 py-4 sm:px-8 border-t border-zinc-100 dark:border-zinc-800/80 shrink-0 bg-white dark:bg-[#09090b] flex items-center justify-end gap-3 rounded-b-3xl">
+            <button type="button" onClick={onClose} className="px-5 py-2.5 text-xs font-bold border border-zinc-200 dark:border-zinc-800 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400">Batal</button>
+            <button type="submit" disabled={pending} className="px-6 py-2.5 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl shadow-lg shadow-purple-500/20 disabled:opacity-60 cursor-pointer">
+              {pending ? 'Mengirim Brief...' : '📩 Kirim Brief ke Koordinator untuk ACC'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Sub-component: Add Participant Modal ──────────────────────────────────────
 
 function AddParticipantModal({
@@ -1528,6 +1660,7 @@ function MentorTaskCard({
   const [isCardExpanded,           setIsCardExpanded]           = useState(isTarget);
   const [showSubmissions,          setShowSubmissions]          = useState(isTarget);
   const [showEditModal,            setShowEditModal]            = useState(false);
+  const [showBriefInputModal,       setShowBriefInputModal]       = useState(false);
   const [showConfirmDelete,        setShowConfirmDelete]        = useState(false);
   const [showAddParticipantModal,  setShowAddParticipantModal]  = useState(false);
   const [showMultiplierModal,      setShowMultiplierModal]      = useState(false);
@@ -1589,6 +1722,14 @@ function MentorTaskCard({
         isTarget ? 'border-purple-500 ring-2 ring-purple-500 shadow-xl shadow-purple-500/20' : 'border-zinc-200/80 dark:border-zinc-800/80'
       }`}
     >
+      {/* Modal Input Brief Assessment */}
+      {showBriefInputModal && (
+        <InputAssessmentBriefModal
+          task={task}
+          workspaceId={workspaceId}
+          onClose={() => setShowBriefInputModal(false)}
+        />
+      )}
       {/* Modal Edit Assessment (rendered at root level so it works even when collapsed) */}
       {showEditModal && (
         <EditAssessmentTaskModal
@@ -1717,9 +1858,14 @@ function MentorTaskCard({
                   <span className="truncate">Mentor: {task.creator_name}</span>
                 </span>
               )}
-              {task.status === 'WAITING_REVIEW' ? (
+              {task.status === 'BRIEF_PENDING' ? (
                 <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
                   <span>⏳</span>
+                  <span>Menunggu Brief Mentor</span>
+                </span>
+              ) : task.status === 'WAITING_REVIEW' ? (
+                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
+                  <span>📥</span>
                   <span>Menunggu ACC Brief</span>
                 </span>
               ) : task.status === 'REVISION_REQUESTED' ? (
@@ -1847,10 +1993,38 @@ function MentorTaskCard({
             />
           )}
 
+          {/* Banner for BRIEF_PENDING */}
+          {task.status === 'BRIEF_PENDING' && (
+            <div className="mt-3 bg-amber-500/8 border border-amber-500/20 rounded-2xl p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">✍️</span>
+                  <div>
+                    <p className="text-xs font-black text-amber-700 dark:text-amber-400">
+                      Brief & Instruksi Pengerjaan Belum Diisi
+                    </p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                      Task ini diinisiasi oleh Koordinator. Mentor yang bertugas perlu menginput brief & instruksi pengerjaan terlebih dahulu.
+                    </p>
+                  </div>
+                </div>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setShowBriefInputModal(true)}
+                    className="px-4 py-2 text-xs font-bold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl shadow-sm shrink-0 cursor-pointer"
+                  >
+                    ✍️ Input Brief & Instruksi
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Banner for REVISION_REQUESTED Brief */}
           {task.status === 'REVISION_REQUESTED' && (
             <div className="mt-3 bg-red-500/8 border border-red-500/20 rounded-2xl p-4 space-y-2">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-red-600 dark:text-red-400 font-bold text-xs">
                   <span>↩</span>
                   <span>Catatan Revisi Brief dari Koordinator</span>
@@ -1858,8 +2032,8 @@ function MentorTaskCard({
                 {canManage && (
                   <button
                     type="button"
-                    onClick={() => setShowEditModal(true)}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-sm shrink-0"
+                    onClick={() => setShowBriefInputModal(true)}
+                    className="inline-flex items-center gap-1 px-3.5 py-1.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all shadow-sm shrink-0 cursor-pointer"
                   >
                     <span>✏️</span>
                     <span>Perbaiki Brief & Ajukan Ulang</span>
