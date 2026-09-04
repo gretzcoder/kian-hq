@@ -33,6 +33,7 @@ export interface RawAssignmentRow {
   task_status: string;
   task_created_by: string | null;
   creator_name: string | null;
+  mentor_name?: string | null;
   project_id: string;
   project_name: string;
   workspace_id: string | null;
@@ -47,6 +48,7 @@ export interface GroupedTask {
   status: string;
   task_created_by: string | null;
   creator_name: string | null;
+  mentor_name?: string | null;
   project_id: string;
   project_name: string;
   workspace_id: string | null;
@@ -320,9 +322,9 @@ function TaskCardItem({
             <span className="font-mono font-black uppercase text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md border border-purple-500/20 shrink-0">
               {parentTask.project_name}
             </span>
-            {parentTask.creator_name && (
+            {(parentTask.mentor_name || parentTask.creator_name) && (
               <span className="text-zinc-400 font-medium truncate">
-                • 🎓 Mentor: <strong className="text-zinc-600 dark:text-zinc-300">{parentTask.creator_name}</strong>
+                • 🎓 Mentor: <strong className="text-zinc-600 dark:text-zinc-300">{parentTask.mentor_name || parentTask.creator_name}</strong>
               </span>
             )}
           </div>
@@ -353,7 +355,7 @@ function TaskCardItem({
               unsubmittedCount={unsubmittedAssignments.length}
               waitingReviewCount={waitingReviewSteps.length}
               revisionCount={revisionSteps.length}
-              mentorName={parentTask.creator_name}
+              mentorName={parentTask.mentor_name || parentTask.creator_name}
               activeTab={activeTab}
             />
           )}

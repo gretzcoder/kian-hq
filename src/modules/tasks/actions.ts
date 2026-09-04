@@ -1474,7 +1474,7 @@ export async function sendReviewReminderToMentor(assignmentId: string, customMes
   const assign = (await db
     .prepare(
       `
-      SELECT ta.id, ta.task_id, ta.user_id, ta.status, t.title AS task_title, t.created_by,
+      SELECT ta.id, ta.task_id, ta.user_id, ta.status, t.title AS task_title, t.created_by, t.assigned_mentors,
              t.workspace_id, u_assignee.name AS assignee_name, u_creator.name AS creator_name,
              ws.name AS workspace_name
       FROM task_assignments ta
@@ -1490,9 +1490,21 @@ export async function sendReviewReminderToMentor(assignmentId: string, customMes
 
   if (!assign) return { success: false, error: 'Penugasan tidak ditemukan.' };
 
-  const targetMentorId = assign.created_by;
-  if (!targetMentorId) {
-    return { success: false, error: 'Pembuat/Mentor tugas tidak terdefinisi.' };
+  let targetMentorIds: string[] = [];
+  if (assign.assigned_mentors) {
+    try {
+      const ids: string[] = JSON.parse(assign.assigned_mentors);
+      if (Array.isArray(ids) && ids.length > 0) {
+        targetMentorIds = ids;
+      }
+    } catch (_e) {}
+  }
+  if (targetMentorIds.length === 0 && assign.created_by) {
+    targetMentorIds = [assign.created_by];
+  }
+
+  if (targetMentorIds.length === 0) {
+    return { success: false, error: 'Mentor petugas tidak terdefinisi.' };
   }
 
   const sender = (await db
@@ -1502,13 +1514,15 @@ export async function sendReviewReminderToMentor(assignmentId: string, customMes
 
   const senderName = sender?.name || 'Koordinator QC';
 
-  await sendPushNotificationToUser(targetMentorId, 'TASK', {
-    title: `🔔 Reminder Review Tugas: ${assign.task_title}`,
-    body: `${senderName} mengingatkan Anda untuk segera meninjau submission dari ${assign.assignee_name || 'Trooper'}.${
-      customMessage ? ` Catatan: ${customMessage}` : ''
-    }`,
-    url: assign.workspace_id ? `/dashboard/workspace/${assign.workspace_id}` : '/dashboard/review',
-  });
+  for (const mentorId of targetMentorIds) {
+    await sendPushNotificationToUser(mentorId, 'TASK', {
+      title: `🔔 Reminder Review Tugas: ${assign.task_title}`,
+      body: `${senderName} mengingatkan Anda untuk segera meninjau submission dari ${assign.assignee_name || 'Trooper'}.${
+        customMessage ? ` Catatan: ${customMessage}` : ''
+      }`,
+      url: assign.workspace_id ? `/dashboard/workspace/${assign.workspace_id}` : '/dashboard/review',
+    });
+  }
 
   await logWorkflowEvent({
     entityType: 'task_assignment',
@@ -1521,7 +1535,7 @@ export async function sendReviewReminderToMentor(assignmentId: string, customMes
 
   return {
     success: true,
-    message: `Reminder berhasil dikirim ke Mentor ${assign.creator_name ? `(${assign.creator_name})` : ''}!`,
+    message: `Reminder berhasil dikirim ke Mentor!`,
   };
 }
 
@@ -1701,7 +1715,7 @@ export async function sendTaskSmartReminder(taskId: string, categoryMode?: strin
   // Get task info & creator mentor
   const task = (await db
     .prepare(
-      `SELECT t.id, t.title, t.workspace_id, t.created_by, u_creator.name AS creator_name
+      `SELECT t.id, t.title, t.workspace_id, t.created_by, t.assigned_mentors, u_creator.name AS creator_name
        FROM tasks t
        LEFT JOIN users u_creator ON t.created_by = u_creator.id
        WHERE t.id = ? AND t.status != 'DELETED'`
@@ -1777,15 +1791,30 @@ export async function sendTaskSmartReminder(taskId: string, categoryMode?: strin
   }
 
   // 3. Notify mentor if there are submissions waiting review (if in review tab or general batch)
-  if (waitingReview.length > 0 && task.created_by && (!categoryMode || isReviewCategory || categoryMode === 'ACTIVE' || categoryMode === 'MENTOR')) {
+  if (waitingReview.length > 0 && (!categoryMode || isReviewCategory || categoryMode === 'ACTIVE' || categoryMode === 'MENTOR')) {
     if (!isRevisionCategory && !isUnsubmittedCategory) {
-      await sendPushNotificationToUser(task.created_by, 'TASK', {
-        title: `🔔 Reminder Review Tugas: ${task.title}`,
-        body: `${senderName} mengingatkan Anda untuk segera meninjau ${waitingReview.length} karya peserta yang telah diunggah.`,
-        url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard',
-      });
-      notifiedCount++;
-      messagesSent.push(`Notifikasi review dikirim ke Mentor (${task.creator_name || 'Mentor'})`);
+      let targetMentorIds: string[] = [];
+      if (task.assigned_mentors) {
+        try {
+          const ids: string[] = JSON.parse(task.assigned_mentors);
+          if (Array.isArray(ids) && ids.length > 0) {
+            targetMentorIds = ids;
+          }
+        } catch (_e) {}
+      }
+      if (targetMentorIds.length === 0 && task.created_by) {
+        targetMentorIds = [task.created_by];
+      }
+
+      for (const mId of targetMentorIds) {
+        await sendPushNotificationToUser(mId, 'TASK', {
+          title: `🔔 Reminder Review Tugas: ${task.title}`,
+          body: `${senderName} mengingatkan Anda untuk segera meninjau ${waitingReview.length} karya peserta yang telah diunggah.`,
+          url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard',
+        });
+        notifiedCount++;
+      }
+      messagesSent.push(`Notifikasi review dikirim ke Mentor`);
     }
   }
 

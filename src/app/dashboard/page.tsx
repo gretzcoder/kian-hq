@@ -35,6 +35,9 @@ interface PersonalTaskRow {
   assignment_role?: string | null;
   workspace_type?: string | null;
   task_type?: string | null;
+  assigned_mentors?: string | null;
+  mentor_name?: string | null;
+  creator_name?: string | null;
 }
 
 export default async function DashboardPage() {
@@ -114,6 +117,7 @@ export default async function DashboardPage() {
           t.start_at,
           t.task_type AS task_type,
           t.created_by AS task_created_by,
+          t.assigned_mentors,
           ws.workspace_type AS workspace_type,
           u.user_type AS user_type,
           ta.appreciation_note AS appreciation_note,
@@ -200,6 +204,7 @@ export default async function DashboardPage() {
           p.name AS project_name,
           u.name AS assigned_name,
           u_creator.name AS creator_name,
+          t.assigned_mentors,
           ta.assignment_role,
           ta.sparks,
           ta.appreciation_note AS appreciation_note,
@@ -319,6 +324,7 @@ export default async function DashboardPage() {
           p.name AS project_name,
           u.name AS assigned_name,
           u_creator.name AS creator_name,
+          t.assigned_mentors,
           ta.assignment_role,
           ta.sparks,
           ta.appreciation_note AS appreciation_note,
@@ -378,6 +384,52 @@ export default async function DashboardPage() {
     personalTasks = (activeRes.results || []) as unknown as PersonalTaskRow[];
     completedTasks = (completedRes.results || []) as unknown as PersonalTaskRow[];
   }
+
+  // ── Resolve assigned_mentors names for DashboardPersonalWorkspace ──
+  const allDashboardTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks, ...completedTasks];
+  const allAssignedMentorIds = new Set<string>();
+  for (const tRow of allDashboardTasks) {
+    if (tRow.assigned_mentors) {
+      try {
+        const ids: string[] = JSON.parse(tRow.assigned_mentors);
+        ids.forEach((id) => allAssignedMentorIds.add(id));
+      } catch (_e) {}
+    }
+  }
+
+  let dashMentorMap: Record<string, string> = {};
+  if (allAssignedMentorIds.size > 0) {
+    const idsArr = Array.from(allAssignedMentorIds);
+    const placeholders = idsArr.map(() => '?').join(',');
+    const { results: mentorUsers } = await db
+      .prepare(`SELECT id, name FROM users WHERE id IN (${placeholders})`)
+      .bind(...idsArr)
+      .all();
+    ((mentorUsers as any[]) || []).forEach((u) => {
+      dashMentorMap[u.id] = u.name;
+    });
+  }
+
+  const mapMentorName = (tRow: PersonalTaskRow) => {
+    if (tRow.assigned_mentors) {
+      try {
+        const ids: string[] = JSON.parse(tRow.assigned_mentors);
+        if (Array.isArray(ids) && ids.length > 0) {
+          const names = ids
+            .map((id) => (id === session.userId ? 'Anda' : dashMentorMap[id] || null))
+            .filter(Boolean);
+          if (names.length > 0) return { ...tRow, mentor_name: names.join(', ') };
+        }
+      } catch (_e) {}
+    }
+    return { ...tRow, mentor_name: tRow.creator_name };
+  };
+
+  personalTasks = personalTasks.map(mapMentorName);
+  trooperTasks = trooperTasks.map(mapMentorName);
+  mentorTasks = mentorTasks.map(mapMentorName);
+  reviewTasks = reviewTasks.map(mapMentorName);
+  completedTasks = completedTasks.map(mapMentorName);
 
   // Fetch pending QC reviews waiting for current user's approval
   const isStaffCoordinator =

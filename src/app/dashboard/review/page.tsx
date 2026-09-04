@@ -107,6 +107,7 @@ export default async function ReviewPage() {
   let leaderWsSet = new Set<string>();
   let coordProjSet = new Set<string>();
 
+  let mentorNameMap: Record<string, string> = {};
   if (reviewRows.length > 0) {
     const [leadRows, coordRows] = await Promise.all([
       db.prepare(`SELECT workspace_id FROM workspace_members WHERE user_id = ? AND team_role = 'LEADER'`).bind(session.userId).all(),
@@ -114,6 +115,27 @@ export default async function ReviewPage() {
     ]);
     leaderWsSet = new Set(((leadRows.results as any[]) || []).map((r) => r.workspace_id));
     coordProjSet = new Set(((coordRows.results as any[]) || []).map((r) => r.project_id));
+
+    const allAssignedMentorIds = new Set<string>();
+    for (const r of reviewRows) {
+      if (r.assigned_mentors) {
+        try {
+          const ids: string[] = JSON.parse(r.assigned_mentors);
+          ids.forEach((id) => allAssignedMentorIds.add(id));
+        } catch (_e) {}
+      }
+    }
+    if (allAssignedMentorIds.size > 0) {
+      const idsArr = Array.from(allAssignedMentorIds);
+      const placeholders = idsArr.map(() => '?').join(',');
+      const { results: mentorUsers } = await db
+        .prepare(`SELECT id, name FROM users WHERE id IN (${placeholders})`)
+        .bind(...idsArr)
+        .all();
+      ((mentorUsers as any[]) || []).forEach((u) => {
+        mentorNameMap[u.id] = u.name;
+      });
+    }
   }
 
   const allReviews = reviewRows.map((r) => ({
@@ -177,6 +199,21 @@ export default async function ReviewPage() {
 
   const totalPendingCount = reviews.length + pendingBriefReviews.length;
   const canRequestRevision = ctx.can('REQUEST_REVISION');
+
+  const getMentorDisplay = (r: ReviewRow) => {
+    if (r.assigned_mentors) {
+      try {
+        const ids: string[] = JSON.parse(r.assigned_mentors);
+        if (Array.isArray(ids) && ids.length > 0) {
+          const names = ids
+            .map((id) => (id === session.userId ? 'Anda' : mentorNameMap[id] || null))
+            .filter(Boolean);
+          if (names.length > 0) return names.join(', ');
+        }
+      } catch (_e) {}
+    }
+    return r.task_created_by === session.userId ? 'Anda' : (r.task_creator_name ?? 'Mentor');
+  };
 
   const priorityColors: Record<string, string> = {
     LOW:    'text-zinc-400',
@@ -313,9 +350,9 @@ export default async function ReviewPage() {
 
                       <div className="flex items-center justify-between gap-2 flex-wrap pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50">
                         <span className="font-bold text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                          <span>🎯 Mentor Pembuat Task:</span>
+                          <span>🎓 Mentor:</span>
                           <strong className="text-zinc-900 dark:text-zinc-200 font-black">
-                            {r.task_created_by === session.userId ? 'Anda (Pemilik Task)' : (r.task_creator_name ?? 'Mentor')}
+                            {getMentorDisplay(r)}
                           </strong>
                         </span>
 
