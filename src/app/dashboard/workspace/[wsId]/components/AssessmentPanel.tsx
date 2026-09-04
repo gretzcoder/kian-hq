@@ -77,6 +77,69 @@ export interface WorkspaceMemberSimple {
   userId?: string;
   name: string;
   email: string;
+  userType?: string;
+  roleNames?: string;
+  roleIds?: string;
+}
+
+export function isMentorUser(m: WorkspaceMemberSimple): boolean {
+  if (m.userType === 'STAFF') return true;
+  const roleNamesUpper = (m.roleNames || '').toUpperCase();
+  const roleIdsUpper = (m.roleIds || '').toUpperCase();
+  if (
+    roleNamesUpper.includes('MENTOR') ||
+    roleNamesUpper.includes('COORDINATOR') ||
+    roleNamesUpper.includes('EXECUTIVE') ||
+    roleNamesUpper.includes('STAFF') ||
+    roleIdsUpper.includes('MENTOR') ||
+    roleIdsUpper.includes('COORDINATOR') ||
+    roleIdsUpper.includes('EXECUTIVE') ||
+    roleIdsUpper.includes('STAFF')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function getTaskAssignedMentorNames(
+  assignedMentorsJson: string | null | undefined,
+  fallbackCreatorName: string | null | undefined,
+  allMembers: WorkspaceMemberSimple[] = []
+): string {
+  if (assignedMentorsJson) {
+    try {
+      const ids: string[] = JSON.parse(assignedMentorsJson);
+      if (Array.isArray(ids) && ids.length > 0) {
+        const names = ids
+          .map((id) => {
+            const m = allMembers.find((mem) => (mem.userId || mem.id) === id);
+            return m ? m.name : null;
+          })
+          .filter(Boolean);
+        if (names.length > 0) {
+          return names.join(', ');
+        }
+      }
+    } catch (_e) {}
+  }
+  return fallbackCreatorName || 'Mentor Bertugas';
+}
+
+export function isAssignedMentorForTask(
+  task: TaskRow,
+  currentUserId: string,
+  isCoordinator: boolean
+): boolean {
+  if (isCoordinator) return true;
+  if (task.assigned_mentors) {
+    try {
+      const ids: string[] = JSON.parse(task.assigned_mentors);
+      if (Array.isArray(ids) && ids.length > 0) {
+        return ids.includes(currentUserId);
+      }
+    } catch (_e) {}
+  }
+  return task.created_by != null && task.created_by === currentUserId;
 }
 
 interface AssessmentPanelProps {
@@ -252,7 +315,22 @@ function CreateAssessmentTaskForm({
   const [error,              setError]              = useState<string | null>(null);
   const [pending, startTransition]                  = useTransition();
 
-  const availableTroopers = allWorkspaceMembers;
+  const [mentorSearchTerm,   setMentorSearchTerm]   = useState('');
+  const [trooperSearchTerm,  setTrooperSearchTerm]  = useState('');
+
+  const mentorCandidates = (allWorkspaceMembers || []).filter(isMentorUser);
+  const filteredMentors = mentorCandidates.filter(
+    (m) =>
+      m.name.toLowerCase().includes(mentorSearchTerm.toLowerCase()) ||
+      m.email.toLowerCase().includes(mentorSearchTerm.toLowerCase())
+  );
+
+  const availableTroopers = (allWorkspaceMembers || []).filter((m) => !isMentorUser(m));
+  const filteredTroopers = availableTroopers.filter(
+    (t) =>
+      t.name.toLowerCase().includes(trooperSearchTerm.toLowerCase()) ||
+      t.email.toLowerCase().includes(trooperSearchTerm.toLowerCase())
+  );
 
   const handleAddGroup = () => {
     setGroups((prev) => [
@@ -325,6 +403,8 @@ function CreateAssessmentTaskForm({
         setOpen(false);
         setDescription('');
         setSelectedMentorIds([]);
+        setMentorSearchTerm('');
+        setTrooperSearchTerm('');
         setCategory('INDIVIDUAL');
         onCreated();
       } else {
@@ -400,11 +480,25 @@ function CreateAssessmentTaskForm({
                     Mentor Bertugas Input Brief <span className="text-red-500">* (Bisa 1 atau lebih)</span>
                   </label>
                   <input type="hidden" name="assigned_mentors" value={JSON.stringify(selectedMentorIds)} />
+                  
+                  {/* Search Mentor */}
+                  <div className="mb-2">
+                    <input
+                      type="text"
+                      value={mentorSearchTerm}
+                      onChange={(e) => setMentorSearchTerm(e.target.value)}
+                      placeholder="🔍 Cari nama mentor..."
+                      className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-2 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[150px] overflow-y-auto p-2 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/40">
-                    {allWorkspaceMembers.length === 0 ? (
-                      <p className="text-xs text-zinc-400 p-2 col-span-2 text-center">Belum ada anggota di workspace.</p>
+                    {filteredMentors.length === 0 ? (
+                      <p className="text-xs text-zinc-400 p-2 col-span-2 text-center">
+                        {mentorCandidates.length === 0 ? 'Belum ada akun mentor di workspace.' : 'Tidak ada akun mentor yang cocok.'}
+                      </p>
                     ) : (
-                      allWorkspaceMembers.map((m) => {
+                      filteredMentors.map((m) => {
                         const uId = m.userId || m.id || '';
                         const isChecked = selectedMentorIds.includes(uId);
                         return (
@@ -539,6 +633,17 @@ function CreateAssessmentTaskForm({
                         </div>
                       </div>
 
+                      {/* Trooper Search Bar */}
+                      <div>
+                        <input
+                          type="text"
+                          value={trooperSearchTerm}
+                          onChange={(e) => setTrooperSearchTerm(e.target.value)}
+                          placeholder="🔍 Cari nama anggota troopers..."
+                          className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-2 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                        />
+                      </div>
+
                       {/* Group Cards List */}
                       <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
                         {groups.map((grp, gIdx) => (
@@ -571,37 +676,41 @@ function CreateAssessmentTaskForm({
 
                             {/* Troopers Selection List */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 max-h-[160px] overflow-y-auto pr-1">
-                              {availableTroopers.map((trooper) => {
-                                const uId = trooper.userId || trooper.id || '';
-                                const isChecked = grp.userIds.includes(uId);
-                                const assignedOtherGrp = groups.find((g) => g.id !== grp.id && g.userIds.includes(uId));
+                              {filteredTroopers.length === 0 ? (
+                                <p className="text-xs text-zinc-400 p-2 col-span-2 text-center">Tidak ada troopers yang cocok.</p>
+                              ) : (
+                                filteredTroopers.map((trooper) => {
+                                  const uId = trooper.userId || trooper.id || '';
+                                  const isChecked = grp.userIds.includes(uId);
+                                  const assignedOtherGrp = groups.find((g) => g.id !== grp.id && g.userIds.includes(uId));
 
-                                return (
-                                  <label
-                                    key={uId}
-                                    className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                                      isChecked
-                                        ? 'border-purple-500 bg-purple-500/10 font-bold text-purple-900 dark:text-purple-200'
-                                        : assignedOtherGrp
-                                        ? 'border-zinc-200 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/40 text-zinc-400 opacity-60'
-                                        : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 hover:border-purple-300 text-zinc-700 dark:text-zinc-300'
-                                    }`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      onChange={() => handleToggleTrooperInGroup(grp.id, uId)}
-                                      className="accent-purple-600 rounded w-3.5 h-3.5"
-                                    />
-                                    <span className="truncate flex-1">{trooper.name}</span>
-                                    {assignedOtherGrp && !isChecked && (
-                                      <span className="text-[9px] text-zinc-400 bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 rounded-md">
-                                        {assignedOtherGrp.name}
-                                      </span>
-                                    )}
-                                  </label>
-                                );
-                              })}
+                                  return (
+                                    <label
+                                      key={uId}
+                                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                                        isChecked
+                                          ? 'border-purple-500 bg-purple-500/10 font-bold text-purple-900 dark:text-purple-200'
+                                          : assignedOtherGrp
+                                          ? 'border-zinc-200 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/40 text-zinc-400 opacity-60'
+                                          : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 hover:border-purple-300 text-zinc-700 dark:text-zinc-300'
+                                      }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={isChecked}
+                                        onChange={() => handleToggleTrooperInGroup(grp.id, uId)}
+                                        className="accent-purple-600 rounded w-3.5 h-3.5"
+                                      />
+                                      <span className="truncate flex-1">{trooper.name}</span>
+                                      {assignedOtherGrp && !isChecked && (
+                                        <span className="text-[9px] text-zinc-400 bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 rounded-md">
+                                          {assignedOtherGrp.name}
+                                        </span>
+                                      )}
+                                    </label>
+                                  );
+                                })
+                              )}
                             </div>
                           </div>
                         ))}
@@ -1275,20 +1384,135 @@ function EditAssessmentTaskModal({
   task,
   execType,
   workspaceId,
+  allWorkspaceMembers = [],
+  taskAssignments = [],
   onClose,
 }: {
   task: TaskRow;
   execType: string;
   workspaceId: string;
+  allWorkspaceMembers?: WorkspaceMemberSimple[];
+  taskAssignments?: AssignmentRow[];
   onClose: () => void;
 }) {
   const [description, setDescription] = useState(task.description ?? '');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const [selectedMentorIds, setSelectedMentorIds] = useState<string[]>(() => {
+    if (task.assigned_mentors) {
+      try {
+        const ids = JSON.parse(task.assigned_mentors);
+        if (Array.isArray(ids)) return ids;
+      } catch (_e) {}
+    }
+    return task.created_by ? [task.created_by] : [];
+  });
+
+  const [category, setCategory] = useState<'INDIVIDUAL' | 'GROUP'>(
+    (task.assessment_category as 'INDIVIDUAL' | 'GROUP') || 'INDIVIDUAL'
+  );
+
+  const [groups, setGroups] = useState<Array<{ id: string; name: string; userIds: string[] }>>(() => {
+    if (task.assessment_category === 'GROUP' && taskAssignments.length > 0) {
+      const groupMap: Record<string, string[]> = {};
+      taskAssignments.forEach((a) => {
+        const gName = a.group_name || 'Kelompok 1';
+        if (!groupMap[gName]) groupMap[gName] = [];
+        groupMap[gName].push(a.user_id);
+      });
+      return Object.entries(groupMap).map(([name, userIds], idx) => ({
+        id: `g_edit_${idx}_${Date.now()}`,
+        name,
+        userIds,
+      }));
+    }
+    return [
+      { id: 'g_1', name: 'Kelompok 1', userIds: [] },
+      { id: 'g_2', name: 'Kelompok 2', userIds: [] },
+    ];
+  });
+
+  const [mentorSearchTerm, setMentorSearchTerm] = useState('');
+  const [trooperSearchTerm, setTrooperSearchTerm] = useState('');
+
+  const mentorCandidates = allWorkspaceMembers.filter(isMentorUser);
+  const filteredMentors = mentorCandidates.filter(
+    (m) =>
+      m.name.toLowerCase().includes(mentorSearchTerm.toLowerCase()) ||
+      m.email.toLowerCase().includes(mentorSearchTerm.toLowerCase())
+  );
+
+  const availableTroopers = allWorkspaceMembers.filter((m) => !isMentorUser(m));
+  const filteredTroopers = availableTroopers.filter(
+    (t) =>
+      t.name.toLowerCase().includes(trooperSearchTerm.toLowerCase()) ||
+      t.email.toLowerCase().includes(trooperSearchTerm.toLowerCase())
+  );
+
+  const handleAddGroup = () => {
+    setGroups((prev) => [
+      ...prev,
+      { id: `g_${Date.now()}_${Math.random()}`, name: `Kelompok ${prev.length + 1}`, userIds: [] },
+    ]);
+  };
+
+  const handleRemoveGroup = (groupId: string) => {
+    if (groups.length <= 1) return;
+    setGroups((prev) => prev.filter((g) => g.id !== groupId));
+  };
+
+  const handleGroupNameChange = (groupId: string, name: string) => {
+    setGroups((prev) =>
+      prev.map((g) => (g.id === groupId ? { ...g, name } : g))
+    );
+  };
+
+  const handleToggleTrooperInGroup = (groupId: string, userId: string) => {
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (g.id === groupId) {
+          const exists = g.userIds.includes(userId);
+          return {
+            ...g,
+            userIds: exists ? g.userIds.filter((id) => id !== userId) : [...g.userIds, userId],
+          };
+        } else {
+          return { ...g, userIds: g.userIds.filter((id) => id !== userId) };
+        }
+      })
+    );
+  };
+
+  const handleAutoDistributeTroopers = () => {
+    if (availableTroopers.length === 0 || groups.length === 0) return;
+    const trooperIds = availableTroopers.map((t) => t.userId || t.id || '').filter(Boolean);
+    const updatedGroups = groups.map((g) => ({ ...g, userIds: [] as string[] }));
+
+    trooperIds.forEach((uId, idx) => {
+      const targetGrpIdx = idx % updatedGroups.length;
+      updatedGroups[targetGrpIdx].userIds.push(uId);
+    });
+
+    setGroups(updatedGroups);
+  };
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+
+    if (selectedMentorIds.length === 0) {
+      setError('Pilih minimal 1 Mentor yang bertugas menginput brief/instruksi pengerjaan.');
+      return;
+    }
+
+    if (category === 'GROUP') {
+      const emptyGroup = groups.find((g) => g.userIds.length === 0);
+      if (emptyGroup) {
+        setError(`Kelompok "${emptyGroup.name}" belum memiliki anggota. Pilih minimal 1 anggota per kelompok.`);
+        return;
+      }
+    }
 
     const fd = new FormData(e.currentTarget);
     startTransition(async () => {
@@ -1315,7 +1539,7 @@ function EditAssessmentTaskModal({
             </div>
             <div>
               <h3 className="text-base sm:text-lg font-black text-zinc-900 dark:text-zinc-100">Edit Assessment</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Perbarui rincian, tenggat waktu, atau jadwal mulai assessment.</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Perbarui rincian, mentor bertugas, tenggat waktu, atau kategori assessment.</p>
             </div>
           </div>
           <button
@@ -1336,6 +1560,7 @@ function EditAssessmentTaskModal({
               </p>
             )}
 
+            {/* Title */}
             <div>
               <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
                 Judul Assessment <span className="text-red-500">*</span>
@@ -1349,6 +1574,61 @@ function EditAssessmentTaskModal({
               />
             </div>
 
+            {/* Mentor Bertugas Input Brief */}
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                Mentor Bertugas Input Brief <span className="text-red-500">* (Bisa 1 atau lebih)</span>
+              </label>
+              <input type="hidden" name="assigned_mentors" value={JSON.stringify(selectedMentorIds)} />
+              
+              {/* Search Mentor */}
+              <div className="mb-2">
+                <input
+                  type="text"
+                  value={mentorSearchTerm}
+                  onChange={(e) => setMentorSearchTerm(e.target.value)}
+                  placeholder="🔍 Cari nama mentor..."
+                  className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-2 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[150px] overflow-y-auto p-2 border border-zinc-200 dark:border-zinc-800 rounded-xl bg-zinc-50/50 dark:bg-zinc-900/40">
+                {filteredMentors.length === 0 ? (
+                  <p className="text-xs text-zinc-400 p-2 col-span-2 text-center">
+                    {mentorCandidates.length === 0 ? 'Belum ada akun mentor di workspace.' : 'Tidak ada akun mentor yang cocok.'}
+                  </p>
+                ) : (
+                  filteredMentors.map((m) => {
+                    const uId = m.userId || m.id || '';
+                    const isChecked = selectedMentorIds.includes(uId);
+                    return (
+                      <label
+                        key={uId}
+                        className={`flex items-center gap-2 p-2 rounded-xl text-xs cursor-pointer border transition-all ${
+                          isChecked
+                            ? 'border-purple-500 bg-purple-500/10 font-bold text-purple-900 dark:text-purple-200'
+                            : 'border-zinc-200 dark:border-zinc-800/60 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 hover:border-purple-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            setSelectedMentorIds((prev) =>
+                              isChecked ? prev.filter((id) => id !== uId) : [...prev, uId]
+                            );
+                          }}
+                          className="accent-purple-600 rounded w-3.5 h-3.5"
+                        />
+                        <span className="truncate flex-1">{m.name}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Brief / Instruksi Pengerjaan */}
             <div>
               <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
                 Brief / Instruksi Pengerjaan
@@ -1358,10 +1638,11 @@ function EditAssessmentTaskModal({
                 value={description}
                 onChange={setDescription}
                 placeholder="Instruksi pengerjaan..."
-                minHeight="min-h-[240px]"
+                minHeight="min-h-[200px]"
               />
             </div>
 
+            {/* Start Date & Deadline */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
@@ -1388,6 +1669,159 @@ function EditAssessmentTaskModal({
               </div>
             </div>
 
+            {/* Kategori Assessment Mode */}
+            <div>
+              <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
+                Kategori Peserta Assessment <span className="text-red-500">*</span>
+              </label>
+              <input type="hidden" name="assessment_category" value={category} />
+              {category === 'GROUP' && (
+                <input type="hidden" name="group_data" value={JSON.stringify(groups.map((g) => ({ name: g.name, userIds: g.userIds })))} />
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                {[
+                  { value: 'INDIVIDUAL', icon: '👤', label: 'Individu', desc: 'Seluruh Troopers di-assign tugas ini secara mandiri' },
+                  { value: 'GROUP', icon: '👥', label: 'Kelompok', desc: 'Bagi Troopers menjadi beberapa kelompok kerja tim' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setCategory(opt.value as 'INDIVIDUAL' | 'GROUP')}
+                    className={`flex flex-col text-left gap-1 border rounded-2xl p-4 cursor-pointer transition-all ${
+                      category === opt.value
+                        ? 'border-purple-500 bg-purple-500/10 dark:bg-purple-500/15 ring-1 ring-purple-500'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 hover:border-purple-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-2xl">{opt.icon}</span>
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${category === opt.value ? 'border-purple-600 bg-purple-600' : 'border-zinc-300 dark:border-zinc-700'}`}>
+                        {category === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </div>
+                    <span className="text-xs font-black text-zinc-900 dark:text-zinc-100 mt-1">{opt.label}</span>
+                    <span className="text-[10px] text-zinc-400 leading-tight">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* If GROUP mode is selected */}
+              {category === 'GROUP' && (
+                <div className="space-y-4 border border-purple-500/20 bg-purple-500/5 dark:bg-purple-500/5 rounded-2xl p-4 sm:p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-purple-500/10 pb-3">
+                    <div>
+                      <h4 className="text-xs font-black text-purple-900 dark:text-purple-300 flex items-center gap-1.5">
+                        <span>👥</span> Custom Pembagian Kelompok
+                      </h4>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                        Tentukan jumlah kelompok & pilih anggota Troopers untuk setiap kelompok.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAutoDistributeTroopers}
+                        className="px-3 py-1.5 text-[11px] font-bold bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-300 rounded-xl transition-all border border-purple-500/20 flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>⚡</span> Acak / Bagi Rata
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddGroup}
+                        className="px-3 py-1.5 text-[11px] font-bold bg-purple-600 text-white hover:bg-purple-500 rounded-xl transition-all shadow-sm cursor-pointer"
+                      >
+                        + Tambah Kelompok
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Trooper Search Bar */}
+                  <div>
+                    <input
+                      type="text"
+                      value={trooperSearchTerm}
+                      onChange={(e) => setTrooperSearchTerm(e.target.value)}
+                      placeholder="🔍 Cari nama anggota troopers..."
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/10 text-xs font-medium rounded-xl px-3 py-2 focus:outline-none transition-all text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+
+                  {/* Group Cards List */}
+                  <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                    {groups.map((grp, gIdx) => (
+                      <div key={grp.id} className="border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-2xl p-3.5 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-1">
+                            <span className="text-xs font-black text-purple-500">#{gIdx + 1}</span>
+                            <input
+                              type="text"
+                              value={grp.name}
+                              onChange={(e) => handleGroupNameChange(grp.id, e.target.value)}
+                              placeholder={`Kelompok ${gIdx + 1}`}
+                              className="bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 font-bold text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-purple-500 text-zinc-900 dark:text-zinc-100 w-44 sm:w-56"
+                            />
+                            <span className="text-[10px] font-bold text-zinc-400">
+                              ({grp.userIds.length} Anggota)
+                            </span>
+                          </div>
+                          {groups.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveGroup(grp.id)}
+                              className="text-xs text-rose-500 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-500/10 transition-all cursor-pointer"
+                              title="Hapus Kelompok"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Troopers Selection List */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 max-h-[160px] overflow-y-auto pr-1">
+                          {filteredTroopers.length === 0 ? (
+                            <p className="text-xs text-zinc-400 p-2 col-span-2 text-center">Tidak ada troopers yang cocok.</p>
+                          ) : (
+                            filteredTroopers.map((trooper) => {
+                              const uId = trooper.userId || trooper.id || '';
+                              const isChecked = grp.userIds.includes(uId);
+                              const assignedOtherGrp = groups.find((g) => g.id !== grp.id && g.userIds.includes(uId));
+
+                              return (
+                                <label
+                                  key={uId}
+                                  className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                                    isChecked
+                                      ? 'border-purple-500 bg-purple-500/10 font-bold text-purple-900 dark:text-purple-200'
+                                      : assignedOtherGrp
+                                      ? 'border-zinc-200 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/40 text-zinc-400 opacity-60'
+                                      : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 hover:border-purple-300 text-zinc-700 dark:text-zinc-300'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => handleToggleTrooperInGroup(grp.id, uId)}
+                                    className="accent-purple-600 rounded w-3.5 h-3.5"
+                                  />
+                                  <span className="truncate flex-1">{trooper.name}</span>
+                                  {assignedOtherGrp && !isChecked && (
+                                    <span className="text-[9px] text-zinc-400 bg-zinc-200 dark:bg-zinc-700 px-1.5 py-0.5 rounded-md">
+                                      {assignedOtherGrp.name}
+                                    </span>
+                                  )}
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Tipe Eksekusi */}
             <div>
               <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">
                 Tipe Eksekusi / Kategori <span className="text-red-500">*</span>
@@ -1547,6 +1981,7 @@ function AddParticipantModal({
   onClose: () => void;
 }) {
   const [selectedUserId, setSelectedUserId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -1554,6 +1989,11 @@ function AddParticipantModal({
     const uId = m.userId || m.id;
     return uId && !existingAssignmentUserIds.includes(uId);
   });
+
+  const filteredAvailableMembers = availableMembers.filter((m) =>
+    m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    m.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handleAdd = () => {
     if (!selectedUserId) {
@@ -1591,13 +2031,22 @@ function AddParticipantModal({
             <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest">
               Pilih Peserta OJT / Anggota Workspace:
             </label>
+            <div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="🔍 Cari nama peserta..."
+                className="w-full mb-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
+              />
+            </div>
             <select
               value={selectedUserId}
               onChange={(e) => setSelectedUserId(e.target.value)}
               className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500"
             >
               <option value="">-- Pilih Peserta --</option>
-              {availableMembers.map((m) => {
+              {filteredAvailableMembers.map((m) => {
                 const uId = m.userId || m.id || '';
                 return (
                   <option key={uId} value={uId}>
@@ -1682,6 +2131,8 @@ function MentorTaskCard({
 
   const execType = assignments[0]?.assignment_role ?? 'DESIGNER';
   const execLabel = EXEC_TYPE_LABEL[execType] ?? execType;
+  const assignedMentorNames = getTaskAssignedMentorNames(task.assigned_mentors, task.creator_name, allWorkspaceMembers);
+  const isAssignedMentor = isAssignedMentorForTask(task, currentUserId, isCoordinator);
 
   // Authorization: Only the creator of the assessment task or Coordinator/Admin can Edit/Delete
   const canEditOrDelete = isCoordinator || (task.created_by != null && task.created_by === currentUserId);
@@ -1736,6 +2187,8 @@ function MentorTaskCard({
           task={task}
           execType={execType}
           workspaceId={workspaceId}
+          allWorkspaceMembers={allWorkspaceMembers}
+          taskAssignments={assignments}
           onClose={() => setShowEditModal(false)}
         />
       )}
@@ -1852,12 +2305,10 @@ function MentorTaskCard({
                   ⚡ {task.sparks_multiplier}x
                 </span>
               )}
-              {task.creator_name && (
-                <span className="text-[9px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1 max-w-full truncate" title="Mentor Pembuat Assessment">
-                  <span>🎓</span>
-                  <span className="truncate">Mentor: {task.creator_name}</span>
-                </span>
-              )}
+              <span className="text-[9px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1 max-w-full truncate" title={`Mentor Bertugas: ${assignedMentorNames}`}>
+                <span>🎓</span>
+                <span className="truncate">Mentor: {assignedMentorNames}</span>
+              </span>
               {task.status === 'BRIEF_PENDING' ? (
                 <span className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
                   <span>⏳</span>
@@ -2004,11 +2455,11 @@ function MentorTaskCard({
                       Brief & Instruksi Pengerjaan Belum Diisi
                     </p>
                     <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                      Task ini diinisiasi oleh Koordinator. Mentor yang bertugas perlu menginput brief & instruksi pengerjaan terlebih dahulu.
+                      Task ini diinisiasi oleh Koordinator. Mentor yang bertugas ({assignedMentorNames}) perlu menginput brief & instruksi pengerjaan terlebih dahulu.
                     </p>
                   </div>
                 </div>
-                {canManage && (
+                {isAssignedMentor ? (
                   <button
                     type="button"
                     onClick={() => setShowBriefInputModal(true)}
@@ -2016,6 +2467,10 @@ function MentorTaskCard({
                   >
                     ✍️ Input Brief & Instruksi
                   </button>
+                ) : (
+                  <span className="px-3 py-1.5 text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl border border-zinc-200 dark:border-zinc-700 shrink-0">
+                    🔒 Diisi oleh Mentor: {assignedMentorNames}
+                  </span>
                 )}
               </div>
             </div>
@@ -2029,7 +2484,7 @@ function MentorTaskCard({
                   <span>↩</span>
                   <span>Catatan Revisi Brief dari Koordinator</span>
                 </div>
-                {canManage && (
+                {isAssignedMentor ? (
                   <button
                     type="button"
                     onClick={() => setShowBriefInputModal(true)}
@@ -2038,6 +2493,10 @@ function MentorTaskCard({
                     <span>✏️</span>
                     <span>Perbaiki Brief & Ajukan Ulang</span>
                   </button>
+                ) : (
+                  <span className="px-3 py-1.5 text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-500 rounded-xl border border-zinc-200 dark:border-zinc-700 shrink-0">
+                    🔒 Revisi oleh Mentor: {assignedMentorNames}
+                  </span>
                 )}
               </div>
               <p className="text-xs text-red-700 dark:text-red-300 font-medium">
@@ -2270,17 +2729,20 @@ function OJTTaskCard({
   assignment,
   reactions = [],
   workspaceId,
+  allWorkspaceMembers = [],
   isTarget = false,
 }: {
   task: TaskRow;
   assignment: AssignmentRow;
   reactions?: ReactionItem[];
   workspaceId: string;
+  allWorkspaceMembers?: WorkspaceMemberSimple[];
   isTarget?: boolean;
 }) {
   const [isCardExpanded, setIsCardExpanded] = useState(isTarget);
   const [pending, startTransition] = useTransition();
   const execLabel = EXEC_TYPE_LABEL[assignment.assignment_role] ?? assignment.assignment_role;
+  const assignedMentorNames = getTaskAssignedMentorNames(task.assigned_mentors, task.creator_name, allWorkspaceMembers);
   const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline, task.extended_deadline);
   const statusBadge = meta.badgeClass;
   const statusLabel = meta.label;
@@ -2319,6 +2781,10 @@ function OJTTaskCard({
                 <span>Assessment Individu</span>
               </span>
             )}
+            <span className="text-[9px] font-black uppercase tracking-widest text-purple-700 dark:text-purple-300 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1 max-w-full truncate" title={`Mentor Bertugas: ${assignedMentorNames}`}>
+              <span>🎓</span>
+              <span className="truncate">Mentor: {assignedMentorNames}</span>
+            </span>
             {task.deadline && (
               <span className="text-[9px] font-black text-rose-600 dark:text-rose-400 bg-rose-500/8 border border-rose-500/15 px-2.5 py-1 rounded-xl flex items-center gap-1">
                 <span>⏰ Deadline:</span>
@@ -2557,6 +3023,7 @@ export function AssessmentPanel({
               assignment={myAssignment}
               reactions={reactionsMap?.[myAssignment.id] ?? []}
               workspaceId={workspaceId}
+              allWorkspaceMembers={allWorkspaceMembers}
               isTarget={isTarget}
             />
           );

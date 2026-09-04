@@ -264,11 +264,29 @@ export async function submitAssessmentBriefByMentor(
   }
 
   const task = await db
-    .prepare('SELECT title, status, created_by FROM tasks WHERE id = ? AND workspace_id = ?')
+    .prepare('SELECT title, status, created_by, assigned_mentors FROM tasks WHERE id = ? AND workspace_id = ?')
     .bind(taskId, workspaceId)
-    .first() as { title: string; status: string; created_by: string | null } | null;
+    .first() as { title: string; status: string; created_by: string | null; assigned_mentors: string | null } | null;
 
   if (!task) return { success: false, error: 'Task assessment tidak ditemukan.' };
+
+  if (!isCoordinator) {
+    let isAssigned = false;
+    if (task.assigned_mentors) {
+      try {
+        const ids: string[] = JSON.parse(task.assigned_mentors);
+        if (Array.isArray(ids) && ids.length > 0) {
+          isAssigned = ids.includes(session.userId);
+        }
+      } catch (_e) {}
+    } else {
+      isAssigned = task.created_by === session.userId;
+    }
+
+    if (!isAssigned) {
+      return { success: false, error: 'Hanya mentor yang ditugaskan pada task ini yang dapat menginput brief.' };
+    }
+  }
 
   try {
     await db
@@ -892,13 +910,25 @@ export async function updateAssessmentTask(taskId: string, workspaceId: string, 
     return { success: false, error: 'Hanya Mentor, Koordinator, atau Admin yang dapat mengedit assessment.' };
   }
 
-  const title = (formData.get('title') as string)?.trim();
-  const description = (formData.get('description') as string)?.trim() || null;
-  const execType = (formData.get('exec_type') as string) || 'DESIGNER';
-  const deadlineStr = formData.get('deadline') as string | null;
-  const startAtStr = (formData.get('start_at') as string) || (formData.get('startAt') as string);
+  const title              = (formData.get('title') as string)?.trim();
+  const description        = (formData.get('description') as string)?.trim() || null;
+  const execType           = (formData.get('exec_type') as string) || 'DESIGNER';
+  const assessmentCategory = (formData.get('assessment_category') as string) === 'GROUP' ? 'GROUP' : 'INDIVIDUAL';
+  const assignedMentorsRaw = formData.get('assigned_mentors') as string | null;
+  const deadlineStr        = formData.get('deadline') as string | null;
+  const startAtStr         = (formData.get('start_at') as string) || (formData.get('startAt') as string);
 
   if (!title) return { success: false, error: 'Judul assessment wajib diisi.' };
+
+  let assignedMentorIds: string[] = [];
+  if (assignedMentorsRaw) {
+    try {
+      assignedMentorIds = JSON.parse(assignedMentorsRaw);
+    } catch (_e) {
+      assignedMentorIds = assignedMentorsRaw.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+  }
+  const assignedMentorsJson = assignedMentorIds.length > 0 ? JSON.stringify(assignedMentorIds) : null;
 
   const deadline = parseIndonesiaDate(deadlineStr);
   const startAt  = parseIndonesiaDate(startAtStr);
@@ -923,10 +953,10 @@ export async function updateAssessmentTask(taskId: string, workspaceId: string, 
     await db
       .prepare(`
         UPDATE tasks
-        SET title = ?, description = ?, deadline = ?, start_at = ?, status = ?, revision_note = NULL
+        SET title = ?, description = ?, deadline = ?, start_at = ?, assigned_mentors = ?, assessment_category = ?, status = ?, revision_note = NULL
         WHERE id = ? AND workspace_id = ?
       `)
-      .bind(title, description, deadline, startAt, newStatus, taskId, workspaceId)
+      .bind(title, description, deadline, startAt, assignedMentorsJson, assessmentCategory, newStatus, taskId, workspaceId)
       .run();
 
     if (deadline) {
