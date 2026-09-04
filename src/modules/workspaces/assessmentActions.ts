@@ -196,10 +196,9 @@ export async function createAssessmentTask(workspaceId: string, formData: FormDa
     });
 
     // Async Web Push for assigned OJT members if published directly
-    if (isCoordinator && ojtMembers.length > 0) {
+    if (isCoordinator && assignedUserIds.length > 0) {
       try {
-        const assignedIds = ojtMembers.map((m) => m.user_id as string);
-        sendPushNotificationToUsers(assignedIds, 'TASK', {
+        sendPushNotificationToUsers(assignedUserIds, 'TASK', {
           title: `📝 Assessment Baru: ${title}`,
           body: description?.slice(0, 100) || `Assessment baru telah ditugaskan di workspace.`,
           url: `/dashboard/workspace/${workspaceId}`,
