@@ -1532,15 +1532,9 @@ function MentorSubmissionCard({
             return (
               <div className="space-y-2">
                 {badges}
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 italic">
-                    Menunggu ACC Mentor pembuat tugas.
-                  </p>
-                )}
-                {isMentorApproved && !isCoordinatorApproved && (
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 italic">
-                    Menunggu peninjauan & pemberian Sparks oleh Koordinator.
-                  </p>
-                )}
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 italic">
+                  Menunggu Penilaian oleh Mentor Bertugas.
+                </p>
               </div>
             );
           })()}
