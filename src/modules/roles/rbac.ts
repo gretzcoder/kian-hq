@@ -120,18 +120,8 @@ export async function hasPermission(
   userId: string,
   permissionName: string,
 ): Promise<boolean> {
-  const simRole = await getActiveSimulatedRole();
-  const userType = await getUserType(userId);
-
-  // OJT Interns cannot execute administrative/export functions
-  if (userType === 'OJT' && ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'EXPORT_DATA', 'MANAGE'].includes(permissionName)) {
-    return false;
-  }
-  const permissions = await getUserPermissions(userId);
-
-  // Superadmin wildcard check (disabled during simulation so admin experiences true role restrictions)
-  if (!simRole && (permissions.includes('ADMIN_SYSTEM') || permissions.includes('MANAGE'))) return true;
-  return permissions.includes(permissionName);
+  const ctx = await getSessionContext(userId);
+  return ctx.can(permissionName);
 }
 
 /**

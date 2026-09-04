@@ -1,5 +1,6 @@
 import { getDB } from '@/db/client';
 import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
+import { getCategoryMultipliers } from './settingsCache';
 
 export interface UserSparksSummary {
   userId: string;
@@ -29,17 +30,8 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
     await evaluateAndAutoAwardBadges(targetUserId);
   } catch (_e) {}
 
-  // 0. Fetch category multipliers
-  const { results: settingsRows } = await db
-    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-    .all();
-
-  let designMultiplier = 1.0;
-  let videoMultiplier = 1.0;
-  for (const row of (settingsRows || []) as any[]) {
-    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-  }
+  // 0. Fetch category multipliers from cache
+  const { designMultiplier, videoMultiplier } = await getCategoryMultipliers();
 
   // 1. Task Assignments
   const { results: taRows } = await db

@@ -5,6 +5,8 @@ import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { revalidatePath } from 'next/cache';
 
+import { getCategoryMultipliers, invalidateCategoryMultipliersCache } from './settingsCache';
+
 export interface SparksMultipliersState {
   designMultiplier: number;
   videoMultiplier: number;
@@ -30,18 +32,8 @@ async function canManageMultipliers(sessionUserId: string): Promise<boolean> {
 export async function getSparksMultipliersData(): Promise<SparksMultipliersState> {
   const db = await getDB();
 
-  // Fetch category multipliers from system_settings
-  const { results: settingsRows } = await db
-    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-    .all();
-
-  let designMultiplier = 1.0;
-  let videoMultiplier = 1.0;
-
-  for (const row of (settingsRows || []) as any[]) {
-    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-  }
+  // Fetch category multipliers from cache/system_settings
+  const { designMultiplier, videoMultiplier } = await getCategoryMultipliers();
 
   const nowMs = Date.now();
   const nowSec = Math.floor(nowMs / 1000);
@@ -128,6 +120,8 @@ export async function updateCategoryMultiplierAction(category: 'DESIGN' | 'VIDEO
     `)
     .bind(settingKey, String(validMult), session.userId, now)
     .run();
+
+  invalidateCategoryMultipliersCache();
 
   revalidatePath('/dashboard');
   revalidatePath('/dashboard/sparks');
