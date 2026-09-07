@@ -1,5 +1,12 @@
-import { redirect } from 'next/navigation';
+import React, { Suspense } from 'react';
+import { MessengerWorkspaceView } from './MessengerWorkspaceView';
+
+export const dynamic = 'force-dynamic';
 
 export default function MessengerPage() {
-  redirect('/dashboard/friends');
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-xs text-zinc-400 font-bold animate-pulse">Memuat Messenger...</div>}>
+      <MessengerWorkspaceView />
+    </Suspense>
+  );
 }

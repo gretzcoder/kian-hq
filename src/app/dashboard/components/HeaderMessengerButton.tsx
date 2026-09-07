@@ -71,7 +71,7 @@ export default function HeaderMessengerButton() {
     if (c.targetUrl) {
       router.push(c.targetUrl);
     } else {
-      openChat(c.partnerId, c.partnerName, c.partnerAvatar);
+      router.push(`/dashboard/messenger?chatUserId=${c.partnerId}`);
     }
   };
 
