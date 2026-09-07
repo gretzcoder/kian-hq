@@ -3,6 +3,7 @@ import { getDB } from '@/db/client';
 import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { getSessionContext, resolveWorkspacePermissions } from '@/modules/roles/rbac';
+import { getOrSetCache } from '@/lib/sharedCache';
 import WorkspaceStatusForm from './components/WorkspaceStatusForm';
 import TeamMemberPanel from './components/TeamMemberPanel';
 import CreateTaskForm from './components/CreateTaskForm';
@@ -141,28 +142,34 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       WHERE wm.workspace_id = ?
       ORDER BY wm.created_at ASC
     `).bind(wsId).all(),
-    db.prepare(`
-      SELECT u.id, u.name, u.email, u.user_type as userType,
-             GROUP_CONCAT(DISTINCT r.name) AS roleNames,
-             GROUP_CONCAT(DISTINCT r.id) AS roleIds
-      FROM users u
-      LEFT JOIN user_roles ur ON u.id = ur.user_id
-      LEFT JOIN roles r ON ur.role_id = r.id
-      WHERE u.status = 'ACTIVE'
-      GROUP BY u.id, u.name
-      ORDER BY u.name ASC
-    `).all(),
+    getOrSetCache('global:users:active-directory', async () => {
+      const db = await getDB();
+      return db.prepare(`
+        SELECT u.id, u.name, u.email, u.user_type as userType,
+               GROUP_CONCAT(DISTINCT r.name) AS roleNames,
+               GROUP_CONCAT(DISTINCT r.id) AS roleIds
+        FROM users u
+        LEFT JOIN user_roles ur ON u.id = ur.user_id
+        LEFT JOIN roles r ON ur.role_id = r.id
+        WHERE u.status = 'ACTIVE'
+        GROUP BY u.id, u.name
+        ORDER BY u.name ASC
+      `).all();
+    }, 120),
     getWorkspaceChats(wsId),
     getSessionContext(session.userId),
-    db.prepare(`
-      SELECT DISTINCT u.id, u.name, u.email
-      FROM users u
-      JOIN user_roles ur ON u.id = ur.user_id
-      JOIN roles r ON ur.role_id = r.id
-      WHERE u.status = 'ACTIVE'
-        AND (r.id = 'role_mentor_troopers' OR r.name = 'MENTOR TROOPERS')
-      ORDER BY u.name ASC
-    `).all(),
+    getOrSetCache('global:users:mentor-troopers', async () => {
+      const db = await getDB();
+      return db.prepare(`
+        SELECT DISTINCT u.id, u.name, u.email
+        FROM users u
+        JOIN user_roles ur ON u.id = ur.user_id
+        JOIN roles r ON ur.role_id = r.id
+        WHERE u.status = 'ACTIVE'
+          AND (r.id = 'role_mentor_troopers' OR r.name = 'MENTOR TROOPERS')
+        ORDER BY u.name ASC
+      `).all();
+    }, 120),
     db.prepare(`
       SELECT ur.user_id as userId, r.id as roleId, r.name as roleName
       FROM user_roles ur

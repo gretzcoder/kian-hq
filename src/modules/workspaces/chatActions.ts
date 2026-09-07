@@ -610,7 +610,7 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
          LEFT JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = wc.user_id
          WHERE wc.workspace_id = ?
          ORDER BY wc.created_at DESC
-         LIMIT 100`
+         LIMIT 50`
       )
       .bind(workspaceId)
       .all();
@@ -648,23 +648,28 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
       }
     } catch {}
 
-    try {
-      const readsRaw = await db
-        .prepare(
-          `SELECT wcr.chat_id, wcr.user_id, u.name AS user_name
-           FROM workspace_chat_reads wcr
-           LEFT JOIN users u ON wcr.user_id = u.id
-           WHERE wcr.chat_id IN (${placeholders})`
-        )
-        .bind(...msgIds)
-        .all();
-      for (const r of (readsRaw.results || []) as any[]) {
-        if (!readsMap.has(r.chat_id)) readsMap.set(r.chat_id, { count: 0, names: [] });
-        const entry = readsMap.get(r.chat_id)!;
-        entry.count += 1;
-        if (r.user_name && r.user_id !== session.userId) entry.names.push(r.user_name);
-      }
-    } catch {}
+    // Focus read receipts query on the active/recent message window (last 25 messages)
+    const readMsgIds = msgIds.slice(-25);
+    if (readMsgIds.length > 0) {
+      const readPlaceholders = readMsgIds.map(() => '?').join(',');
+      try {
+        const readsRaw = await db
+          .prepare(
+            `SELECT wcr.chat_id, wcr.user_id, u.name AS user_name
+             FROM workspace_chat_reads wcr
+             LEFT JOIN users u ON wcr.user_id = u.id
+             WHERE wcr.chat_id IN (${readPlaceholders})`
+          )
+          .bind(...readMsgIds)
+          .all();
+        for (const r of (readsRaw.results || []) as any[]) {
+          if (!readsMap.has(r.chat_id)) readsMap.set(r.chat_id, { count: 0, names: [] });
+          const entry = readsMap.get(r.chat_id)!;
+          entry.count += 1;
+          if (r.user_name && r.user_id !== session.userId) entry.names.push(r.user_name);
+        }
+      } catch {}
+    }
   }
 
   const now = Math.floor(Date.now() / 1000);

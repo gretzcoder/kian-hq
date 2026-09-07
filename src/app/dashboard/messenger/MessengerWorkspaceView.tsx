@@ -174,10 +174,10 @@ export function MessengerWorkspaceView() {
   // Fetch Active Messages in-place for Personal, Workspace, or Community
   const fetchActiveChat = async (targetId: string, category: 'PERSONAL' | 'WORKSPACE' | 'COMMUNITY' | 'REQUESTS') => {
     if (!targetId) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
 
     try {
       if (category === 'WORKSPACE') {
-        markWorkspaceChatsRead(targetId).catch(() => {});
         const wsChats = await getWorkspaceChats(targetId);
         if (wsChats && Array.isArray(wsChats)) {
           const mapped: DirectMessage[] = wsChats.map((r: any) => ({
@@ -207,7 +207,6 @@ export function MessengerWorkspaceView() {
       }
 
       if (category === 'COMMUNITY') {
-        markCommunityChannelReadAction(targetId).catch(() => {});
         const commMsgs = await getCommunityMessages(targetId);
         if (commMsgs && Array.isArray(commMsgs)) {
           const mapped: DirectMessage[] = commMsgs.map((r: any) => ({
@@ -259,9 +258,16 @@ export function MessengerWorkspaceView() {
   useEffect(() => {
     if (activePartnerId) {
       setLoadingMsg(true);
+      // Mark read when entering or switching conversations
+      if (activeCategory === 'WORKSPACE') markWorkspaceChatsRead(activePartnerId).catch(() => {});
+      if (activeCategory === 'COMMUNITY') markCommunityChannelReadAction(activePartnerId).catch(() => {});
+
       fetchActiveChat(activePartnerId, activeCategory).finally(() => setLoadingMsg(false));
 
-      const interval = setInterval(() => fetchActiveChat(activePartnerId, activeCategory), 8_000);
+      const interval = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        fetchActiveChat(activePartnerId, activeCategory);
+      }, 8_000);
       return () => clearInterval(interval);
     }
   }, [activePartnerId, activeCategory]);

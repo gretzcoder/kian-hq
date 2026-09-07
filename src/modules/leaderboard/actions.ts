@@ -594,17 +594,8 @@ export async function getSparksHistory(
 
   const now = Math.floor(Date.now() / 1000);
 
-  // Fetch category multipliers
-  const { results: settingsRows } = await db
-    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-    .all();
-
-  let designMultiplier = 1.0;
-  let videoMultiplier = 1.0;
-  for (const row of (settingsRows || []) as any[]) {
-    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-  }
+  // Fetch category multipliers from cache
+  const { designMultiplier, videoMultiplier } = await getCategoryMultipliers();
 
   const pStartTs = await getLeaderboardPeriodStartTimestamp(period);
   let timeClause = '';

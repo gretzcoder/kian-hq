@@ -4,6 +4,7 @@ import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { revalidatePath } from 'next/cache';
+import { getCategoryMultipliers } from './settingsCache';
 
 export interface UserSparksRankItem {
   rank: number;
@@ -63,17 +64,8 @@ export async function getSparksManagementOverview(
   const timeClauseT  = minTs > 0 ? `AND COALESCE(t.start_at, t.created_at) >= ${minTs}` : '';
   const timeClauseSA = minTs > 0 ? `AND sa.created_at >= ${minTs}` : '';
 
-  // 0. Fetch category multipliers
-  const { results: settingsRows } = await db
-    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-    .all();
-
-  let designMultiplier = 1.0;
-  let videoMultiplier = 1.0;
-  for (const row of (settingsRows || []) as any[]) {
-    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-  }
+  // 0. Fetch category multipliers from cache
+  const { designMultiplier, videoMultiplier } = await getCategoryMultipliers();
 
   // 1. Fetch task assignment sparks
   const { results: taRows } = await db.prepare(`

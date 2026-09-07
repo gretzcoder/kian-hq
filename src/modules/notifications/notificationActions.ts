@@ -3,6 +3,7 @@
 import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
+import { getCategoryMultipliers } from '@/modules/sparks/settingsCache';
 
 export interface WorkspaceNotifItem {
   wsId: string;
@@ -191,17 +192,8 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
 
   const feedItems: NotificationFeedItem[] = [];
 
-  // 0. Fetch category multipliers
-  const { results: settingsRows } = await db
-    .prepare("SELECT key, value FROM system_settings WHERE key IN ('category_multiplier_design', 'category_multiplier_video')")
-    .all();
-
-  let designMultiplier = 1.0;
-  let videoMultiplier = 1.0;
-  for (const row of (settingsRows || []) as any[]) {
-    if (row.key === 'category_multiplier_design') designMultiplier = Number(row.value) || 1.0;
-    if (row.key === 'category_multiplier_video') videoMultiplier = Number(row.value) || 1.0;
-  }
+  // 0. Fetch category multipliers from cache
+  const { designMultiplier, videoMultiplier } = await getCategoryMultipliers();
 
   // 1. Fetch user's task assignments & status events
   const { results: myAssignments } = await db
@@ -408,60 +400,42 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
 
   // Note: All chat notifications (Workspace, Community, Personal DMs) have been moved exclusively to Messenger Hub (HeaderMessengerButton).
 
-  // 6. Fetch reminder workflow events for this user (where user is target assignee of task_assignment or creator of task)
+  // 6. Fetch reminder workflow events for this user (optimized to scan workflow_events status index directly)
   try {
     const { results: reminderEvents } = await db
       .prepare(
-        `SELECT * FROM (
-           SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
-                  u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
-                  t.workspace_id AS wsId, ws.name AS wsName
-           FROM task_assignments ta
-           CROSS JOIN workflow_events we ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
-           JOIN tasks t ON ta.task_id = t.id
-           LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
-           LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-           WHERE ta.user_id = ?
-             AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
-             AND (we.triggered_by IS NULL OR we.triggered_by != ?)
-             AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-
-           UNION
-
-           SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
-                  u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
-                  t.workspace_id AS wsId, ws.name AS wsName
-           FROM tasks t
-           CROSS JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id)
-           LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
-           LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-           WHERE t.created_by = ? AND t.status != 'DELETED'
-             AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
-             AND (we.triggered_by IS NULL OR we.triggered_by != ?)
-             AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-
-           UNION
-
-           SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
-                  u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
-                  t.workspace_id AS wsId, ws.name AS wsName
-           FROM task_assignments ta
-           JOIN tasks t ON ta.task_id = t.id
-           CROSS JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id)
-           LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
-           LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-           WHERE ta.user_id = ?
-             AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
-             AND (we.triggered_by IS NULL OR we.triggered_by != ?)
-             AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-         )
-         ORDER BY created_at DESC
+        `SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
+                u_sender.name AS senderName,
+                COALESCE(t_direct.id, t_via_ta.id) AS taskId,
+                COALESCE(t_direct.title, t_via_ta.title) AS taskTitle,
+                COALESCE(t_direct.workspace_id, t_via_ta.workspace_id) AS wsId,
+                COALESCE(ws_direct.name, ws_via_ta.name) AS wsName
+         FROM workflow_events we
+         LEFT JOIN task_assignments ta ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
+         LEFT JOIN tasks t_via_ta ON ta.task_id = t_via_ta.id
+         LEFT JOIN workspaces ws_via_ta ON t_via_ta.workspace_id = ws_via_ta.id
+         LEFT JOIN tasks t_direct ON (we.entity_type = 'task' AND we.entity_id = t_direct.id)
+         LEFT JOIN workspaces ws_direct ON t_direct.workspace_id = ws_direct.id
+         LEFT JOIN task_assignments ta_direct ON (we.entity_type = 'task' AND we.entity_id = ta_direct.task_id AND ta_direct.user_id = ?)
+         LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+         WHERE (we.to_status = 'REMINDER_SENT' OR we.from_status = 'REMINDER_SENT')
+           AND (we.triggered_by IS NULL OR we.triggered_by != ?)
+           AND (
+             (ta.user_id = ? AND t_via_ta.status != 'DELETED' AND (ws_via_ta.id IS NULL OR ws_via_ta.deleted_at IS NULL))
+             OR
+             (t_direct.created_by = ? AND t_direct.status != 'DELETED' AND (ws_direct.id IS NULL OR ws_direct.deleted_at IS NULL))
+             OR
+             (ta_direct.user_id = ? AND t_direct.status != 'DELETED' AND (ws_direct.id IS NULL OR ws_direct.deleted_at IS NULL))
+           )
+         ORDER BY we.created_at DESC
          LIMIT 15`
       )
       .bind(
-        session.userId, session.userId,
-        session.userId, session.userId,
-        session.userId, session.userId
+        session.userId, // ta_direct.user_id
+        session.userId, // we.triggered_by != ?
+        session.userId, // ta.user_id = ?
+        session.userId, // t_direct.created_by = ?
+        session.userId  // ta_direct.user_id = ?
       )
       .all();
 
