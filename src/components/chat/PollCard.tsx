@@ -17,7 +17,8 @@ export interface PollData {
 
 export interface PollCardProps {
   poll: PollData;
-  currentUserId: string;
+  messageId?: string;
+  currentUserId?: string;
   onVote: (optionId: string) => void;
   isMe?: boolean;
 }
@@ -63,7 +64,7 @@ export function PollCard({ poll, currentUserId, onVote, isMe = false }: PollCard
         {poll.options.map((opt) => {
           const voteCount = opt.votes?.length || 0;
           const percentage = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
-          const hasVoted = opt.votes?.includes(currentUserId);
+          const hasVoted = Boolean(currentUserId && opt.votes?.includes(currentUserId));
 
           return (
             <button
