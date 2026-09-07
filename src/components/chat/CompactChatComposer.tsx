@@ -45,6 +45,7 @@ export function CompactChatComposer({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [sending, setSending] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Mention state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -95,8 +96,9 @@ export function CompactChatComposer({
   const handleFormSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = text.trim();
-    if ((!trimmed && !attachmentUrl) || sending || disabled) return;
+    if ((!trimmed && !attachmentUrl) || sending || disabled || isSubmittingRef.current) return;
 
+    isSubmittingRef.current = true;
     setSending(true);
     try {
       await onSend(trimmed, attachmentUrl.trim() || undefined);
@@ -113,6 +115,7 @@ export function CompactChatComposer({
       console.error(err);
     } finally {
       setSending(false);
+      isSubmittingRef.current = false;
     }
   };
 

@@ -116,9 +116,13 @@ function mergeAndDeduplicateMessages(
   currentUserId: string
 ): WorkspaceChatMessage[] {
   const map = new Map<string, WorkspaceChatMessage>();
+  const seenKeys = new Set<string>();
 
-  // Add server messages first (authoritative source)
+  // Add server messages first (authoritative source) with content-deduplication
   for (const msg of serverMsgs) {
+    const contentKey = `${msg.user_id}_${msg.message.trim()}_${Math.floor(msg.created_at / 4)}`;
+    if (seenKeys.has(contentKey)) continue;
+    seenKeys.add(contentKey);
     map.set(msg.id, msg);
   }
 
@@ -202,6 +206,16 @@ export function WorkspaceChatRoom({
       }
       return next;
     });
+  };
+
+  const handleVotePoll = async (msgId: string, optionId: string) => {
+    const res = await voteWorkspacePollAction(msgId, optionId, workspaceId);
+    if (res.success) {
+      const latest = await getWorkspaceChats(workspaceId);
+      if (latest && Array.isArray(latest)) {
+        setMessages((prev) => mergeAndDeduplicateMessages(latest, prev, currentUserId));
+      }
+    }
   };
 
   const [isPending, startTransition] = useTransition();
@@ -726,343 +740,57 @@ export function WorkspaceChatRoom({
               presenceStatus === 'online' ? 'bg-emerald-500' : presenceStatus === 'idle' ? 'bg-amber-500' : 'bg-zinc-400';
 
             return (
-              <motion.div
+              <CompactMessageBubble
                 key={msg.id}
-                id={`chat_msg_${msg.id}`}
-                initial={{ opacity: 0, y: 12, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
-                className={`group relative flex flex-col ${isMe ? 'items-end' : 'items-start'} ${
-                  isSameSender ? 'mt-1' : 'mt-3.5'
-                }`}
-              >
-                <div className="flex items-end gap-2 max-w-[88%] sm:max-w-[80%] group">
-                  {/* Multi-select Circular Checkbox */}
-                  {isSelectMode && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelectMsg(msg.id);
-                      }}
-                      className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all mb-2 shrink-0 ${
-                        selectedMsgIds.has(msg.id)
-                          ? 'bg-purple-600 border-purple-600 text-white scale-110'
-                          : 'border-zinc-300 dark:border-zinc-700 hover:border-purple-400 bg-white dark:bg-zinc-900'
-                      }`}
-                    >
-                      {selectedMsgIds.has(msg.id) && '✓'}
-                    </button>
-                  )}
-
-                  <div className="relative flex-1 min-w-0">
-                    {/* WhatsApp Web Chevron Down Action Menu Trigger (v) */}
-                    {!isSelectMode && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuMsgId((prev) => (prev === msg.id ? null : msg.id));
-                        }}
-                        className={`absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 ${
-                          isMe ? 'text-white/80 hover:text-white' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
-                        } cursor-pointer z-10`}
-                        title="Opsi Pesan"
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                    )}
-
-                    {/* Dropdown Menu Popover */}
-                    {openMenuMsgId === msg.id && (() => {
-                      const nowSec = Math.floor(Date.now() / 1000);
-                      const createdAtSec = msg.created_at < 10000000000 ? msg.created_at : Math.floor(msg.created_at / 1000);
-                      const isWithin15Min = nowSec - createdAtSec <= 15 * 60;
-                      const canEdit = isMe && isWithin15Min && (msg.edit_count || 0) < 5;
-                      const msgIdx = messages.findIndex((m) => m.id === msg.id);
-                      const isNearBottom = msgIdx >= messages.length - 3;
-                      const verticalPos = isNearBottom ? 'bottom-full mb-1' : 'top-8';
-
-                      return (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className={`absolute ${verticalPos} ${isMe ? 'right-0' : 'left-0'} z-[100] w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl py-1 text-xs animate-in zoom-in-95 duration-150`}
-                        >
-                          {/* Quick Reactions Strip */}
-                          <div className="px-2 py-1 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-around">
-                            {QUICK_EMOJIS.slice(0, 5).map((e) => (
-                              <button
-                                key={e}
-                                type="button"
-                                onClick={() => {
-                                  handleToggleReaction(msg.id, e);
-                                  setOpenMenuMsgId(null);
-                                }}
-                                className="hover:scale-125 transition-transform text-sm cursor-pointer p-0.5"
-                              >
-                                {e}
-                              </button>
-                            ))}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReplyingTo(msg);
-                              setOpenMenuMsgId(null);
-                            }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
-                          >
-                            <span>↩</span>
-                            <span>Balas Pesan</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              handleCopyText(msg.message);
-                              setOpenMenuMsgId(null);
-                            }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
-                          >
-                            <span>📋</span>
-                            <span>Salin Teks</span>
-                          </button>
-
-                          {canPinMessage && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleTogglePin(msg.id);
-                                setOpenMenuMsgId(null);
-                              }}
-                              className="w-full px-3 py-1.5 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400 cursor-pointer"
-                            >
-                              <span>📌</span>
-                              <span>{msg.is_pinned ? 'Unpin' : 'Pin Pesan'}</span>
-                            </button>
-                          )}
-
-                          {canEdit && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingMsg(msg);
-                                setEditText(msg.message);
-                                setOpenMenuMsgId(null);
-                              }}
-                              className="w-full px-3 py-1.5 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400 cursor-pointer"
-                            >
-                              <span>✏️</span>
-                              <span>Edit ({5 - (msg.edit_count || 0)}x tersisa)</span>
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsSelectMode(true);
-                              setSelectedMsgIds(new Set([msg.id]));
-                              setOpenMenuMsgId(null);
-                            }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-indigo-500/10 flex items-center gap-2 font-medium text-indigo-600 dark:text-indigo-400 cursor-pointer"
-                          >
-                            <span>☑️</span>
-                            <span>Pilih Pesan</span>
-                          </button>
-
-                          {(isMe || canDeleteAny) && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedMsgIds(new Set([msg.id]));
-                                setDeleteModalOpen(true);
-                                setOpenMenuMsgId(null);
-                              }}
-                              className="w-full px-3 py-1.5 text-left hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 font-medium text-red-600 dark:text-red-400 border-t border-zinc-100 dark:border-zinc-800 cursor-pointer"
-                            >
-                              <span>🗑️</span>
-                              <span>Hapus Pesan</span>
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
-
-                {/* Sender Info & Presence Status */}
-                {!isSameSender && (
-                  <div
-                    className={`flex items-center gap-2 mb-1 text-[10px] font-bold text-zinc-400 ${
-                      isMe ? 'flex-row-reverse' : 'flex-row'
-                    }`}
-                  >
-                    {/* User Avatar with Presence Dot */}
-                    <div className="relative shrink-0">
-                      <UserAvatar src={msg.user_avatar} name={msg.user_name} size="xs" />
-                      <span className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-white dark:border-zinc-900 ${presenceDot}`} />
-                    </div>
-
-                    <span className="font-extrabold text-zinc-700 dark:text-zinc-200">
-                      {isMe ? 'Anda' : msg.user_name}
-                    </span>
-
-                    {/* Role Pill */}
-                    {msg.user_role && (
-                      <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
-                        {msg.user_role}
-                      </span>
-                    )}
-
-                    {/* Natural Localized Timestamp */}
-                    <span className="font-mono text-[9px] text-zinc-400">
-                      {formatNaturalTimestamp(msg.created_at)}
-                    </span>
-
-                    {/* Pinned Badge Indicator */}
-                    {msg.is_pinned && (
-                      <span className="text-[9px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.2 rounded-md border border-amber-500/20 flex items-center gap-0.5">
-                        📌 Pinned
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                {/* ── Chat Bubble Container ── */}
-                {msg.is_sticker && msg.sticker_info ? (
-                  /* Dedicated Team Sticker Renderer */
-                  <div className="relative p-2 hover:scale-105 transition-transform">
-                    <div className="flex flex-col items-center p-3 bg-purple-500/10 border border-purple-500/20 rounded-3xl backdrop-blur-sm shadow-sm">
-                      <span className="text-5xl animate-bounce">{msg.sticker_info.emoji}</span>
-                      <span className="text-xs font-black text-purple-700 dark:text-purple-300 mt-1">
-                        {msg.sticker_info.name}
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  /* Standard Modern Text Bubble */
-                  <div
-                    className={`w-fit max-w-[85%] sm:max-w-[75%] rounded-3xl p-3.5 shadow-sm relative transition-all break-words ${
-                      isMe
-                        ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-tr-xs'
-                        : 'bg-zinc-100 dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 border border-zinc-200/60 dark:border-zinc-800/60 rounded-tl-xs'
-                    }`}
-                  >
-                    {/* Quoted Parent Reply Header */}
-                    {msg.parent_id && msg.reply_message && (
-                      <div
-                        onClick={() => {
-                          const el = document.getElementById(`chat_msg_${msg.parent_id}`);
-                          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }}
-                        className={`mb-2 p-2.5 rounded-2xl border text-xs cursor-pointer transition-all ${
-                          isMe
-                            ? 'bg-black/20 border-white/20 text-white/90 hover:bg-black/30'
-                            : 'bg-zinc-200/60 dark:bg-zinc-800/80 border-zinc-300/40 dark:border-zinc-700/40 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200'
-                        }`}
-                      >
-                        <p className="text-[9px] font-black uppercase tracking-wider text-purple-300 dark:text-purple-400 flex items-center gap-1">
-                          <span>↩ Membalas {msg.reply_user_name || 'Anggota Tim'}</span>
-                        </p>
-                        <p className="text-[11px] truncate italic mt-0.5">{msg.reply_message}</p>
-                      </div>
-                    )}
-
-                    {/* Message Text Content */}
-                    <div className="text-xs leading-relaxed break-words text-inherit font-medium">
-                      {parseRichMessageContent(msg.message, { isSelf: isMe, memberList: members })}
-                    </div>
-
-                    {/* Edited Indicator */}
-                    {msg.is_edited && (
-                      <span className="text-[8px] italic opacity-75 block mt-0.5 text-right">
-                        (diedit)
-                      </span>
-                    )}
-
-                    {/* Rich Submitted Link Previewer for Links inside Workspace Chat Message */}
-                    {(() => {
-                      const firstUrlMatch = msg.message.match(/(https?:\/\/[^\s<"']+)/i);
-                      if (firstUrlMatch && !isImageUrl(firstUrlMatch[1])) {
-                        return (
-                          <div className="mt-2.5">
-                            <SubmittedLinkPreviewer url={firstUrlMatch[1]} autoExpand={false} />
-                          </div>
-                        );
+                id={msg.id}
+                isMe={isMe}
+                showSenderHeader={!isSameSender}
+                senderName={isMe ? 'Anda' : msg.user_name || 'Anggota Tim'}
+                senderAvatar={msg.user_avatar}
+                senderRole={msg.user_role}
+                message={msg.message}
+                attachmentUrl={msg.attachment_url}
+                replyMessage={
+                  msg.reply_message
+                    ? {
+                        id: msg.parent_id || undefined,
+                        senderName: msg.reply_user_name || 'Anggota Tim',
+                        message: msg.reply_message,
                       }
-                      return null;
-                    })()}
-
-                    {/* Media & Attachment Preview */}
-                    {msg.attachment_url && (
-                      <div className="mt-2.5 rounded-2xl overflow-hidden border border-white/20 shadow-sm relative group/img">
-                        {msg.attachment_url.startsWith('voice:') || msg.attachment_url.startsWith('data:audio') || msg.attachment_url.includes('.mp3') || msg.attachment_url.includes('.webm') || msg.attachment_url.includes('.wav') ? (
-                          <audio
-                            controls
-                            src={msg.attachment_url.replace(/^voice:/, '')}
-                            className="w-full h-9 rounded-xl shadow-xs"
-                          />
-                        ) : (
-                          <a href={msg.attachment_url} target="_blank" rel="noreferrer" className="block relative group/zoom">
-                            <img
-                              src={msg.attachment_url}
-                              alt="Attachment"
-                              className="object-cover max-h-64 w-full rounded-2xl group-hover/zoom:scale-[1.01] transition-transform duration-200"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/zoom:opacity-100 transition-opacity p-3 flex items-end justify-between">
-                              <span className="text-white text-[11px] font-bold truncate">Klik untuk gambar penuh ↗</span>
-                              <span className="text-white text-xs">🔍</span>
-                            </div>
-                          </a>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Read Receipts Indicator (For Own Sent Messages) */}
-                    {isMe && (
-                      <div className="flex items-center justify-end gap-1 mt-1 text-[9px] font-bold text-white/80">
-                        {msg.read_count > 0 ? (
-                          <span
-                            className="text-cyan-300 font-mono tracking-tighter"
-                            title={`Dibaca oleh ${msg.read_count} anggota (${msg.read_by_names.join(', ')})`}
-                          >
-                            ✓✓
-                          </span>
-                        ) : (
-                          <span className="text-white/60 font-mono" title="Terkirim">
-                            ✓
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-
-                {/* Emoji Reactions Badges Bar */}
-                {msg.reactions && msg.reactions.length > 0 && (
-                  <div className={`flex items-center gap-1 flex-wrap mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    {msg.reactions.map((rx) => (
-                      <button
-                        key={rx.emoji}
-                        type="button"
-                        onClick={() => handleToggleReaction(msg.id, rx.emoji)}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 transition-all hover:scale-110 cursor-pointer ${
-                          rx.hasReacted
-                            ? 'bg-purple-500/20 text-purple-600 dark:text-purple-400 border-purple-500/40 shadow-xs'
-                            : 'bg-zinc-100 dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700/60'
-                        }`}
-                        title={`Bereaksi: ${rx.userNames.join(', ')}`}
-                      >
-                        <span>{rx.emoji}</span>
-                        <span>{rx.count}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
+                    : null
+                }
+                reactions={(msg.reactions || []).map((rx) => ({
+                  emoji: rx.emoji,
+                  count: rx.count,
+                  hasReacted: rx.hasReacted,
+                  userIds: rx.userNames || [],
+                }))}
+                status={msg.read_count > 0 ? 'READ' : 'SENT'}
+                createdAt={msg.created_at < 10000000000 ? msg.created_at * 1000 : msg.created_at}
+                isEdited={msg.is_edited}
+                isPinned={msg.is_pinned}
+                isSelectMode={isSelectMode}
+                isSelected={selectedMsgIds.has(msg.id)}
+                currentUserId={currentUserId}
+                onVotePoll={(msgId, optId) => handleVotePoll(msgId, optId)}
+                onToggleSelect={(id) => toggleSelectMsg(id)}
+                onToggleReaction={(id, emoji) => handleToggleReaction(id, emoji)}
+                onReply={() => setReplyingTo(msg)}
+                onCopy={(text) => navigator.clipboard.writeText(text)}
+                onEdit={() => {
+                  setEditingMsg(msg);
+                  setEditText(msg.message);
+                }}
+                onPin={() => handleTogglePin(msg.id)}
+                onDelete={() => {
+                  setSelectedMsgIds(new Set([msg.id]));
+                  setDeleteModalOpen(true);
+                }}
+                canEdit={isMe}
+                canPin={canPinMessage}
+                canDelete={canDeleteAny || isMe}
+                memberList={members}
+              />
             );
           })
         )}
@@ -1194,80 +922,34 @@ export function WorkspaceChatRoom({
         </form>
       )}
 
-      {/* ── Input Footer Form ── */}
-      {/* Chat Action Bar & Auto-resizing Text Input */}
-      <form onSubmit={handleSend} className="p-3 bg-zinc-50 dark:bg-zinc-950 border-t border-zinc-200 dark:border-zinc-800 flex items-end gap-2 shrink-0">
-        <div className="flex items-center gap-1.5 shrink-0 pb-0.5">
-          <button
-            type="button"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="h-10 w-10 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 flex items-center justify-center text-sm transition-all shrink-0 cursor-pointer shadow-xs active:scale-95"
-            title="Pilih Emoji"
-          >
-            😊
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsMenuModalOpen(true)}
-            className="h-10 px-3 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20 text-xs font-black flex items-center gap-1 transition-all shrink-0 cursor-pointer active:scale-95"
-            title="Tag Menu atau Sub-Menu Pintasan"
-          >
-            <span>📌</span>
-            <span className="hidden sm:inline">Tag Menu</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowPollModal(true)}
-            className="h-10 px-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 text-xs font-black flex items-center gap-1 transition-all shrink-0 cursor-pointer active:scale-95"
-            title="Buat Polling / Voting Tim"
-          >
-            <span>📊</span>
-            <span className="hidden sm:inline font-bold">Voting</span>
-          </button>
-        </div>
-
-        <div className="flex-1 relative">
-          <MenuHashtagAutocompletePopover
-            inputText={inputMessage}
-            onSelectTag={(formattedTag) => {
-              setInputMessage((prev) => prev.replace(/#([a-zA-Z0-9_\-\s>]*)$/, formattedTag + ' '));
-              if (inputRef.current) inputRef.current.focus();
-            }}
-          />
-          <textarea
-            ref={inputRef}
-            rows={1}
-            value={inputMessage}
-            onChange={handleInputChange}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                if (typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0 || window.matchMedia('(pointer: coarse)').matches || window.matchMedia('(max-width: 768px)').matches)) {
-                  return;
-                }
-                if (!e.shiftKey) {
-                  e.preventDefault();
-                  handleSend(e);
-                }
+      {/* ── Integrated Compact Chat Composer ── */}
+      <CompactChatComposer
+        onSend={async (text, attachmentUrl) => {
+          const res = await sendWorkspaceMessage(workspaceId, text, replyingTo?.id, attachmentUrl);
+          if (res.success) {
+            setReplyingTo(null);
+            const latest = await getWorkspaceChats(workspaceId);
+            if (latest && Array.isArray(latest)) {
+              setMessages((prev) => mergeAndDeduplicateMessages(latest, prev, currentUserId));
+            }
+          }
+        }}
+        onSendSticker={(stk) => handleSendSticker(stk as any)}
+        replyingTo={
+          replyingTo
+            ? {
+                id: replyingTo.id,
+                senderName: replyingTo.user_name || 'Anggota Tim',
+                message: replyingTo.message,
               }
-            }}
-            placeholder="Ketik pesan tim (ketik # untuk tag menu)..."
-            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl px-4 py-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-purple-500/50 focus:ring-1 focus:ring-purple-500/50 shadow-xs transition-all resize-none min-h-[40px] max-h-[180px] leading-relaxed overflow-y-auto scrollbar-thin"
-          />
-        </div>
-
-        <div className="shrink-0 pb-0.5">
-          <button
-            type="submit"
-            disabled={isPending || !inputMessage.trim()}
-            className="h-10 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-2xl shadow-md hover:scale-105 active:scale-95 transition-all disabled:opacity-40 shrink-0 flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>Kirim</span>
-            <span className="text-sm">🚀</span>
-          </button>
-        </div>
-      </form>
+            : null
+        }
+        onCancelReply={() => setReplyingTo(null)}
+        placeholder="Ketik pesan tim (ketik # untuk tag menu)..."
+        stickers={TEAM_STICKERS}
+        memberList={members}
+        onOpenPollModal={() => setShowPollModal(true)}
+      />
 
       {/* Menu Tag Picker Modal */}
       <MenuTagModal

@@ -73,6 +73,29 @@ function getDateDividerLabel(timestamp: number): string {
   }
 }
 
+function deduplicateDirectMessages(msgs: DirectMessage[]): DirectMessage[] {
+  const seenIds = new Set<string>();
+  const result: DirectMessage[] = [];
+
+  for (const m of msgs) {
+    if (seenIds.has(m.id)) continue;
+    seenIds.add(m.id);
+
+    const isDuplicateContent = result.some(
+      (existing) =>
+        existing.senderId === m.senderId &&
+        existing.message === m.message &&
+        Math.abs(existing.createdAt - m.createdAt) < 4000
+    );
+
+    if (!isDuplicateContent) {
+      result.push(m);
+    }
+  }
+
+  return result;
+}
+
 export function MessengerWorkspaceView() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -178,7 +201,7 @@ export function MessengerWorkspaceView() {
             editCount: r.edit_count,
             isPinned: r.is_pinned,
           }));
-          setMessages(mapped);
+          setMessages(deduplicateDirectMessages(mapped));
         }
         return;
       }
@@ -206,7 +229,7 @@ export function MessengerWorkspaceView() {
             createdAt: typeof r.created_at === 'number' ? r.created_at * 1000 : new Date(r.created_at).getTime(),
             isEdited: r.is_edited,
           }));
-          setMessages(mapped);
+          setMessages(deduplicateDirectMessages(mapped));
         }
         return;
       }
@@ -218,7 +241,7 @@ export function MessengerWorkspaceView() {
       ]);
 
       if (msgRes.success && msgRes.messages) {
-        setMessages(msgRes.messages);
+        setMessages(deduplicateDirectMessages(msgRes.messages));
         if (msgRes.partnerInfo) setPartnerInfo(msgRes.partnerInfo);
       }
       if (friendRes.success) {
