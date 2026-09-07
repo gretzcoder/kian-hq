@@ -8,17 +8,30 @@ import {
   sendDirectMessageAction,
   toggleDMReactionAction,
   acceptMessageRequestAction,
-  editDirectMessageAction,
-  deleteDirectMessagePOVAction,
   deleteConversationPOVAction,
+  voteDMPollAction,
+  markCommunityChannelReadAction,
   ConversationItem,
   DirectMessage,
 } from '@/modules/direct-messages/dmActions';
+import {
+  getWorkspaceChats,
+  sendWorkspaceMessage,
+  toggleWorkspaceChatReaction,
+  voteWorkspacePollAction,
+  markWorkspaceChatsRead,
+} from '@/modules/workspaces/chatActions';
+import {
+  getCommunityMessages,
+  sendCommunityMessage,
+  toggleCommunityReaction,
+} from '@/modules/community/communityActions';
 import { respondFriendRequestAction, getFriendshipStatusAction, FriendshipStatus } from '@/modules/friends/friendActions';
 import { ConversationList } from '@/components/chat/ConversationList';
 import { CompactMessageBubble } from '@/components/chat/CompactMessageBubble';
 import { CompactChatComposer, StickerOption } from '@/components/chat/CompactChatComposer';
 import { DateSeparatorDivider } from '@/components/chat/DateSeparatorDivider';
+import { CreatePollModal } from '@/components/chat/CreatePollModal';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { DeletePOVModal } from '@/components/DeletePOVModal';
 import { useFloatingMessenger } from '@/modules/direct-messages/components/FloatingMessengerContext';
@@ -68,6 +81,9 @@ export function MessengerWorkspaceView() {
 
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activePartnerId, setActivePartnerId] = useState<string | null>(paramPartnerId);
+  const [activeCategory, setActiveCategory] = useState<'PERSONAL' | 'WORKSPACE' | 'COMMUNITY' | 'REQUESTS'>('PERSONAL');
+  const [activeTargetUrl, setActiveTargetUrl] = useState<string | null>(null);
+
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [partnerInfo, setPartnerInfo] = useState<{
     id: string;
@@ -87,9 +103,11 @@ export function MessengerWorkspaceView() {
   const [mobileView, setMobileView] = useState<'LIST' | 'CHAT'>(paramPartnerId ? 'CHAT' : 'LIST');
   const [showRightSidebar, setShowRightSidebar] = useState(false);
 
+  // Poll modal state
+  const [showPollModal, setShowPollModal] = useState(false);
+
   // Actions & Selection state
   const [replyingTo, setReplyingTo] = useState<DirectMessage | null>(null);
-  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
 
@@ -107,9 +125,11 @@ export function MessengerWorkspaceView() {
       if (res.success && res.conversations) {
         setConversations(res.conversations);
         if (!activePartnerId && res.conversations.length > 0) {
-          const firstPersonal = res.conversations.find((c) => c.category === 'PERSONAL' || c.category === 'REQUESTS');
-          if (firstPersonal) {
-            setActivePartnerId(firstPersonal.partnerId);
+          const firstItem = res.conversations[0];
+          if (firstItem) {
+            setActivePartnerId(firstItem.partnerId);
+            setActiveCategory(firstItem.category);
+            setActiveTargetUrl(firstItem.targetUrl || null);
           }
         }
       }
@@ -120,13 +140,73 @@ export function MessengerWorkspaceView() {
     }
   };
 
-  // Fetch Active Messages
-  const fetchActiveChat = async (partnerId: string) => {
-    if (!partnerId) return;
+  // Fetch Active Messages in-place for Personal, Workspace, or Community
+  const fetchActiveChat = async (targetId: string, category: 'PERSONAL' | 'WORKSPACE' | 'COMMUNITY' | 'REQUESTS') => {
+    if (!targetId) return;
+
     try {
+      if (category === 'WORKSPACE') {
+        markWorkspaceChatsRead(targetId).catch(() => {});
+        const wsChats = await getWorkspaceChats(targetId);
+        if (wsChats && Array.isArray(wsChats)) {
+          const mapped: DirectMessage[] = wsChats.map((r: any) => ({
+            id: r.id,
+            senderId: r.user_id,
+            receiverId: targetId,
+            message: r.message,
+            attachmentUrl: r.attachment_url,
+            replyToId: r.parent_id,
+            replyMessage: r.reply_message ? { id: r.parent_id, senderName: r.reply_user_name || 'User', message: r.reply_message } : null,
+            reactions: (r.reactions || []).map((rx: any) => ({
+              emoji: rx.emoji,
+              count: rx.count,
+              hasReacted: rx.hasReacted,
+              userIds: rx.userNames || [],
+            })),
+            status: 'READ',
+            isRequest: false,
+            createdAt: r.created_at * 1000,
+            isEdited: r.is_edited,
+            editCount: r.edit_count,
+            isPinned: r.is_pinned,
+          }));
+          setMessages(mapped);
+        }
+        return;
+      }
+
+      if (category === 'COMMUNITY') {
+        markCommunityChannelReadAction(targetId).catch(() => {});
+        const commMsgs = await getCommunityMessages(targetId);
+        if (commMsgs && Array.isArray(commMsgs)) {
+          const mapped: DirectMessage[] = commMsgs.map((r: any) => ({
+            id: r.id,
+            senderId: r.user_id,
+            receiverId: targetId,
+            message: r.message,
+            attachmentUrl: r.attachment_url,
+            replyToId: r.parent_id,
+            replyMessage: r.reply_message ? { id: r.parent_id, senderName: r.reply_user_name || 'User', message: r.reply_message } : null,
+            reactions: (r.reactions || []).map((rx: any) => ({
+              emoji: rx.emoji,
+              count: rx.count,
+              hasReacted: rx.hasReacted,
+              userIds: rx.userNames || [],
+            })),
+            status: 'READ',
+            isRequest: false,
+            createdAt: typeof r.created_at === 'number' ? r.created_at * 1000 : new Date(r.created_at).getTime(),
+            isEdited: r.is_edited,
+          }));
+          setMessages(mapped);
+        }
+        return;
+      }
+
+      // PERSONAL DMs
       const [msgRes, friendRes] = await Promise.all([
-        getDirectMessagesAction(partnerId),
-        getFriendshipStatusAction(partnerId),
+        getDirectMessagesAction(targetId),
+        getFriendshipStatusAction(targetId),
       ]);
 
       if (msgRes.success && msgRes.messages) {
@@ -148,35 +228,59 @@ export function MessengerWorkspaceView() {
   useEffect(() => {
     if (activePartnerId) {
       setLoadingMsg(true);
-      fetchActiveChat(activePartnerId).finally(() => setLoadingMsg(false));
+      fetchActiveChat(activePartnerId, activeCategory).finally(() => setLoadingMsg(false));
 
-      const interval = setInterval(() => fetchActiveChat(activePartnerId), 10_000);
+      const interval = setInterval(() => fetchActiveChat(activePartnerId, activeCategory), 8_000);
       return () => clearInterval(interval);
     }
-  }, [activePartnerId]);
+  }, [activePartnerId, activeCategory]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
 
-  // Handle Selecting a Conversation
+  // Handle Selecting ANY Conversation in-place without redirecting!
   const handleSelectConversation = (conv: ConversationItem) => {
-    if (conv.category === 'WORKSPACE' && conv.targetUrl) {
-      router.push(conv.targetUrl);
-      return;
-    }
-    if (conv.category === 'COMMUNITY' && conv.targetUrl) {
-      router.push(conv.targetUrl);
-      return;
-    }
-
     setActivePartnerId(conv.partnerId);
+    setActiveCategory(conv.category);
+    setActiveTargetUrl(conv.targetUrl || null);
+    setPartnerInfo({
+      id: conv.partnerId,
+      name: conv.partnerName,
+      email: conv.partnerEmail,
+      avatarUrl: conv.partnerAvatar || null,
+      userType: conv.partnerUserType || null,
+      isFriend: Boolean(conv.isFriend),
+      isRequest: Boolean(conv.isRequest),
+    });
     setMobileView('CHAT');
   };
 
-  // Send DM
+  // Send Message (Handles Personal, Workspace, & Community seamlessly)
   const handleSend = async (text: string, attachmentUrl?: string) => {
     if (!activePartnerId) return;
+
+    if (activeCategory === 'WORKSPACE') {
+      const res = await sendWorkspaceMessage(activePartnerId, text, replyingTo?.id, attachmentUrl);
+      if (res.success) {
+        setReplyingTo(null);
+        fetchActiveChat(activePartnerId, 'WORKSPACE');
+        fetchInbox();
+      }
+      return;
+    }
+
+    if (activeCategory === 'COMMUNITY') {
+      const res = await sendCommunityMessage(activePartnerId, text, replyingTo?.id, attachmentUrl);
+      if (res.success) {
+        setReplyingTo(null);
+        fetchActiveChat(activePartnerId, 'COMMUNITY');
+        fetchInbox();
+      }
+      return;
+    }
+
+    // Personal DM
     const res = await sendDirectMessageAction({
       receiverId: activePartnerId,
       message: text,
@@ -192,8 +296,40 @@ export function MessengerWorkspaceView() {
     }
   };
 
+  // Vote on Poll
+  const handleVotePoll = async (msgId: string, optionId: string) => {
+    if (!activePartnerId) return;
+
+    if (activeCategory === 'WORKSPACE') {
+      const res = await voteWorkspacePollAction(msgId, optionId, activePartnerId);
+      if (res.success) {
+        fetchActiveChat(activePartnerId, 'WORKSPACE');
+      }
+      return;
+    }
+
+    const res = await voteDMPollAction(msgId, optionId);
+    if (res.success) {
+      fetchActiveChat(activePartnerId, activeCategory);
+    }
+  };
+
   // Toggle Reaction
   const handleToggleReaction = async (msgId: string, emoji: string) => {
+    if (!activePartnerId) return;
+
+    if (activeCategory === 'WORKSPACE') {
+      await toggleWorkspaceChatReaction(msgId, emoji, activePartnerId);
+      fetchActiveChat(activePartnerId, 'WORKSPACE');
+      return;
+    }
+
+    if (activeCategory === 'COMMUNITY') {
+      await toggleCommunityReaction(msgId, emoji);
+      fetchActiveChat(activePartnerId, 'COMMUNITY');
+      return;
+    }
+
     const res = await toggleDMReactionAction(msgId, emoji);
     if (res.success && res.reactions) {
       setMessages((prev) =>
@@ -207,7 +343,7 @@ export function MessengerWorkspaceView() {
     if (!activePartnerId) return;
     await acceptMessageRequestAction(activePartnerId);
     if (partnerInfo) setPartnerInfo({ ...partnerInfo, isRequest: false });
-    fetchActiveChat(activePartnerId);
+    fetchActiveChat(activePartnerId, activeCategory);
     fetchInbox();
   };
 
@@ -216,7 +352,7 @@ export function MessengerWorkspaceView() {
     if (!activePartnerId) return;
     await respondFriendRequestAction(activePartnerId, 'ACCEPT');
     setFriendshipStatus('FRIENDS');
-    fetchActiveChat(activePartnerId);
+    fetchActiveChat(activePartnerId, activeCategory);
   };
 
   // Delete POV Action
@@ -237,8 +373,8 @@ export function MessengerWorkspaceView() {
     }
   };
 
-  const activeConv = conversations.find((c) => c.partnerId === activePartnerId);
-  const activeName = partnerInfo?.name || activeConv?.partnerName || 'User';
+  const activeConv = conversations.find((c) => c.partnerId === activePartnerId || c.id === activePartnerId);
+  const activeName = partnerInfo?.name || activeConv?.partnerName || 'Chat Room';
   const activeAvatar = partnerInfo?.avatarUrl || activeConv?.partnerAvatar;
 
   return (
@@ -283,21 +419,30 @@ export function MessengerWorkspaceView() {
                 <div className="min-w-0">
                   <h3 className="text-xs sm:text-sm font-black text-zinc-900 dark:text-zinc-100 truncate flex items-center gap-2">
                     <span>{activeName}</span>
-                    {partnerInfo?.isFriend && (
-                      <span className="text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 shrink-0">
-                        Teman
-                      </span>
-                    )}
+                    <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20 shrink-0">
+                      {activeCategory}
+                    </span>
                   </h3>
                   <p className="text-[10px] text-zinc-400 truncate">
-                    {partnerInfo?.email || 'Personal Chat'}
+                    {partnerInfo?.email || 'Live Chat Stream'}
                   </p>
                 </div>
               </div>
 
               {/* Header Right Actions */}
               <div className="flex items-center gap-1 sm:gap-2">
-                {friendshipStatus === 'NONE' && (
+                {activeTargetUrl && (
+                  <button
+                    type="button"
+                    onClick={() => router.push(activeTargetUrl)}
+                    className="px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 font-bold text-xs rounded-xl border border-zinc-200 dark:border-zinc-700 transition-all cursor-pointer flex items-center gap-1"
+                    title="Buka Dashboard Workspace / Channel"
+                  >
+                    <span>⚡ Halaman Detail</span> ↗
+                  </button>
+                )}
+
+                {activeCategory === 'PERSONAL' && friendshipStatus === 'NONE' && (
                   <button
                     type="button"
                     onClick={handleFriendRequest}
@@ -316,7 +461,7 @@ export function MessengerWorkspaceView() {
                       ? 'bg-purple-600 border-purple-600 text-white'
                       : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300'
                   }`}
-                  title="Toggle Profil & Detail"
+                  title="Toggle Detail Room"
                 >
                   ℹ️
                 </button>
@@ -400,6 +545,7 @@ export function MessengerWorkspaceView() {
                           });
                         }}
                         onToggleReaction={handleToggleReaction}
+                        onVotePoll={handleVotePoll}
                         onReply={() => setReplyingTo(msg)}
                         onCopy={(text) => navigator.clipboard.writeText(text)}
                         onDelete={() => {
@@ -430,6 +576,7 @@ export function MessengerWorkspaceView() {
               onCancelReply={() => setReplyingTo(null)}
               placeholder={`Tulis pesan untuk ${activeName}...`}
               stickers={STICKERS}
+              onOpenPollModal={() => setShowPollModal(true)}
             />
           </>
         ) : (
@@ -437,7 +584,7 @@ export function MessengerWorkspaceView() {
             <span className="text-5xl opacity-40">💬</span>
             <p className="text-base font-bold text-zinc-700 dark:text-zinc-300">Pilih Percakapan</p>
             <p className="text-xs text-zinc-400 max-w-sm">
-              Pilihlah salah satu teman atau percakapan dari daftar inbox sebelah kiri untuk mulai mengobrol.
+              Pilihlah salah satu percakapan personal, workspace room, atau community channel dari inbox sebelah kiri.
             </p>
           </div>
         )}
@@ -448,7 +595,7 @@ export function MessengerWorkspaceView() {
         <div className="w-72 border-l border-zinc-200/90 dark:border-zinc-800/90 bg-white dark:bg-[#09090b] p-5 flex flex-col space-y-6 overflow-y-auto shrink-0 animate-in slide-in-from-right-5 duration-200">
           <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
             <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-widest">
-              Detail Percakapan
+              Detail Room
             </h4>
             <button
               type="button"
@@ -463,17 +610,24 @@ export function MessengerWorkspaceView() {
             <UserAvatar src={activeAvatar} name={activeName} size="xl" square className="mx-auto rounded-3xl ring-4 ring-purple-500/20 shadow-xl" />
             <div>
               <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">{activeName}</h3>
-              <p className="text-xs text-zinc-400">{partnerInfo?.email}</p>
+              <p className="text-xs text-zinc-400">{partnerInfo?.email || 'Live Chat Stream'}</p>
             </div>
-            {partnerInfo?.userType && (
-              <span className="inline-block px-3 py-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-[10px] uppercase tracking-wider rounded-full border border-purple-500/20">
-                {partnerInfo.userType}
-              </span>
-            )}
+            <span className="inline-block px-3 py-1 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-[10px] uppercase tracking-wider rounded-full border border-purple-500/20">
+              {activeCategory}
+            </span>
           </div>
 
           <div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-zinc-800">
             <h5 className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Aksi Cepat</h5>
+            {activeTargetUrl && (
+              <button
+                type="button"
+                onClick={() => router.push(activeTargetUrl)}
+                className="w-full p-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              >
+                <span>⚡</span> Halaman Detail Workspace
+              </button>
+            )}
             {activeConv && (
               <button
                 type="button"
@@ -486,6 +640,15 @@ export function MessengerWorkspaceView() {
           </div>
         </div>
       )}
+
+      {/* Create Poll Modal */}
+      <CreatePollModal
+        isOpen={showPollModal}
+        onClose={() => setShowPollModal(false)}
+        onCreatePoll={(pollPayload) => {
+          handleSend(pollPayload);
+        }}
+      />
 
       {/* Delete POV Modal */}
       <DeletePOVModal

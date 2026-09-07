@@ -20,6 +20,7 @@ import {
   updateUserTypingPresence,
   getWorkspacePresence,
   clearWorkspaceChats,
+  voteWorkspacePollAction,
   WorkspaceChatMessage,
   MemberPresenceInfo,
 } from '@/modules/workspaces/chatActions';
@@ -31,6 +32,7 @@ import { parseRichMessageContent } from '@/lib/menuTagging';
 import { CompactMessageBubble } from '@/components/chat/CompactMessageBubble';
 import { CompactChatComposer, StickerOption } from '@/components/chat/CompactChatComposer';
 import { DateSeparatorDivider } from '@/components/chat/DateSeparatorDivider';
+import { CreatePollModal } from '@/components/chat/CreatePollModal';
 import { MenuTagModal } from '@/components/MenuTagModal';
 import { MenuTagOption } from '@/modules/menu/menuTagActions';
 import { MenuHashtagAutocompletePopover } from '@/components/MenuHashtagAutocompletePopover';
@@ -173,6 +175,7 @@ export function WorkspaceChatRoom({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [isMenuModalOpen, setIsMenuModalOpen] = useState(false);
   const [showPinnedBanner, setShowPinnedBanner] = useState(false);
+  const [showPollModal, setShowPollModal] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   // Mention state
@@ -1213,6 +1216,16 @@ export function WorkspaceChatRoom({
             <span>📌</span>
             <span className="hidden sm:inline">Tag Menu</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setShowPollModal(true)}
+            className="h-10 px-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-500/20 text-xs font-black flex items-center gap-1 transition-all shrink-0 cursor-pointer active:scale-95"
+            title="Buat Polling / Voting Tim"
+          >
+            <span>📊</span>
+            <span className="hidden sm:inline font-bold">Voting</span>
+          </button>
         </div>
 
         <div className="flex-1 relative">
@@ -1352,6 +1365,14 @@ export function WorkspaceChatRoom({
           }
         }}
         submitting={submittingDelete}
+      />
+
+      <CreatePollModal
+        isOpen={showPollModal}
+        onClose={() => setShowPollModal(false)}
+        onCreatePoll={(pollPayload) => {
+          sendWorkspaceMessage(workspaceId, pollPayload);
+        }}
       />
     </div>
   );

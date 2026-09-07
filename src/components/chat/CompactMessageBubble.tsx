@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { parseRichMessageContent } from '@/lib/menuTagging';
+import { PollCard, parsePollPayload } from './PollCard';
 
 export interface ReactionItem {
   emoji: string;
@@ -34,6 +35,8 @@ export interface CompactMessageBubbleProps {
   isPinned?: boolean;
   isSelectMode?: boolean;
   isSelected?: boolean;
+  currentUserId?: string;
+  onVotePoll?: (msgId: string, optionId: string) => void;
   onToggleSelect?: (id: string) => void;
   onToggleReaction?: (id: string, emoji: string) => void;
   onReply?: (id: string) => void;
@@ -87,6 +90,8 @@ export function CompactMessageBubble({
   isPinned = false,
   isSelectMode = false,
   isSelected = false,
+  currentUserId,
+  onVotePoll,
   onToggleSelect,
   onToggleReaction,
   onReply,
@@ -222,16 +227,33 @@ export function CompactMessageBubble({
             )}
 
             {/* Direct Image Attachment */}
-            {attachmentUrl && (
-              <div className="mb-2 rounded-xl overflow-hidden border border-white/20">
-                <img src={attachmentUrl} alt="Attachment" className="max-h-60 w-full object-cover rounded-xl" />
-              </div>
-            )}
+            {/* Poll Card or Text Content */}
+            {(() => {
+              const pollData = parsePollPayload(message);
+              if (pollData) {
+                return (
+                  <PollCard
+                    poll={pollData}
+                    currentUserId={currentUserId || ''}
+                    onVote={(optionId) => onVotePoll?.(id, optionId)}
+                    isMe={isMe}
+                  />
+                );
+              }
 
-            {/* Main Text Content */}
-            <div className="whitespace-pre-wrap pr-3 text-[13px] sm:text-xs">
-              {parseRichMessageContent(message, { memberList, onSelectMember })}
-            </div>
+              return (
+                <>
+                  {attachmentUrl && (
+                    <div className="mb-2 rounded-xl overflow-hidden border border-white/20">
+                      <img src={attachmentUrl} alt="Attachment" className="max-h-60 w-full object-cover rounded-xl" />
+                    </div>
+                  )}
+                  <div className="whitespace-pre-wrap pr-3 text-[13px] sm:text-xs">
+                    {parseRichMessageContent(message, { memberList, onSelectMember })}
+                  </div>
+                </>
+              );
+            })()}
 
             {/* Compact Bottom Metadata: Timestamp & Status Ticks */}
             <div

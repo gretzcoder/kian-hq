@@ -25,6 +25,7 @@ export interface CompactChatComposerProps {
   stickers?: StickerOption[];
   memberList?: any[];
   disabled?: boolean;
+  onOpenPollModal?: () => void;
 }
 
 export function CompactChatComposer({
@@ -36,6 +37,7 @@ export function CompactChatComposer({
   stickers = [],
   memberList = [],
   disabled = false,
+  onOpenPollModal,
 }: CompactChatComposerProps) {
   const [text, setText] = useState('');
   const [attachmentUrl, setAttachmentUrl] = useState('');
@@ -293,6 +295,23 @@ export function CompactChatComposer({
               title="Pilih Stiker Ekspresi"
             >
               ✨
+            </button>
+          )}
+
+          {/* Poll Button */}
+          {onOpenPollModal && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenPollModal();
+                setShowEmojiPicker(false);
+                setShowStickerPicker(false);
+                setShowUrlModal(false);
+              }}
+              className="w-8 h-8 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 flex items-center justify-center text-sm transition-all cursor-pointer"
+              title="Buat Polling / Voting Tim"
+            >
+              📊
             </button>
           )}
 

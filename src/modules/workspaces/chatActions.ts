@@ -229,6 +229,58 @@ export async function editWorkspaceMessage(messageId: string, newMessage: string
 }
 
 /**
+ * Vote on a poll inside a workspace chat room.
+ */
+export async function voteWorkspacePollAction(chatId: string, optionId: string, workspaceId: string) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  try {
+    const row = (await db
+      .prepare('SELECT message FROM workspace_chats WHERE id = ?')
+      .bind(chatId)
+      .first()) as { message: string } | null;
+
+    if (!row || !row.message.startsWith('[poll_data:')) {
+      return { success: false, error: 'Poll tidak ditemukan.' };
+    }
+
+    const rawJson = row.message.slice(11, -1);
+    const poll = JSON.parse(rawJson);
+
+    // Toggle vote
+    poll.options = poll.options.map((opt: any) => {
+      const votes = opt.votes || [];
+      const hasVoted = votes.includes(session.userId);
+
+      if (opt.id === optionId) {
+        return {
+          ...opt,
+          votes: hasVoted ? votes.filter((id: string) => id !== session.userId) : [...votes, session.userId],
+        };
+      } else if (!poll.multipleAnswers) {
+        // Single choice poll: remove user vote from other options
+        return {
+          ...opt,
+          votes: votes.filter((id: string) => id !== session.userId),
+        };
+      }
+      return opt;
+    });
+
+    const updatedPayload = `[poll_data:${JSON.stringify(poll)}]`;
+    await db.prepare('UPDATE workspace_chats SET message = ? WHERE id = ?').bind(updatedPayload, chatId).run();
+
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    return { success: true, poll };
+  } catch (err: any) {
+    console.error('voteWorkspacePollAction error:', err);
+    return { success: false, error: 'Gagal melakukan voting.' };
+  }
+}
+
+/**
  * Delete a workspace chat message.
  */
 export async function deleteWorkspaceMessage(messageId: string, workspaceId: string) {

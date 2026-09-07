@@ -569,6 +569,56 @@ export async function toggleDMReactionAction(messageId: string, emoji: string): 
 }
 
 /**
+ * Vote on a poll inside direct messages
+ */
+export async function voteDMPollAction(messageId: string, optionId: string): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  try {
+    const row = (await db
+      .prepare('SELECT message FROM direct_messages WHERE id = ?')
+      .bind(messageId)
+      .first()) as { message: string } | null;
+
+    if (!row || !row.message.startsWith('[poll_data:')) {
+      return { success: false, error: 'Poll tidak ditemukan.' };
+    }
+
+    const rawJson = row.message.slice(11, -1);
+    const poll = JSON.parse(rawJson);
+
+    poll.options = poll.options.map((opt: any) => {
+      const votes = opt.votes || [];
+      const hasVoted = votes.includes(session.userId);
+
+      if (opt.id === optionId) {
+        return {
+          ...opt,
+          votes: hasVoted ? votes.filter((id: string) => id !== session.userId) : [...votes, session.userId],
+        };
+      } else if (!poll.multipleAnswers) {
+        return {
+          ...opt,
+          votes: votes.filter((id: string) => id !== session.userId),
+        };
+      }
+      return opt;
+    });
+
+    const updatedPayload = `[poll_data:${JSON.stringify(poll)}]`;
+    await db.prepare('UPDATE direct_messages SET message = ? WHERE id = ?').bind(updatedPayload, messageId).run();
+
+    revalidatePath('/dashboard');
+    return { success: true };
+  } catch (err) {
+    console.error('voteDMPollAction error:', err);
+    return { success: false, error: 'Gagal melakukan voting.' };
+  }
+}
+
+/**
  * Accept message request from partnerUserId (converts all pending requests to regular DMs)
  */
 export async function acceptMessageRequestAction(partnerUserId: string): Promise<{
