@@ -89,12 +89,13 @@ export default async function WorkspacePage() {
         WHERE (
             wm.workspace_id IS NOT NULL
             OR ws.ojt_coordinator_id = ?
+            OR EXISTS (SELECT 1 FROM workspace_mentors wment WHERE wment.workspace_id = ws.id AND wment.user_id = ?)
             OR EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = ws.project_id AND pc.user_id = ?)
             OR (? = 1 AND ws.workspace_type = 'ASSESSMENT')
           )
           AND ws.deleted_at IS NULL
         ORDER BY ws.created_at DESC
-      `).bind(session.userId, session.userId, session.userId, (hasMentorRole || ctx.userType === 'STAFF') ? 1 : 0).all();
+      `).bind(session.userId, session.userId, session.userId, session.userId, (hasMentorRole || ctx.userType === 'STAFF') ? 1 : 0).all();
     }),
     // 2. All active assignments for the current user
     getDB().then((db) => db.prepare(`

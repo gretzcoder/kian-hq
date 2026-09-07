@@ -119,6 +119,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
     { results: mentorsRaw },
     { results: memberAccountRolesRaw },
     projMentorCheck,
+    { results: workspaceMentorsRaw },
   ] = await Promise.all([
     db.prepare('SELECT id, name FROM projects WHERE id = ?').bind(projectId).first() as Promise<ProjectRow | null>,
     db.prepare("SELECT 1 FROM project_coordinators pc JOIN users u ON pc.user_id = u.id WHERE pc.project_id = ? AND u.user_type = 'OJT' LIMIT 1").bind(projectId).first(),
@@ -171,9 +172,18 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       )
     `).bind(wsId).all(),
     db.prepare('SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ? LIMIT 1').bind(projectId, session.userId).first(),
+    db.prepare(`
+      SELECT wm.user_id as userId, u.name as userName, u.email as userEmail
+      FROM workspace_mentors wm
+      JOIN users u ON wm.user_id = u.id
+      WHERE wm.workspace_id = ?
+    `).bind(wsId).all(),
   ]);
 
-  const isOjtWorkspace = ojtCheck !== null || workspace.ojt_coordinator_id !== null;
+  const assignedWorkspaceMentors = (workspaceMentorsRaw as any[]);
+  const isAssignedMentor = assignedWorkspaceMentors.some((m) => m.userId === session.userId);
+
+  const isOjtWorkspace = ojtCheck !== null || workspace.ojt_coordinator_id !== null || assignedWorkspaceMentors.length > 0;
   const users = usersRaw as unknown as UserRow[];
   const activeUsers = usersRaw as unknown as { id: string; name: string; email: string }[];
   const members = (membersRaw as any[]);
@@ -198,6 +208,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   const isDesignatedMentor =
     workspace.ojt_coordinator_id === session.userId ||
+    isAssignedMentor ||
     hasMentorRole ||
     isProjectCoordinator ||
     isTaskCreatorInWs;
@@ -377,7 +388,11 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
               </p>
             )}
             <div className="flex items-center gap-4 mt-3 text-[10px] text-zinc-500 dark:text-zinc-400 font-bold">
-              {workspace.mentor_name ? (
+              {assignedWorkspaceMentors.length > 0 ? (
+                <span className="text-purple-600 dark:text-purple-400 font-black">
+                  🎓 Mentor: {assignedWorkspaceMentors.map((m) => m.userName).join(', ')}
+                </span>
+              ) : workspace.mentor_name ? (
                 <span className="text-purple-600 dark:text-purple-400 font-black">🎓 Mentor: {workspace.mentor_name}</span>
               ) : workspace.creator_name ? (
                 <span>👤 Created by: {workspace.creator_name}</span>
@@ -395,6 +410,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
                 initialName={workspace.name}
                 initialDescription={workspace.description}
                 initialMentorId={workspace.ojt_coordinator_id}
+                initialMentorIds={assignedWorkspaceMentors.map((m) => m.userId)}
                 initialType={workspace.workspace_type as any}
                 mentors={mentors}
                 isAssessment={workspace.workspace_type === 'ASSESSMENT'}

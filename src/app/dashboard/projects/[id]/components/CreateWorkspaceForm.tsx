@@ -22,6 +22,9 @@ export default function CreateWorkspaceForm({
   const [error,         setError]         = useState<string | null>(null);
   const [success,       setSuccess]       = useState(false);
   const [wsType,        setWsType]        = useState<WorkspaceType>('TROOPERS');
+  const [selectedMentorIds, setSelectedMentorIds] = useState<string[]>(
+    mentors.length > 0 ? [mentors[0].id] : []
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -31,12 +34,16 @@ export default function CreateWorkspaceForm({
 
     const formData = new FormData(e.currentTarget);
     formData.set('workspace_type', wsType);
+    if (wsType === 'TROOPERS') {
+      selectedMentorIds.forEach((id) => formData.append('mentorIds', id));
+    }
 
     try {
       const res = await createWorkspace(projectId, formData);
       if (res.success) {
         (e.target as HTMLFormElement).reset();
         setWsType('TROOPERS');
+        if (mentors.length > 0) setSelectedMentorIds([mentors[0].id]);
         setSuccess(true);
         setTimeout(() => setSuccess(false), 4000);
       } else {
@@ -158,22 +165,74 @@ export default function CreateWorkspaceForm({
         />
       </div>
 
-      {/* Mentor select — only for TROOPERS */}
+      {/* Mentor multi-select — only for TROOPERS */}
       {wsType === 'TROOPERS' && mentors.length > 0 && (
         <div>
-          <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-            Mentor Workspace
-          </label>
-          <select
-            name="mentorId"
-            className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-3 focus:outline-none transition-all"
-          >
-            {mentors.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({m.email})
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+              <span>Mentor Workspace</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                {selectedMentorIds.length} Terpilih
+              </span>
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedMentorIds(mentors.map((m) => m.id))}
+                className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline"
+              >
+                Pilih Semua
+              </button>
+              <span className="text-zinc-300 dark:text-zinc-700 text-xs">•</span>
+              <button
+                type="button"
+                onClick={() => setSelectedMentorIds([])}
+                className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:underline"
+              >
+                Bersihkan
+              </button>
+            </div>
+          </div>
+
+          <div className="max-h-48 overflow-y-auto space-y-1.5 p-2 bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+            {mentors.map((m) => {
+              const isSelected = selectedMentorIds.includes(m.id);
+              return (
+                <label
+                  key={m.id}
+                  className={`flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all ${
+                    isSelected
+                      ? 'border-purple-500/50 bg-purple-500/10 text-purple-900 dark:text-purple-100 font-medium'
+                      : 'border-transparent hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {
+                        if (isSelected) {
+                          setSelectedMentorIds(selectedMentorIds.filter((id) => id !== m.id));
+                        } else {
+                          setSelectedMentorIds([...selectedMentorIds, m.id]);
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
+                    />
+                    <div className="truncate">
+                      <p className="text-xs font-bold truncate">{m.name}</p>
+                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{m.email}</p>
+                    </div>
+                  </div>
+                  {isSelected && (
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold shrink-0 ml-2">
+                      ✓ Mentor
+                    </span>
+                  )}
+                </label>
+              );
+            })}
+          </div>
         </div>
       )}
 

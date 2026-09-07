@@ -36,8 +36,14 @@ export async function createWorkspace(projectId: string, formData: FormData) {
 
   const name          = formData.get('name') as string;
   const description   = formData.get('description') as string;
-  const mentorId      = formData.get('mentorId') as string | null;
   const workspaceType = (formData.get('workspace_type') as string) || 'TROOPERS';
+
+  const rawMentorIds = [
+    ...formData.getAll('mentorIds'),
+    ...formData.getAll('mentorId'),
+  ].map((v) => String(v).trim()).filter(Boolean);
+  const mentorIds = Array.from(new Set(rawMentorIds));
+  const primaryMentorId = mentorIds[0] || session.userId;
 
   if (!name?.trim()) {
     return { success: false, error: 'Workspace name is required.' };
@@ -83,9 +89,9 @@ export async function createWorkspace(projectId: string, formData: FormData) {
       }
     } else if (workspaceType === 'MENTOR') {
       // ── Mentor Workspace ────────────────────────────────────────────────
-      // Directly under Coordinator control (ojt_coordinator_id = session.userId / mentorId).
+      // Directly under Coordinator control (ojt_coordinator_id = session.userId / primaryMentorId).
       // Automatically enroll ALL active mentors as MEMBER in workspace_members.
-      const ojtCoordinatorId = mentorId || session.userId;
+      const ojtCoordinatorId = primaryMentorId;
       await db
         .prepare(`
           INSERT INTO workspaces (id, project_id, name, description, status, created_by, ojt_coordinator_id, workspace_type, created_at)
@@ -113,13 +119,25 @@ export async function createWorkspace(projectId: string, formData: FormData) {
       }
     } else {
       // ── Standard / Troopers Workspace ────────────────────────────────────
-      const ojtCoordinatorId = mentorId || session.userId;
+      const ojtCoordinatorId = primaryMentorId;
       await db
         .prepare(`
           INSERT INTO workspaces (id, project_id, name, description, status, created_by, ojt_coordinator_id, workspace_type, created_at)
           VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, 'TROOPERS', strftime('%s', 'now'))
         `)
         .bind(workspaceId, projectId, name.trim(), description || null, session.userId, ojtCoordinatorId)
+        .run();
+    }
+
+    // Save assigned mentors to workspace_mentors & workspace_members junction tables
+    for (const mId of mentorIds) {
+      await db
+        .prepare('INSERT OR IGNORE INTO workspace_mentors (workspace_id, user_id, created_at) VALUES (?, ?, strftime(\'%s\', \'now\'))')
+        .bind(workspaceId, mId)
+        .run();
+      await db
+        .prepare('INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at) VALUES (?, ?, \'MEMBER\', strftime(\'%s\', \'now\'))')
+        .bind(workspaceId, mId)
         .run();
     }
 
@@ -183,7 +201,14 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
 
     if (!ws) return { success: false, error: 'Workspace not found.' };
 
-    const ojtCoordinatorId = formData.get('ojt_coordinator_id') as string;
+    const rawMentorIds = [
+      ...formData.getAll('mentorIds'),
+      ...formData.getAll('mentorId'),
+      formData.get('ojt_coordinator_id') as string,
+    ].map((v) => String(v).trim()).filter(Boolean);
+    const mentorIds = Array.from(new Set(rawMentorIds));
+    const primaryMentor = mentorIds[0] || null;
+
     const workspaceType = formData.get('workspace_type') as string;
     const newWsType = (['ASSESSMENT', 'TROOPERS', 'MENTOR'].includes(workspaceType)) ? workspaceType : ws.workspace_type;
 
@@ -191,8 +216,22 @@ export async function updateWorkspace(workspaceId: string, formData: FormData) {
       .prepare(`
         UPDATE workspaces SET name = ?, description = ?, ojt_coordinator_id = ?, workspace_type = ? WHERE id = ?
       `)
-      .bind(name.trim(), description || null, ojtCoordinatorId || null, newWsType, workspaceId)
+      .bind(name.trim(), description || null, primaryMentor, newWsType, workspaceId)
       .run();
+
+    if (formData.has('mentorIds') || formData.has('mentorId') || formData.has('ojt_coordinator_id')) {
+      await db.prepare('DELETE FROM workspace_mentors WHERE workspace_id = ?').bind(workspaceId).run();
+      for (const mId of mentorIds) {
+        await db
+          .prepare('INSERT OR IGNORE INTO workspace_mentors (workspace_id, user_id, created_at) VALUES (?, ?, strftime(\'%s\', \'now\'))')
+          .bind(workspaceId, mId)
+          .run();
+        await db
+          .prepare('INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at) VALUES (?, ?, \'MEMBER\', strftime(\'%s\', \'now\'))')
+          .bind(workspaceId, mId)
+          .run();
+      }
+    }
 
     if (newWsType === 'ASSESSMENT' && ws.workspace_type !== 'ASSESSMENT') {
       // Auto-enroll active OJT troopers if converting to ASSESSMENT workspace

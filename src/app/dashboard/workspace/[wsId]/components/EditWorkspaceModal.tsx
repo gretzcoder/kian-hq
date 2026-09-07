@@ -15,6 +15,7 @@ interface EditWorkspaceModalProps {
   initialName: string;
   initialDescription: string | null;
   initialMentorId: string | null;
+  initialMentorIds?: string[];
   initialType?: 'TROOPERS' | 'ASSESSMENT' | 'MENTOR';
   mentors: Mentor[];
   isAssessment: boolean;
@@ -25,6 +26,7 @@ export default function EditWorkspaceModal({
   initialName,
   initialDescription,
   initialMentorId,
+  initialMentorIds,
   initialType,
   mentors,
   isAssessment,
@@ -37,14 +39,26 @@ export default function EditWorkspaceModal({
   const defaultType = initialType ?? (isAssessment ? 'ASSESSMENT' : 'TROOPERS');
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription ?? '');
-  const [mentorId, setMentorId] = useState(initialMentorId ?? '');
+  const [selectedMentorIds, setSelectedMentorIds] = useState<string[]>(
+    initialMentorIds && initialMentorIds.length > 0
+      ? initialMentorIds
+      : initialMentorId
+      ? [initialMentorId]
+      : []
+  );
   const [wsType, setWsType] = useState<'TROOPERS' | 'ASSESSMENT' | 'MENTOR'>(defaultType);
 
   const handleOpen = () => {
     // Reset form to current values on every open
     setName(initialName);
     setDescription(initialDescription ?? '');
-    setMentorId(initialMentorId ?? '');
+    setSelectedMentorIds(
+      initialMentorIds && initialMentorIds.length > 0
+        ? initialMentorIds
+        : initialMentorId
+        ? [initialMentorId]
+        : []
+    );
     setWsType(initialType ?? (isAssessment ? 'ASSESSMENT' : 'TROOPERS'));
     setError(null);
     setIsOpen(true);
@@ -64,7 +78,12 @@ export default function EditWorkspaceModal({
       const formData = new FormData();
       formData.append('name', name.trim());
       formData.append('description', description.trim());
-      formData.append('ojt_coordinator_id', mentorId);
+      if (selectedMentorIds.length > 0) {
+        formData.append('ojt_coordinator_id', selectedMentorIds[0]);
+        selectedMentorIds.forEach((id) => formData.append('mentorIds', id));
+      } else {
+        formData.append('ojt_coordinator_id', '');
+      }
       formData.append('workspace_type', wsType);
 
       const res = await updateWorkspace(workspaceId, formData);
@@ -184,19 +203,68 @@ export default function EditWorkspaceModal({
               {/* Mentor — hanya untuk TROOPERS workspace */}
               {wsType === 'TROOPERS' && mentors.length > 0 && (
                 <div>
-                  <label className={labelCls}>Mentor Workspace</label>
-                  <select
-                    value={mentorId}
-                    onChange={(e) => setMentorId(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">— Tanpa Mentor —</option>
-                    {mentors.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name} ({m.email})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className={labelCls}>
+                      Mentor Workspace ({selectedMentorIds.length} terpilih)
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMentorIds(mentors.map((m) => m.id))}
+                        className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline"
+                      >
+                        Pilih Semua
+                      </button>
+                      <span className="text-zinc-300 dark:text-zinc-700 text-xs">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedMentorIds([])}
+                        className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 hover:underline"
+                      >
+                        Bersihkan
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 p-2 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                    {mentors.map((m) => {
+                      const isSelected = selectedMentorIds.includes(m.id);
+                      return (
+                        <label
+                          key={m.id}
+                          className={`flex items-center justify-between p-2 rounded-xl border cursor-pointer transition-all ${
+                            isSelected
+                              ? 'border-purple-500/50 bg-purple-500/10 text-purple-900 dark:text-purple-100 font-medium'
+                              : 'border-transparent hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                if (isSelected) {
+                                  setSelectedMentorIds(selectedMentorIds.filter((id) => id !== m.id));
+                                } else {
+                                  setSelectedMentorIds([...selectedMentorIds, m.id]);
+                                }
+                              }}
+                              className="w-4 h-4 rounded border-zinc-300 text-purple-600 focus:ring-purple-500 accent-purple-600"
+                            />
+                            <div className="truncate">
+                              <p className="text-xs font-bold truncate">{m.name}</p>
+                              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{m.email}</p>
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold shrink-0 ml-2">
+                              ✓ Mentor
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
