@@ -106,25 +106,25 @@ export function CompactMessageBubble({
   onSelectMember,
 }: CompactMessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false);
-
   const timeStr = formatTime(createdAt);
+  const pollData = parsePollPayload(message);
 
   return (
     <div
       id={`msg_${id}`}
       className={`group relative flex flex-col w-full select-none ${
         isMe ? 'items-end' : 'items-start'
-      } ${showSenderHeader ? 'mt-3.5' : 'mt-1'}`}
+      } ${showSenderHeader ? 'mt-3' : 'mt-0.5'}`}
     >
       {/* Optional Pinned Tag Banner */}
       {isPinned && (
-        <div className={`text-[9px] font-black uppercase text-amber-500 flex items-center gap-1 mb-0.5 ${isMe ? 'pr-2' : 'pl-2'}`}>
+        <div className={`text-[9px] font-black uppercase text-amber-400 flex items-center gap-1 mb-0.5 ${isMe ? 'pr-2' : 'pl-10'}`}>
           <span>📌 Tersemat</span>
         </div>
       )}
 
-      {/* Outer row wrapper */}
-      <div className="flex items-end gap-2 max-w-[92%] sm:max-w-[82%] group/row relative">
+      {/* Main Container Row */}
+      <div className="flex items-end gap-2 max-w-[90%] sm:max-w-[78%] group/row relative">
         {/* Multi-select Circular Checkbox */}
         {isSelectMode && (
           <button
@@ -136,42 +136,42 @@ export function CompactMessageBubble({
             className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all mb-1 shrink-0 ${
               isSelected
                 ? 'bg-purple-600 border-purple-600 text-white scale-110'
-                : 'border-zinc-300 dark:border-zinc-700 hover:border-purple-400 bg-white dark:bg-zinc-900'
+                : 'border-zinc-700 hover:border-purple-400 bg-zinc-900'
             }`}
           >
             {isSelected && '✓'}
           </button>
         )}
 
-        {/* Sender Avatar (Only shown on non-consecutive or non-self messages) */}
+        {/* Sender Avatar Column */}
         {!isMe && (
-          <div className="w-8 h-8 shrink-0 mb-0.5">
+          <div className="w-7 h-7 shrink-0 mb-0.5">
             {showSenderHeader ? (
               <UserAvatar
                 src={senderAvatar}
                 name={senderName}
                 size="sm"
-                square
-                className="w-8 h-8 rounded-xl shadow-xs"
+                square={false}
+                className="w-7 h-7 rounded-full ring-2 ring-purple-500/20 shadow-xs"
               />
             ) : (
-              <div className="w-8 h-8" />
+              <div className="w-7 h-7" />
             )}
           </div>
         )}
 
-        {/* Main Content Column */}
+        {/* Bubble & Details Column */}
         <div className="relative flex-1 min-w-0">
-          {/* Sender Header Name & Role Badge (Only shown if showSenderHeader = true and not isMe) */}
+          {/* Sender Name & Role Header */}
           {!isMe && showSenderHeader && (
             <div className="flex items-center gap-1.5 mb-1 px-1">
-              <span className="text-xs font-black text-zinc-900 dark:text-zinc-100 truncate">
+              <span className="text-[11px] font-bold text-zinc-300 truncate">
                 {senderName}
               </span>
               {senderRole && (
                 <span
-                  style={{ backgroundColor: senderColor ? `${senderColor}25` : undefined, color: senderColor || undefined }}
-                  className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded border border-purple-500/20 text-purple-400 bg-purple-500/10"
+                  style={{ backgroundColor: senderColor ? `${senderColor}20` : undefined, color: senderColor || undefined }}
+                  className="text-[8.5px] font-medium uppercase tracking-wider px-1.5 py-0.2 rounded-full border border-purple-500/20 text-purple-300 bg-purple-950/40"
                 >
                   {senderRole}
                 </span>
@@ -179,21 +179,21 @@ export function CompactMessageBubble({
             </div>
           )}
 
-          {/* Reply Quote Snippet */}
+          {/* Quoted Reply Snippet */}
           {replyMessage && (
             <div
-              className={`text-[10px] p-2 rounded-t-xl mb-0.5 border-l-2 max-w-full opacity-90 ${
+              className={`text-[10px] px-3 py-1.5 rounded-t-2xl mb-0.5 border-l-2 max-w-full opacity-90 backdrop-blur-md ${
                 isMe
-                  ? 'bg-purple-950/40 border-purple-400 text-purple-200'
-                  : 'bg-zinc-200/80 dark:bg-zinc-800/80 border-purple-500 text-zinc-600 dark:text-zinc-300'
+                  ? 'bg-purple-950/60 border-purple-400 text-purple-200'
+                  : 'bg-zinc-800/90 border-purple-500 text-zinc-300'
               }`}
             >
-              <p className="font-bold truncate text-[10px]">↩ {replyMessage.senderName}</p>
-              <p className="truncate line-clamp-1">{replyMessage.message}</p>
+              <p className="font-bold truncate text-[10px] text-purple-300">↩ {replyMessage.senderName}</p>
+              <p className="truncate line-clamp-1 opacity-80">{replyMessage.message}</p>
             </div>
           )}
 
-          {/* Bubble Box */}
+          {/* Main Bubble Box */}
           <div
             onClick={(e) => {
               if (isSelectMode) {
@@ -201,22 +201,28 @@ export function CompactMessageBubble({
                 onToggleSelect?.(id);
               }
             }}
-            className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-2xs relative transition-all group/bubble ${
-              isMe
-                ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 text-white rounded-br-xs'
-                : 'bg-white dark:bg-[#121215] text-zinc-900 dark:text-zinc-100 border border-zinc-200/90 dark:border-zinc-800/90 rounded-bl-xs'
-            } ${isSelected ? 'ring-2 ring-purple-500/80 ring-offset-1' : ''}`}
+            className={`px-3.5 py-2 text-xs leading-relaxed break-words relative transition-all group/bubble ${
+              pollData
+                ? 'p-0 bg-transparent border-0'
+                : isMe
+                ? `bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-700 text-white shadow-md ${
+                    showSenderHeader ? 'rounded-[18px] rounded-tr-xs' : 'rounded-[18px]'
+                  }`
+                : `bg-[#18181b] border border-zinc-800/90 text-zinc-100 ${
+                    showSenderHeader ? 'rounded-[18px] rounded-tl-xs' : 'rounded-[18px]'
+                  }`
+            } ${isSelected ? 'ring-2 ring-purple-500 ring-offset-2 ring-offset-zinc-950' : ''}`}
           >
-            {/* WhatsApp Web Style Dropdown Chevron Trigger (`v`) */}
-            {!isSelectMode && (
+            {/* Popover Chevron Action Menu Trigger */}
+            {!isSelectMode && !pollData && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowMenu((prev) => !prev);
                 }}
-                className={`absolute top-1.5 right-1.5 opacity-0 group-hover/bubble:opacity-100 transition-opacity p-1 rounded-full hover:bg-black/10 dark:hover:bg-white/10 ${
-                  isMe ? 'text-white/80 hover:text-white' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                className={`absolute top-1.5 right-1.5 opacity-0 group-hover/bubble:opacity-100 transition-opacity p-1 rounded-full hover:bg-black/20 ${
+                  isMe ? 'text-white/80 hover:text-white' : 'text-zinc-400 hover:text-zinc-200'
                 } cursor-pointer z-10`}
                 title="Opsi Pesan"
               >
@@ -226,64 +232,59 @@ export function CompactMessageBubble({
               </button>
             )}
 
-            {/* Direct Image Attachment */}
-            {/* Poll Card or Text Content */}
-            {(() => {
-              const pollData = parsePollPayload(message);
-              if (pollData) {
-                return (
-                  <PollCard
-                    poll={pollData}
-                    currentUserId={currentUserId || ''}
-                    onVote={(optionId) => onVotePoll?.(id, optionId)}
-                    isMe={isMe}
-                  />
-                );
-              }
-
-              return (
-                <>
-                  {attachmentUrl && (
-                    <div className="mb-2 rounded-xl overflow-hidden border border-white/20">
-                      <img src={attachmentUrl} alt="Attachment" className="max-h-60 w-full object-cover rounded-xl" />
-                    </div>
-                  )}
-                  <div className="whitespace-pre-wrap pr-3 text-[13px] sm:text-xs">
-                    {parseRichMessageContent(message, { memberList, onSelectMember })}
+            {/* Poll Card or Standard Message */}
+            {pollData ? (
+              <PollCard
+                poll={pollData}
+                currentUserId={currentUserId || ''}
+                onVote={(optionId) => onVotePoll?.(id, optionId)}
+                isMe={isMe}
+              />
+            ) : (
+              <>
+                {/* Image Attachment Preview */}
+                {attachmentUrl && (
+                  <div className="mb-1.5 rounded-xl overflow-hidden border border-white/10 max-w-xs">
+                    <img src={attachmentUrl} alt="Attachment" className="max-h-56 w-full object-cover rounded-xl" />
                   </div>
-                </>
-              );
-            })()}
+                )}
 
-            {/* Compact Bottom Metadata: Timestamp & Status Ticks */}
-            <div
-              className={`mt-1 flex items-center gap-1 text-[9.5px] ${
-                isMe ? 'justify-end text-purple-200/80' : 'justify-start text-zinc-400'
-              }`}
-            >
-              {isEdited && <span className="text-[8.5px] opacity-75 italic font-mono">(edited)</span>}
-              <span>{timeStr}</span>
-              {isMe && (
-                <span title={status === 'READ' ? 'Terbaca' : 'Terkirim'} className="font-bold ml-0.5">
-                  {status === 'READ' ? (
-                    <span className="text-cyan-300">✓✓</span>
-                  ) : (
-                    <span>✓</span>
+                {/* Parsed Message Content */}
+                <div className="whitespace-pre-wrap pr-3 text-[13px] sm:text-xs">
+                  {parseRichMessageContent(message, { memberList, onSelectMember })}
+                </div>
+
+                {/* Inline Compact Timestamp & Read Ticks */}
+                <div
+                  className={`mt-0.5 flex items-center gap-1 text-[9px] ${
+                    isMe ? 'justify-end text-purple-200/70' : 'justify-start text-zinc-400'
+                  }`}
+                >
+                  {isEdited && <span className="text-[8px] opacity-70 italic font-mono">(edited)</span>}
+                  <span>{timeStr}</span>
+                  {isMe && (
+                    <span title={status === 'READ' ? 'Terbaca' : 'Terkirim'} className="font-bold">
+                      {status === 'READ' ? (
+                        <span className="text-cyan-300">✓✓</span>
+                      ) : (
+                        <span>✓</span>
+                      )}
+                    </span>
                   )}
-                </span>
-              )}
-            </div>
+                </div>
+              </>
+            )}
 
-            {/* Popover Dropdown Action Menu */}
+            {/* Glass Dropdown Popover Action Menu */}
             {showMenu && (
               <div
                 onClick={(e) => e.stopPropagation()}
                 className={`absolute top-8 ${
                   isMe ? 'right-0' : 'left-0'
-                } z-[120] w-48 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl py-1 text-xs animate-in zoom-in-95 duration-150`}
+                } z-[120] w-48 bg-zinc-900/95 border border-zinc-800 rounded-2xl shadow-2xl backdrop-blur-xl py-1 text-xs animate-in zoom-in-95 duration-150`}
               >
-                {/* Quick Emoji Reactions Bar */}
-                <div className="px-2 py-1.5 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-around">
+                {/* Quick Reactions Bar */}
+                <div className="px-2 py-1.5 border-b border-zinc-800 flex items-center justify-around">
                   {COMMON_EMOJIS.slice(0, 5).map((emoji) => (
                     <button
                       key={emoji}
@@ -305,7 +306,7 @@ export function CompactMessageBubble({
                     onReply?.(id);
                     setShowMenu(false);
                   }}
-                  className="w-full px-3.5 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
+                  className="w-full px-3.5 py-2 text-left hover:bg-zinc-800/80 flex items-center gap-2 font-medium text-zinc-200 cursor-pointer"
                 >
                   <span>↩</span>
                   <span>Balas Pesan</span>
@@ -317,7 +318,7 @@ export function CompactMessageBubble({
                     onCopy?.(message);
                     setShowMenu(false);
                   }}
-                  className="w-full px-3.5 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
+                  className="w-full px-3.5 py-2 text-left hover:bg-zinc-800/80 flex items-center gap-2 font-medium text-zinc-200 cursor-pointer"
                 >
                   <span>📋</span>
                   <span>Salin Teks</span>
@@ -330,7 +331,7 @@ export function CompactMessageBubble({
                       onEdit?.(id);
                       setShowMenu(false);
                     }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400 cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-400 cursor-pointer"
                   >
                     <span>✏️</span>
                     <span>Edit Pesan</span>
@@ -344,7 +345,7 @@ export function CompactMessageBubble({
                       onPin?.(id);
                       setShowMenu(false);
                     }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400 cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-400 cursor-pointer"
                   >
                     <span>📌</span>
                     <span>{isPinned ? 'Lepas Sematan' : 'Sematkan Pesan'}</span>
@@ -357,7 +358,7 @@ export function CompactMessageBubble({
                     onToggleSelect?.(id);
                     setShowMenu(false);
                   }}
-                  className="w-full px-3.5 py-2 text-left hover:bg-indigo-500/10 flex items-center gap-2 font-medium text-indigo-600 dark:text-indigo-400 cursor-pointer"
+                  className="w-full px-3.5 py-2 text-left hover:bg-indigo-500/10 flex items-center gap-2 font-medium text-indigo-400 cursor-pointer"
                 >
                   <span>☑️</span>
                   <span>Pilih Pesan</span>
@@ -370,7 +371,7 @@ export function CompactMessageBubble({
                       onDelete?.(id);
                       setShowMenu(false);
                     }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 font-medium text-red-600 dark:text-red-400 border-t border-zinc-100 dark:border-zinc-800 cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left hover:bg-red-950/40 flex items-center gap-2 font-medium text-red-400 border-t border-zinc-800 cursor-pointer"
                   >
                     <span>🗑️</span>
                     <span>Hapus Pesan</span>
@@ -391,10 +392,10 @@ export function CompactMessageBubble({
                     key={r.emoji}
                     type="button"
                     onClick={() => onToggleReaction?.(id, r.emoji)}
-                    className={`px-2 py-0.5 rounded-full text-[10px] border flex items-center gap-1 transition-transform hover:scale-105 cursor-pointer ${
+                    className={`px-2 py-0.5 rounded-full text-[10px] border flex items-center gap-1 transition-transform hover:scale-105 cursor-pointer backdrop-blur-md ${
                       r.hasReacted
-                        ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 font-bold'
-                        : 'bg-zinc-200/60 dark:bg-zinc-800/80 border-zinc-300/60 dark:border-zinc-700/60 text-zinc-600 dark:text-zinc-300'
+                        ? 'bg-purple-500/20 border-purple-500/40 text-purple-300 font-bold'
+                        : 'bg-zinc-900/80 border-zinc-800 text-zinc-300'
                     }`}
                   >
                     <span>{r.emoji}</span>
