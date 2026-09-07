@@ -943,7 +943,7 @@ export function WorkspaceChatRoom({
                 ) : (
                   /* Standard Modern Text Bubble */
                   <div
-                    className={`max-w-[85%] sm:max-w-[75%] rounded-3xl p-3.5 shadow-sm relative transition-all ${
+                    className={`w-fit max-w-[85%] sm:max-w-[75%] rounded-3xl p-3.5 shadow-sm relative transition-all break-words ${
                       isMe
                         ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-tr-xs'
                         : 'bg-zinc-100 dark:bg-zinc-900/90 text-zinc-900 dark:text-zinc-100 border border-zinc-200/60 dark:border-zinc-800/60 rounded-tl-xs'

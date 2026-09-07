@@ -307,7 +307,7 @@ export function CompactMessageBubble({
         )}
 
         {/* Message Bubble Body */}
-        <div className="flex flex-col min-w-0 relative group/bubble">
+        <div className={`flex flex-col min-w-0 w-fit max-w-full relative group/bubble ${isMe ? 'items-end' : 'items-start'}`}>
           {/* Sender Header Name & Role */}
           {showSenderHeader && !isMe && (
             <div className="flex items-center gap-1.5 mb-1 pl-1 text-[11px] font-semibold tracking-wide">
@@ -333,7 +333,7 @@ export function CompactMessageBubble({
               e.preventDefault();
               setShowMenu(true);
             }}
-            className={`relative px-3.5 py-2 transition-all shadow-sm ${
+            className={`relative px-3 py-2 w-fit max-w-full transition-all shadow-sm break-words ${
               isMe
                 ? 'bg-gradient-to-br from-purple-600 via-indigo-600 to-purple-700 text-white rounded-[18px] rounded-tr-xs shadow-purple-950/20'
                 : 'bg-zinc-900/90 border border-zinc-800/90 text-zinc-100 rounded-[18px] rounded-tl-xs shadow-black/40'
@@ -371,7 +371,7 @@ export function CompactMessageBubble({
                 )}
 
                 {/* Parsed Message Content */}
-                <div className="whitespace-pre-wrap pr-3 text-[13px] sm:text-xs">
+                <div className="whitespace-pre-wrap text-[13px] sm:text-xs leading-relaxed break-words">
                   {parseRichMessageContent(message, { memberList, onSelectMember })}
                 </div>
 

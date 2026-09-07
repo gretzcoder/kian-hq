@@ -11,6 +11,7 @@ import {
   deleteConversationPOVAction,
   voteDMPollAction,
   markCommunityChannelReadAction,
+  getCurrentUserIdAction,
   ConversationItem,
   DirectMessage,
 } from '@/modules/direct-messages/dmActions';
@@ -78,6 +79,13 @@ export function MessengerWorkspaceView() {
   const paramPartnerId = searchParams.get('chatUserId') || searchParams.get('partnerId');
 
   const { refreshUnread } = useFloatingMessenger();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getCurrentUserIdAction().then((uid) => {
+      if (uid) setCurrentUserId(uid);
+    });
+  }, []);
 
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activePartnerId, setActivePartnerId] = useState<string | null>(paramPartnerId);
@@ -503,7 +511,11 @@ export function MessengerWorkspaceView() {
                 </div>
               ) : (
                 messages.map((msg, index) => {
-                  const isMe = msg.senderId !== activePartnerId;
+                  const isMe = currentUserId
+                    ? msg.senderId === currentUserId
+                    : activeCategory === 'PERSONAL'
+                    ? msg.senderId !== activePartnerId
+                    : false;
                   const prevMsg = index > 0 ? messages[index - 1] : null;
 
                   // Date Separator Divider Check
@@ -536,6 +548,7 @@ export function MessengerWorkspaceView() {
                         isEdited={msg.isEdited}
                         isSelectMode={isSelectMode}
                         isSelected={selectedMsgIds.has(msg.id)}
+                        currentUserId={currentUserId || undefined}
                         onToggleSelect={(id) => {
                           setSelectedMsgIds((prev) => {
                             const next = new Set(prev);

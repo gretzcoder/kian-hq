@@ -49,6 +49,14 @@ export interface ConversationItem {
 }
 
 /**
+ * Get current authenticated user ID for client components.
+ */
+export async function getCurrentUserIdAction(): Promise<string | null> {
+  const session = await getSession();
+  return session?.userId || null;
+}
+
+/**
  * Send a direct message to a user. If users are not friends yet, sets is_request = 1.
  */
 export async function sendDirectMessageAction(input: {
