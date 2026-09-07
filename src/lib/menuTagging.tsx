@@ -116,11 +116,11 @@ export function parseRichMessageContent(text: string, options: RenderOptions = {
           <Link
             key={index}
             href={path}
-            className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-lg text-xs font-black transition-all duration-200 active:scale-95 cursor-pointer shadow-xs border bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/25 hover:border-purple-500/50 hover:shadow-md align-baseline"
+            className="inline-flex items-center gap-1 font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer align-baseline"
             title={`Buka menu ${label}`}
           >
             <span className="text-xs">{icon}</span>
-            <span className="underline decoration-purple-400/50">{label}</span>
+            <span>{label}</span>
             <span className="text-[10px] opacity-75 font-mono">↗</span>
           </Link>
         );
@@ -137,18 +137,18 @@ export function parseRichMessageContent(text: string, options: RenderOptions = {
           <Link
             key={index}
             href={mapped.path}
-            className="inline-flex items-center gap-1 px-2 py-0.5 mx-0.5 rounded-lg text-xs font-black transition-all duration-200 active:scale-95 cursor-pointer shadow-xs border bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/25 hover:border-purple-500/50 hover:shadow-md align-baseline"
+            className="inline-flex items-center gap-1 font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer align-baseline"
             title={`Buka menu ${mapped.label}`}
           >
             <span className="text-xs">{mapped.icon}</span>
-            <span className="underline decoration-purple-400/50">{mapped.label}</span>
+            <span>{mapped.label}</span>
             <span className="text-[10px] opacity-75 font-mono">↗</span>
           </Link>
         );
       } else if (part.length > 1) {
         // Generic styled hashtag
         return (
-          <span key={index} className="inline-block px-1 py-0.2 mx-0.5 rounded font-extrabold text-xs bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+          <span key={index} className="font-semibold text-indigo-500 dark:text-indigo-400">
             {part}
           </span>
         );
@@ -187,11 +187,10 @@ export function parseRichMessageContent(text: string, options: RenderOptions = {
               }
             }
           }}
-          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded-md text-xs font-black transition-all active:scale-95 cursor-pointer bg-purple-500/15 text-purple-600 dark:text-purple-300 hover:bg-purple-500/25 hover:underline"
+          className="inline font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer align-baseline"
           title={`Lihat profil ${matchingMember ? matchingMember.name : part}`}
         >
-          <span>@</span>
-          <span>{matchingMember ? matchingMember.name.split(' ')[0] : part.substring(1)}</span>
+          <span>@{matchingMember ? matchingMember.name.split(' ')[0] : part.substring(1)}</span>
         </button>
       );
     }

@@ -28,6 +28,9 @@ import EmojiStickerPicker, { TEAM_STICKERS, TeamSticker } from './EmojiStickerPi
 import { SmartLinkMeta } from '@/modules/workspaces/smartLinkParser';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
 import { parseRichMessageContent } from '@/lib/menuTagging';
+import { CompactMessageBubble } from '@/components/chat/CompactMessageBubble';
+import { CompactChatComposer, StickerOption } from '@/components/chat/CompactChatComposer';
+import { DateSeparatorDivider } from '@/components/chat/DateSeparatorDivider';
 import { MenuTagModal } from '@/components/MenuTagModal';
 import { MenuTagOption } from '@/modules/menu/menuTagActions';
 import { MenuHashtagAutocompletePopover } from '@/components/MenuHashtagAutocompletePopover';
