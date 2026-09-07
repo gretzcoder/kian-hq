@@ -44,6 +44,12 @@ export interface WorkspaceTaskData {
   assignmentsByTask: Record<string, PollAssignmentRow[]>;
 }
 
+import { getOrSetCache, invalidateCache } from '@/lib/sharedCache';
+
+export async function invalidateWorkspaceTaskCache(wsId: string): Promise<void> {
+  await invalidateCache(`ws:${wsId}:tasks:v1`);
+}
+
 /**
  * Lightweight server action used by LiveTaskAccordion to poll
  * tasks + assignments for a workspace without a full page reload.
@@ -52,61 +58,68 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
   const session = await getSession();
   if (!session) return null;
 
-  const db = await getDB();
-  await syncAndRepairTaskStatuses(db, wsId);
   const ctx = await getSessionContext(session.userId);
-
-  const { results: tasksRaw } = await db
-    .prepare(
-      `SELECT id, title, description, status, priority, deadline, start_at, created_at, task_type, parent_task_id, revision_note, sparks, sparks_multiplier
-       FROM tasks
-       WHERE workspace_id = ? AND status != 'DELETED'
-       ORDER BY
-         CASE WHEN deadline IS NULL THEN 1 ELSE 0 END ASC,
-         deadline ASC,
-         created_at ASC`
-    )
-    .bind(wsId)
-    .all();
-
   const isMentorUser = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
   const isManagerUser = ctx.userType === 'STAFF' || isMentorUser || ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE');
+  const roleScope = isManagerUser ? 'manager' : 'member';
 
-  const now = Date.now();
-  const allTasks = ((tasksRaw as unknown as PollTaskRow[]) || []).filter((t) => t.status !== 'DELETED');
-  const tasks = isManagerUser
-    ? allTasks
-    : allTasks.filter((t) => {
-        if (t.start_at && t.start_at > now) return false;
-        if (t.task_type === 'ASSESSMENT') return t.status === 'APPROVED';
-        return true;
-      });
+  return getOrSetCache(
+    `ws:${wsId}:tasks:${roleScope}:v1`,
+    async () => {
+      const db = await getDB();
+      await syncAndRepairTaskStatuses(db, wsId);
 
-  if (tasks.length === 0) {
-    return { tasks: [], assignmentsByTask: {} };
-  }
+      const { results: tasksRaw } = await db
+        .prepare(
+          `SELECT id, title, description, status, priority, deadline, start_at, created_at, task_type, parent_task_id, revision_note, sparks, sparks_multiplier
+           FROM tasks
+           WHERE workspace_id = ? AND status != 'DELETED'
+           ORDER BY
+             CASE WHEN deadline IS NULL THEN 1 ELSE 0 END ASC,
+             deadline ASC,
+             created_at ASC`
+        )
+        .bind(wsId)
+        .all();
 
-  const { results: assignmentsRaw } = await db
-    .prepare(
-      `SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
-              ta.status, ta.result_url, ta.revision_note, ta.appreciation_note,
-              ta.submitted_at, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
-              ta.sparks, ta.deadline, u.name as user_name
-       FROM task_assignments ta
-       LEFT JOIN users u ON ta.user_id = u.id
-       WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
-       ORDER BY ta.created_at ASC`
-    )
-    .bind(...tasks.map((t) => t.id))
-    .all();
+      const now = Date.now();
+      const allTasks = ((tasksRaw as unknown as PollTaskRow[]) || []).filter((t) => t.status !== 'DELETED');
+      const tasks = isManagerUser
+        ? allTasks
+        : allTasks.filter((t) => {
+            if (t.start_at && t.start_at > now) return false;
+            if (t.task_type === 'ASSESSMENT') return t.status === 'APPROVED';
+            return true;
+          });
 
-  const assignments = (assignmentsRaw as unknown as PollAssignmentRow[]) || [];
+      if (tasks.length === 0) {
+        return { tasks: [], assignmentsByTask: {} };
+      }
 
-  const assignmentsByTask: Record<string, PollAssignmentRow[]> = {};
-  for (const a of assignments) {
-    if (!assignmentsByTask[a.task_id]) assignmentsByTask[a.task_id] = [];
-    assignmentsByTask[a.task_id].push(a);
-  }
+      const { results: assignmentsRaw } = await db
+        .prepare(
+          `SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role,
+                  ta.status, ta.result_url, ta.revision_note, ta.appreciation_note,
+                  ta.submitted_at, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
+                  ta.sparks, ta.deadline, u.name as user_name
+           FROM task_assignments ta
+           LEFT JOIN users u ON ta.user_id = u.id
+           WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
+           ORDER BY ta.created_at ASC`
+        )
+        .bind(...tasks.map((t) => t.id))
+        .all();
 
-  return { tasks, assignmentsByTask };
+      const assignments = (assignmentsRaw as unknown as PollAssignmentRow[]) || [];
+
+      const assignmentsByTask: Record<string, PollAssignmentRow[]> = {};
+      for (const a of assignments) {
+        if (!assignmentsByTask[a.task_id]) assignmentsByTask[a.task_id] = [];
+        assignmentsByTask[a.task_id].push(a);
+      }
+
+      return { tasks, assignmentsByTask };
+    },
+    15 // 15 seconds TTL for polling
+  );
 }

@@ -2,6 +2,7 @@ import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { createKBCategory, createKBItem } from '@/modules/knowledge-base/actions';
+import { getOrSetCache } from '@/lib/sharedCache';
 import DeleteCategoryButton from './components/DeleteCategoryButton';
 import DeleteItemButton from './components/DeleteItemButton';
 import Link from 'next/link';
@@ -75,33 +76,44 @@ export default async function KnowledgeBasePage({
   const ctx = await getSessionContext(session.userId);
   const canManage = ctx.can('KB_MANAGE');
 
-  // Fetch all categories with item count
-  const { results: rawCategories } = await db.prepare(`
-    SELECT
-      kc.*,
-      COUNT(ki.id) AS item_count
-    FROM knowledge_categories kc
-    LEFT JOIN knowledge_items ki ON ki.category_id = kc.id
-    GROUP BY kc.id
-    ORDER BY kc.sort_order ASC, kc.created_at ASC
-  `).all();
-
-  const categories = rawCategories as unknown as KBCategory[];
+  // Fetch all categories with item count (Global Shared Cache: 10 minutes TTL)
+  const categories = await getOrSetCache<KBCategory[]>(
+    'global:kb:categories:v1',
+    async () => {
+      const { results: rawCategories } = await db.prepare(`
+        SELECT
+          kc.*,
+          COUNT(ki.id) AS item_count
+        FROM knowledge_categories kc
+        LEFT JOIN knowledge_items ki ON ki.category_id = kc.id
+        GROUP BY kc.id
+        ORDER BY kc.sort_order ASC, kc.created_at ASC
+      `).all();
+      return (rawCategories || []) as unknown as KBCategory[];
+    },
+    600
+  );
 
   // Determine active category
   const activeCat = categories.find((c) => c.id === activeCatParam) ?? categories[0] ?? null;
 
-  // Fetch items for active category
+  // Fetch items for active category (Global Shared Cache per category: 10 minutes TTL)
   let items: KBItem[] = [];
   if (activeCat) {
-    const { results } = await db.prepare(`
-      SELECT ki.*, u.name AS created_by_name
-      FROM knowledge_items ki
-      LEFT JOIN users u ON ki.created_by = u.id
-      WHERE ki.category_id = ?
-      ORDER BY ki.sort_order ASC, ki.created_at ASC
-    `).bind(activeCat.id).all();
-    items = results as unknown as KBItem[];
+    items = await getOrSetCache<KBItem[]>(
+      `global:kb:items:cat_${activeCat.id}:v1`,
+      async () => {
+        const { results } = await db.prepare(`
+          SELECT ki.*, u.name AS created_by_name
+          FROM knowledge_items ki
+          LEFT JOIN users u ON ki.created_by = u.id
+          WHERE ki.category_id = ?
+          ORDER BY ki.sort_order ASC, ki.created_at ASC
+        `).bind(activeCat.id).all();
+        return (results || []) as unknown as KBItem[];
+      },
+      600
+    );
   }
 
   // Server actions

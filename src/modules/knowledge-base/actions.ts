@@ -4,6 +4,11 @@ import { getSession } from '@/modules/auth/session';
 import { checkPermission } from '@/modules/roles/rbac';
 import { getDB } from '@/db/client';
 import { revalidatePath } from 'next/cache';
+import { invalidateCachePrefix } from '@/lib/sharedCache';
+
+export async function invalidateKBCache() {
+  await invalidateCachePrefix('global:kb:');
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LEGACY: Keep old KB article creation for backwards-compatibility
@@ -28,6 +33,7 @@ export async function createKBArticle(formData: FormData) {
       .prepare('INSERT INTO knowledge_base (id, title, content, category, created_by) VALUES (?, ?, ?, ?, ?)')
       .bind(kbId, title, content, category || 'GENERAL', session.userId)
       .run();
+    await invalidateKBCache();
     revalidatePath('/dashboard/kb');
     return { success: true };
   } catch (error: any) {
@@ -58,6 +64,7 @@ export async function createKBCategory(formData: FormData) {
       .prepare('INSERT INTO knowledge_categories (id, name, description, icon, created_by) VALUES (?, ?, ?, ?, ?)')
       .bind(id, name, description, icon, session.userId)
       .run();
+    await invalidateKBCache();
     revalidatePath('/dashboard/kb');
     return { success: true, id };
   } catch (error: any) {
@@ -73,6 +80,7 @@ export async function deleteKBCategory(id: string) {
 
   const db = await getDB();
   await db.prepare('DELETE FROM knowledge_categories WHERE id = ?').bind(id).run();
+  await invalidateKBCache();
   revalidatePath('/dashboard/kb');
   return { success: true };
 }
@@ -103,6 +111,7 @@ export async function createKBItem(formData: FormData) {
       .prepare('INSERT INTO knowledge_items (id, category_id, title, url, description, created_by) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(id, categoryId, title, url, description, session.userId)
       .run();
+    await invalidateKBCache();
     revalidatePath('/dashboard/kb');
     return { success: true };
   } catch (error: any) {
@@ -118,6 +127,7 @@ export async function deleteKBItem(id: string) {
 
   const db = await getDB();
   await db.prepare('DELETE FROM knowledge_items WHERE id = ?').bind(id).run();
+  await invalidateKBCache();
   revalidatePath('/dashboard/kb');
   return { success: true };
 }

@@ -5,9 +5,11 @@ import { getSession } from '@/modules/auth/session';
 import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
 import { getUserStreakBadgeMapAction } from '@/modules/achievements/actions';
 import { getCategoryMultipliers } from '@/modules/sparks/settingsCache';
+import { getOrSetCache, invalidateCachePrefix } from '@/lib/sharedCache';
 
-const leaderboardCache = new Map<string, { data: any; ts: number }>();
-const LEADERBOARD_CACHE_TTL_MS = 60_000; // 60s memory SWR cache
+export async function invalidateLeaderboardCache() {
+  await invalidateCachePrefix('global:leaderboard:');
+}
 
 export interface LeaderboardUser {
   rank: number;
@@ -130,13 +132,13 @@ export async function getLeaderboardData(
 ) {
   const session = await getSession();
   const currentUserId = session?.userId || '';
-  const cacheKey = `${category}:${period}:${group}:${customDateRange ? `${customDateRange.startTs}-${customDateRange.endTs}` : ''}:${currentUserId}`;
-  const cached = leaderboardCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < LEADERBOARD_CACHE_TTL_MS) {
-    return cached.data;
-  }
+  const dateRangeKey = customDateRange ? `${customDateRange.startTs}-${customDateRange.endTs}` : '';
+  const cacheKey = `global:leaderboard:${category}:${period}:${group}:${dateRangeKey}:${currentUserId}`;
 
-  const db = await getDB();
+  return getOrSetCache(
+    cacheKey,
+    async () => {
+      const db = await getDB();
 
   let periodStartTs = 0;
   let periodEndTs = 0;
@@ -382,7 +384,6 @@ export async function getLeaderboardData(
     }));
 
     const resObj = { type: 'individual' as const, data: ranked };
-    leaderboardCache.set(cacheKey, { data: resObj, ts: Date.now() });
     return resObj;
   }
 
@@ -490,7 +491,6 @@ export async function getLeaderboardData(
       .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
     const resObj = { type: 'individual' as const, data: ranked };
-    leaderboardCache.set(cacheKey, { data: resObj, ts: Date.now() });
     return resObj;
   }
 
@@ -552,13 +552,14 @@ export async function getLeaderboardData(
       .map((ws, idx) => ({ ...ws, rank: idx + 1 }));
 
     const resObj = { type: 'workspace' as const, data: ranked };
-    leaderboardCache.set(cacheKey, { data: resObj, ts: Date.now() });
     return resObj;
   }
 
   const defaultObj = { type: 'individual' as const, data: [] };
-  leaderboardCache.set(cacheKey, { data: defaultObj, ts: Date.now() });
   return defaultObj;
+    },
+    60 // 60s TTL
+  );
 }
 
 export interface SparksHistoryItem {

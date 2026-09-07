@@ -8,6 +8,8 @@ import { validateTransition } from '@/modules/workflow/engine';
 import { logWorkflowEvent } from '@/modules/workflow/events';
 import { sendPushNotificationToUser, sendPushNotificationToUsers } from '@/modules/notifications/pushActions';
 import { parseIndonesiaDate } from '@/lib/dateUtils';
+import { invalidateWorkspaceTaskCache } from '@/modules/workspaces/taskPollActions';
+import { invalidateLeaderboardCache } from '@/modules/leaderboard/actions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -277,6 +279,9 @@ export async function createTask(workspaceId: string, formData: FormData) {
       console.error('Failed to trigger task Web Push:', pushErr);
     }
 
+    if (workspaceId) {
+      await invalidateWorkspaceTaskCache(workspaceId);
+    }
     revalidatePath(`/dashboard/workspace/${workspaceId}`);
     revalidatePath('/dashboard/workspace');
     return { success: true, taskId };
@@ -341,6 +346,7 @@ export async function assignCreatorToTask(
     });
 
     if (task.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -412,6 +418,7 @@ export async function assignMultipleCreatorsToTask(
     }
 
     if (task.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -459,6 +466,7 @@ export async function removeTaskAssignment(assignmentId: string) {
       .run();
 
     if (assignment.workspace_id) {
+      await invalidateWorkspaceTaskCache(assignment.workspace_id);
       revalidatePath(`/dashboard/workspace/${assignment.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -517,6 +525,7 @@ export async function startWork(assignmentId: string) {
     }
 
     if (task?.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -694,6 +703,7 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
     });
 
     if (task?.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -771,6 +781,7 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
       .run();
 
     if (task.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -968,8 +979,10 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     }
 
     if (task.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
+    await invalidateLeaderboardCache();
     revalidatePath('/dashboard/review');
     revalidatePath('/dashboard/workspace');
     return { success: true };
@@ -1034,8 +1047,10 @@ export async function updateSparks(assignmentId: string, sparks: number) {
       .run();
 
     if (workspaceId) {
+      await invalidateWorkspaceTaskCache(workspaceId);
       revalidatePath(`/dashboard/workspace/${workspaceId}`);
     }
+    await invalidateLeaderboardCache();
     revalidatePath('/dashboard/review');
     revalidatePath('/dashboard/workspace');
     revalidatePath('/dashboard/leaderboard');
@@ -1141,6 +1156,7 @@ export async function requestRevision(assignmentId: string, note: string) {
     }
 
     if (task?.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/review');
@@ -1221,6 +1237,7 @@ export async function updateTask(taskId: string, formData: FormData) {
       .run();
 
     if (task.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -1265,6 +1282,7 @@ export async function deleteTask(taskId: string) {
     await db.prepare('DELETE FROM tasks WHERE id = ?').bind(taskId).run();
 
     if (task.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -1372,6 +1390,7 @@ export async function declineAssignment(assignmentId: string, note: string) {
     });
 
     if (task?.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -1441,6 +1460,7 @@ export async function resetDeclinedAssignment(assignmentId: string) {
     });
 
     if (task?.workspace_id) {
+      await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
     revalidatePath('/dashboard/workspace');
@@ -1898,6 +1918,7 @@ export async function extendTaskDeadline(
 
     const targetWsId = workspaceId || task.workspace_id;
     if (targetWsId) {
+      await invalidateWorkspaceTaskCache(targetWsId);
       revalidatePath(`/dashboard/workspace/${targetWsId}`);
     }
     revalidatePath('/dashboard/review');
