@@ -396,109 +396,175 @@ export function CompactMessageBubble({
               </>
             )}
 
+            {/* Desktop Hover Quick Action Bar */}
+            <div
+              className={`absolute -top-3.5 ${
+                isMe ? 'left-1' : 'right-1'
+              } z-20 hidden sm:flex items-center gap-0.5 bg-zinc-900/90 dark:bg-zinc-800/95 border border-zinc-700/70 dark:border-zinc-700 rounded-full px-1.5 py-0.5 shadow-lg backdrop-blur-md opacity-0 group-hover/bubble:opacity-100 transition-all duration-150`}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleReaction?.(id, '❤️');
+                }}
+                className="p-1 hover:scale-125 transition-transform text-xs text-zinc-300 hover:text-red-400 cursor-pointer"
+                title="Suka (❤️)"
+              >
+                ❤️
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleReaction?.(id, '👍');
+                }}
+                className="p-1 hover:scale-125 transition-transform text-xs text-zinc-300 hover:text-amber-400 cursor-pointer"
+                title="Setuju (👍)"
+              >
+                👍
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReply?.(id);
+                }}
+                className="p-1 hover:bg-white/10 rounded-full text-zinc-300 hover:text-purple-400 transition-colors cursor-pointer text-xs"
+                title="Balas Pesan"
+              >
+                ↩
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu((prev) => !prev);
+                }}
+                className="p-1 hover:bg-white/10 rounded-full text-zinc-300 hover:text-white transition-colors cursor-pointer text-xs"
+                title="Opsi Lainnya"
+              >
+                •••
+              </button>
+            </div>
+
             {/* Glass Dropdown Popover Action Menu (Desktop / Context Menu) */}
             {showMenu && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className={`absolute top-8 ${
-                  isMe ? 'right-0' : 'left-0'
-                } z-[120] w-48 bg-zinc-900/95 border border-zinc-800 rounded-2xl shadow-2xl backdrop-blur-xl py-1 text-xs animate-in zoom-in-95 duration-150`}
-              >
-                {/* Quick Reactions Bar */}
-                <div className="px-2 py-1.5 border-b border-zinc-800 flex items-center justify-around">
-                  {COMMON_EMOJIS.slice(0, 5).map((emoji) => (
+              <>
+                {/* Full-screen invisible backdrop to dismiss on click outside */}
+                <div
+                  className="fixed inset-0 z-[110]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowMenu(false);
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setShowMenu(false);
+                  }}
+                />
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className={`absolute top-full mt-1.5 ${
+                    isMe ? 'right-0' : 'left-0'
+                  } z-[120] w-48 bg-zinc-900/98 border border-zinc-700/80 rounded-2xl shadow-2xl backdrop-blur-2xl py-1 text-xs animate-in zoom-in-95 duration-150 ring-1 ring-white/10`}
+                >
+                  {/* Quick Reactions Bar */}
+                  <div className="px-2 py-1.5 border-b border-zinc-800 flex items-center justify-around">
+                    {COMMON_EMOJIS.slice(0, 5).map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => {
+                          onToggleReaction?.(id, emoji);
+                          setShowMenu(false);
+                        }}
+                        className="hover:scale-125 transition-transform p-1 text-base cursor-pointer"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onReply?.(id);
+                      setShowMenu(false);
+                    }}
+                    className="w-full px-3.5 py-2 text-left hover:bg-zinc-800/80 flex items-center gap-2.5 font-medium text-zinc-200 cursor-pointer"
+                  >
+                    <span>↩</span>
+                    <span>Balas Pesan</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCopy?.(message);
+                      setShowMenu(false);
+                    }}
+                    className="w-full px-3.5 py-2 text-left hover:bg-zinc-800/80 flex items-center gap-2.5 font-medium text-zinc-200 cursor-pointer"
+                  >
+                    <span>📋</span>
+                    <span>Salin Teks</span>
+                  </button>
+
+                  {canEdit && (
                     <button
-                      key={emoji}
                       type="button"
                       onClick={() => {
-                        onToggleReaction?.(id, emoji);
+                        onEdit?.(id);
                         setShowMenu(false);
                       }}
-                      className="hover:scale-125 transition-transform p-1 text-base cursor-pointer"
+                      className="w-full px-3.5 py-2 text-left hover:bg-amber-500/10 flex items-center gap-2.5 font-medium text-amber-400 cursor-pointer"
                     >
-                      {emoji}
+                      <span>✏️</span>
+                      <span>Edit Pesan</span>
                     </button>
-                  ))}
+                  )}
+
+                  {canPin && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onPin?.(id);
+                        setShowMenu(false);
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-amber-500/10 flex items-center gap-2.5 font-medium text-amber-400 cursor-pointer"
+                    >
+                      <span>📌</span>
+                      <span>{isPinned ? 'Lepas Sematan' : 'Sematkan Pesan'}</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onToggleSelect?.(id);
+                      setShowMenu(false);
+                    }}
+                    className="w-full px-3.5 py-2 text-left hover:bg-indigo-500/10 flex items-center gap-2.5 font-medium text-indigo-400 cursor-pointer"
+                  >
+                    <span>☑️</span>
+                    <span>Pilih Pesan</span>
+                  </button>
+
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDelete?.(id);
+                        setShowMenu(false);
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-red-950/40 flex items-center gap-2.5 font-medium text-red-400 border-t border-zinc-800 cursor-pointer"
+                    >
+                      <span>🗑️</span>
+                      <span>Hapus Pesan</span>
+                    </button>
+                  )}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    onReply?.(id);
-                    setShowMenu(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-left hover:bg-zinc-800/80 flex items-center gap-2 font-medium text-zinc-200 cursor-pointer"
-                >
-                  <span>↩</span>
-                  <span>Balas Pesan</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    onCopy?.(message);
-                    setShowMenu(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-left hover:bg-zinc-800/80 flex items-center gap-2 font-medium text-zinc-200 cursor-pointer"
-                >
-                  <span>📋</span>
-                  <span>Salin Teks</span>
-                </button>
-
-                {canEdit && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onEdit?.(id);
-                      setShowMenu(false);
-                    }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-400 cursor-pointer"
-                  >
-                    <span>✏️</span>
-                    <span>Edit Pesan</span>
-                  </button>
-                )}
-
-                {canPin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onPin?.(id);
-                      setShowMenu(false);
-                    }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-400 cursor-pointer"
-                  >
-                    <span>📌</span>
-                    <span>{isPinned ? 'Lepas Sematan' : 'Sematkan Pesan'}</span>
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    onToggleSelect?.(id);
-                    setShowMenu(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-left hover:bg-indigo-500/10 flex items-center gap-2 font-medium text-indigo-400 cursor-pointer"
-                >
-                  <span>☑️</span>
-                  <span>Pilih Pesan</span>
-                </button>
-
-                {canDelete && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onDelete?.(id);
-                      setShowMenu(false);
-                    }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-red-950/40 flex items-center gap-2 font-medium text-red-400 border-t border-zinc-800 cursor-pointer"
-                  >
-                    <span>🗑️</span>
-                    <span>Hapus Pesan</span>
-                  </button>
-                )}
-              </div>
+              </>
             )}
           </div>
 

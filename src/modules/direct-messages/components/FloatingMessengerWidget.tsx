@@ -17,6 +17,7 @@ import {
 import { respondFriendRequestAction, getFriendshipStatusAction, FriendshipStatus } from '@/modules/friends/friendActions';
 import UserAvatar from '@/components/ui/UserAvatar';
 import { DeleteMessageModal } from '@/components/DeleteMessageModal';
+import { CompactMessageBubble } from '@/components/chat/CompactMessageBubble';
 import { parseRichMessageContent } from '@/lib/menuTagging';
 import { MenuHashtagAutocompletePopover } from '@/components/MenuHashtagAutocompletePopover';
 import { MenuTagModal } from '@/components/MenuTagModal';
@@ -500,221 +501,61 @@ function SingleChatBox({ chat, index, totalChats }: SingleChatBoxProps) {
         ) : (
           messages.map((m) => {
             const isMe = m.senderId !== partnerId;
-            const isActionActive = activeActionMsgId === m.id;
+            const nowSec = Math.floor(Date.now() / 1000);
+            const createdAtSec = m.createdAt < 10000000000 ? m.createdAt : Math.floor(m.createdAt / 1000);
+            const isWithin15Min = nowSec - createdAtSec <= 15 * 60;
+            const canEditMsg = isMe && isWithin15Min && (m.editCount || 0) < 5;
 
             return (
-              <div
+              <CompactMessageBubble
                 key={m.id}
-                className={`flex flex-col group relative select-none ${isMe ? 'items-end' : 'items-start'}`}
-              >
-                {/* Reply quote snippet */}
-                {m.replyMessage && (
-                  <div
-                    className={`text-[10px] p-1.5 rounded-t-xl mb-0.5 border max-w-[85%] opacity-80 ${
-                      isMe
-                        ? 'bg-purple-900/20 border-purple-500/30 text-purple-300 text-right'
-                        : 'bg-zinc-200 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700 text-zinc-400 text-left'
-                    }`}
-                  >
-                    <p className="font-bold truncate">↩ {m.replyMessage.senderName}</p>
-                    <p className="truncate">{m.replyMessage.message}</p>
-                  </div>
-                )}
-
-                <div className="flex items-end gap-2 max-w-[92%] sm:max-w-[85%] group">
-                  {/* Multi-select Circular Checkbox (WhatsApp Web Style) */}
-                  {isSelectMode && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelectMsg(m.id);
-                      }}
-                      className={`w-5 h-5 rounded-full border flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all mb-2 shrink-0 ${
-                        selectedMsgIds.has(m.id)
-                          ? 'bg-purple-600 border-purple-600 text-white scale-110'
-                          : 'border-zinc-300 dark:border-zinc-700 hover:border-purple-400 bg-white dark:bg-zinc-900'
-                      }`}
-                    >
-                      {selectedMsgIds.has(m.id) && '✓'}
-                    </button>
-                  )}
-
-                  {!isMe && (
-                    <UserAvatar src={avatar} name={name} size="xs" square className="rounded-lg mb-1 shrink-0" />
-                  )}
-
-                  <div className="relative flex-1 min-w-0">
-                    {/* Message Bubble */}
-                    <div
-                      onClick={(e) => {
-                        if (isSelectMode) {
-                          e.stopPropagation();
-                          toggleSelectMsg(m.id);
-                        }
-                      }}
-                      className={`px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed break-words shadow-2xs relative transition-all ${
-                        isMe
-                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-xs'
-                          : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 border border-zinc-200/80 dark:border-zinc-700/80 rounded-bl-xs'
-                      } ${selectedMsgIds.has(m.id) ? 'ring-2 ring-purple-500/80 ring-offset-1' : ''}`}
-                    >
-                      {/* WhatsApp Web Chevron Down Action Menu Trigger (v) */}
-                      {!isSelectMode && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOpenMenuMsgId((prev) => (prev === m.id ? null : m.id));
-                          }}
-                          className={`absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 ${
-                            isMe ? 'text-white/80 hover:text-white' : 'text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
-                          } cursor-pointer z-10`}
-                          title="Opsi Pesan"
-                        >
-                          <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
-                      )}
-
-                      {m.attachmentUrl && (
-                        <div className="mb-1.5 rounded-xl overflow-hidden border border-white/20">
-                          <img src={m.attachmentUrl} alt="Attachment" className="max-h-48 w-full object-cover" />
-                        </div>
-                      )}
-                      <div className="whitespace-pre-wrap pr-4">{parseRichMessageContent(m.message)}</div>
-
-                      {/* Timestamp & Delivery Indicator */}
-                      <div className={`mt-1 flex items-center gap-1 text-[9px] ${isMe ? 'justify-end text-purple-200/80' : 'justify-start text-zinc-400'}`}>
-                        {m.isEdited && <span className="text-[8px] opacity-70 italic font-mono">(edited)</span>}
-                        <span>{new Date(m.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
-                        {isMe && (
-                          <span title={m.status === 'READ' ? 'Terbaca' : 'Terkirim'} className="font-bold">
-                            {m.status === 'READ' ? '✓✓' : '✓'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* WhatsApp Web Popover Dropdown Menu */}
-                    {openMenuMsgId === m.id && (() => {
-                      const nowSec = Math.floor(Date.now() / 1000);
-                      const createdAtSec = m.createdAt < 10000000000 ? m.createdAt : Math.floor(m.createdAt / 1000);
-                      const isWithin15Min = nowSec - createdAtSec <= 15 * 60;
-                      const canEditMsg = isMe && isWithin15Min && (m.editCount || 0) < 5;
-                      const msgIdx = messages.findIndex((msg) => msg.id === m.id);
-                      const isNearBottom = msgIdx >= messages.length - 3;
-                      const verticalPos = isNearBottom ? 'bottom-full mb-1' : 'top-8';
-
-                      return (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          className={`absolute ${verticalPos} ${isMe ? 'right-0' : 'left-0'} z-[100] w-44 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl py-1 text-xs animate-in zoom-in-95 duration-150`}
-                        >
-                          {/* Quick Reactions Strip */}
-                          <div className="px-2 py-1 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-around">
-                            {COMMON_EMOJIS.slice(0, 5).map((e) => (
-                              <button
-                                key={e}
-                                type="button"
-                                onClick={() => {
-                                  handleToggleReaction(m.id, e);
-                                  setOpenMenuMsgId(null);
-                                }}
-                                className="hover:scale-125 transition-transform text-sm cursor-pointer p-0.5"
-                              >
-                                {e}
-                              </button>
-                            ))}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReplyingTo(m);
-                              setOpenMenuMsgId(null);
-                            }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
-                          >
-                            <span>↩</span>
-                            <span>Balas Pesan</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(m.message);
-                              setOpenMenuMsgId(null);
-                              triggerToast('Pesan berhasil disalin!');
-                            }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium text-zinc-700 dark:text-zinc-200 cursor-pointer"
-                          >
-                            <span>📋</span>
-                            <span>Salin Teks</span>
-                          </button>
-
-                          {canEditMsg && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingMsg(m);
-                                setEditText(m.message);
-                                setOpenMenuMsgId(null);
-                              }}
-                              className="w-full px-3 py-1.5 text-left hover:bg-amber-500/10 flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400 cursor-pointer"
-                            >
-                              <span>✏️</span>
-                              <span>Edit ({5 - (m.editCount || 0)}x tersisa)</span>
-                            </button>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsSelectMode(true);
-                              setSelectedMsgIds(new Set([m.id]));
-                              setOpenMenuMsgId(null);
-                            }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-indigo-500/10 flex items-center gap-2 font-medium text-indigo-600 dark:text-indigo-400 cursor-pointer"
-                          >
-                            <span>☑️</span>
-                            <span>Pilih Pesan</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedMsgIds(new Set([m.id]));
-                              setDeleteTargetMsgId(m.id);
-                              setOpenMenuMsgId(null);
-                            }}
-                            className="w-full px-3 py-1.5 text-left hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 font-medium text-red-600 dark:text-red-400 border-t border-zinc-100 dark:border-zinc-800 cursor-pointer"
-                          >
-                            <span>🗑️</span>
-                            <span>Hapus Pesan</span>
-                          </button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-                {/* Reactions Display */}
-                {m.reactions && m.reactions.length > 0 && (
-                  <div className={`flex items-center gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    {m.reactions.map((r) => (
-                      <span
-                        key={r.emoji}
-                        className="px-1.5 py-0.5 rounded-full bg-zinc-200/80 dark:bg-zinc-800 text-[10px] border border-zinc-300 dark:border-zinc-700 flex items-center gap-0.5"
-                      >
-                        <span>{r.emoji}</span>
-                        <span className="font-bold text-[9px] text-zinc-500">{r.userIds.length}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+                id={m.id}
+                isMe={isMe}
+                showSenderHeader={false}
+                senderName={isMe ? 'Anda' : name}
+                senderAvatar={isMe ? null : avatar}
+                message={m.message}
+                attachmentUrl={m.attachmentUrl}
+                replyMessage={
+                  m.replyMessage
+                    ? {
+                        id: m.replyToId || undefined,
+                        senderName: m.replyMessage.senderName,
+                        message: m.replyMessage.message,
+                      }
+                    : null
+                }
+                reactions={(m.reactions || []).map((rx) => ({
+                  emoji: rx.emoji,
+                  count: rx.userIds?.length || 0,
+                  hasReacted: rx.userIds?.includes(isMe ? m.senderId : partnerId),
+                  userIds: rx.userIds,
+                }))}
+                status={m.status}
+                createdAt={m.createdAt}
+                isEdited={m.isEdited}
+                isPinned={Boolean((m as any).isPinned)}
+                isSelectMode={isSelectMode}
+                isSelected={selectedMsgIds.has(m.id)}
+                onToggleSelect={(id) => toggleSelectMsg(id)}
+                onToggleReaction={(id, emoji) => handleToggleReaction(id, emoji)}
+                onReply={() => setReplyingTo(m)}
+                onCopy={(text) => {
+                  navigator.clipboard.writeText(text);
+                  triggerToast('Pesan berhasil disalin!');
+                }}
+                onEdit={() => {
+                  setEditingMsg(m);
+                  setEditText(m.message);
+                }}
+                onDelete={() => {
+                  setSelectedMsgIds(new Set([m.id]));
+                  setDeleteTargetMsgId(m.id);
+                }}
+                canEdit={canEditMsg}
+                canPin={false}
+                canDelete={isMe}
+              />
             );
           })
         )}
