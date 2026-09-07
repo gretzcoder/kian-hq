@@ -145,10 +145,10 @@ export default async function ProfilePage({
 
     db.prepare(`
       SELECT we.note, ta.assignment_role, ta.id as entity_id
-      FROM workflow_events we
-      JOIN task_assignments ta ON we.entity_id = ta.id
+      FROM task_assignments ta
       JOIN tasks t ON ta.task_id = t.id
       LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      JOIN workflow_events we ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
       WHERE ta.user_id = ? AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL) AND (we.note LIKE '%[Sparks:%' OR we.note LIKE '%[Badge:%')
     `).bind(targetUserId).all(),
 
