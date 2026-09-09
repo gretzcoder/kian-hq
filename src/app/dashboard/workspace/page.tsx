@@ -93,7 +93,7 @@ export default async function WorkspacePage() {
           )
           AND ws.deleted_at IS NULL
         ORDER BY ws.created_at DESC
-      `).bind(session.userId, session.userId, session.userId, session.userId, (hasMentorRole || ctx.userType === 'STAFF') ? 1 : 0).all();
+      `).bind(session.userId, session.userId, session.userId, session.userId, session.userId, (hasMentorRole || ctx.userType === 'STAFF') ? 1 : 0).all();
     }),
     // 2. All active assignments for the current user
     getDB().then((db) => db.prepare(`
