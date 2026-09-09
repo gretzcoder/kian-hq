@@ -123,9 +123,6 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
       badgeColumnsEnsured = true;
     }
 
-    // Auto-sync team/group assignments across all users
-    await syncGroupAndTeamTaskAssignments(db);
-
     // 1. Fetch active badges with requirements
     const { results: rawBadges } = await db
       .prepare("SELECT id, name, category, requirement_type, requirement_data, is_continuous_earning, sparks_reward FROM badges WHERE requirement_type IN ('TASK', 'WORKSPACE', 'ACHIEVEMENT')")
@@ -447,135 +444,32 @@ export async function getAllBadgesWithUserProgress(): Promise<{
     ctx.permissions.has('ADMIN_SYSTEM');
 
   try {
-    // 0. Auto-evaluate and award badges for all users with completed requirements
-    await evaluateAndAutoAwardBadges();
+    // 0. Auto-evaluate and award badges for current user (throttled)
+    await evaluateAndAutoAwardBadges(session.userId);
 
-    // Retroactively sync all past BADGE_REWARD sparks_adjustments to match current badge.sparks_reward
-    await db.prepare(`
-      UPDATE sparks_adjustments
-      SET sparks = (
-        SELECT b.sparks_reward FROM badges b WHERE b.id = sparks_adjustments.badge_id
-      )
-      WHERE category = 'BADGE_REWARD'
-        AND badge_id IS NOT NULL
-        AND badge_id IN (SELECT id FROM badges)
-        AND sparks != (SELECT b.sparks_reward FROM badges b WHERE b.id = sparks_adjustments.badge_id)
-    `).run();
-
-    // Link unlinked BADGE_REWARD adjustments by matching badge title
-    await db.prepare(`
-      UPDATE sparks_adjustments
-      SET badge_id = (
-        SELECT b.id FROM badges b WHERE sparks_adjustments.note LIKE '%' || b.name || '%' LIMIT 1
-      ),
-      sparks = (
-        SELECT b.sparks_reward FROM badges b WHERE sparks_adjustments.note LIKE '%' || b.name || '%' LIMIT 1
-      )
-      WHERE category = 'BADGE_REWARD'
-        AND (badge_id IS NULL OR badge_id = '')
-        AND EXISTS (
-          SELECT 1 FROM badges b WHERE sparks_adjustments.note LIKE '%' || b.name || '%'
-        )
-    `).run();
-
-    // Backfill user_badges.claimed_at and sync awarded_at date with actual claim log timestamp
-    await db.prepare(`
-      UPDATE user_badges
-      SET claimed_at = (
-        SELECT COALESCE(sa.created_at * 1000, strftime('%s', 'now') * 1000)
-        FROM sparks_adjustments sa
-        WHERE sa.user_id = user_badges.user_id
-          AND sa.category = 'BADGE_REWARD'
-          AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%')
-        LIMIT 1
-      )
-      WHERE claimed_at IS NULL
-        AND EXISTS (
-          SELECT 1 FROM sparks_adjustments sa
-          WHERE sa.user_id = user_badges.user_id
-            AND sa.category = 'BADGE_REWARD'
-            AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%')
-        )
-    `).run();
-
-    // Sync awarded_at timestamp to match earliest claim date when awarded_at is newer than claim timestamp
-    await db.prepare(`
-      UPDATE user_badges
-      SET awarded_at = (
-        SELECT sa.created_at * 1000
-        FROM sparks_adjustments sa
-        WHERE sa.user_id = user_badges.user_id
-          AND sa.category = 'BADGE_REWARD'
-          AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%')
-        ORDER BY sa.created_at ASC
-        LIMIT 1
-      )
-      WHERE EXISTS (
-        SELECT 1 FROM sparks_adjustments sa
-        WHERE sa.user_id = user_badges.user_id
-          AND sa.category = 'BADGE_REWARD'
-          AND (sa.badge_id = user_badges.badge_id OR sa.note LIKE '%' || (SELECT name FROM badges WHERE id = user_badges.badge_id) || '%')
-          AND (sa.created_at * 1000) < user_badges.awarded_at
-      )
-    `).run();
-
-    // 1. Fetch raw badges
-    const { results: rawBadges } = await db
-      .prepare('SELECT * FROM badges ORDER BY created_at DESC')
-      .all();
-
-    // 2. Fetch user's earned badges & claimed sparks history
-    const [userEarnedRes, claimedSparksRes] = await Promise.all([
-      db.prepare('SELECT badge_id, awarded_at, claimed_at, claim_count FROM user_badges WHERE user_id = ?')
-        .bind(session.userId).all(),
-      db.prepare("SELECT badge_id, note FROM sparks_adjustments WHERE user_id = ? AND category = 'BADGE_REWARD'")
-        .bind(session.userId).all(),
-    ]);
-
-    const userEarnedMap = new Map<string, { awardedAt: number; claimedAt: number | null; claimCount: number }>();
-    (userEarnedRes.results as any[] || []).forEach((ub) => {
-      userEarnedMap.set(ub.badge_id, { awardedAt: ub.awarded_at, claimedAt: ub.claimed_at || null, claimCount: ub.claim_count || 1 });
-    });
-
-    const claimedBadgeIds = new Set<string>();
-    const claimedBadgeNotesSet = new Set<string>();
-    (claimedSparksRes.results as any[] || []).forEach((row) => {
-      if (row.badge_id) claimedBadgeIds.add(row.badge_id);
-      if (row.note) claimedBadgeNotesSet.add(row.note.toLowerCase());
-    });
-
-    // 3. Fetch all owners for all badges to show badge earners
-    const { results: allOwnersRaw } = await db
-      .prepare(`
+    // Parallel fetch for all required badge data in ONE round-trip
+    const [
+      rawBadgesRes,
+      userEarnedRes,
+      claimedSparksRes,
+      allOwnersRawRes,
+      userAssignmentsRes,
+      allTasksRawRes,
+      allWorkspacesRawRes,
+      allAchievementsRawRes,
+    ] = await Promise.all([
+      db.prepare('SELECT * FROM badges ORDER BY created_at DESC').all(),
+      db.prepare('SELECT badge_id, awarded_at, claimed_at, claim_count FROM user_badges WHERE user_id = ?').bind(session.userId).all(),
+      db.prepare("SELECT badge_id, note FROM sparks_adjustments WHERE user_id = ? AND category = 'BADGE_REWARD'").bind(session.userId).all(),
+      db.prepare(`
         SELECT ub.badge_id, ub.user_id, ub.awarded_at, ub.awarded_by,
                u.name AS user_name, u.email AS user_email, u.user_type, u.avatar_url
         FROM user_badges ub
         JOIN users u ON ub.user_id = u.id
         WHERE u.status = 'ACTIVE'
         ORDER BY ub.awarded_at DESC
-      `)
-      .all();
-
-    const badgeOwnersMap = new Map<string, BadgeOwner[]>();
-    (allOwnersRaw as any[]).forEach((row) => {
-      const bId = row.badge_id;
-      if (!badgeOwnersMap.has(bId)) {
-        badgeOwnersMap.set(bId, []);
-      }
-      badgeOwnersMap.get(bId)!.push({
-        userId: row.user_id,
-        userName: row.user_name || row.user_email || 'User',
-        userEmail: row.user_email || '',
-        userType: row.user_type || null,
-        avatarUrl: row.avatar_url || null,
-        awardedAt: row.awarded_at,
-        awardedBy: row.awarded_by,
-      });
-    });
-
-    // 4. Fetch user's task assignments & task statuses for requirement checking (including group completion)
-    const { results: userAssignments } = await db
-      .prepare(`
+      `).all(),
+      db.prepare(`
         SELECT DISTINCT ta.task_id, ta.status AS assignment_status, t.status AS task_status, t.workspace_id,
                EXISTS (
                  SELECT 1 FROM task_assignments ta2
@@ -592,12 +486,52 @@ export async function getAllBadgesWithUserProgress(): Promise<{
         WHERE ta.user_id = ?
           AND t.status != 'DELETED'
           AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      `)
-      .bind(session.userId)
-      .all();
+      `).bind(session.userId).all(),
+      db.prepare(`
+        SELECT t.id, t.title, t.workspace_id, t.status
+        FROM tasks t
+        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+        WHERE t.status != 'DELETED'
+          AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+      `).all(),
+      db.prepare('SELECT id, name FROM workspaces WHERE deleted_at IS NULL').all(),
+      db.prepare('SELECT user_id, category, period, earned_at, rank FROM achievement_history WHERE user_id = ?').bind(session.userId).all(),
+    ]);
+
+    const rawBadges = rawBadgesRes.results || [];
+    const allTasksRaw = allTasksRawRes.results || [];
+
+    const userEarnedMap = new Map<string, { awardedAt: number; claimedAt: number | null; claimCount: number }>();
+    (userEarnedRes.results as any[] || []).forEach((ub) => {
+      userEarnedMap.set(ub.badge_id, { awardedAt: ub.awarded_at, claimedAt: ub.claimed_at || null, claimCount: ub.claim_count || 1 });
+    });
+
+    const claimedBadgeIds = new Set<string>();
+    const claimedBadgeNotesSet = new Set<string>();
+    (claimedSparksRes.results as any[] || []).forEach((row) => {
+      if (row.badge_id) claimedBadgeIds.add(row.badge_id);
+      if (row.note) claimedBadgeNotesSet.add(row.note.toLowerCase());
+    });
+
+    const badgeOwnersMap = new Map<string, BadgeOwner[]>();
+    (allOwnersRawRes.results as any[] || []).forEach((row) => {
+      const bId = row.badge_id;
+      if (!badgeOwnersMap.has(bId)) {
+        badgeOwnersMap.set(bId, []);
+      }
+      badgeOwnersMap.get(bId)!.push({
+        userId: row.user_id,
+        userName: row.user_name || row.user_email || 'User',
+        userEmail: row.user_email || '',
+        userType: row.user_type || null,
+        avatarUrl: row.avatar_url || null,
+        awardedAt: row.awarded_at,
+        awardedBy: row.awarded_by,
+      });
+    });
 
     const userCompletedTaskIds = new Set<string>();
-    (userAssignments as any[]).forEach((row) => {
+    (userAssignmentsRes.results as any[] || []).forEach((row) => {
       if (
         ['APPROVED', 'DONE', 'PUBLISHED'].includes(row.assignment_status) ||
         row.task_status === 'COMPLETED' ||
@@ -607,37 +541,17 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       }
     });
 
-    // 5. Fetch all tasks and workspaces for requirement title lookups & workspace completion
-    const { results: allTasksRaw } = await db
-      .prepare(`
-        SELECT t.id, t.title, t.workspace_id, t.status
-        FROM tasks t
-        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-        WHERE t.status != 'DELETED'
-          AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      `)
-      .all();
-
     const taskMap = new Map<string, { title: string; workspace_id: string | null; status: string }>();
     (allTasksRaw as any[]).forEach((t) => {
       taskMap.set(t.id, { title: t.title, workspace_id: t.workspace_id, status: t.status });
     });
 
-    const { results: allWorkspacesRaw } = await db
-      .prepare('SELECT id, name FROM workspaces WHERE deleted_at IS NULL')
-      .all();
-
     const workspaceMap = new Map<string, string>();
-    (allWorkspacesRaw as any[]).forEach((w) => {
+    (allWorkspacesRawRes.results as any[] || []).forEach((w: any) => {
       workspaceMap.set(w.id, w.name);
     });
 
-    // 6. Fetch achievement history records for requirement checking
-    const { results: allAchievementsRaw } = await db
-      .prepare('SELECT user_id, category, period, earned_at, rank FROM achievement_history WHERE user_id = ?')
-      .bind(session.userId)
-      .all();
-    const userAchievementsList = (allAchievementsRaw as any[]) || [];
+    const userAchievementsList = (allAchievementsRawRes.results as any[]) || [];
 
     // Process badges and check auto-award eligibility
     const badges: BadgeItem[] = [];
