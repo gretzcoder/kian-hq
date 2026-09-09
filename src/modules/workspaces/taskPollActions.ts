@@ -88,7 +88,7 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
         ? allTasks
         : allTasks.filter((t) => {
             if (t.start_at && t.start_at > now) return false;
-            if (t.task_type === 'ASSESSMENT') return t.status === 'APPROVED';
+            if (t.task_type === 'ASSESSMENT') return ['APPROVED', 'COMPLETED', 'PUBLISHED', 'DONE', 'ARCHIVED'].includes(t.status);
             return true;
           });
 

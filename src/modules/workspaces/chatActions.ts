@@ -607,15 +607,27 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
          LEFT JOIN users u ON wc.user_id = u.id
          LEFT JOIN workspace_chats p_wc ON wc.parent_id = p_wc.id
          LEFT JOIN users p_u ON p_wc.user_id = p_u.id
-         LEFT JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = wc.user_id
+         LEFT JOIN (
+           SELECT workspace_id, user_id, MAX(team_role) AS team_role
+           FROM workspace_members
+           GROUP BY workspace_id, user_id
+         ) wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = wc.user_id
          WHERE wc.workspace_id = ?
+         GROUP BY wc.id
          ORDER BY wc.created_at DESC
          LIMIT 50`
       )
       .bind(workspaceId)
       .all();
 
-    msgsRaw = ((res.results || []) as any[]).reverse();
+    const seenIds = new Set<string>();
+    const uniqueList: any[] = [];
+    for (const r of ((res.results || []) as any[])) {
+      if (seenIds.has(r.id)) continue;
+      seenIds.add(r.id);
+      uniqueList.push(r);
+    }
+    msgsRaw = uniqueList.reverse();
   } catch (err) {
     console.error('getWorkspaceChats primary query failed:', err);
     return [];

@@ -3338,7 +3338,12 @@ export function AssessmentPanel({
       return allAss.every((a) => a.status === 'APPROVED');
     } else {
       const myAss = allAss.find((a) => a.user_id === currentUserId);
-      return myAss ? myAss.status === 'APPROVED' : false;
+      if (!myAss) return false;
+      if (myAss.status === 'APPROVED') return true;
+      if (t.assessment_category === 'GROUP' && myAss.group_name) {
+        return allAss.some((a) => (a.group_name || '') === myAss.group_name && a.status === 'APPROVED');
+      }
+      return false;
     }
   };
 
@@ -3539,11 +3544,40 @@ export function AssessmentPanel({
           const myAssignment = allAssignments.find((a) => a.user_id === currentUserId);
           if (!myAssignment) return null;
 
+          const effectiveAssignment =
+            task.assessment_category === 'GROUP' && myAssignment.group_name
+              ? (() => {
+                  const groupMembers = allAssignments.filter((a) => (a.group_name || '') === myAssignment.group_name);
+                  const approvedOne = groupMembers.find((a) => a.status === 'APPROVED');
+                  if (approvedOne) {
+                    return {
+                      ...myAssignment,
+                      status: 'APPROVED',
+                      result_url: myAssignment.result_url || approvedOne.result_url,
+                      appreciation_note: myAssignment.appreciation_note || approvedOne.appreciation_note,
+                      sparks: myAssignment.sparks != null ? myAssignment.sparks : approvedOne.sparks,
+                    };
+                  }
+                  const submittedOne = groupMembers.find(
+                    (a) => a.status === 'WAITING_REVIEW' || a.status === 'RESUBMITTED' || (a.result_url != null && a.result_url.trim() !== '')
+                  );
+                  if (submittedOne) {
+                    return {
+                      ...myAssignment,
+                      status: submittedOne.status,
+                      result_url: myAssignment.result_url || submittedOne.result_url,
+                      revision_note: myAssignment.revision_note || submittedOne.revision_note,
+                    };
+                  }
+                  return myAssignment;
+                })()
+              : myAssignment;
+
           return (
             <OJTTaskCard
               key={task.id}
               task={task}
-              assignment={myAssignment}
+              assignment={effectiveAssignment}
               reactions={reactionsMap?.[myAssignment.id] ?? []}
               workspaceId={workspaceId}
               allWorkspaceMembers={allWorkspaceMembers}

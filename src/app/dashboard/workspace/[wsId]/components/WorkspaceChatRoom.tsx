@@ -115,33 +115,44 @@ function mergeAndDeduplicateMessages(
   prevMsgs: WorkspaceChatMessage[],
   currentUserId: string
 ): WorkspaceChatMessage[] {
-  const map = new Map<string, WorkspaceChatMessage>();
-  const seenKeys = new Set<string>();
+  const result: WorkspaceChatMessage[] = [];
+  const seenIds = new Set<string>();
 
   // Add server messages first (authoritative source) with content-deduplication
   for (const msg of serverMsgs) {
-    const contentKey = `${msg.user_id}_${msg.message.trim()}_${Math.floor(msg.created_at / 4)}`;
-    if (seenKeys.has(contentKey)) continue;
-    seenKeys.add(contentKey);
-    map.set(msg.id, msg);
+    if (seenIds.has(msg.id)) continue;
+    seenIds.add(msg.id);
+
+    // If another message from same user with identical text arrived within 4 seconds, treat as duplicate
+    const isDuplicate = result.some(
+      (existing) =>
+        existing.user_id === msg.user_id &&
+        existing.message.trim() === msg.message.trim() &&
+        Math.abs(existing.created_at - msg.created_at) < 4
+    );
+
+    if (!isDuplicate) {
+      result.push(msg);
+    }
   }
 
   // Filter remaining optimistic temporary messages
   const tempMsgs = prevMsgs.filter((m) => m.id.startsWith('temp_'));
   for (const temp of tempMsgs) {
-    const isAlreadySaved = serverMsgs.some(
+    const isAlreadySaved = result.some(
       (s) =>
         s.user_id === currentUserId &&
-        s.message === temp.message &&
+        s.message.trim() === temp.message.trim() &&
         Math.abs(s.created_at - temp.created_at) < 15
     );
 
-    if (!isAlreadySaved && !map.has(temp.id)) {
-      map.set(temp.id, temp);
+    if (!isAlreadySaved && !seenIds.has(temp.id)) {
+      seenIds.add(temp.id);
+      result.push(temp);
     }
   }
 
-  return Array.from(map.values()).sort((a, b) => a.created_at - b.created_at);
+  return result.sort((a, b) => a.created_at - b.created_at);
 }
 
 function formatNaturalTimestamp(timestampSec: number): string {
@@ -171,7 +182,9 @@ export function WorkspaceChatRoom({
   canDeleteAny,
   members = [],
 }: WorkspaceChatRoomProps) {
-  const [messages, setMessages] = useState<WorkspaceChatMessage[]>(initialMessages);
+  const [messages, setMessages] = useState<WorkspaceChatMessage[]>(() =>
+    mergeAndDeduplicateMessages(initialMessages || [], [], currentUserId)
+  );
   const [inputMessage, setInputMessage] = useState('');
   const [replyingTo, setReplyingTo] = useState<WorkspaceChatMessage | null>(null);
   const [editingMsg, setEditingMsg] = useState<WorkspaceChatMessage | null>(null);
