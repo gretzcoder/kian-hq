@@ -1,24 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BadgeCategory, BadgeItem, CATEGORY_META } from '@/modules/badges/badgeTypes';
 import { BadgeDetailModal } from '@/components/BadgeDetailModal';
 import { CreateBadgeModal } from '@/components/CreateBadgeModal';
 import { AwardBadgeModal } from '@/components/AwardBadgeModal';
+import { getAllBadgesWithUserProgress } from '@/modules/badges/badgeActions';
 
 interface BadgeGalleryViewProps {
-  initialBadges: BadgeItem[];
-  userOwnedCount: number;
-  totalBadgeCount: number;
-  isManager: boolean;
+  initialBadges?: BadgeItem[];
+  userOwnedCount?: number;
+  totalBadgeCount?: number;
+  isManager?: boolean;
 }
 
 export default function BadgeGalleryView({
   initialBadges,
-  userOwnedCount,
-  totalBadgeCount,
-  isManager,
+  userOwnedCount = 0,
+  totalBadgeCount = 0,
+  isManager = false,
 }: BadgeGalleryViewProps) {
+  const [badges, setBadges] = useState<BadgeItem[]>(initialBadges || []);
+  const [userOwnedCountState, setUserOwnedCountState] = useState(userOwnedCount);
+  const [totalBadgeCountState, setTotalBadgeCountState] = useState(totalBadgeCount);
+  const [isManagerState, setIsManagerState] = useState(isManager);
+  const [isLoading, setIsLoading] = useState(!initialBadges);
+
   const [selectedCategory, setSelectedCategory] = useState<BadgeCategory | 'ALL'>('ALL');
   const [ownershipFilter, setOwnershipFilter] = useState<'ALL' | 'OWNED' | 'UNOWNED'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,9 +35,28 @@ export default function BadgeGalleryView({
   const [awardingBadge, setAwardingBadge] = useState<BadgeItem | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const percentOwned = totalBadgeCount > 0 ? Math.round((userOwnedCount / totalBadgeCount) * 100) : 0;
+  useEffect(() => {
+    if (!initialBadges) {
+      let isMounted = true;
+      getAllBadgesWithUserProgress().then((res) => {
+        if (!isMounted) return;
+        if (res.success && res.badges) {
+          setBadges(res.badges);
+          setUserOwnedCountState(res.userOwnedCount || 0);
+          setTotalBadgeCountState(res.totalBadgeCount || 0);
+          setIsManagerState(Boolean(res.isManager));
+        }
+        setIsLoading(false);
+      }).catch(() => {
+        if (isMounted) setIsLoading(false);
+      });
+      return () => { isMounted = false; };
+    }
+  }, [initialBadges]);
 
-  const filteredBadges = initialBadges.filter((b) => {
+  const percentOwned = totalBadgeCountState > 0 ? Math.round((userOwnedCountState / totalBadgeCountState) * 100) : 0;
+
+  const filteredBadges = badges.filter((b) => {
     if (selectedCategory !== 'ALL' && b.category !== selectedCategory) return false;
     if (ownershipFilter === 'OWNED' && !b.isOwned) return false;
     if (ownershipFilter === 'UNOWNED' && b.isOwned) return false;
@@ -67,8 +93,8 @@ export default function BadgeGalleryView({
               <span className="text-xs font-black text-purple-400 font-mono">{percentOwned}%</span>
             </div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-black text-white">{userOwnedCount}</span>
-              <span className="text-sm font-bold text-zinc-400">/ {totalBadgeCount} Badge</span>
+              <span className="text-3xl font-black text-white">{userOwnedCountState}</span>
+              <span className="text-sm font-bold text-zinc-400">/ {totalBadgeCountState} Badge</span>
             </div>
             <div className="w-full h-2 rounded-full bg-black/40 overflow-hidden">
               <div
@@ -76,7 +102,7 @@ export default function BadgeGalleryView({
                 style={{ width: `${percentOwned}%` }}
               />
             </div>
-            {isManager && (
+            {isManagerState && (
               <button
                 type="button"
                 onClick={() => setShowCreateModal(true)}
@@ -163,7 +189,29 @@ export default function BadgeGalleryView({
       </div>
 
       {/* Badge Grid */}
-      {filteredBadges.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className="p-5 rounded-3xl border border-zinc-200/60 dark:border-zinc-800/60 bg-white/50 dark:bg-[#09090b]/50 animate-pulse space-y-4"
+            >
+              <div className="flex justify-between items-center">
+                <div className="w-16 h-5 bg-zinc-200 dark:bg-zinc-800 rounded-xl" />
+                <div className="w-12 h-5 bg-zinc-200 dark:bg-zinc-800 rounded-xl" />
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 bg-zinc-200 dark:bg-zinc-800 rounded-2xl shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <div className="w-3/4 h-4 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
+                  <div className="w-1/2 h-3 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
+                </div>
+              </div>
+              <div className="w-full h-10 bg-zinc-100 dark:bg-zinc-900 rounded-xl" />
+            </div>
+          ))}
+        </div>
+      ) : filteredBadges.length === 0 ? (
         <div className="p-12 text-center bg-zinc-50 dark:bg-zinc-900/30 border border-zinc-200 dark:border-zinc-800 rounded-3xl space-y-3">
           <span className="text-4xl opacity-50">🛡️</span>
           <h3 className="text-base font-bold text-zinc-700 dark:text-zinc-300">
@@ -174,7 +222,7 @@ export default function BadgeGalleryView({
               ? 'Tidak ada badge yang cocok dengan kriteria pencarian atau filter Anda.'
               : 'Belum ada badge yang dibuat oleh Admin/Koordinator.'}
           </p>
-          {isManager && (
+          {isManagerState && (
             <button
               type="button"
               onClick={() => setShowCreateModal(true)}
