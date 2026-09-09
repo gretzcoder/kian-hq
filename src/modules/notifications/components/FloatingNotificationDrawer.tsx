@@ -167,8 +167,8 @@ export default function FloatingNotificationDrawer({
     };
     window.addEventListener('kian_notif_refresh', handleCustomRefresh);
 
-    // 3. Fallback polling interval (every 60 seconds)
-    const interval = setInterval(loadNotifications, 60_000);
+    // 3. Fallback polling interval (every 90 seconds)
+    const interval = setInterval(loadNotifications, 90_000);
 
     return () => {
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {

@@ -469,37 +469,47 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     });
   }
 
-  // Note: All chat notifications (Workspace, Community, Personal DMs) have been moved exclusively to Messenger Hub (HeaderMessengerButton).
-
   // 6. Fetch reminder workflow events for this user (optimized to scan workflow_events status index directly)
   try {
-    const { results: reminderEvents } = await db
-      .prepare(
+    const [assignRemindersRes, taskRemindersRes] = await Promise.all([
+      db.prepare(
         `SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
                 u_sender.name AS senderName,
-                COALESCE(t_direct.id, t_via_ta.id) AS taskId,
-                COALESCE(t_direct.title, t_via_ta.title) AS taskTitle,
-                COALESCE(t_direct.workspace_id, t_via_ta.workspace_id) AS wsId,
-                COALESCE(ws_direct.name, ws_via_ta.name) AS wsName
-         FROM workflow_events we
-         LEFT JOIN task_assignments ta ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
-         LEFT JOIN tasks t_via_ta ON (ta.task_id = t_via_ta.id)
-         LEFT JOIN tasks t_direct ON (we.entity_type = 'task' AND we.entity_id = t_direct.id)
-         LEFT JOIN users u_sender ON (we.triggered_by = u_sender.id)
-         LEFT JOIN workspaces ws_direct ON (t_direct.workspace_id = ws_direct.id)
-         LEFT JOIN workspaces ws_via_ta ON (t_via_ta.workspace_id = ws_via_ta.id)
-         WHERE we.to_status = 'REMINDER_SENT'
+                t.id AS taskId, t.title AS taskTitle, t.workspace_id AS wsId, ws.name AS wsName
+         FROM task_assignments ta
+         JOIN tasks t ON ta.task_id = t.id
+         JOIN workflow_events we ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id AND we.to_status = 'REMINDER_SENT')
+         LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+         WHERE ta.user_id = ?
            AND (we.triggered_by IS NULL OR we.triggered_by != ?)
-           AND (
-             (we.entity_type = 'task_assignment' AND ta.user_id = ? AND t_via_ta.status != 'DELETED' AND (ws_via_ta.id IS NULL OR ws_via_ta.deleted_at IS NULL))
-             OR
-             (we.entity_type = 'task' AND (t_direct.created_by = ? OR EXISTS (SELECT 1 FROM task_assignments ta2 WHERE ta2.task_id = t_direct.id AND ta2.user_id = ?)) AND t_direct.status != 'DELETED' AND (ws_direct.id IS NULL OR ws_direct.deleted_at IS NULL))
-           )
+           AND t.status != 'DELETED'
+           AND (ws.id IS NULL OR ws.deleted_at IS NULL)
          ORDER BY we.created_at DESC
-         LIMIT 15`
-      )
-      .bind(session.userId, session.userId, session.userId, session.userId)
-      .all();
+         LIMIT 10`
+      ).bind(session.userId, session.userId).all(),
+
+      db.prepare(
+        `SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
+                u_sender.name AS senderName,
+                t.id AS taskId, t.title AS taskTitle, t.workspace_id AS wsId, ws.name AS wsName
+         FROM tasks t
+         JOIN workflow_events we ON (we.entity_type = 'task' AND we.entity_id = t.id AND we.to_status = 'REMINDER_SENT')
+         LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+         WHERE t.created_by = ?
+           AND (we.triggered_by IS NULL OR we.triggered_by != ?)
+           AND t.status != 'DELETED'
+           AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+         ORDER BY we.created_at DESC
+         LIMIT 10`
+      ).bind(session.userId, session.userId).all(),
+    ]);
+
+    const reminderEvents = [
+      ...((assignRemindersRes.results || []) as any[]),
+      ...((taskRemindersRes.results || []) as any[]),
+    ];
 
     for (const r of reminderEvents as any[]) {
       const isReviewReminder = (r.note || '').toLowerCase().includes('review') || (r.note || '').toLowerCase().includes('mentor');

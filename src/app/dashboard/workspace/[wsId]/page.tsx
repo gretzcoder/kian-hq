@@ -104,10 +104,6 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   const projectId = workspace.project_id;
 
-  // Auto-repair any assessment tasks whose status was corrupted to WAITING_REVIEW by submissions
-  await repairAssessmentTaskStatuses(db, wsId);
-  await syncAndRepairTaskStatuses(db, wsId);
-
   // Fetch everything else IN PARALLEL — no sequential waterfall
   const [
     project,

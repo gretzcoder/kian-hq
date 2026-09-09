@@ -849,19 +849,14 @@ export async function markWorkspaceChatReadAction(workspaceId: string): Promise<
 
   const db = await getDB();
   try {
-    const chats = (await db
-      .prepare('SELECT id FROM workspace_chats WHERE workspace_id = ?')
-      .bind(workspaceId)
-      .all()) as any;
-
-    const rows = chats.results || [];
     const now = Math.floor(Date.now() / 1000);
-    for (const r of rows) {
-      await db
-        .prepare('INSERT OR REPLACE INTO workspace_chat_reads (chat_id, user_id, read_at) VALUES (?, ?, ?)')
-        .bind(r.id, session.userId, now)
-        .run();
-    }
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO workspace_chat_reads (chat_id, user_id, read_at)
+         SELECT id, ?, ? FROM workspace_chats WHERE workspace_id = ?`
+      )
+      .bind(session.userId, now, workspaceId)
+      .run();
   } catch (err) {
     console.error('Error marking workspace chat as read:', err);
   }

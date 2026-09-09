@@ -67,7 +67,6 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
     `ws:${wsId}:tasks:${roleScope}:v1`,
     async () => {
       const db = await getDB();
-      await syncAndRepairTaskStatuses(db, wsId);
 
       const { results: tasksRaw } = await db
         .prepare(
