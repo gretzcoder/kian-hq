@@ -8,6 +8,8 @@ const memoryCache = new Map<string, { data: any; expiresAt: number }>();
  */
 const ENABLE_SHARED_CACHE = process.env.ENABLE_SHARED_CACHE !== 'false';
 
+let kvWriteDisabledUntil = 0;
+
 /**
  * Retrieves data from memory/KV cache or fetches fresh data from source (D1/API),
  * populating the cache with the given TTL in seconds.
@@ -43,7 +45,7 @@ export async function getOrSetCache<T>(
       }
     }
   } catch (err) {
-    console.error(`KV Cache read error for key "${key}":`, err);
+    // Non-fatal read error
   }
 
   // 3. Cache Miss — Execute Fetcher (e.g. D1 Query)
@@ -53,14 +55,17 @@ export async function getOrSetCache<T>(
     // Populate Memory Cache
     memoryCache.set(key, { data: freshData, expiresAt: now + Math.min(ttlMs, 30_000) });
 
-    // Populate Cloudflare KV
-    try {
-      const kv = await getKV();
-      if (kv) {
-        await kv.put(key, JSON.stringify(freshData), { expirationTtl: Math.max(ttlSeconds, 60) });
+    // Populate Cloudflare KV if circuit breaker is not tripped
+    if (now > kvWriteDisabledUntil) {
+      try {
+        const kv = await getKV();
+        if (kv) {
+          await kv.put(key, JSON.stringify(freshData), { expirationTtl: Math.max(ttlSeconds, 60) });
+        }
+      } catch (err: any) {
+        // If quota exceeded or write failed, trip circuit breaker for 10 minutes
+        kvWriteDisabledUntil = Date.now() + 10 * 60 * 1000;
       }
-    } catch (err) {
-      console.error(`KV Cache write error for key "${key}":`, err);
     }
   }
 

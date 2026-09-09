@@ -2,13 +2,13 @@
 
 import { getSession } from '@/modules/auth/session';
 import { getDB, getKV } from '@/db/client';
-import { generateSalt, hashPassword } from '@/modules/auth/crypto';
+import { generateSalt, hashPassword, createSignedSessionToken } from '@/modules/auth/crypto';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
 /**
  * Update the current user's display name.
- * Also refreshes the KV session so the header updates on next page load.
+ * Also refreshes the signed session cookie so the header updates on next page load.
  */
 export async function updateProfileName(name: string) {
   const session = await getSession();
@@ -21,16 +21,25 @@ export async function updateProfileName(name: string) {
   const db = await getDB();
   await db.prepare('UPDATE users SET name = ? WHERE id = ?').bind(name, session.userId).run();
 
-  // Refresh KV session so the header name updates immediately (only if not impersonating)
+  // Refresh session cookie so the header name updates immediately (only if not impersonating)
   if (!session.isImpersonating) {
     try {
-      const kv = await getKV();
       const cookieStore = await cookies();
-      const sessionId = cookieStore.get('session_id')?.value;
-      if (sessionId) {
-        const updated = { ...session, name };
-        const ttlSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
-        await kv.put(`session:${sessionId}`, JSON.stringify(updated), { expirationTtl: ttlSeconds || 3600 });
+      const updated = { ...session, name };
+      const ttlSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
+      const newSignedToken = await createSignedSessionToken(updated);
+
+      cookieStore.set('session_id', newSignedToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: ttlSeconds || 604800,
+      });
+
+      const kv = await getKV();
+      if (kv) {
+        await kv.put(`session:${newSignedToken}`, JSON.stringify(updated), { expirationTtl: ttlSeconds || 3600 });
       }
     } catch {
       // non-fatal
@@ -279,21 +288,30 @@ export async function updateOjtProfile(payload: {
       .run();
   }
 
-  // Refresh KV session so email, avatar and name update instantly (only if not impersonating)
+  // Refresh session cookie so email, avatar and name update instantly (only if not impersonating)
   if (!session.isImpersonating) {
     try {
-      const kv = await getKV();
       const cookieStore = await cookies();
-      const sessionId = cookieStore.get('session_id')?.value;
-      if (sessionId) {
-        const updated = {
-          ...session,
-          name,
-          email: email || session.email,
-          avatar: normalizedAvatar || session.avatar,
-        };
-        const ttlSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
-        await kv.put(`session:${sessionId}`, JSON.stringify(updated), { expirationTtl: ttlSeconds || 3600 });
+      const updated = {
+        ...session,
+        name,
+        email: email || session.email,
+        avatar: normalizedAvatar || session.avatar,
+      };
+      const ttlSeconds = Math.max(0, Math.floor((session.expiresAt - Date.now()) / 1000));
+      const newSignedToken = await createSignedSessionToken(updated);
+
+      cookieStore.set('session_id', newSignedToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: ttlSeconds || 604800,
+      });
+
+      const kv = await getKV();
+      if (kv) {
+        await kv.put(`session:${newSignedToken}`, JSON.stringify(updated), { expirationTtl: ttlSeconds || 3600 });
       }
     } catch {
       // non-fatal

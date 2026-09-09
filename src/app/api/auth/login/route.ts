@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDB, getKV } from '@/db/client';
-import { hashPassword } from '@/modules/auth/crypto';
+import { hashPassword, createSignedSessionToken } from '@/modules/auth/crypto';
 
 const SESSION_TTL = 7 * 24 * 60 * 60 * 1000;
 const SESSION_TTL_SECONDS = 604800;
@@ -29,7 +29,6 @@ export async function POST(request: Request) {
     }
 
     const db = await getDB();
-    const kv = await getKV();
 
     const user = await db
       .prepare('SELECT id, email, username, name, status, password_hash FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?')
@@ -60,25 +59,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Invalid username/email or password.' }, { status: 400 });
     }
 
-    const sessionId = `session_${crypto.randomUUID().replace(/-/g, '')}`;
     const sessionData = {
       userId: user.id,
       email: user.email,
-      username: user.username,
+      username: user.username || undefined,
       name: user.name,
       avatar: undefined,
       expiresAt: Date.now() + SESSION_TTL,
     };
 
-    await kv.put(`session:${sessionId}`, JSON.stringify(sessionData), {
-      expirationTtl: SESSION_TTL_SECONDS,
-    });
+    const sessionToken = await createSignedSessionToken(sessionData);
+
+    // Best-effort secondary KV write
+    try {
+      const kv = await getKV();
+      if (kv) {
+        await kv.put(`session:${sessionToken}`, JSON.stringify(sessionData), {
+          expirationTtl: SESSION_TTL_SECONDS,
+        });
+      }
+    } catch (kvErr) {
+      console.warn('Non-fatal KV session write error:', kvErr);
+    }
 
     const referer = request.headers.get('referer') || '';
     const secure = referer.startsWith('https://');
 
     const response = NextResponse.json({ success: true });
-    response.cookies.set('session_id', sessionId, {
+    response.cookies.set('session_id', sessionToken, {
       httpOnly: true,
       secure,
       sameSite: 'lax',

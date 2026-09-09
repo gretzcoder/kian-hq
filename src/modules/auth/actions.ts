@@ -2,7 +2,7 @@
 
 import { cookies, headers } from 'next/headers';
 import { getDB, getKV } from '@/db/client';
-import { generateSalt, hashPassword } from './crypto';
+import { generateSalt, hashPassword, createSignedSessionToken } from './crypto';
 
 const SESSION_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 const SESSION_TTL_SECONDS = 604800; // 7 days in seconds
@@ -35,7 +35,6 @@ export async function signupAction(formData: FormData) {
   }
 
   const db = await getDB();
-  const kv = await getKV();
 
   try {
     // 1. Check if user with same email or username already exists
@@ -77,8 +76,7 @@ export async function signupAction(formData: FormData) {
         .bind(userId, 'role_executive')
         .run();
 
-      // Create session & cookie
-      const sessionId = `session_${crypto.randomUUID().replace(/-/g, '')}`;
+      // Create stateless signed session token
       const sessionData = {
         userId,
         email: email.toLowerCase(),
@@ -88,16 +86,26 @@ export async function signupAction(formData: FormData) {
         expiresAt: Date.now() + SESSION_TTL,
       };
 
-      await kv.put(`session:${sessionId}`, JSON.stringify(sessionData), {
-        expirationTtl: SESSION_TTL_SECONDS,
-      });
+      const sessionToken = await createSignedSessionToken(sessionData);
+
+      // Best-effort secondary KV caching (non-fatal if KV quota is exceeded)
+      try {
+        const kv = await getKV();
+        if (kv) {
+          await kv.put(`session:${sessionToken}`, JSON.stringify(sessionData), {
+            expirationTtl: SESSION_TTL_SECONDS,
+          });
+        }
+      } catch (kvErr) {
+        console.warn('Non-fatal KV session write error:', kvErr);
+      }
 
       const headersStore = await headers();
       const referer = headersStore.get('referer') || '';
       const secure = referer.startsWith('https://');
 
       const cookieStore = await cookies();
-      cookieStore.set('session_id', sessionId, {
+      cookieStore.set('session_id', sessionToken, {
         httpOnly: true,
         secure,
         sameSite: 'lax',
@@ -133,7 +141,6 @@ export async function loginAction(formData: FormData) {
   }
 
   const db = await getDB();
-  const kv = await getKV();
 
   try {
     // 1. Fetch user from database by email OR username
@@ -166,27 +173,36 @@ export async function loginAction(formData: FormData) {
       return { success: false, error: 'Invalid username/email or password.' };
     }
 
-    // 3. Create session & cookie
-    const sessionId = `session_${crypto.randomUUID().replace(/-/g, '')}`;
+    // 3. Create stateless signed session token
     const sessionData = {
       userId: user.id,
       email: user.email,
-      username: user.username,
+      username: user.username || undefined,
       name: user.name,
       avatar: undefined,
       expiresAt: Date.now() + SESSION_TTL,
     };
 
-    await kv.put(`session:${sessionId}`, JSON.stringify(sessionData), {
-      expirationTtl: SESSION_TTL_SECONDS,
-    });
+    const sessionToken = await createSignedSessionToken(sessionData);
+
+    // Best-effort secondary KV caching (non-fatal if KV quota is exceeded)
+    try {
+      const kv = await getKV();
+      if (kv) {
+        await kv.put(`session:${sessionToken}`, JSON.stringify(sessionData), {
+          expirationTtl: SESSION_TTL_SECONDS,
+        });
+      }
+    } catch (kvErr) {
+      console.warn('Non-fatal KV session write error:', kvErr);
+    }
 
     const headersStore = await headers();
     const referer = headersStore.get('referer') || '';
     const secure = referer.startsWith('https://');
 
     const cookieStore = await cookies();
-    cookieStore.set('session_id', sessionId, {
+    cookieStore.set('session_id', sessionToken, {
       httpOnly: true,
       secure,
       sameSite: 'lax',

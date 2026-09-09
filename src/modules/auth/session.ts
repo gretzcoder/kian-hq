@@ -2,10 +2,12 @@ import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { getKV, getDB } from '@/db/client';
 import { isAuthorizedForImpersonation } from '@/modules/users/impersonationActions';
+import { verifySignedSessionToken } from './crypto';
 
 export interface SessionUser {
   userId: string;
   email: string;
+  username?: string;
   name: string;
   avatar?: string;
   expiresAt: number;
@@ -15,7 +17,8 @@ export interface SessionUser {
 }
 
 /**
- * Retrieves the current session from cookies, Cloudflare KV, and checks user impersonation state.
+ * Retrieves the current session from cookies (stateless HMAC token or legacy KV),
+ * and checks user impersonation state.
  * Must be called in Server Components, Server Actions, or Route Handlers.
  */
 export const getSession = cache(async function getSession(): Promise<SessionUser | null> {
@@ -27,13 +30,31 @@ export const getSession = cache(async function getSession(): Promise<SessionUser
       return null;
     }
 
-    const kv = await getKV();
-    const sessionVal = await kv.get(`session:${sessionId}`);
-    if (!sessionVal) {
-      return null;
+    let realSession: SessionUser | null = null;
+
+    // 1. Try stateless signed token verification first (0ms, 0 KV reads/writes, quota immune)
+    if (sessionId.includes('.')) {
+      realSession = await verifySignedSessionToken<SessionUser>(sessionId);
     }
 
-    const realSession = JSON.parse(sessionVal) as SessionUser;
+    // 2. Fallback to Cloudflare KV for legacy session tokens
+    if (!realSession) {
+      try {
+        const kv = await getKV();
+        if (kv) {
+          const sessionVal = await kv.get(`session:${sessionId}`);
+          if (sessionVal) {
+            realSession = JSON.parse(sessionVal) as SessionUser;
+          }
+        }
+      } catch (kvErr) {
+        console.warn('Non-fatal KV session read error:', kvErr);
+      }
+    }
+
+    if (!realSession) {
+      return null;
+    }
 
     // Check session expiration
     if (Date.now() > realSession.expiresAt) {
