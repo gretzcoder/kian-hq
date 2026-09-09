@@ -71,7 +71,7 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
                   )}
                   {(r.task_type === 'DIRECT_BRIEF' || (r as any).is_direct_brief) && (
                     <span className="text-[9px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2 py-0.2 rounded-full">
-                      ⚡ Brief Direct Koordinator
+                      ⚡ Brief Diberikan Langsung
                     </span>
                   )}
                 </div>

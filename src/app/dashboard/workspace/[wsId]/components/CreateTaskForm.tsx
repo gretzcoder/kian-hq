@@ -95,7 +95,7 @@ export default function CreateTaskForm({
       )}
       {success && (
         <p className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-4 py-3 font-bold">
-          ✓ Tugas berhasil dibuat{isDirectBrief ? ' dengan Brief Direct Koordinator' : ''}!
+          ✓ Tugas berhasil dibuat{isDirectBrief ? ' dengan Brief Diberikan Langsung' : ''}!
         </p>
       )}
 
@@ -117,15 +117,15 @@ export default function CreateTaskForm({
         <div className="flex-1 space-y-1">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="font-extrabold text-xs text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-              <span>⚡</span> Brief Diberikan Langsung oleh Koordinator
+              <span>⚡</span> Brief Diberikan Langsung
             </span>
             {isDirectBrief ? (
               <span className="bg-blue-500/20 text-blue-700 dark:text-blue-300 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border border-blue-500/30">
-                Direct Brief Aktif
+                Brief Diberikan Langsung Aktif
               </span>
             ) : (
               <span className="bg-zinc-200/80 dark:bg-zinc-800 text-zinc-500 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                Direct Brief Tidak Aktif
+                Brief Diberikan Langsung Tidak Aktif
               </span>
             )}
           </div>
@@ -143,7 +143,7 @@ export default function CreateTaskForm({
               <span className="text-lg">🎯</span>
               <div>
                 <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
-                  Kategori & Slot Output Karya (Direct Brief)
+                  Kategori & Slot Output Karya (Brief Diberikan Langsung)
                 </h4>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
                   Tentukan rincian setiap slot output karya. Anda dapat menentukan peserta khusus (assign), deadline spesifik, serta brief/asset tambahan per output.

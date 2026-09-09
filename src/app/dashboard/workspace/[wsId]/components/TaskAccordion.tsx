@@ -188,7 +188,7 @@ export default function TaskAccordion({
 
   // Target task open if in URL searchParams, otherwise ALL tasks start collapsed
   const [openTaskId, setOpenTaskId] = useState<string | null>(targetTaskId || null);
-  const [filterCategory, setFilterCategory] = useState<'ALL' | 'OVERDUE' | 'ON_PROGRESS' | 'COMPLETED'>('ALL');
+  const [filterCategory, setFilterCategory] = useState<'ALL' | 'MY_TASKS' | 'OVERDUE' | 'ON_PROGRESS' | 'COMPLETED'>('ALL');
   const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
   const [extendTask, setExtendTask] = useState<TaskRow | null>(null);
   const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
@@ -230,6 +230,16 @@ export default function TaskAccordion({
     return !isTaskOverdue(t);
   };
 
+  const isTaskMine = (t: TaskRow) => {
+    if (t.created_by === currentUserId) return true;
+    const taskAss = assignmentsByTask[t.id] ?? [];
+    if (taskAss.some((a) => a.user_id === currentUserId)) return true;
+    const directSlots = parseDirectBriefSlots(t.description);
+    if (directSlots.some((s) => s.assignedUserId === currentUserId)) return true;
+    return false;
+  };
+
+  const myTasksCount = tasks.filter(isTaskMine).length;
   const overdueCount = tasks.filter(isTaskOverdue).length;
   const onProgressCount = tasks.filter(isTaskOnProgress).length;
   const completedCount = tasks.filter(isTaskFinished).length;
@@ -242,6 +252,7 @@ export default function TaskAccordion({
   });
 
   const filteredTasks = sortedTasks.filter((task) => {
+    if (filterCategory === 'MY_TASKS') return isTaskMine(task);
     if (filterCategory === 'OVERDUE') return isTaskOverdue(task);
     if (filterCategory === 'ON_PROGRESS') return isTaskOnProgress(task);
     if (filterCategory === 'COMPLETED') return isTaskFinished(task);
@@ -255,7 +266,7 @@ export default function TaskAccordion({
         <button
           type="button"
           onClick={() => setFilterCategory('ALL')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
             filterCategory === 'ALL'
               ? 'bg-purple-600 text-white border-purple-600 shadow-sm shadow-purple-500/20'
               : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -275,8 +286,33 @@ export default function TaskAccordion({
 
         <button
           type="button"
+          onClick={() => setFilterCategory('MY_TASKS')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+            filterCategory === 'MY_TASKS'
+              ? 'bg-purple-600 text-white border-purple-600 shadow-sm shadow-purple-500/20'
+              : myTasksCount > 0
+                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30 hover:bg-purple-500/20'
+                : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+          }`}
+        >
+          <span>👤 Task Saya</span>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+              filterCategory === 'MY_TASKS'
+                ? 'bg-white/20 text-white'
+                : myTasksCount > 0
+                  ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 font-black'
+                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+            }`}
+          >
+            {myTasksCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setFilterCategory('OVERDUE')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
             filterCategory === 'OVERDUE'
               ? 'bg-red-600 text-white border-red-600 shadow-sm shadow-red-500/20'
               : overdueCount > 0
@@ -301,7 +337,7 @@ export default function TaskAccordion({
         <button
           type="button"
           onClick={() => setFilterCategory('ON_PROGRESS')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
             filterCategory === 'ON_PROGRESS'
               ? 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/20'
               : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -322,7 +358,7 @@ export default function TaskAccordion({
         <button
           type="button"
           onClick={() => setFilterCategory('COMPLETED')}
-          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
             filterCategory === 'COMPLETED'
               ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-500/20'
               : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800'
@@ -344,10 +380,18 @@ export default function TaskAccordion({
       {filteredTasks.length === 0 ? (
         <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-10 text-center bg-white dark:bg-transparent space-y-2">
           <p className="text-3xl">
-            {filterCategory === 'OVERDUE' ? '🎉' : filterCategory === 'COMPLETED' ? '📋' : '⚙️'}
+            {filterCategory === 'MY_TASKS'
+              ? '👤'
+              : filterCategory === 'OVERDUE'
+              ? '🎉'
+              : filterCategory === 'COMPLETED'
+              ? '📋'
+              : '⚙️'}
           </p>
           <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-            {filterCategory === 'OVERDUE'
+            {filterCategory === 'MY_TASKS'
+              ? 'Anda belum memiliki tugas atau belum terlibat pada task di workspace ini.'
+              : filterCategory === 'OVERDUE'
               ? 'Tidak ada tugas yang terlewat deadline.'
               : filterCategory === 'COMPLETED'
               ? 'Belum ada tugas yang selesai.'
@@ -402,7 +446,7 @@ export default function TaskAccordion({
                     </span>
                     {(task.task_type === 'DIRECT_BRIEF' || (task.description && task.description.includes('[DIRECT_BRIEF]'))) && (
                       <span className="text-[9px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
-                        <span>⚡</span> Brief Direct Koordinator
+                        <span>⚡</span> Brief Diberikan Langsung
                       </span>
                     )}
                     {totalTaskSparks > 0 && (
@@ -432,13 +476,6 @@ export default function TaskAccordion({
                 <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-700 dark:group-hover:text-purple-400 transition-colors break-words">
                   {task.title}
                 </h3>
-
-                {/* Description — only show when collapsed */}
-                {!isOpen && task.description && (
-                  <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5 truncate leading-relaxed">
-                    {task.description.replace(/\[DIRECT_BRIEF\]/g, '').replace(/<[^>]*>/g, '').trim()}
-                  </p>
-                )}
               </div>
 
               {/* Far right side: Task Deadline Badge + Multiplier Badge + Edit/Delete Buttons + chevron */}
@@ -536,8 +573,8 @@ export default function TaskAccordion({
                           <DocxDocumentViewer
                             content={task.description.replace('[DIRECT_BRIEF]', '')}
                             docTitle="Brief / Instruksi Pengerjaan"
-                            roleName={isDirectBriefTask ? "Brief Direct Koordinator" : "Catatan & Instruksi Tugas"}
-                            badgeText={isDirectBriefTask ? "⚡ Brief Direct" : "Brief Active"}
+                            roleName={isDirectBriefTask ? "Brief Diberikan Langsung" : "Catatan & Instruksi Tugas"}
+                            badgeText={isDirectBriefTask ? "⚡ Brief Diberikan Langsung" : "Brief Active"}
                           />
                         </div>
                       )}
@@ -748,7 +785,7 @@ function EditTaskModal({
                 <span>Edit Tugas</span>
                 {isDirectBrief && (
                   <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full uppercase">
-                    ⚡ Brief Direct Koordinator
+                    ⚡ Brief Diberikan Langsung
                   </span>
                 )}
               </h3>
