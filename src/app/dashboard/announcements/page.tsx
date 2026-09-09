@@ -38,34 +38,48 @@ export default async function AnnouncementsPage() {
   if (!session) return null;
 
   const db = await getDB();
-  const [resultsRaw, commentsRaw, reactionsRaw, ctx] = await Promise.all([
+  const [resultsRaw, ctx] = await Promise.all([
     db.prepare(`
       SELECT a.id, a.title, a.content, a.created_at, a.created_by as author_id, u.name as author_name, u.avatar_url as author_avatar
       FROM announcements a
       LEFT JOIN users u ON a.created_by = u.id
       ORDER BY a.created_at DESC
+      LIMIT 25
     `).all(),
-    db.prepare(`
-      SELECT c.id, c.announcement_id, c.user_id, c.parent_id, c.content, c.created_at, u.name as user_name, u.avatar_url as user_avatar
-      FROM announcement_comments c
-      LEFT JOIN users u ON c.user_id = u.id
-      ORDER BY c.created_at ASC
-    `).all(),
-    db.prepare(`
-      SELECT 
-        announcement_id, 
-        emoji, 
-        COUNT(*) as count,
-        MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as user_reacted
-      FROM announcement_reactions
-      GROUP BY announcement_id, emoji
-    `).bind(session.userId).all(),
     getSessionContext(session.userId),
   ]);
 
-  const announcements = resultsRaw.results as unknown as AnnouncementRow[];
-  const allComments = commentsRaw.results as unknown as DBCommentRow[];
-  const allReactions = reactionsRaw.results as unknown as DBReactionRow[];
+  const announcements = (resultsRaw.results || []) as unknown as AnnouncementRow[];
+  let allComments: DBCommentRow[] = [];
+  let allReactions: DBReactionRow[] = [];
+
+  if (announcements.length > 0) {
+    const annIds = announcements.map((a) => a.id);
+    const placeholders = annIds.map(() => '?').join(',');
+
+    const [commentsRaw, reactionsRaw] = await Promise.all([
+      db.prepare(`
+        SELECT c.id, c.announcement_id, c.user_id, c.parent_id, c.content, c.created_at, u.name as user_name, u.avatar_url as user_avatar
+        FROM announcement_comments c
+        LEFT JOIN users u ON c.user_id = u.id
+        WHERE c.announcement_id IN (${placeholders})
+        ORDER BY c.created_at ASC
+      `).bind(...annIds).all(),
+      db.prepare(`
+        SELECT 
+          announcement_id, 
+          emoji, 
+          COUNT(*) as count,
+          MAX(CASE WHEN user_id = ? THEN 1 ELSE 0 END) as user_reacted
+        FROM announcement_reactions
+        WHERE announcement_id IN (${placeholders})
+        GROUP BY announcement_id, emoji
+      `).bind(session.userId, ...annIds).all(),
+    ]);
+
+    allComments = (commentsRaw.results || []) as unknown as DBCommentRow[];
+    allReactions = (reactionsRaw.results || []) as unknown as DBReactionRow[];
+  }
 
   const canCreate = ctx.can('ANNOUNCEMENT_POST');
   const canDelete = ctx.can('ANNOUNCEMENT_POST') || ctx.can('ADMIN_SYSTEM');

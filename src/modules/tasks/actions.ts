@@ -994,9 +994,9 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
   const task = await db
-    .prepare('SELECT id, title, project_id, workspace_id, status, task_type, created_by FROM tasks WHERE id = ?')
+    .prepare('SELECT id, title, project_id, workspace_id, status, task_type, created_by, assigned_mentors FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null } | null;
+    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null; assigned_mentors?: string | null } | null;
 
   if (!task) return { success: false, error: 'Task not found.' };
 
@@ -1012,10 +1012,26 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     .bind(workspaceId, session.userId)
     .first()) !== null;
 
+  let isAssignedTaskMentor = false;
+  if (task.assigned_mentors) {
+    try {
+      const ids = JSON.parse(task.assigned_mentors);
+      if (Array.isArray(ids) && ids.includes(session.userId)) {
+        isAssignedTaskMentor = true;
+      }
+    } catch (_e) {}
+  }
+
   const isMentor = (await db
-    .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
-    .bind(workspaceId, session.userId)
-    .first()) !== null;
+    .prepare(`
+      SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?
+      UNION ALL
+      SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?
+      UNION ALL
+      SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?
+    `)
+    .bind(workspaceId, session.userId, workspaceId, session.userId, task.project_id || '', session.userId)
+    .first()) !== null || isAssignedTaskMentor || (task.created_by != null && task.created_by === session.userId);
 
   const isCoordinator =
     (ctx.userType === 'STAFF' &&
@@ -1258,9 +1274,9 @@ export async function requestRevision(assignmentId: string, note: string) {
   }
 
   const task = await db
-    .prepare('SELECT id, title, project_id, workspace_id, status, task_type, created_by FROM tasks WHERE id = ?')
+    .prepare('SELECT id, title, project_id, workspace_id, status, task_type, created_by, assigned_mentors FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null } | null;
+    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null; assigned_mentors?: string | null } | null;
 
   if (!task) return { success: false, error: 'Task not found.' };
 
@@ -1282,10 +1298,26 @@ export async function requestRevision(assignmentId: string, note: string) {
       .bind(workspaceId, session.userId)
       .first()) !== null;
 
+    let isAssignedTaskMentor = false;
+    if (task.assigned_mentors) {
+      try {
+        const ids = JSON.parse(task.assigned_mentors);
+        if (Array.isArray(ids) && ids.includes(session.userId)) {
+          isAssignedTaskMentor = true;
+        }
+      } catch (_e) {}
+    }
+
     const isMentor = (await db
-      .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
-      .bind(workspaceId, session.userId)
-      .first()) !== null;
+      .prepare(`
+        SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?
+        UNION ALL
+        SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?
+        UNION ALL
+        SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?
+      `)
+      .bind(workspaceId, session.userId, workspaceId, session.userId, task.project_id || '', session.userId)
+      .first()) !== null || isAssignedTaskMentor || (task.created_by != null && task.created_by === session.userId);
 
     if (!isLeader && !isMentor && !isCoordinator) {
       throw new Error('Forbidden: You do not have permission to request revision for this step.');
@@ -1488,9 +1520,9 @@ export async function declineAssignment(assignmentId: string, note: string) {
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
   const task = await db
-    .prepare('SELECT id, project_id, workspace_id, status, task_type, created_by FROM tasks WHERE id = ?')
+    .prepare('SELECT id, project_id, workspace_id, status, task_type, created_by, assigned_mentors FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null } | null;
+    .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null; assigned_mentors?: string | null } | null;
 
   if (!task) return { success: false, error: 'Task not found.' };
 
@@ -1512,10 +1544,26 @@ export async function declineAssignment(assignmentId: string, note: string) {
       .bind(workspaceId, session.userId)
       .first()) !== null;
 
+    let isAssignedTaskMentor = false;
+    if (task.assigned_mentors) {
+      try {
+        const ids = JSON.parse(task.assigned_mentors);
+        if (Array.isArray(ids) && ids.includes(session.userId)) {
+          isAssignedTaskMentor = true;
+        }
+      } catch (_e) {}
+    }
+
     const isMentor = (await db
-      .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
-      .bind(workspaceId, session.userId)
-      .first()) !== null;
+      .prepare(`
+        SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?
+        UNION ALL
+        SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?
+        UNION ALL
+        SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?
+      `)
+      .bind(workspaceId, session.userId, workspaceId, session.userId, task.project_id || '', session.userId)
+      .first()) !== null || isAssignedTaskMentor || (task.created_by != null && task.created_by === session.userId);
 
     if (!isLeader && !isMentor && !isCoordinator) {
       throw new Error('Forbidden: You do not have permission to decline this step.');

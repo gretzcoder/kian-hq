@@ -28,6 +28,7 @@ interface ReviewRow {
   workspace_id:    string | null;
   workspace_name:  string | null;
   workspace_type:  string | null;
+  ojt_coordinator_id?: string | null;
   project_id:      string;
   project_name:    string;
   creator_id:      string;
@@ -106,15 +107,32 @@ export default async function ReviewPage() {
   const reviewRows = (rawReviews as any[]) || [];
   let leaderWsSet = new Set<string>();
   let coordProjSet = new Set<string>();
+  let mentorWsSet = new Set<string>();
+  let wsWithMentorsSet = new Set<string>();
+  let wsMentorsMap: Record<string, { id: string; name: string }[]> = {};
 
   let mentorNameMap: Record<string, string> = {};
   if (reviewRows.length > 0) {
-    const [leadRows, coordRows] = await Promise.all([
+    const [leadRows, coordRows, mentorWsRows, allWsMentors] = await Promise.all([
       db.prepare(`SELECT workspace_id FROM workspace_members WHERE user_id = ? AND team_role = 'LEADER'`).bind(session.userId).all(),
       db.prepare(`SELECT project_id FROM project_coordinators WHERE user_id = ?`).bind(session.userId).all(),
+      db.prepare(`SELECT workspace_id FROM workspace_mentors WHERE user_id = ?`).bind(session.userId).all(),
+      db.prepare(`
+        SELECT wm.workspace_id, wm.user_id, u.name 
+        FROM workspace_mentors wm 
+        JOIN users u ON wm.user_id = u.id
+      `).all(),
     ]);
     leaderWsSet = new Set(((leadRows.results as any[]) || []).map((r) => r.workspace_id));
     coordProjSet = new Set(((coordRows.results as any[]) || []).map((r) => r.project_id));
+    mentorWsSet = new Set(((mentorWsRows.results as any[]) || []).map((r) => r.workspace_id));
+
+    ((allWsMentors.results as any[]) || []).forEach((row) => {
+      wsWithMentorsSet.add(row.workspace_id);
+      if (!wsMentorsMap[row.workspace_id]) wsMentorsMap[row.workspace_id] = [];
+      wsMentorsMap[row.workspace_id].push({ id: row.user_id, name: row.name });
+      mentorNameMap[row.user_id] = row.name;
+    });
 
     const allAssignedMentorIds = new Set<string>();
     for (const r of reviewRows) {
@@ -123,6 +141,9 @@ export default async function ReviewPage() {
           const ids: string[] = JSON.parse(r.assigned_mentors);
           ids.forEach((id) => allAssignedMentorIds.add(id));
         } catch (_e) {}
+      }
+      if (r.ojt_coordinator_id) {
+        allAssignedMentorIds.add(r.ojt_coordinator_id);
       }
     }
     if (allAssignedMentorIds.size > 0) {
@@ -138,11 +159,32 @@ export default async function ReviewPage() {
     }
   }
 
-  const allReviews = reviewRows.map((r) => ({
-    ...r,
-    is_leader: r.workspace_id ? (leaderWsSet.has(r.workspace_id) ? 1 : 0) : 0,
-    is_mentor: (r.ojt_coordinator_id === session.userId || (r.project_id && coordProjSet.has(r.project_id)) || r.task_created_by === session.userId) ? 1 : 0,
-  })) as unknown as (ReviewRow & {
+  const allReviews = reviewRows.map((r) => {
+    let isAssignedTaskMentor = false;
+    if (r.assigned_mentors) {
+      try {
+        const ids: string[] = JSON.parse(r.assigned_mentors);
+        if (Array.isArray(ids) && ids.includes(session.userId)) {
+          isAssignedTaskMentor = true;
+        }
+      } catch (_e) {}
+    }
+
+    const is_leader = r.workspace_id ? (leaderWsSet.has(r.workspace_id) ? 1 : 0) : 0;
+    const is_mentor = (
+      (r.workspace_id && mentorWsSet.has(r.workspace_id)) ||
+      r.ojt_coordinator_id === session.userId ||
+      (r.project_id && coordProjSet.has(r.project_id)) ||
+      r.task_created_by === session.userId ||
+      isAssignedTaskMentor
+    ) ? 1 : 0;
+
+    return {
+      ...r,
+      is_leader,
+      is_mentor,
+    };
+  }) as unknown as (ReviewRow & {
     lead_approved: number;
     mentor_approved: number;
     coordinator_approved: number;
@@ -155,21 +197,11 @@ export default async function ReviewPage() {
     // ── Exclude own submissions ──
     if (r.creator_id === session.userId) return false;
 
-    // ── Assessment 1-step flow ──
+    // ── Assessment flow ──
     if (r.task_type === 'ASSESSMENT') {
-      let isTaskMentor = false;
-      if (r.assigned_mentors) {
-        try {
-          const ids: string[] = JSON.parse(r.assigned_mentors);
-          if (Array.isArray(ids) && ids.length > 0) {
-            isTaskMentor = ids.includes(session.userId);
-          }
-        } catch (_e) {}
-      }
-      if (!isTaskMentor) {
-        isTaskMentor = (r.task_created_by != null && r.task_created_by === session.userId) || r.is_mentor === 1;
-      }
-      return (isCoordinator || isTaskMentor) && r.coordinator_approved === 0;
+      if (r.is_mentor && r.mentor_approved === 0) return true;
+      if (isCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
+      return false;
     }
 
     // ── Mentor Workspaces: ONLY Coordinators/Admins OR Task Creator evaluate submissions ──
@@ -179,10 +211,28 @@ export default async function ReviewPage() {
       return (isCoordinator || isTaskCreator) && r.coordinator_approved === 0;
     }
 
-    // ── Regular / Troopers tasks: show if user is Coordinator, Mentor, or Leader and step is pending ──
-    if (isCoordinator && r.coordinator_approved === 0) return true;
-    if (r.is_mentor && r.mentor_approved === 0) return true;
+    // ── Regular / Troopers tasks: ──
+    // Stage 1 (Leader):
     if (r.is_leader && r.lead_approved === 0) return true;
+
+    // Stage 2 (Mentor):
+    if (r.is_mentor && r.mentor_approved === 0) return true;
+
+    // Stage 3 (Coordinator):
+    // If workspace or task has mentors assigned, coordinator only reviews AFTER mentor has approved (r.mentor_approved === 1).
+    // If no mentor is assigned, coordinator can review directly (r.coordinator_approved === 0).
+    const hasAssignedMentors = Boolean(
+      (r.workspace_id && wsWithMentorsSet.has(r.workspace_id)) ||
+      r.ojt_coordinator_id != null ||
+      (r.assigned_mentors && r.assigned_mentors.length > 2)
+    );
+
+    if (isCoordinator) {
+      if (hasAssignedMentors) {
+        return r.mentor_approved === 1 && r.coordinator_approved === 0;
+      }
+      return r.coordinator_approved === 0;
+    }
 
     return false;
   });
@@ -211,6 +261,15 @@ export default async function ReviewPage() {
           if (names.length > 0) return names.join(', ');
         }
       } catch (_e) {}
+    }
+    if (r.workspace_id && wsMentorsMap[r.workspace_id] && wsMentorsMap[r.workspace_id].length > 0) {
+      const names = wsMentorsMap[r.workspace_id]
+        .map((m) => (m.id === session.userId ? 'Anda' : m.name))
+        .filter(Boolean);
+      if (names.length > 0) return names.join(', ');
+    }
+    if (r.ojt_coordinator_id) {
+      return r.ojt_coordinator_id === session.userId ? 'Anda' : (mentorNameMap[r.ojt_coordinator_id] || 'Mentor');
     }
     return r.task_created_by === session.userId ? 'Anda' : (r.task_creator_name ?? 'Mentor');
   };
@@ -407,11 +466,12 @@ export default async function ReviewPage() {
                       assignmentId={r.assignment_id}
                       canRequestRevision={true}
                       taskType={r.task_type}
-                      isAssessmentMentorStep={r.task_type === 'ASSESSMENT'}
-                      creatorName={r.creator_name}
+                      isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.is_mentor === 1 && ((r as any).mentor_approved ?? 0) === 0}
+                      creatorName={getMentorDisplay(r)}
                       isStaffOrCoord={isCoordinator}
                       mentorApproved={(r as any).mentor_approved ?? 0}
                       coordinatorApproved={(r as any).coordinator_approved ?? 0}
+                      isTaskMentor={r.is_mentor === 1}
                       isMentorWs={(r as any).workspace_type === 'MENTOR'}
                       taskId={r.task_id}
                       taskTitle={r.task_title}

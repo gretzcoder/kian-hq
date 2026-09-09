@@ -104,7 +104,7 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
       ? db
           .prepare(
             `SELECT ta.id, ta.user_id AS creator_id, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
-                    t.task_type, t.created_by AS task_created_by, t.workspace_id, t.project_id,
+                    t.task_type, t.created_by AS task_created_by, t.workspace_id, t.project_id, t.assigned_mentors,
                     ws.workspace_type, ws.ojt_coordinator_id, p.name AS project_name
              FROM task_assignments ta
              JOIN tasks t ON ta.task_id = t.id
@@ -125,22 +125,46 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
     const reviewItems = (reviewRaw.results as any[]) || [];
     let leaderWsSet = new Set<string>();
     let coordProjSet = new Set<string>();
+    let mentorWsSet = new Set<string>();
+    let wsWithMentorsSet = new Set<string>();
 
     if (reviewItems.length > 0) {
-      const [leadRows, coordRows] = await Promise.all([
+      const [leadRows, coordRows, mentorWsRows, allWsMentors] = await Promise.all([
         db.prepare(`SELECT workspace_id FROM workspace_members WHERE user_id = ? AND team_role = 'LEADER'`).bind(session.userId).all(),
         db.prepare(`SELECT project_id FROM project_coordinators WHERE user_id = ?`).bind(session.userId).all(),
+        db.prepare(`SELECT workspace_id FROM workspace_mentors WHERE user_id = ?`).bind(session.userId).all(),
+        db.prepare(`SELECT DISTINCT workspace_id FROM workspace_mentors`).all(),
       ]);
       leaderWsSet = new Set(((leadRows.results as any[]) || []).map((r) => r.workspace_id));
       coordProjSet = new Set(((coordRows.results as any[]) || []).map((r) => r.project_id));
+      mentorWsSet = new Set(((mentorWsRows.results as any[]) || []).map((r) => r.workspace_id));
+      wsWithMentorsSet = new Set(((allWsMentors.results as any[]) || []).map((r) => r.workspace_id));
     }
 
     const validReviews = reviewItems.filter((r) => {
       if (r.creator_id === session.userId) return false;
 
+      let isAssignedTaskMentor = false;
+      if (r.assigned_mentors) {
+        try {
+          const ids = JSON.parse(r.assigned_mentors);
+          if (Array.isArray(ids) && ids.includes(session.userId)) {
+            isAssignedTaskMentor = true;
+          }
+        } catch (_e) {}
+      }
+
+      const isLead = r.workspace_id ? leaderWsSet.has(r.workspace_id) : false;
+      const isMentor = (
+        (r.workspace_id ? mentorWsSet.has(r.workspace_id) : false) ||
+        (r.ojt_coordinator_id === session.userId) ||
+        (r.project_id ? coordProjSet.has(r.project_id) : false) ||
+        (r.task_created_by === session.userId) ||
+        isAssignedTaskMentor
+      );
+
       if (r.task_type === 'ASSESSMENT') {
-        const isCreator = r.task_created_by != null && r.task_created_by === session.userId;
-        if (isCreator && r.mentor_approved === 0) return true;
+        if (isMentor && r.mentor_approved === 0) return true;
         if (isCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
         return false;
       }
@@ -151,12 +175,23 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
         return (isCoordinator || isTaskCreator) && r.coordinator_approved === 0;
       }
 
-      const isLead = r.workspace_id ? leaderWsSet.has(r.workspace_id) : false;
-      const isMentor = (r.ojt_coordinator_id === session.userId) || (r.project_id ? coordProjSet.has(r.project_id) : false) || (r.task_created_by === session.userId);
-
-      if (isCoordinator && r.coordinator_approved === 0) return true;
-      if (isMentor && r.mentor_approved === 0) return true;
+      // Regular / Troopers tasks:
       if (isLead && r.lead_approved === 0) return true;
+      if (isMentor && r.mentor_approved === 0) return true;
+
+      const hasAssignedMentors = Boolean(
+        (r.workspace_id && wsWithMentorsSet.has(r.workspace_id)) ||
+        r.ojt_coordinator_id != null ||
+        (r.assigned_mentors && r.assigned_mentors.length > 2)
+      );
+
+      if (isCoordinator) {
+        if (hasAssignedMentors) {
+          return r.mentor_approved === 1 && r.coordinator_approved === 0;
+        }
+        return r.coordinator_approved === 0;
+      }
+
       return false;
     });
     pendingReviewCount = validReviews.length;
@@ -297,11 +332,22 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
   if (canReview) {
     const { results: pendingReviews } = await db
       .prepare(
-        `SELECT ta.id, ta.assignment_role, ta.submitted_at, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
-                t.id AS taskId, t.title AS taskTitle, t.task_type AS taskType, t.created_by AS taskCreatedBy,
-                t.workspace_id AS wsId, ws.name AS wsName, ws.workspace_type AS wsType,
+        `SELECT ta.id, ta.user_id AS assigneeId, ta.assignment_role, ta.submitted_at, ta.lead_approved, ta.mentor_approved, ta.coordinator_approved,
+                t.id AS taskId, t.title AS taskTitle, t.task_type AS taskType, t.created_by AS taskCreatedBy, t.assigned_mentors,
+                t.workspace_id AS wsId, ws.name AS wsName, ws.workspace_type AS wsType, ws.ojt_coordinator_id,
                 p.name AS projectName, u.name AS assigneeName,
-                EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AS is_lead
+                EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = t.workspace_id AND user_id = ? AND team_role = 'LEADER') AS is_lead,
+                (
+                  (EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = t.workspace_id AND wm.user_id = ?))
+                  OR ws.ojt_coordinator_id = ?
+                  OR t.created_by = ?
+                  OR (EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = t.project_id AND pc.user_id = ?))
+                ) AS is_mentor,
+                (
+                  (EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = t.workspace_id))
+                  OR ws.ojt_coordinator_id IS NOT NULL
+                  OR (t.assigned_mentors IS NOT NULL AND length(t.assigned_mentors) > 2)
+                ) AS has_mentor
          FROM task_assignments ta
          JOIN tasks t ON ta.task_id = t.id
          JOIN projects p ON t.project_id = p.id
@@ -315,25 +361,41 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
           ORDER BY ta.submitted_at DESC
          LIMIT 30`
       )
-      .bind(session.userId)
+      .bind(session.userId, session.userId, session.userId, session.userId, session.userId)
       .all();
 
     const validReviews = (pendingReviews as any[]).filter((r) => {
+      if (r.assigneeId === session.userId) return false;
+
+      let isAssignedTaskMentor = Boolean(r.is_mentor);
+      if (!isAssignedTaskMentor && r.assigned_mentors) {
+        try {
+          const ids = JSON.parse(r.assigned_mentors);
+          if (Array.isArray(ids) && ids.includes(session.userId)) {
+            isAssignedTaskMentor = true;
+          }
+        } catch (_e) {}
+      }
+
       const isMentorWs = r.wsType === 'MENTOR' || r.taskType === 'MENTOR' || (r.projectName ? r.projectName.toUpperCase().includes('MENTOR') : false);
       if (r.taskType === 'ASSESSMENT') {
-        const isCreator = r.taskCreatedBy != null && r.taskCreatedBy === session.userId;
-        if (isCreator && r.mentor_approved === 0) return true;
+        if (isAssignedTaskMentor && r.mentor_approved === 0) return true;
         if (isCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
         return false;
       }
       if (isMentorWs) {
-        const isTaskCreator = r.wsType ? (r.taskCreatedBy != null && r.taskCreatedBy === session.userId) : (r.task_created_by != null && r.task_created_by === session.userId);
+        const isTaskCreator = r.taskCreatedBy != null && r.taskCreatedBy === session.userId;
         if ((isCoordinator || isTaskCreator) && r.coordinator_approved === 0) return true;
         return false;
       }
       if (r.is_lead && r.lead_approved === 0) return true;
-      if (r.taskCreatedBy === session.userId && r.mentor_approved === 0) return true;
-      if (isCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
+      if (isAssignedTaskMentor && r.mentor_approved === 0) return true;
+      if (isCoordinator) {
+        if (r.has_mentor) {
+          return r.mentor_approved === 1 && r.coordinator_approved === 0;
+        }
+        return r.coordinator_approved === 0;
+      }
       return false;
     });
 

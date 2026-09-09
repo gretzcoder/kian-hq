@@ -468,12 +468,26 @@ export default async function DashboardPage() {
       t.priority       AS task_priority,
       t.task_type      AS task_type,
       t.created_by     AS task_created_by,
+      t.assigned_mentors,
       t.workspace_id,
       ws.name          AS workspace_name,
       ws.workspace_type AS workspace_type,
+      ws.ojt_coordinator_id,
       t.project_id,
       p.name           AS project_name,
-      u.name           AS creator_name
+      u.name           AS creator_name,
+      EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ? AND team_role = 'LEADER') AS is_lead,
+      (
+        (EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = ws.id AND wm.user_id = ?))
+        OR ws.ojt_coordinator_id = ?
+        OR t.created_by = ?
+        OR (EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = p.id AND pc.user_id = ?))
+      ) AS is_mentor,
+      (
+        (EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = ws.id))
+        OR ws.ojt_coordinator_id IS NOT NULL
+        OR (t.assigned_mentors IS NOT NULL AND length(t.assigned_mentors) > 2)
+      ) AS has_mentor
     FROM task_assignments ta
     JOIN tasks t       ON ta.task_id = t.id
     JOIN projects p    ON t.project_id = p.id
@@ -484,16 +498,10 @@ export default async function DashboardPage() {
       AND TRIM(ta.result_url) != ''
       AND t.status != 'DELETED'
       AND (ws.deleted_at IS NULL OR ws.id IS NULL)
-      AND (
-        (EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ? AND team_role = 'LEADER') AND ta.lead_approved = 0)
-        OR (EXISTS (SELECT 1 FROM project_coordinators WHERE project_id = p.id AND user_id = ?) AND ta.mentor_approved = 0)
-        OR (? = 1 AND ta.coordinator_approved = 0)
-        OR (t.task_type = 'ASSESSMENT' AND t.created_by = ?)
-      )
     ORDER BY ta.submitted_at ASC
   `
     )
-    .bind(session.userId, session.userId, isStaffCoordinator ? 1 : 0, session.userId)
+    .bind(session.userId, session.userId, session.userId, session.userId, session.userId)
     .all();
 
   const allQCReviews = rawPendingQCReviews as unknown as (QCReviewItem & {
@@ -502,25 +510,43 @@ export default async function DashboardPage() {
     task_type?: string | null;
   })[];
 
-  const pendingQCReviews = allQCReviews.filter((r) => {
+  const pendingQCReviews = allQCReviews.filter((r: any) => {
     // ── Exclude own submissions ──
     if (r.user_id === session.userId) return false;
 
+    let isAssignedTaskMentor = Boolean(r.is_mentor);
+    if (!isAssignedTaskMentor && r.assigned_mentors) {
+      try {
+        const ids = JSON.parse(r.assigned_mentors);
+        if (Array.isArray(ids) && ids.includes(session.userId)) {
+          isAssignedTaskMentor = true;
+        }
+      } catch (_e) {}
+    }
+
     // ── Mentor Workspaces: ONLY Coordinators/Admins evaluate submissions ──
     if (r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR' || (r.project_name ? r.project_name.toUpperCase().includes('MENTOR') : false)) {
-      if (!isStaffCoordinator) return false;
+      const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
+      if (!isStaffCoordinator && !isTaskCreator) return false;
+      return r.coordinator_approved === 0;
     }
 
     if (r.task_type === 'ASSESSMENT') {
-      const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
-      if (isTaskCreator && r.mentor_approved === 0) return true;
+      if (isAssignedTaskMentor && r.mentor_approved === 0) return true;
       if (isStaffCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
       return false;
     }
-    if (r.lead_approved === 1) return false;
-    if (r.mentor_approved === 1) return false;
-    if (isStaffCoordinator && r.coordinator_approved === 1) return false;
-    return true;
+
+    // Regular / Troopers:
+    if (r.is_lead && r.lead_approved === 0) return true;
+    if (isAssignedTaskMentor && r.mentor_approved === 0) return true;
+    if (isStaffCoordinator) {
+      if (r.has_mentor) {
+        return r.mentor_approved === 1 && r.coordinator_approved === 0;
+      }
+      return r.coordinator_approved === 0;
+    }
+    return false;
   });
 
   async function handlePostAnnouncement(formData: FormData) {
