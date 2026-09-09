@@ -869,6 +869,9 @@ export async function markWorkspaceChatReadAction(workspaceId: string): Promise<
   return { success: true };
 }
 
+const unreadSummaryMemoryCache = new Map<string, { data: { success: boolean; totalUnread: number }; ts: number }>();
+const UNREAD_SUMMARY_CACHE_TTL_MS = 20_000; // 20 seconds
+
 /**
  * Lightweight fast unread summary counter action for floating messenger badge.
  * Returns only total unread count using indexed queries, minimizing D1 rows read.
@@ -876,6 +879,12 @@ export async function markWorkspaceChatReadAction(workspaceId: string): Promise<
 export async function getUnreadSummaryAction(): Promise<{ success: boolean; totalUnread: number }> {
   const session = await getSession();
   if (!session) return { success: false, totalUnread: 0 };
+
+  const now = Date.now();
+  const cached = unreadSummaryMemoryCache.get(session.userId);
+  if (cached && now - cached.ts < UNREAD_SUMMARY_CACHE_TTL_MS) {
+    return cached.data;
+  }
 
   const db = await getDB();
   const userId = session.userId;
@@ -891,11 +900,13 @@ export async function getUnreadSummaryAction(): Promise<{ success: boolean; tota
         .prepare(
           `SELECT COUNT(*) AS cnt
            FROM workspace_chats wc
-           JOIN workspace_members wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = ?
-           LEFT JOIN workspace_chat_reads wcr ON wcr.chat_id = wc.id AND wcr.user_id = ?
-           WHERE wc.user_id != ? 
+           WHERE wc.workspace_id IN (SELECT DISTINCT workspace_id FROM workspace_members WHERE user_id = ?)
+             AND wc.user_id != ? 
              AND wc.created_at > (strftime('%s', 'now') - 604800)
-             AND wcr.chat_id IS NULL`
+             AND NOT EXISTS (
+               SELECT 1 FROM workspace_chat_reads wcr 
+               WHERE wcr.chat_id = wc.id AND wcr.user_id = ?
+             )`
         )
         .bind(userId, userId, userId)
         .first<{ cnt: number }>(),
@@ -918,7 +929,9 @@ export async function getUnreadSummaryAction(): Promise<{ success: boolean; tota
       (Number(wsRes?.cnt) || 0) +
       (Number(commRes?.cnt) || 0);
 
-    return { success: true, totalUnread: total };
+    const result = { success: true, totalUnread: total };
+    unreadSummaryMemoryCache.set(userId, { data: result, ts: now });
+    return result;
   } catch (err) {
     console.error('Error fetching unread summary:', err);
     return { success: false, totalUnread: 0 };

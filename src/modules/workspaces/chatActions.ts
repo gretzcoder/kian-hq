@@ -602,18 +602,12 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
         `SELECT wc.id, wc.workspace_id, wc.user_id, wc.message, wc.parent_id, wc.attachment_url, wc.created_at,
                 u.name AS user_name, u.avatar_url AS user_avatar, u.user_type,
                 p_wc.message AS reply_message, p_u.name AS reply_user_name,
-                wm.team_role AS user_role
+                (SELECT wm.team_role FROM workspace_members wm WHERE wm.workspace_id = wc.workspace_id AND wm.user_id = wc.user_id ORDER BY CASE wm.team_role WHEN 'LEADER' THEN 1 WHEN 'MEMBER' THEN 9 ELSE 2 END LIMIT 1) AS user_role
          FROM workspace_chats wc
          LEFT JOIN users u ON wc.user_id = u.id
          LEFT JOIN workspace_chats p_wc ON wc.parent_id = p_wc.id
          LEFT JOIN users p_u ON p_wc.user_id = p_u.id
-         LEFT JOIN (
-           SELECT workspace_id, user_id, MAX(team_role) AS team_role
-           FROM workspace_members
-           GROUP BY workspace_id, user_id
-         ) wm ON wm.workspace_id = wc.workspace_id AND wm.user_id = wc.user_id
          WHERE wc.workspace_id = ?
-         GROUP BY wc.id
          ORDER BY wc.created_at DESC
          LIMIT 50`
       )

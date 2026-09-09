@@ -130,10 +130,8 @@ export async function getLeaderboardData(
   group: 'troopers' | 'mentor' = 'troopers',
   customDateRange?: { startTs: number; endTs?: number }
 ) {
-  const session = await getSession();
-  const currentUserId = session?.userId || '';
   const dateRangeKey = customDateRange ? `${customDateRange.startTs}-${customDateRange.endTs}` : '';
-  const cacheKey = `global:leaderboard:${category}:${period}:${group}:${dateRangeKey}:${currentUserId}`;
+  const cacheKey = `global:leaderboard:${category}:${period}:${group}:${dateRangeKey}`;
 
   return getOrSetCache(
     cacheKey,
@@ -527,17 +525,15 @@ export async function getLeaderboardData(
         p.name  AS projectName,
         COALESCE(wmc.membersCount, 0) AS membersCount,
         COALESCE(ws_sparks.tasksCompleted, 0) AS tasksCompleted,
-        COALESCE(ws_sparks.totalSparks, 0) AS rawSparks,
-        CASE WHEN wm_me.user_id IS NOT NULL THEN 1 ELSE 0 END AS isMember
+        COALESCE(ws_sparks.totalSparks, 0) AS rawSparks
       FROM workspaces ws
       JOIN projects p ON ws.project_id = p.id
       LEFT JOIN workspace_sparks ws_sparks ON ws.id = ws_sparks.workspace_id
       LEFT JOIN workspace_members_count wmc ON ws.id = wmc.workspace_id
-      LEFT JOIN workspace_members wm_me ON ws.id = wm_me.workspace_id AND wm_me.user_id = ?
       WHERE ws.deleted_at IS NULL ${wsTypeFilter}
     `;
 
-    const { results } = await db.prepare(query).bind(currentUserId).all();
+    const { results } = await db.prepare(query).all();
     const ranked: WorkspaceLeaderboardItem[] = (results as any[])
       .map((r) => ({
         workspaceId: r.workspaceId,
@@ -546,7 +542,7 @@ export async function getLeaderboardData(
         totalSparks: Math.round(Number(r.rawSparks || 0)),
         tasksCompleted: Number(r.tasksCompleted) || 0,
         membersCount: Number(r.membersCount) || 0,
-        isMember: Boolean(r.isMember),
+        isMember: true,
       }))
       .sort((a, b) => b.totalSparks - a.totalSparks || b.tasksCompleted - a.tasksCompleted)
       .map((ws, idx) => ({ ...ws, rank: idx + 1 }));

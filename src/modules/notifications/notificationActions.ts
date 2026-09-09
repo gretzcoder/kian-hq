@@ -175,12 +175,21 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
   return res;
 }
 
+const userNotificationsMemoryCache = new Map<string, { data: NotificationFeedItem[]; ts: number }>();
+const NOTIFS_CACHE_TTL_MS = 25_000; // 25 seconds
+
 /**
  * Fetch detailed floating notification feed items customized strictly for user's accessible features.
  */
 export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> {
   const session = await getSession();
   if (!session) return [];
+
+  const now = Date.now();
+  const cached = userNotificationsMemoryCache.get(session.userId);
+  if (cached && now - cached.ts < NOTIFS_CACHE_TTL_MS) {
+    return cached.data;
+  }
 
   const db = await getDB();
   const ctx = await getSessionContext(session.userId);
@@ -404,38 +413,55 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
   try {
     const { results: reminderEvents } = await db
       .prepare(
-        `SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
-                u_sender.name AS senderName,
-                COALESCE(t_direct.id, t_via_ta.id) AS taskId,
-                COALESCE(t_direct.title, t_via_ta.title) AS taskTitle,
-                COALESCE(t_direct.workspace_id, t_via_ta.workspace_id) AS wsId,
-                COALESCE(ws_direct.name, ws_via_ta.name) AS wsName
-         FROM workflow_events we
-         LEFT JOIN task_assignments ta ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
-         LEFT JOIN tasks t_via_ta ON ta.task_id = t_via_ta.id
-         LEFT JOIN workspaces ws_via_ta ON t_via_ta.workspace_id = ws_via_ta.id
-         LEFT JOIN tasks t_direct ON (we.entity_type = 'task' AND we.entity_id = t_direct.id)
-         LEFT JOIN workspaces ws_direct ON t_direct.workspace_id = ws_direct.id
-         LEFT JOIN task_assignments ta_direct ON (we.entity_type = 'task' AND we.entity_id = ta_direct.task_id AND ta_direct.user_id = ?)
-         LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
-         WHERE (we.to_status = 'REMINDER_SENT' OR we.from_status = 'REMINDER_SENT')
-           AND (we.triggered_by IS NULL OR we.triggered_by != ?)
-           AND (
-             (ta.user_id = ? AND t_via_ta.status != 'DELETED' AND (ws_via_ta.id IS NULL OR ws_via_ta.deleted_at IS NULL))
-             OR
-             (t_direct.created_by = ? AND t_direct.status != 'DELETED' AND (ws_direct.id IS NULL OR ws_direct.deleted_at IS NULL))
-             OR
-             (ta_direct.user_id = ? AND t_direct.status != 'DELETED' AND (ws_direct.id IS NULL OR ws_direct.deleted_at IS NULL))
-           )
-         ORDER BY we.created_at DESC
-         LIMIT 15`
+        `SELECT * FROM (
+          SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
+                 u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
+                 t.workspace_id AS wsId, ws.name AS wsName
+          FROM workflow_events we
+          JOIN task_assignments ta ON (we.entity_type = 'task_assignment' AND we.entity_id = ta.id)
+          JOIN tasks t ON ta.task_id = t.id
+          LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+          LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+          WHERE ta.id IN (SELECT id FROM task_assignments WHERE user_id = ?)
+            AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
+            AND (we.triggered_by IS NULL OR we.triggered_by != ?)
+            AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+
+          UNION
+
+          SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
+                 u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
+                 t.workspace_id AS wsId, ws.name AS wsName
+          FROM workflow_events we
+          JOIN tasks t ON (we.entity_type = 'task' AND we.entity_id = t.id)
+          LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+          LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+          WHERE t.id IN (SELECT id FROM tasks WHERE created_by = ? AND status != 'DELETED')
+            AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
+            AND (we.triggered_by IS NULL OR we.triggered_by != ?)
+            AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+
+          UNION
+
+          SELECT we.id, we.entity_type, we.entity_id, we.note, we.created_at,
+                 u_sender.name AS senderName, t.id AS taskId, t.title AS taskTitle,
+                 t.workspace_id AS wsId, ws.name AS wsName
+          FROM workflow_events we
+          JOIN tasks t ON (we.entity_type = 'task' AND we.entity_id = t.id)
+          LEFT JOIN users u_sender ON we.triggered_by = u_sender.id
+          LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+          WHERE t.id IN (SELECT task_id FROM task_assignments WHERE user_id = ?)
+            AND (we.from_status = 'REMINDER_SENT' OR we.to_status = 'REMINDER_SENT')
+            AND (we.triggered_by IS NULL OR we.triggered_by != ?)
+            AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+        )
+        ORDER BY created_at DESC
+        LIMIT 15`
       )
       .bind(
-        session.userId, // ta_direct.user_id
-        session.userId, // we.triggered_by != ?
-        session.userId, // ta.user_id = ?
-        session.userId, // t_direct.created_by = ?
-        session.userId  // ta_direct.user_id = ?
+        session.userId, session.userId,
+        session.userId, session.userId,
+        session.userId, session.userId
       )
       .all();
 
@@ -461,6 +487,7 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
   // Sort all notifications by newest timestamp
   feedItems.sort((a, b) => b.createdAt - a.createdAt);
 
+  userNotificationsMemoryCache.set(session.userId, { data: feedItems, ts: now });
   return feedItems;
 }
 
