@@ -779,8 +779,17 @@ export default function TaskActions({
                                 );
                               }
 
-                              const approvedCount = (assign.lead_approved || 0) + (assign.mentor_approved || 0) + (assign.coordinator_approved || 0);
-                              const isFullyApproved = approvedCount === 3;
+                              const isFullyApproved = isApprovedState;
+                              let statusText = '⏳ Menunggu QC';
+                              if (isFullyApproved) {
+                                statusText = '✓ Selesai & Disetujui';
+                              } else if (!assign.lead_approved) {
+                                statusText = '⏳ Menunggu QC Ketua Tim';
+                              } else if (assign.lead_approved && !assign.mentor_approved) {
+                                statusText = '⏳ Lolos QC Ketua — Menunggu Review Mentor';
+                              } else if (assign.mentor_approved) {
+                                statusText = '✓ Disetujui Mentor';
+                              }
 
                               return (
                                 <div className="border-t border-zinc-100 dark:border-zinc-800/60 pt-2 mt-2">
@@ -795,7 +804,7 @@ export default function TaskActions({
                                         }`}
                                       title={`Detail: Ketua Tim (${assign.lead_approved ? '✓' : '⏳'}), Mentor (${assign.mentor_approved ? '✓' : '⏳'}), Koordinator (${assign.coordinator_approved ? '✓' : '⏳'})`}
                                     >
-                                      <span>{isFullyApproved ? '✓ Selesai (3/3)' : `⏳ Persetujuan (${approvedCount}/3)`}</span>
+                                      <span>{statusText}</span>
                                     </span>
                                   </div>
                                 </div>

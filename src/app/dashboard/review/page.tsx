@@ -112,8 +112,10 @@ export default async function ReviewPage() {
   let wsMentorsMap: Record<string, { id: string; name: string }[]> = {};
 
   let mentorNameMap: Record<string, string> = {};
+  const wsLeadersMap = new Map<string, Set<string>>();
+
   if (reviewRows.length > 0) {
-    const [leadRows, coordRows, mentorWsRows, allWsMentors] = await Promise.all([
+    const [leadRows, coordRows, mentorWsRows, allWsMentors, allWsLeaders] = await Promise.all([
       db.prepare(`SELECT workspace_id FROM workspace_members WHERE user_id = ? AND team_role = 'LEADER'`).bind(session.userId).all(),
       db.prepare(`SELECT project_id FROM project_coordinators WHERE user_id = ?`).bind(session.userId).all(),
       db.prepare(`SELECT workspace_id FROM workspace_mentors WHERE user_id = ?`).bind(session.userId).all(),
@@ -122,10 +124,20 @@ export default async function ReviewPage() {
         FROM workspace_mentors wm 
         JOIN users u ON wm.user_id = u.id
       `).all(),
+      db.prepare(`
+        SELECT workspace_id, user_id 
+        FROM workspace_members 
+        WHERE team_role = 'LEADER'
+      `).all(),
     ]);
     leaderWsSet = new Set(((leadRows.results as any[]) || []).map((r) => r.workspace_id));
     coordProjSet = new Set(((coordRows.results as any[]) || []).map((r) => r.project_id));
     mentorWsSet = new Set(((mentorWsRows.results as any[]) || []).map((r) => r.workspace_id));
+
+    ((allWsLeaders.results as any[]) || []).forEach((row) => {
+      if (!wsLeadersMap.has(row.workspace_id)) wsLeadersMap.set(row.workspace_id, new Set());
+      wsLeadersMap.get(row.workspace_id)!.add(row.user_id);
+    });
 
     ((allWsMentors.results as any[]) || []).forEach((row) => {
       wsWithMentorsSet.add(row.workspace_id);
@@ -212,15 +224,23 @@ export default async function ReviewPage() {
     }
 
     // ── Regular / Troopers tasks: ──
-    // Stage 1 (Leader):
+    const leadersInWs = r.workspace_id ? wsLeadersMap.get(r.workspace_id) : undefined;
+    const hasLeaderInThisWs = Boolean(leadersInWs && leadersInWs.size > 0);
+    const submitterIsLeader = Boolean(leadersInWs && leadersInWs.has(r.creator_id));
+
+    // Stage 1 (Ketua Tim):
     if (r.is_leader && r.lead_approved === 0) return true;
 
     // Stage 2 (Mentor):
-    if (r.is_mentor && r.mentor_approved === 0) return true;
+    if (r.is_mentor && r.mentor_approved === 0) {
+      if (hasLeaderInThisWs && !submitterIsLeader) {
+        // Must pass Ketua Tim QC first
+        return r.lead_approved === 1;
+      }
+      return true;
+    }
 
     // Stage 3 (Coordinator):
-    // If workspace or task has mentors assigned, coordinator only reviews AFTER mentor has approved (r.mentor_approved === 1).
-    // If no mentor is assigned, coordinator can review directly (r.coordinator_approved === 0).
     const hasAssignedMentors = Boolean(
       (r.workspace_id && wsWithMentorsSet.has(r.workspace_id)) ||
       r.ojt_coordinator_id != null ||

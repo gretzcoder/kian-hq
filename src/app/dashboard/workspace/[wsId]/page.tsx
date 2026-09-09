@@ -488,6 +488,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             isMentor={isMentor}
             ojtUsers={activeUsers}
             isAssessment={workspace.workspace_type === 'ASSESSMENT'}
+            workspaceType={workspace.workspace_type}
             mentorId={workspace.ojt_coordinator_id}
           />
         }

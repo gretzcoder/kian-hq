@@ -525,6 +525,72 @@ export async function updateWorkspaceMemberRoles(
 }
 
 /**
+ * Toggles or sets an OJT member as Ketua Tim (LEADER) inside a workspace.
+ * In standard workspaces: Mentor, Coordinator, or Admin can assign.
+ * In mentor workspaces: ONLY Coordinator/Admin can assign.
+ */
+export async function toggleWorkspaceLeaderAction(workspaceId: string, targetUserId: string) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+  const ws = await db
+    .prepare('SELECT ojt_coordinator_id, workspace_type FROM workspaces WHERE id = ?')
+    .bind(workspaceId)
+    .first() as { ojt_coordinator_id: string | null; workspace_type: string | null } | null;
+
+  if (!ws) return { success: false, error: 'Workspace tidak ditemukan.' };
+
+  const ctx = await getSessionContext(session.userId);
+  const isGlobalAdmin = ctx.can('MANAGE') || ctx.can('WORKSPACE_MANAGE') || ctx.userType === 'STAFF';
+
+  // Check if assigned mentor
+  const isAssignedMentor = (await db
+    .prepare('SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?')
+    .bind(workspaceId, session.userId)
+    .first()) !== null || ws.ojt_coordinator_id === session.userId;
+
+  if (ws.workspace_type === 'MENTOR') {
+    if (!isGlobalAdmin) {
+      return { success: false, error: 'Hanya Koordinator/Admin yang berhak mengubah Ketua Tim pada workspace Mentor.' };
+    }
+  } else {
+    if (!isAssignedMentor && !isGlobalAdmin) {
+      return { success: false, error: 'Hanya Mentor atau Koordinator yang berhak menentukan Ketua Tim.' };
+    }
+  }
+
+  // Get target user current roles
+  const currentRoles = await getLocalWorkspaceRoles(workspaceId, targetUserId);
+  const isCurrentlyLeader = currentRoles.includes('LEADER');
+
+  try {
+    if (isCurrentlyLeader) {
+      // Remove LEADER role
+      await db
+        .prepare("DELETE FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+        .bind(workspaceId, targetUserId)
+        .run();
+    } else {
+      // Add LEADER role
+      await db
+        .prepare("INSERT OR IGNORE INTO workspace_members (workspace_id, user_id, team_role, created_at) VALUES (?, ?, 'LEADER', strftime('%s', 'now'))")
+        .bind(workspaceId, targetUserId)
+        .run();
+    }
+
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+    return {
+      success: true,
+      isLeader: !isCurrentlyLeader,
+      message: !isCurrentlyLeader ? 'Berhasil mengangkat sebagai Ketua Tim.' : 'Status Ketua Tim dicabut.',
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Gagal mengubah status Ketua Tim.' };
+  }
+}
+
+/**
  * Updates an OJT member's team role inside a workspace (Backward compatible).
  */
 export async function updateWorkspaceMemberRole(

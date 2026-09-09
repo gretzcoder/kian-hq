@@ -109,6 +109,196 @@ function parseSlotsFromDescription(description: string | null | undefined): Arra
 }
 
 // ---------------------------------------------------------------------------
+// Helper: Calculate Fair Rolling Creative Assignments (Researcher, Planner, Creator)
+// ---------------------------------------------------------------------------
+export async function calculateNextRollingAssignments(
+  db: any,
+  workspaceId: string,
+  outputType: 'DESIGN' | 'VIDEO' | 'OTHER'
+): Promise<{
+  researcherId: string | null;
+  plannerId: string | null;
+  creatorId: string | null;
+  assignments: Array<{ userId: string; role: string }>;
+}> {
+  // 1. Fetch all active Troopers in this workspace (excluding staff/mentors)
+  const { results: rawTroopers } = await db
+    .prepare(`
+      SELECT DISTINCT u.id, u.name
+      FROM users u
+      JOIN workspace_members wm ON u.id = wm.user_id
+      LEFT JOIN workspace_mentors wmen ON wmen.workspace_id = wm.workspace_id AND wmen.user_id = u.id
+      WHERE wm.workspace_id = ?
+        AND wmen.user_id IS NULL
+        AND (u.user_type IS NULL OR u.user_type != 'STAFF')
+        AND u.status = 'ACTIVE'
+      ORDER BY wm.created_at ASC
+    `)
+    .bind(workspaceId)
+    .all();
+
+  const troopers = (rawTroopers as { id: string; name: string }[]) || [];
+  if (troopers.length === 0) {
+    return { researcherId: null, plannerId: null, creatorId: null, assignments: [] };
+  }
+
+  const creatorRole = outputType === 'VIDEO' ? 'VIDEO_EDITOR' : outputType === 'OTHER' ? 'CREATOR' : 'DESIGNER';
+
+  if (troopers.length === 1) {
+    const single = troopers[0].id;
+    return {
+      researcherId: single,
+      plannerId: single,
+      creatorId: single,
+      assignments: [
+        { userId: single, role: 'RESEARCHER' },
+        { userId: single, role: 'PLANNER' },
+        { userId: single, role: creatorRole },
+      ],
+    };
+  }
+
+  // 2. Fetch past task assignments history in this workspace
+  const { results: rawHistory } = await db
+    .prepare(`
+      SELECT ta.user_id, ta.assignment_role, ta.created_at, t.created_at as task_created_at
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      WHERE t.workspace_id = ? AND t.status != 'DELETED'
+      ORDER BY ta.created_at DESC
+    `)
+    .bind(workspaceId)
+    .all();
+
+  const history = (rawHistory as any[]) || [];
+
+  // Group stats per trooper
+  const userStats = new Map<
+    string,
+    {
+      userId: string;
+      totalAssigned: number;
+      lastAssignedTime: number;
+      roleCounts: Record<string, number>;
+      lastRole: string | null;
+    }
+  >();
+
+  for (const tr of troopers) {
+    userStats.set(tr.id, {
+      userId: tr.id,
+      totalAssigned: 0,
+      lastAssignedTime: 0,
+      roleCounts: { RESEARCHER: 0, PLANNER: 0, CREATOR: 0 },
+      lastRole: null,
+    });
+  }
+
+  for (const h of history) {
+    const stat = userStats.get(h.user_id);
+    if (stat) {
+      stat.totalAssigned++;
+      const time = Number(h.created_at || h.task_created_at || 0);
+      if (time > stat.lastAssignedTime) {
+        stat.lastAssignedTime = time;
+        if (!stat.lastRole) {
+          const norm = ['DESIGNER', 'VIDEO_EDITOR', 'CREATOR'].includes(h.assignment_role)
+            ? 'CREATOR'
+            : h.assignment_role;
+          stat.lastRole = norm;
+        }
+      }
+      const roleKey = ['DESIGNER', 'VIDEO_EDITOR', 'CREATOR'].includes(h.assignment_role)
+        ? 'CREATOR'
+        : h.assignment_role;
+      if (stat.roleCounts[roleKey] !== undefined) {
+        stat.roleCounts[roleKey]++;
+      }
+    }
+  }
+
+  // 3. Selection & Rotation Logic: Prioritize members who haven't worked or worked least
+  const candidateList = Array.from(userStats.values()).sort((a, b) => {
+    if (a.totalAssigned !== b.totalAssigned) {
+      return a.totalAssigned - b.totalAssigned;
+    }
+    return a.lastAssignedTime - b.lastAssignedTime;
+  });
+
+  const selectedTroopers = candidateList.slice(0, Math.min(3, candidateList.length));
+
+  if (selectedTroopers.length === 2) {
+    const [u0, u1] = selectedTroopers;
+    if (u0.lastRole === 'RESEARCHER') {
+      return {
+        researcherId: u1.userId,
+        plannerId: u0.userId,
+        creatorId: u1.userId,
+        assignments: [
+          { userId: u1.userId, role: 'RESEARCHER' },
+          { userId: u0.userId, role: 'PLANNER' },
+          { userId: u1.userId, role: creatorRole },
+        ],
+      };
+    } else {
+      return {
+        researcherId: u0.userId,
+        plannerId: u1.userId,
+        creatorId: u0.userId,
+        assignments: [
+          { userId: u0.userId, role: 'RESEARCHER' },
+          { userId: u1.userId, role: 'PLANNER' },
+          { userId: u0.userId, role: creatorRole },
+        ],
+      };
+    }
+  }
+
+  // 3 Troopers selected: Cyclic permutation / Fair role distribution
+  // Role sequence: RESEARCHER -> PLANNER -> CREATOR -> RESEARCHER
+  const nextRoleOf = (r: string | null) => {
+    if (r === 'RESEARCHER') return 'PLANNER';
+    if (r === 'PLANNER') return 'CREATOR';
+    if (r === 'CREATOR') return 'RESEARCHER';
+    return null;
+  };
+
+  const users = [selectedTroopers[0], selectedTroopers[1], selectedTroopers[2]];
+  const assignedRoles: Record<string, string> = {};
+  const unassignedRoles = new Set(['RESEARCHER', 'PLANNER', 'CREATOR']);
+
+  for (const u of users) {
+    const preferred = nextRoleOf(u.lastRole);
+    if (preferred && unassignedRoles.has(preferred)) {
+      assignedRoles[preferred] = u.userId;
+      unassignedRoles.delete(preferred);
+    }
+  }
+
+  // Fill remaining unassigned roles
+  const remainingUsers = users.filter((u) => !Object.values(assignedRoles).includes(u.userId));
+  for (const role of Array.from(unassignedRoles)) {
+    const u = remainingUsers.shift() || users[0];
+    assignedRoles[role] = u.userId;
+  }
+
+  const rId = assignedRoles['RESEARCHER'] || users[0].userId;
+  const pId = assignedRoles['PLANNER'] || users[1].userId;
+  const cId = assignedRoles['CREATOR'] || users[2].userId;
+
+  return {
+    researcherId: rId,
+    plannerId: pId,
+    creatorId: cId,
+    assignments: [
+      { userId: rId, role: 'RESEARCHER' },
+      { userId: pId, role: 'PLANNER' },
+      { userId: cId, role: creatorRole },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // CREATE TASK (now under a workspace, not directly under a project)
 // ---------------------------------------------------------------------------
 
@@ -142,6 +332,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
   const deadlineStr = formData.get('deadline') as string;
   const startAtStr = (formData.get('start_at') as string) || (formData.get('startAt') as string);
   const outputType = (formData.get('outputType') as string) || 'DESIGN';
+  const taskExecutionMode = (formData.get('taskExecutionMode') as string) || 'ROLLING'; // 'ROLLING' | 'ALL_MEMBERS'
   
   // OJT fields
   const parentTaskId = formData.get('parentTaskId') as string || null;
@@ -319,6 +510,52 @@ export async function createTask(workspaceId: string, formData: FormData) {
             .run();
         }
       }
+    } else {
+      // ── Standard Troopers Workspace ──────────────────────────────────────
+      if (taskExecutionMode === 'ALL_MEMBERS') {
+        // Mode 2: Semua Anggota Ikut Serta Semua Peran (Tugas Individu)
+        const { results: trooperMembers } = await db
+          .prepare(`
+            SELECT DISTINCT u.id AS user_id
+            FROM users u
+            JOIN workspace_members wm ON u.id = wm.user_id
+            LEFT JOIN workspace_mentors wmen ON wmen.workspace_id = wm.workspace_id AND wmen.user_id = u.id
+            WHERE wm.workspace_id = ?
+              AND wmen.user_id IS NULL
+              AND (u.user_type IS NULL OR u.user_type != 'STAFF')
+              AND u.status = 'ACTIVE'
+          `)
+          .bind(workspaceId)
+          .all();
+
+        for (const m of (trooperMembers as { user_id: string }[])) {
+          for (const role of stepRoles) {
+            const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+            await db
+              .prepare(`
+                INSERT OR IGNORE INTO task_assignments
+                  (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+                VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+              `)
+              .bind(assignId, taskId, m.user_id, role, session.userId, deadline, startAt)
+              .run();
+          }
+        }
+      } else {
+        // Mode 1: Sistem Role Rolling Otomatis (Kolaborasi Tim)
+        const rolling = await calculateNextRollingAssignments(db, workspaceId, outputType as any);
+        for (const item of rolling.assignments) {
+          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+          await db
+            .prepare(`
+              INSERT OR IGNORE INTO task_assignments
+                (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+              VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+            `)
+            .bind(assignId, taskId, item.userId, item.role, session.userId, deadline, startAt)
+            .run();
+        }
+      }
     }
 
     await logWorkflowEvent({
@@ -327,7 +564,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
       fromStatus: null,
       toStatus: initialStatus,
       triggeredBy: session.userId,
-      note: `Task "${title}" created (Output: ${outputType}${ws.workspace_type === 'MENTOR' ? ', Workspace: MENTOR' : ''})`,
+      note: `Task "${title}" created (Output: ${outputType}, Mode: ${taskExecutionMode}${ws.workspace_type === 'MENTOR' ? ', Workspace: MENTOR' : ''})`,
     });
 
     // Async Web Push to workspace members
@@ -1072,13 +1309,15 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
       newCoordinatorApproved = 1;
       nextStatus = 'APPROVED';
     } else if (isOjtRole) {
-      if (isLeader) newLeadApproved = 1;
-      if (isMentor) newMentorApproved = 1;
-      if (isCoordinator) newCoordinatorApproved = 1;
-
-      if (newLeadApproved === 1 || newMentorApproved === 1 || newCoordinatorApproved === 1) {
+      if (isCoordinator) {
+        newCoordinatorApproved = 1;
+        newMentorApproved = 1;
         nextStatus = 'APPROVED';
-      } else {
+      } else if (isMentor) {
+        newMentorApproved = 1;
+        nextStatus = 'APPROVED';
+      } else if (isLeader) {
+        newLeadApproved = 1;
         nextStatus = 'WAITING_REVIEW';
       }
     } else {
@@ -1121,12 +1360,21 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     });
 
     if (assignment.user_id) {
-      sendPushNotificationToUser(assignment.user_id, 'TASK', {
-        title: `🎉 Tugas Disetujui!`,
-        body: `Tugas ${task?.title || ''} telah disetujui.${sparksValue ? ` (+${sparksValue} Sparks ✨)` : ''}`,
-        url: `/dashboard/workspace/${task?.workspace_id || ''}`,
-        category: 'TASK',
-      }).catch(() => {});
+      if (isLeader && nextStatus === 'WAITING_REVIEW') {
+        sendPushNotificationToUser(assignment.user_id, 'TASK', {
+          title: `✓ Lolos QC Ketua Tim`,
+          body: `Step ${assignment.assignment_role} pada ${task?.title || 'tugas'} telah disetujui Ketua Tim dan diteruskan ke Mentor.`,
+          url: `/dashboard/workspace/${task?.workspace_id || ''}`,
+          category: 'TASK',
+        }).catch(() => {});
+      } else {
+        sendPushNotificationToUser(assignment.user_id, 'TASK', {
+          title: `🎉 Tugas Disetujui!`,
+          body: `Tugas ${task?.title || ''} telah disetujui.${sparksValue ? ` (+${sparksValue} Sparks ✨)` : ''}`,
+          url: `/dashboard/workspace/${task?.workspace_id || ''}`,
+          category: 'TASK',
+        }).catch(() => {});
+      }
     }
 
     if (nextStatus === 'APPROVED') {
@@ -2205,4 +2453,176 @@ export async function syncAndRepairTaskStatuses(db: any, workspaceId?: string) {
     console.error('syncAndRepairTaskStatuses error:', err);
   }
 }
+
+/**
+ * Server Action for Ketua Tim to propose a custom Role Rolling arrangement.
+ */
+export async function proposeTaskRoleRollingAction(
+  taskId: string,
+  proposal: {
+    researcherId: string;
+    plannerId: string;
+    creatorId: string;
+    reason?: string;
+  }
+) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+  const task = await db
+    .prepare('SELECT id, workspace_id, title, description, status FROM tasks WHERE id = ?')
+    .bind(taskId)
+    .first() as { id: string; workspace_id: string; title: string; description: string | null; status: string } | null;
+
+  if (!task) return { success: false, error: 'Task tidak ditemukan.' };
+
+  // Check if session user is LEADER, Mentor, or Coordinator
+  const isLeader = (await db
+    .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+    .bind(task.workspace_id, session.userId)
+    .first()) !== null;
+
+  const ctx = await getSessionContext(session.userId);
+  const isManager = ctx.can('MANAGE') || ctx.userType === 'STAFF';
+
+  if (!isLeader && !isManager) {
+    return { success: false, error: 'Hanya Ketua Tim yang dapat mengajukan usulan rolling role.' };
+  }
+
+  const proposalData = {
+    proposedBy: session.userId,
+    proposedAt: Date.now(),
+    researcherId: proposal.researcherId,
+    plannerId: proposal.plannerId,
+    creatorId: proposal.creatorId,
+    reason: proposal.reason || '',
+    status: 'PENDING',
+  };
+
+  let desc = task.description || '';
+  desc = desc.replace(/\[ROLE_PROPOSAL:[\s\S]*?\]/g, '').trim();
+  desc = `[ROLE_PROPOSAL:${JSON.stringify(proposalData)}]\n${desc}`;
+
+  await db.prepare('UPDATE tasks SET description = ? WHERE id = ?').bind(desc, taskId).run();
+
+  await logWorkflowEvent({
+    entityType: 'task',
+    entityId: taskId,
+    fromStatus: task.status || null,
+    toStatus: task.status || 'IN_PROGRESS',
+    triggeredBy: session.userId,
+    note: `Ketua Tim mengajukan usulan rolling role: ${proposal.reason || 'Tanpa catatan'}`,
+  });
+
+  if (task.workspace_id) {
+    await invalidateWorkspaceTaskCache(task.workspace_id);
+    revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
+  }
+
+  return { success: true, message: 'Usulan rolling role berhasil dikirim ke Mentor untuk ditinjau.' };
+}
+
+/**
+ * Server Action for Mentor/Coordinator to approve or reject Ketua Tim's role rolling proposal.
+ */
+export async function decideTaskRoleProposalAction(taskId: string, approved: boolean) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+  const task = await db
+    .prepare('SELECT id, workspace_id, title, description, task_type, deadline, status FROM tasks WHERE id = ?')
+    .bind(taskId)
+    .first() as { id: string; workspace_id: string; title: string; description: string | null; task_type: string; deadline: number | null; status: string } | null;
+
+  if (!task) return { success: false, error: 'Task tidak ditemukan.' };
+
+  const ctx = await getSessionContext(session.userId);
+  const isCoordinator = ctx.can('MANAGE') || ctx.userType === 'STAFF';
+
+  const ws = await db
+    .prepare('SELECT ojt_coordinator_id FROM workspaces WHERE id = ?')
+    .bind(task.workspace_id)
+    .first() as { ojt_coordinator_id: string | null } | null;
+
+  const isMentor = ws?.ojt_coordinator_id === session.userId || (await db
+    .prepare('SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?')
+    .bind(task.workspace_id, session.userId)
+    .first()) !== null;
+
+  if (!isMentor && !isCoordinator) {
+    return { success: false, error: 'Hanya Mentor atau Koordinator yang berhak menyetujui/menolak usulan role.' };
+  }
+
+  const desc = task.description || '';
+  const match = desc.match(/\[ROLE_PROPOSAL:([\s\S]*?)\]/);
+  if (!match || !match[1]) {
+    return { success: false, error: 'Tidak ada usulan role yang aktif pada task ini.' };
+  }
+
+  let proposalData: any;
+  try {
+    proposalData = JSON.parse(match[1]);
+  } catch {
+    return { success: false, error: 'Format data usulan tidak valid.' };
+  }
+
+  if (approved) {
+    const creatorRole = task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : task.task_type === 'OTHER' ? 'CREATOR' : 'DESIGNER';
+    const roleMappings = [
+      { role: 'RESEARCHER', userId: proposalData.researcherId },
+      { role: 'PLANNER', userId: proposalData.plannerId },
+      { role: creatorRole, userId: proposalData.creatorId },
+    ];
+
+    for (const mapping of roleMappings) {
+      if (mapping.userId) {
+        const existing = await db
+          .prepare('SELECT id FROM task_assignments WHERE task_id = ? AND assignment_role = ?')
+          .bind(taskId, mapping.role)
+          .first() as { id: string } | null;
+
+        if (existing) {
+          await db
+            .prepare('UPDATE task_assignments SET user_id = ? WHERE id = ?')
+            .bind(mapping.userId, existing.id)
+            .run();
+        } else {
+          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+          await db
+            .prepare(`
+              INSERT INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, deadline, created_at)
+              VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, strftime('%s', 'now'))
+            `)
+            .bind(assignId, taskId, mapping.userId, mapping.role, session.userId, task.deadline)
+            .run();
+        }
+      }
+    }
+  }
+
+  const updatedDesc = desc.replace(/\[ROLE_PROPOSAL:[\s\S]*?\]/g, '').trim();
+  await db.prepare('UPDATE tasks SET description = ? WHERE id = ?').bind(updatedDesc, taskId).run();
+
+  await logWorkflowEvent({
+    entityType: 'task',
+    entityId: taskId,
+    fromStatus: task.status || null,
+    toStatus: task.status || 'IN_PROGRESS',
+    triggeredBy: session.userId,
+    note: approved ? 'Usulan role rolling Ketua Tim DISETUJUI oleh Mentor' : 'Usulan role rolling Ketua Tim DITOLAK oleh Mentor (mengikuti rolling sistem)',
+  });
+
+  if (task.workspace_id) {
+    await invalidateWorkspaceTaskCache(task.workspace_id);
+    revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
+  }
+
+  return {
+    success: true,
+    message: approved ? 'Usulan role berhasil diterapkan pada task.' : 'Usulan role ditolak.',
+  };
+}
+
 

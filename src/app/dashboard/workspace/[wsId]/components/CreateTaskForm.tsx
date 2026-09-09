@@ -26,6 +26,7 @@ export default function CreateTaskForm({
 }: CreateTaskFormProps) {
   const [loading, setLoading] = useState(false);
   const [outputType, setOutputType] = useState<'DESIGN' | 'VIDEO' | 'OTHER'>('DESIGN');
+  const [taskExecutionMode, setTaskExecutionMode] = useState<'ROLLING' | 'ALL_MEMBERS'>('ROLLING');
   const [isDirectBrief, setIsDirectBrief] = useState(false);
   const [outputSlots, setOutputSlots] = useState<DirectBriefOutputSlot[]>([
     { id: 'slot_1', name: 'Desain Feed Post 1', assignedUserId: '', assignedUserName: '', deadline: '', specificBrief: '' },
@@ -54,6 +55,7 @@ export default function CreateTaskForm({
     const form = e.currentTarget;
     const formData = new FormData(form);
     formData.set('outputType', outputType);
+    formData.set('taskExecutionMode', taskExecutionMode);
     formData.set('priority', priority);
     formData.set('parentTaskId', parentTaskId);
     formData.set('isDirectBrief', String(isDirectBrief));
@@ -65,6 +67,7 @@ export default function CreateTaskForm({
       if (res.success) {
         form.reset();
         setOutputType('DESIGN');
+        setTaskExecutionMode('ROLLING');
         setIsDirectBrief(false);
         setOutputSlots([
           { id: 'slot_1', name: 'Desain Feed Post 1', assignedUserId: '', assignedUserName: '', deadline: '', specificBrief: '' },
@@ -134,6 +137,52 @@ export default function CreateTaskForm({
           </p>
         </div>
       </div>
+
+      {/* Mode Penugasan Tim (Ketika Brief Diberikan Langsung Tidak Aktif) */}
+      {!isDirectBrief && (
+        <div className="p-4 rounded-2xl bg-zinc-50/70 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 space-y-3">
+          <label className="block text-[10px] font-black text-zinc-600 dark:text-zinc-400 uppercase tracking-widest">
+            Sistem Penugasan Tim <span className="text-red-500">*</span>
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={() => setTaskExecutionMode('ROLLING')}
+              className={`p-3.5 rounded-2xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                taskExecutionMode === 'ROLLING'
+                  ? 'bg-purple-500/10 border-purple-500 text-purple-700 dark:text-purple-300 font-bold ring-2 ring-purple-500/20 shadow-xs'
+                  : 'bg-white dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+              }`}
+            >
+              <span className="text-2xl mt-0.5">🔄</span>
+              <div>
+                <p className="text-xs font-black">Role Rolling Otomatis</p>
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 leading-relaxed font-normal">
+                  Sistem otomatis merotasi role Researcher, Planner, dan Creator secara bergilir agar semua anggota merasakan seluruh peran.
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTaskExecutionMode('ALL_MEMBERS')}
+              className={`p-3.5 rounded-2xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                taskExecutionMode === 'ALL_MEMBERS'
+                  ? 'bg-indigo-500/10 border-indigo-500 text-indigo-700 dark:text-indigo-300 font-bold ring-2 ring-indigo-500/20 shadow-xs'
+                  : 'bg-white dark:bg-zinc-900/60 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+              }`}
+            >
+              <span className="text-2xl mt-0.5">👥</span>
+              <div>
+                <p className="text-xs font-black">Semua Anggota (Tugas Individu)</p>
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 leading-relaxed font-normal">
+                  Setiap anggota dalam workspace ikut serta mengerjakan step Researcher, Planner, serta output hasil masing-masing.
+                </p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Dynamic Enriched Output Slots Section for Direct Brief */}
       {isDirectBrief && (

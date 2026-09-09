@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import UserAvatar from '@/components/ui/UserAvatar';
-import { addWorkspaceMembersBulk, updateWorkspaceMemberRoles, removeWorkspaceMember } from '@/modules/workspaces/actions';
+import { addWorkspaceMembersBulk, updateWorkspaceMemberRoles, removeWorkspaceMember, toggleWorkspaceLeaderAction } from '@/modules/workspaces/actions';
 
 interface Member {
   userId: string;
@@ -50,22 +50,22 @@ const userMatchesRoleCategory = (u: OjtUser, catId: string): boolean => {
 const roleConfig: Record<'LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR', { label: string; activeColor: string; inactiveColor: string }> = {
   LEADER: {
     label: 'Ketua Tim',
-    activeColor: 'text-purple-700 bg-purple-100 dark:text-purple-300 dark:bg-purple-900/40 border-purple-200 dark:border-purple-800/60',
-    inactiveColor: 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40 hover:border-purple-300 dark:hover:border-purple-800/40',
+    activeColor: 'text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700/60 font-black ring-1 ring-amber-400/40 shadow-xs',
+    inactiveColor: 'text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40 hover:border-amber-300 dark:hover:border-amber-800/40 hover:text-amber-600',
   },
   RESEARCHER: {
     label: 'Researcher',
-    activeColor: 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800/60',
+    activeColor: 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800/60 font-black',
     inactiveColor: 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40 hover:border-blue-300 dark:hover:border-blue-800/40',
   },
   PLANNER: {
     label: 'Planner',
-    activeColor: 'text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800/60',
+    activeColor: 'text-emerald-700 bg-emerald-100 dark:text-emerald-300 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-800/60 font-black',
     inactiveColor: 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40 hover:border-emerald-300 dark:hover:border-emerald-800/40',
   },
   CREATOR: {
     label: 'Creator',
-    activeColor: 'text-pink-700 bg-pink-100 dark:text-pink-300 dark:bg-pink-900/40 border-pink-200 dark:border-pink-800/60',
+    activeColor: 'text-pink-700 bg-pink-100 dark:text-pink-300 dark:bg-pink-900/40 border-pink-200 dark:border-pink-800/60 font-black',
     inactiveColor: 'text-zinc-400 dark:text-zinc-600 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800/40 hover:border-pink-300 dark:hover:border-pink-800/40',
   },
 };
@@ -77,6 +77,7 @@ export default function TeamMemberPanel({
   isMentor,
   ojtUsers = [],
   isAssessment = false,
+  workspaceType = 'TROOPERS',
   mentorId = null,
 }: {
   workspaceId: string;
@@ -85,6 +86,7 @@ export default function TeamMemberPanel({
   isMentor: boolean;
   ojtUsers?: OjtUser[];
   isAssessment?: boolean;
+  workspaceType?: string;
   mentorId?: string | null;
 }) {
   const [search, setSearch] = useState('');
@@ -111,12 +113,11 @@ export default function TeamMemberPanel({
     ) ||
     m.userId === mentorId;
 
-  // For Assessment: split members into Troopers and Mentors
-  const trooperMembers = isAssessment ? members.filter((m) => !isMentorOrStaff(m)) : members;
-  const mentorMembers = isAssessment ? members.filter((m) => isMentorOrStaff(m)) : [];
-
-  // displayMembers is used for backward compatibility in the add-member logic
-  const displayMembers = trooperMembers;
+  // Split members into Troopers and Mentors for all non-MENTOR workspaces
+  const isMentorWs = workspaceType === 'MENTOR';
+  const mentorMembers = isMentorWs ? members : members.filter((m) => isMentorOrStaff(m));
+  const trooperMembers = isMentorWs ? [] : members.filter((m) => !isMentorOrStaff(m));
+  const displayMembers = isMentorWs ? members : trooperMembers;
 
   const [selectedRoleCategory, setSelectedRoleCategory] = useState<string>('ALL');
 
@@ -523,13 +524,13 @@ export default function TeamMemberPanel({
         {/* Right Column: Member List Cards (2/3 Width) */}
         <div className={`space-y-6 ${canManageMembers ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
 
-          {/* ─── MENTOR SECTION (Assessment only) ─── */}
-          {isAssessment && mentorMembers.length > 0 && (
+          {/* ─── MENTOR & KOORDINATOR SECTION ─── */}
+          {mentorMembers.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm">🎓</span>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
-                  Mentor ({mentorMembers.length})
+                  {isMentorWs ? `Daftar Mentor Workspace (${mentorMembers.length})` : `Daftar Mentor & Koordinator (${mentorMembers.length})`}
                 </h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -566,15 +567,39 @@ export default function TeamMemberPanel({
                           <button
                             onClick={() => handleRemove(m.userId, m.userName)}
                             disabled={isSelfUpdating}
-                            className="text-[10px] text-red-500 hover:text-red-600 font-bold px-2 py-1 rounded-lg hover:bg-red-500/5 transition-all shrink-0"
+                            className="text-[10px] text-red-500 hover:text-red-600 font-bold px-2 py-1 rounded-lg hover:bg-red-500/5 transition-all shrink-0 cursor-pointer"
                             title="Hapus anggota"
                           >
                             ✕ Hapus
                           </button>
                         )}
                       </div>
-                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-purple-100 dark:border-purple-800/30">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 pt-1 border-t border-purple-100 dark:border-purple-800/30">
                         <AccountRoleBadges member={m} mentorId={mentorId} />
+                        {isMentorWs && canManageMembers && (
+                          <button
+                            type="button"
+                            disabled={isSelfUpdating}
+                            onClick={async () => {
+                              setUpdating(m.userId);
+                              try {
+                                const res = await toggleWorkspaceLeaderAction(workspaceId, m.userId);
+                                if (!res.success) alert(res.error || 'Gagal mengubah Ketua Tim.');
+                              } catch (err: any) {
+                                alert(err.message || 'Terjadi kesalahan.');
+                              } finally {
+                                setUpdating(null);
+                              }
+                            }}
+                            className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
+                              m.teamRoles.includes('LEADER')
+                                ? 'text-amber-700 bg-amber-100 dark:text-amber-300 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700/60 font-black shadow-xs'
+                                : 'text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900/10 border-zinc-200 dark:border-zinc-800 hover:border-amber-300'
+                            }`}
+                          >
+                            {m.teamRoles.includes('LEADER') ? '⭐ Ketua Tim' : '+ Jadikan Ketua'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -583,113 +608,169 @@ export default function TeamMemberPanel({
             </div>
           )}
 
-          {/* ─── TROOPERS / MEMBER SECTION ─── */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              {isAssessment && <span className="text-sm">👤</span>}
-              <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                {isAssessment ? `Daftar Troopers (${trooperMembers.length})` : `Daftar Anggota Aktif (${displayMembers.length})`}
-              </h3>
-            </div>
-
-            {(isAssessment ? trooperMembers : displayMembers).length === 0 ? (
-              <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center bg-white dark:bg-transparent">
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">
-                  Belum ada anggota tim yang ditambahkan ke workspace ini.
-                </p>
+          {/* ─── TROOPERS / ANGGOTA TIM SECTION ─── */}
+          {!isMentorWs && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">👥</span>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-700 dark:text-zinc-300">
+                    Daftar Troopers / Anggota Tim ({trooperMembers.length})
+                  </h3>
+                </div>
+                <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">
+                  *Role creative akan rolling otomatis saat pembuatan task
+                </span>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(isAssessment ? trooperMembers : displayMembers).map((m) => {
+
+              {trooperMembers.length === 0 ? (
+                <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-2xl p-8 text-center bg-white dark:bg-transparent">
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">
+                    Belum ada anggota Troopers yang ditambahkan ke workspace ini.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {trooperMembers.map((m) => {
                     const isSelfUpdating = updating === m.userId;
+                    const isLeader = m.teamRoles.includes('LEADER');
+                    const canToggleLeader = isMentor || canManageMembers;
 
                     return (
                       <div
                         key={m.userId}
-                        className="border border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40 rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between"
+                        className={`border rounded-2xl p-4 space-y-3 shadow-sm flex flex-col justify-between transition-all ${
+                          isLeader
+                            ? 'border-amber-500/40 bg-gradient-to-b from-amber-500/5 to-transparent dark:border-amber-500/30 ring-1 ring-amber-500/20'
+                            : 'border-zinc-200/80 dark:border-zinc-800/80 bg-white dark:bg-zinc-900/40'
+                        }`}
                       >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <Link
-                            href={`/dashboard/profile?userId=${m.userId}`}
-                            className="shrink-0"
-                            title={`Lihat profil ${m.userName}`}
-                          >
-                            <UserAvatar src={m.avatarUrl} name={m.userName} size="sm" square />
-                          </Link>
-                          <div className="min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-3 min-w-0">
                             <Link
                               href={`/dashboard/profile?userId=${m.userId}`}
-                              className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate hover:text-purple-600 dark:hover:text-purple-400 hover:underline block"
+                              className="shrink-0 relative"
                               title={`Lihat profil ${m.userName}`}
                             >
-                              {m.userName || 'Unknown User'}
+                              <UserAvatar src={m.avatarUrl} name={m.userName} size="sm" square />
+                              {isLeader && (
+                                <span className="absolute -top-1.5 -right-1.5 text-xs" title="Ketua Tim">
+                                  👑
+                                </span>
+                              )}
                             </Link>
-                            <p className="text-[10px] text-zinc-400 font-mono truncate">
-                              {m.userEmail}
-                            </p>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <Link
+                                  href={`/dashboard/profile?userId=${m.userId}`}
+                                  className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate hover:text-purple-600 dark:hover:text-purple-400 hover:underline block"
+                                  title={`Lihat profil ${m.userName}`}
+                                >
+                                  {m.userName || 'Unknown User'}
+                                </Link>
+                                {isLeader && (
+                                  <span className="text-[9px] font-black uppercase text-amber-700 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/30">
+                                    Ketua Tim
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-zinc-400 font-mono truncate">
+                                {m.userEmail}
+                              </p>
+                            </div>
                           </div>
+
+                          {canManageMembers && (
+                            <button
+                              onClick={() => handleRemove(m.userId, m.userName)}
+                              disabled={isSelfUpdating}
+                              className="text-[10px] text-red-500 hover:text-red-600 font-bold px-2 py-1 rounded-lg hover:bg-red-500/5 transition-all shrink-0 cursor-pointer"
+                              title="Hapus anggota"
+                            >
+                              ✕ Hapus
+                            </button>
+                          )}
                         </div>
 
-                        {canManageMembers && (
-                          <button
-                            onClick={() => handleRemove(m.userId, m.userName)}
-                            disabled={isSelfUpdating}
-                            className="text-[10px] text-red-500 hover:text-red-600 font-bold px-2 py-1 rounded-lg hover:bg-red-500/5 transition-all shrink-0"
-                            title="Hapus anggota"
-                          >
-                            ✕ Hapus
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Roles Selector / Display */}
-                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-zinc-100 dark:border-zinc-800/60">
-                        {isAssessment ? (
-                          /* Assessment mode: show real account role badges */
-                          <AccountRoleBadges member={m} mentorId={mentorId} />
-                        ) : (
-                          /* Regular workspace mode: role toggles */
-                          <>
-                            {(['LEADER', 'RESEARCHER', 'PLANNER', 'CREATOR'] as const).map((r) => {
-                              const hasRole = m.teamRoles.includes(r);
-                              const cfg = roleConfig[r];
-                              const clickable = canToggleRole(r);
-                              const classes = `text-[9px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${
-                                hasRole ? cfg.activeColor : cfg.inactiveColor
-                              } ${
-                                clickable && !isSelfUpdating
-                                  ? 'cursor-pointer active:scale-95'
-                                  : 'pointer-events-none opacity-50'
-                              }`;
-
-                              return (
+                        {/* Roles Selector / Display */}
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+                          {isAssessment ? (
+                            <AccountRoleBadges member={m} mentorId={mentorId} />
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-1">
+                              {/* Ketua Tim Toggle Button */}
+                              {canToggleLeader ? (
                                 <button
-                                  key={r}
                                   type="button"
-                                  disabled={isSelfUpdating || !clickable}
-                                  onClick={() => handleToggleRole(m.userId, m.teamRoles, r)}
-                                  className={classes}
+                                  disabled={isSelfUpdating}
+                                  onClick={async () => {
+                                    setUpdating(m.userId);
+                                    try {
+                                      const res = await toggleWorkspaceLeaderAction(workspaceId, m.userId);
+                                      if (!res.success) alert(res.error || 'Gagal mengubah Ketua Tim.');
+                                    } catch (err: any) {
+                                      alert(err.message || 'Terjadi kesalahan.');
+                                    } finally {
+                                      setUpdating(null);
+                                    }
+                                  }}
+                                  className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
+                                    isLeader
+                                      ? roleConfig.LEADER.activeColor
+                                      : roleConfig.LEADER.inactiveColor
+                                  }`}
+                                  title={isLeader ? 'Klik untuk mencabut status Ketua Tim' : 'Klik untuk mengangkat sebagai Ketua Tim'}
                                 >
-                                  {hasRole ? '✓ ' : ''}
-                                  {cfg.label}
+                                  {isLeader ? '⭐ Ketua Tim' : '+ Jadikan Ketua'}
                                 </button>
-                              );
-                            })}
-                            {isSelfUpdating && (
-                              <span className="text-[9px] text-zinc-400 animate-pulse font-bold self-center">
-                                Menyimpan...
-                              </span>
-                            )}
-                          </>
-                        )}
+                              ) : isLeader ? (
+                                <span className={roleConfig.LEADER.activeColor + ' text-[9px] font-black uppercase px-2 py-0.5 rounded-full border'}>
+                                  ⭐ Ketua Tim
+                                </span>
+                              ) : null}
+
+                              {/* Creative Roles */}
+                              {(['RESEARCHER', 'PLANNER', 'CREATOR'] as const).map((r) => {
+                                const hasRole = m.teamRoles.includes(r);
+                                const cfg = roleConfig[r];
+                                const clickable = canToggleRole(r);
+                                const classes = `text-[9px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${
+                                  hasRole ? cfg.activeColor : cfg.inactiveColor
+                                } ${
+                                  clickable && !isSelfUpdating
+                                    ? 'cursor-pointer active:scale-95'
+                                    : 'pointer-events-none opacity-50'
+                                }`;
+
+                                return (
+                                  <button
+                                    key={r}
+                                    type="button"
+                                    disabled={isSelfUpdating || !clickable}
+                                    onClick={() => handleToggleRole(m.userId, m.teamRoles, r)}
+                                    className={classes}
+                                  >
+                                    {hasRole ? '✓ ' : ''}
+                                    {cfg.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {isSelfUpdating && (
+                            <span className="text-[9px] text-zinc-400 animate-pulse font-bold self-center">
+                              Menyimpan...
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
         </div>
       </div>

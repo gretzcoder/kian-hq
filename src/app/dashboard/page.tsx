@@ -477,6 +477,8 @@ export default async function DashboardPage() {
       p.name           AS project_name,
       u.name           AS creator_name,
       EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ? AND team_role = 'LEADER') AS is_lead,
+      EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND team_role = 'LEADER') AS has_lead,
+      EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ta.user_id AND team_role = 'LEADER') AS submitter_is_lead,
       (
         (EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = ws.id AND wm.user_id = ?))
         OR ws.ojt_coordinator_id = ?
@@ -508,6 +510,9 @@ export default async function DashboardPage() {
     user_id?: string;
     task_created_by?: string | null;
     task_type?: string | null;
+    is_lead?: number;
+    has_lead?: number;
+    submitter_is_lead?: number;
   })[];
 
   const pendingQCReviews = allQCReviews.filter((r: any) => {
@@ -538,8 +543,19 @@ export default async function DashboardPage() {
     }
 
     // Regular / Troopers:
+    // Stage 1 (Ketua Tim QC):
     if (r.is_lead && r.lead_approved === 0) return true;
-    if (isAssignedTaskMentor && r.mentor_approved === 0) return true;
+
+    // Stage 2 (Mentor Review):
+    if (isAssignedTaskMentor && r.mentor_approved === 0) {
+      if (r.has_lead && !r.submitter_is_lead) {
+        // Must pass Ketua Tim QC first
+        return r.lead_approved === 1;
+      }
+      return true;
+    }
+
+    // Stage 3 (Coordinator Review):
     if (isStaffCoordinator) {
       if (r.has_mentor) {
         return r.mentor_approved === 1 && r.coordinator_approved === 0;
