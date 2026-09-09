@@ -12,19 +12,50 @@ import { cleanAppreciationNote } from '@/lib/noteUtils';
 import SendReminderButton from '@/components/SendReminderButton';
 import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 
-export function getDirectBriefCategories(description: string | null | undefined): string[] {
+import { formatIndonesiaDate } from '@/lib/dateUtils';
+
+export interface DirectBriefOutputSlot {
+  id: string;
+  name: string;
+  assignedUserId?: string | null;
+  assignedUserName?: string | null;
+  deadline?: string | null;
+  specificBrief?: string | null;
+}
+
+export function parseDirectBriefSlots(description: string | null | undefined): DirectBriefOutputSlot[] {
   if (!description) return [];
   const match = description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]/);
   if (match && match[1]) {
     try {
       const parsed = JSON.parse(match[1]);
       if (Array.isArray(parsed)) {
-        return parsed.map((c) => String(c).trim()).filter(Boolean);
+        return parsed.map((item, idx) => {
+          if (typeof item === 'string') {
+            return {
+              id: `slot_${idx + 1}`,
+              name: item.trim(),
+            };
+          }
+          return {
+            id: item.id || `slot_${idx + 1}`,
+            name: (item.name || '').trim(),
+            assignedUserId: item.assignedUserId || null,
+            assignedUserName: item.assignedUserName || null,
+            deadline: item.deadline || null,
+            specificBrief: item.specificBrief || null,
+          };
+        }).filter((s) => s.name.length > 0);
       }
     } catch {}
   }
   return [];
 }
+
+export function getDirectBriefCategories(description: string | null | undefined): string[] {
+  return parseDirectBriefSlots(description).map((s) => s.name);
+}
+
 
 // ─── CreatorDrivePreview ────────────────────────────────────────────────────
 // Aspect-ratio aware, user-friendly Google Drive preview widget for Creator step
@@ -405,8 +436,10 @@ export default function TaskActions({
   const isOjtTask = !isDirectBriefTask && (isOjt || ojtAssignments.length > 0);
 
   // Direct Brief submission state
+  const directSlotsForInit = parseDirectBriefSlots(taskDescription);
+  const myAssignedSlot = directSlotsForInit.find((s) => s.assignedUserId === currentUserId);
   const [directUrlInput, setDirectUrlInput] = useState('');
-  const [selectedDirectCategory, setSelectedDirectCategory] = useState('');
+  const [selectedDirectCategory, setSelectedDirectCategory] = useState(myAssignedSlot ? myAssignedSlot.name : '');
   const [categoryInputs, setCategoryInputs] = useState<Record<string, string>>({});
   const [slotSubmitMap, setSlotSubmitMap] = useState<Record<string, boolean>>({});
   const [slotUrlMap, setSlotUrlMap] = useState<Record<string, string>>({});
@@ -982,7 +1015,8 @@ export default function TaskActions({
       if (!canUserSubmitDirect) return null; // Koordinator / Admin does NOT see submit form
 
       const mySubmission = assignments.find(a => a.user_id === currentUserId && (a.result_url || a.status !== 'ASSIGNED'));
-      const categories = getDirectBriefCategories(taskDescription);
+      const directSlots = parseDirectBriefSlots(taskDescription);
+      const categories = directSlots.length > 0 ? directSlots.map(s => s.name) : getDirectBriefCategories(taskDescription);
 
       if (mySubmission && !showDirectForm) {
         return (
@@ -1021,7 +1055,7 @@ export default function TaskActions({
             {categories.length > 0 && (
               <div className="space-y-1">
                 <label className="block text-[10px] font-extrabold text-purple-700 dark:text-purple-300 uppercase tracking-wide">
-                  Pilih Kategori Output Karya Yang Dikerjakan <span className="text-red-500">*</span>
+                  Pilih Kategori / Slot Output Yang Dikerjakan <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={selectedDirectCategory}
@@ -1030,19 +1064,49 @@ export default function TaskActions({
                   className="w-full bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
                 >
                   <option value="">-- Pilih Kategori Output Karya --</option>
-                  {categories.map((cat) => {
-                    const claimedAss = displayAssignments.find(
-                      (a) => (a.result_url || a.status !== 'ASSIGNED') && (a.assignment_role === cat || a.assignment_role === `Kategori: ${cat}` || a.assignment_role.includes(cat))
-                    );
-                    const isClaimedByMe = mySubmission && (mySubmission.assignment_role === cat || mySubmission.assignment_role === `Kategori: ${cat}`);
-                    const isClaimedByOther = claimedAss && !isClaimedByMe && (claimedAss.user_id !== currentUserId);
+                  {directSlots.length > 0 ? (
+                    directSlots.map((slot) => {
+                      const cat = slot.name;
+                      const claimedAss = displayAssignments.find(
+                        (a) => (a.result_url || a.status !== 'ASSIGNED') && (a.assignment_role === cat || a.assignment_role === `Kategori: ${cat}` || a.assignment_role.includes(cat))
+                      );
+                      const isClaimedByMe = mySubmission && (mySubmission.assignment_role === cat || mySubmission.assignment_role === `Kategori: ${cat}`);
+                      const isClaimedByOther = claimedAss && !isClaimedByMe && (claimedAss.user_id !== currentUserId);
+                      const isAssignedToOther = slot.assignedUserId && slot.assignedUserId !== currentUserId;
+                      const isAssignedToMe = slot.assignedUserId === currentUserId;
 
-                    return (
-                      <option key={cat} value={cat} disabled={Boolean(isClaimedByOther)}>
-                        {isClaimedByOther ? `❌ ${cat} (Sudah diambil oleh ${claimedAss.user_name || 'Peserta lain'})` : `✓ ${cat}`}
-                      </option>
-                    );
-                  })}
+                      const isDisabled = Boolean(isClaimedByOther || isAssignedToOther);
+
+                      let label = `✓ ${cat}`;
+                      if (isAssignedToMe) {
+                        label = `⭐ ${cat} (Ditugaskan untuk Anda)`;
+                      } else if (isAssignedToOther) {
+                        label = `🔒 ${cat} (Khusus ${slot.assignedUserName || 'Peserta Lain'})`;
+                      } else if (isClaimedByOther) {
+                        label = `❌ ${cat} (Sudah diambil oleh ${claimedAss.user_name || 'Peserta lain'})`;
+                      }
+
+                      return (
+                        <option key={slot.id || cat} value={cat} disabled={isDisabled}>
+                          {label}
+                        </option>
+                      );
+                    })
+                  ) : (
+                    categories.map((cat) => {
+                      const claimedAss = displayAssignments.find(
+                        (a) => (a.result_url || a.status !== 'ASSIGNED') && (a.assignment_role === cat || a.assignment_role === `Kategori: ${cat}` || a.assignment_role.includes(cat))
+                      );
+                      const isClaimedByMe = mySubmission && (mySubmission.assignment_role === cat || mySubmission.assignment_role === `Kategori: ${cat}`);
+                      const isClaimedByOther = claimedAss && !isClaimedByMe && (claimedAss.user_id !== currentUserId);
+
+                      return (
+                        <option key={cat} value={cat} disabled={Boolean(isClaimedByOther)}>
+                          {isClaimedByOther ? `❌ ${cat} (Sudah diambil oleh ${claimedAss.user_name || 'Peserta lain'})` : `✓ ${cat}`}
+                        </option>
+                      );
+                    })
+                  )}
                 </select>
               </div>
             )}
@@ -1069,27 +1133,34 @@ export default function TaskActions({
       );
     };
 
-    const categories = getDirectBriefCategories(taskDescription);
+    const directSlots = parseDirectBriefSlots(taskDescription);
+    const hasDirectSlots = directSlots.length > 0;
+    const categories = hasDirectSlots ? directSlots.map(s => s.name) : getDirectBriefCategories(taskDescription);
 
-    if (isDirectBriefTask && categories.length > 0) {
+    if (isDirectBriefTask && (hasDirectSlots || categories.length > 0)) {
+      const slotItems: DirectBriefOutputSlot[] = hasDirectSlots
+        ? directSlots
+        : categories.map((c, i) => ({ id: `slot_${i + 1}`, name: c }));
+
       return (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
               <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5 uppercase tracking-wide">
-                <span>🎯</span> Slot Output Karya Berdasarkan Kategori ({categories.length} Slot)
+                <span>🎯</span> Slot Output Karya Berdasarkan Kategori ({slotItems.length} Slot)
               </h4>
               <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                Pilih slot kategori yang masih tersedia untuk mengumpulkan karya Anda. Setiap kategori hanya dapat di-submit 1x oleh 1 peserta.
+                Rincian slot output karya, peserta yang ditugaskan, deadline khusus, serta brief lanjutan per-output.
               </p>
             </div>
             <span className="text-[10px] font-mono text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-700">
-              {assignments.filter(a => a.result_url || a.status !== 'ASSIGNED').length}/{categories.length} Slot Terisi
+              {assignments.filter(a => a.result_url || a.status !== 'ASSIGNED').length}/{slotItems.length} Slot Terisi
             </span>
           </div>
 
           <div className="space-y-3">
-            {categories.map((cat, idx) => {
+            {slotItems.map((slot, idx) => {
+              const cat = slot.name;
               // Find matching assignment submitted for this category
               const categoryAss = assignments.find(
                 (a) => (a.result_url || a.status !== 'ASSIGNED') && (
@@ -1102,29 +1173,54 @@ export default function TaskActions({
 
               const isTaken = Boolean(categoryAss);
               const isMine = categoryAss?.user_id === currentUserId;
-              const canUserSubmit = !isCoordinator;
+              const isAssignedToMe = slot.assignedUserId === currentUserId;
+              const isAssignedToOther = slot.assignedUserId && slot.assignedUserId !== currentUserId;
+              const canUserSubmit = !isCoordinator && (!isAssignedToOther || isAssignedToMe);
               const hasUserSubmittedAny = assignments.some(a => a.user_id === currentUserId && (a.result_url || a.status !== 'ASSIGNED'));
 
               return (
                 <div
-                  key={idx}
+                  key={slot.id || idx}
                   className={`rounded-2xl border p-4 space-y-3 transition-all ${
                     isTaken
                       ? 'bg-emerald-500/[0.02] dark:bg-emerald-500/[0.04] border-emerald-500/25 shadow-xs'
+                      : isAssignedToMe
+                      ? 'bg-purple-500/[0.03] dark:bg-purple-500/[0.05] border-purple-500/30 shadow-xs'
                       : 'bg-zinc-50/50 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-800'
                   }`}
                 >
                   {/* Category Slot Header */}
                   <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className={`w-6 h-6 rounded-lg text-xs font-black flex items-center justify-center shrink-0 ${
-                        isTaken ? 'bg-emerald-500 text-white' : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
+                        isTaken
+                          ? 'bg-emerald-500 text-white'
+                          : isAssignedToMe
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
                       }`}>
                         #{idx + 1}
                       </span>
                       <span className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
                         {cat}
                       </span>
+
+                      {/* Assigned Member Badge */}
+                      {slot.assignedUserId ? (
+                        isAssignedToMe ? (
+                          <span className="text-[10px] font-extrabold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/30 flex items-center gap-1">
+                            <span>⭐</span> Ditugaskan ke Anda
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20 flex items-center gap-1">
+                            <span>👤</span> Ditugaskan ke: {slot.assignedUserName || 'Peserta'}
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">
+                          🌐 Open Claim
+                        </span>
+                      )}
                     </div>
 
                     {isTaken && categoryAss ? (
@@ -1136,12 +1232,44 @@ export default function TaskActions({
                           {categoryAss.status.replace('_', ' ')}
                         </span>
                       </div>
+                    ) : isAssignedToMe ? (
+                      <span className="text-[10px] font-extrabold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-full border border-purple-500/30 animate-pulse">
+                        ⏳ Menunggu Submit Anda
+                      </span>
+                    ) : isAssignedToOther ? (
+                      <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 px-2.5 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">
+                        🔒 Khusus {slot.assignedUserName || 'Peserta Terpilih'}
+                      </span>
                     ) : (
                       <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
                         ⏳ Slot Tersedia
                       </span>
                     )}
                   </div>
+
+                  {/* Slot Custom Deadline & Specific Brief */}
+                  {(slot.deadline || (slot.specificBrief && slot.specificBrief.trim())) && (
+                    <div className="space-y-2 pt-1">
+                      {slot.deadline && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-black uppercase text-amber-700 dark:text-amber-300 bg-amber-500/10 px-2.5 py-1 rounded-xl border border-amber-500/25 flex items-center gap-1.5">
+                            <span>📅</span> Deadline Khusus Slot: {formatIndonesiaDate(slot.deadline)}
+                          </span>
+                        </div>
+                      )}
+
+                      {slot.specificBrief && slot.specificBrief.trim() && (
+                        <div className="bg-blue-500/[0.04] dark:bg-blue-500/[0.08] border border-blue-500/20 rounded-2xl p-3.5 space-y-1.5">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+                            <span>📋</span> Brief Lanjutan & Asset Khusus Output:
+                          </span>
+                          <div className="text-xs text-zinc-700 dark:text-zinc-300 leading-relaxed pt-0.5">
+                            <MarkdownViewer content={slot.specificBrief} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Content Body */}
                   {isTaken && categoryAss ? (
@@ -1203,7 +1331,7 @@ export default function TaskActions({
                                 type="url"
                                 value={urlInputs[categoryAss.id] ?? ''}
                                 onChange={(e) => setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: e.target.value }))}
-                                placeholder="Paste URL Karya (Google Drive / Canva / Figma / Youtube)..."
+                                placeholder="Paste URL Karya (Google Drive / Figma / Canva / Youtube)..."
                                 required
                                 className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
                               />
@@ -1233,7 +1361,11 @@ export default function TaskActions({
                   ) : (
                     /* Slot Available Form / Submit Button */
                     <div className="pt-1">
-                      {canUserSubmit && !hasUserSubmittedAny ? (
+                      {isAssignedToOther ? (
+                        <p className="text-[11px] text-zinc-400 italic">
+                          🔒 Slot ini dialokasikan khusus untuk <strong>{slot.assignedUserName || 'peserta tertentu'}</strong>.
+                        </p>
+                      ) : canUserSubmit && !hasUserSubmittedAny ? (
                         <div>
                           {slotSubmitMap[cat] ? (
                             <form
@@ -1290,11 +1422,18 @@ export default function TaskActions({
                           ) : (
                             <button
                               type="button"
-                              onClick={() => setSlotSubmitMap((prev) => ({ ...prev, [cat]: true }))}
-                              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-blue-500/20 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+                              onClick={() => {
+                                setSlotSubmitMap((prev) => ({ ...prev, [cat]: true }));
+                                setSlotUrlMap((prev) => ({ ...prev, [cat]: '' }));
+                              }}
+                              className={`text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5 ${
+                                isAssignedToMe
+                                  ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-purple-500/20'
+                                  : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-purple-600 hover:text-white text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700'
+                              }`}
                             >
                               <span>📤</span>
-                              <span>Submit Karya untuk Kategori Ini</span>
+                              <span>{isAssignedToMe ? 'Submit Hasil Karya Saya Untuk Slot Ini' : 'Submit Hasil Karya Untuk Kategori Ini'}</span>
                             </button>
                           )}
                         </div>

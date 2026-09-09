@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import TaskActions, { getDirectBriefCategories } from '@/modules/tasks/components/TaskActions';
+import TaskActions, { getDirectBriefCategories, parseDirectBriefSlots, DirectBriefOutputSlot } from '@/modules/tasks/components/TaskActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
@@ -588,6 +588,7 @@ export default function TaskAccordion({
       {editingTask && (
         <EditTaskModal
           task={editingTask}
+          members={members}
           onClose={() => setEditingTask(null)}
         />
       )}
@@ -661,9 +662,11 @@ export default function TaskAccordion({
 
 function EditTaskModal({
   task,
+  members = [],
   onClose,
 }: {
   task: TaskRow;
+  members?: Member[];
   onClose: () => void;
 }) {
   const [priority, setPriority] = useState(task.priority || 'NORMAL');
@@ -673,9 +676,14 @@ function EditTaskModal({
 
   const rawDesc = task.description ?? '';
   const isDirectBrief = rawDesc.includes('[DIRECT_BRIEF]') || task.task_type === 'DIRECT_BRIEF';
-  const initialCategories = getDirectBriefCategories(rawDesc);
-  const [editCategories, setEditCategories] = useState<string[]>(
-    initialCategories.length > 0 ? initialCategories : ['Desain Feed Post 1', 'Desain Feed Post 2']
+  const initialSlots = parseDirectBriefSlots(rawDesc);
+  const [editSlots, setEditSlots] = useState<DirectBriefOutputSlot[]>(
+    initialSlots.length > 0
+      ? initialSlots
+      : [
+          { id: 'slot_1', name: 'Desain Feed Post 1', assignedUserId: '', assignedUserName: '', deadline: '', specificBrief: '' },
+          { id: 'slot_2', name: 'Desain Feed Post 2', assignedUserId: '', assignedUserName: '', deadline: '', specificBrief: '' },
+        ]
   );
   const initialHtml = rawDesc
     .replace(/^\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]\s*/i, '')
@@ -695,11 +703,11 @@ function EditTaskModal({
     formData.set('priority', priority);
     formData.set('outputType', outputType);
 
-    const cleanCategories = editCategories.map((c) => c.trim()).filter(Boolean);
+    const validSlots = editSlots.filter((s) => s.name && s.name.trim().length > 0);
     let finalDescription = description;
     if (isDirectBrief) {
-      if (cleanCategories.length > 0) {
-        finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(cleanCategories)}]\n[DIRECT_BRIEF]\n${description}`;
+      if (validSlots.length > 0) {
+        finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(validSlots)}]\n[DIRECT_BRIEF]\n${description}`;
       } else {
         finalDescription = `[DIRECT_BRIEF]\n${description}`;
       }
@@ -745,7 +753,7 @@ function EditTaskModal({
                 )}
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Perbarui judul, instruksi brief, tenggat waktu, atau tanggal mulai tugas.
+                Perbarui judul, instruksi brief, tenggat waktu, atau rincian slot output karya.
               </p>
             </div>
           </div>
@@ -796,7 +804,7 @@ function EditTaskModal({
 
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                  Tenggat Waktu (Deadline) <span className="text-red-500">*</span>
+                  Tenggat Waktu General (Deadline) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="datetime-local"
@@ -810,61 +818,148 @@ function EditTaskModal({
                 />
               </div>
 
-              {/* Dynamic Categories Section for Direct Brief in Edit Modal */}
+              {/* Dynamic Categories / Output Slots Section for Direct Brief in Edit Modal */}
               {isDirectBrief && (
-                <div className="p-4 rounded-2xl bg-blue-500/5 dark:bg-blue-500/[0.04] border border-blue-500/20 space-y-3">
+                <div className="p-4 rounded-2xl bg-blue-500/5 dark:bg-blue-500/[0.04] border border-blue-500/20 space-y-3.5">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-sm">🎯</span>
+                      <span className="text-base">🎯</span>
                       <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
-                        Kategori Output Karya
+                        Slot Output Karya
                       </h4>
                     </div>
                     <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">
-                      {editCategories.filter(c => c.trim()).length} Slot
+                      {editSlots.filter(c => c.name.trim()).length} Slot
                     </span>
                   </div>
 
-                  <div className="space-y-2 pt-1">
-                    {editCategories.map((cat, idx) => (
-                      <div key={idx} className="flex items-center gap-2">
-                        <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border border-blue-500/20">
-                          #{idx + 1}
-                        </span>
-                        <input
-                          type="text"
-                          value={cat}
-                          onChange={(e) => {
-                            const updated = [...editCategories];
-                            updated[idx] = e.target.value;
-                            setEditCategories(updated);
-                          }}
-                          placeholder={`Nama Kategori Output #${idx + 1}`}
-                          className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 font-medium text-zinc-900 dark:text-zinc-100"
-                        />
-                        {editCategories.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = editCategories.filter((_, i) => i !== idx);
-                              setEditCategories(updated);
+                  <div className="space-y-3 pt-1">
+                    {editSlots.map((slot, idx) => (
+                      <div
+                        key={slot.id || idx}
+                        className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-blue-500/20 shadow-xs space-y-2.5"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">
+                            Slot #{idx + 1}
+                          </span>
+                          {editSlots.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = editSlots.filter((_, i) => i !== idx);
+                                setEditSlots(updated);
+                              }}
+                              className="p-1 text-zinc-400 hover:text-red-500 text-xs font-bold cursor-pointer"
+                              title="Hapus Slot"
+                            >
+                              🗑️ Hapus
+                            </button>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[9px] font-bold text-zinc-500 uppercase tracking-wider mb-0.5">
+                            Nama Output <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={slot.name}
+                            onChange={(e) => {
+                              const updated = [...editSlots];
+                              updated[idx].name = e.target.value;
+                              setEditSlots(updated);
                             }}
-                            className="p-1.5 text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
-                            title="Hapus Kategori"
-                          >
-                            🗑️
-                          </button>
+                            placeholder={`Nama Kategori Output #${idx + 1}`}
+                            className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-blue-500 font-semibold text-zinc-900 dark:text-zinc-100"
+                          />
+                        </div>
+
+                        {members.length > 0 && (
+                          <div>
+                            <label className="block text-[9px] font-bold text-zinc-500 uppercase tracking-wider mb-0.5">
+                              Assign Peserta (Opsional)
+                            </label>
+                            <select
+                              value={slot.assignedUserId || ''}
+                              onChange={(e) => {
+                                const uid = e.target.value;
+                                const matched = members.find((m) => m.userId === uid);
+                                const uname = matched ? (matched.userName || matched.userEmail || '') : '';
+                                const updated = [...editSlots];
+                                updated[idx].assignedUserId = uid || null;
+                                updated[idx].assignedUserName = uname || null;
+                                setEditSlots(updated);
+                              }}
+                              className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-blue-500 text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                            >
+                              <option value="">-- Open Claim (Siapa Saja) --</option>
+                              {members.map((m) => (
+                                <option key={m.userId} value={m.userId}>
+                                  👤 {m.userName || m.userEmail || 'Anggota'}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         )}
+
+                        <div>
+                          <label className="block text-[9px] font-bold text-zinc-500 uppercase tracking-wider mb-0.5">
+                            Deadline Khusus Slot (Opsional)
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={slot.deadline || ''}
+                            onChange={(e) => {
+                              const updated = [...editSlots];
+                              updated[idx].deadline = e.target.value || null;
+                              setEditSlots(updated);
+                            }}
+                            onClick={(e) => {
+                              try { e.currentTarget.showPicker?.(); } catch {}
+                            }}
+                            className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-blue-500 text-zinc-900 dark:text-zinc-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[9px] font-bold text-zinc-500 uppercase tracking-wider mb-0.5">
+                            Brief / Asset Khusus Slot (Opsional)
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={slot.specificBrief || ''}
+                            onChange={(e) => {
+                              const updated = [...editSlots];
+                              updated[idx].specificBrief = e.target.value || null;
+                              setEditSlots(updated);
+                            }}
+                            placeholder="Link asset Drive / Canva / Copywriting khusus slot..."
+                            className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-blue-500 text-zinc-900 dark:text-zinc-100 leading-relaxed resize-y"
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => setEditCategories((prev) => [...prev, ''])}
+                    onClick={() =>
+                      setEditSlots((prev) => [
+                        ...prev,
+                        {
+                          id: `slot_${prev.length + 1}`,
+                          name: '',
+                          assignedUserId: '',
+                          assignedUserName: '',
+                          deadline: '',
+                          specificBrief: '',
+                        },
+                      ])
+                    }
                     className="w-full text-xs font-extrabold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-3 py-2 rounded-xl border border-blue-500/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
                   >
-                    <span>➕ Tambah Kategori Output</span>
+                    <span>➕ Tambah Slot Output</span>
                   </button>
                 </div>
               )}

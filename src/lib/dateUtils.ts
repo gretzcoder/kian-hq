@@ -44,3 +44,24 @@ export function formatDatetimeLocalInput(ts: number | null | undefined): string 
 
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
 }
+
+/**
+ * Formats a Unix timestamp or date string into human readable Indonesian date & time (e.g. 15 Sep 2026, 23:59 WIB).
+ */
+export function formatIndonesiaDate(tsOrStr: number | string | null | undefined): string {
+  if (!tsOrStr) return '';
+  const ts = typeof tsOrStr === 'string' ? (parseIndonesiaDate(tsOrStr) ?? new Date(tsOrStr).getTime()) : tsOrStr;
+  if (!ts || isNaN(ts)) return '';
+  const date = new Date(ts);
+  if (isNaN(date.getTime())) return '';
+
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date) + ' WIB';
+}
+

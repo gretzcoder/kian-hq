@@ -73,6 +73,42 @@ async function checkOJTPrerequisites(db: any, taskId: string, role: string, user
 }
 
 // ---------------------------------------------------------------------------
+// Helper: Parse Direct Brief Output Slots
+// ---------------------------------------------------------------------------
+function parseSlotsFromDescription(description: string | null | undefined): Array<{
+  id: string;
+  name: string;
+  assignedUserId?: string | null;
+  assignedUserName?: string | null;
+  deadline?: string | null;
+  specificBrief?: string | null;
+}> {
+  if (!description) return [];
+  const match = description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]/);
+  if (match && match[1]) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (Array.isArray(parsed)) {
+        return parsed.map((item, idx) => {
+          if (typeof item === 'string') {
+            return { id: `slot_${idx + 1}`, name: item.trim() };
+          }
+          return {
+            id: item.id || `slot_${idx + 1}`,
+            name: (item.name || '').trim(),
+            assignedUserId: item.assignedUserId || null,
+            assignedUserName: item.assignedUserName || null,
+            deadline: item.deadline || null,
+            specificBrief: item.specificBrief || null,
+          };
+        }).filter((s) => s.name.length > 0);
+      }
+    } catch {}
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
 // CREATE TASK (now under a workspace, not directly under a project)
 // ---------------------------------------------------------------------------
 
@@ -124,10 +160,25 @@ export async function createTask(workspaceId: string, formData: FormData) {
 
   const isDirectBrief = (formData.get('isDirectBrief') as string) === 'true' || (formData.get('briefSource') as string) === 'DIRECT_COORDINATOR';
   const directBriefCategoriesStr = formData.get('directBriefCategories') as string;
-  let parsedCategories: string[] = [];
+  let parsedSlots: any[] = [];
   if (directBriefCategoriesStr) {
     try {
-      parsedCategories = (JSON.parse(directBriefCategoriesStr) as string[]).map(c => String(c).trim()).filter(Boolean);
+      const rawParsed = JSON.parse(directBriefCategoriesStr);
+      if (Array.isArray(rawParsed)) {
+        parsedSlots = rawParsed.map((item, idx) => {
+          if (typeof item === 'string') {
+            return { id: `slot_${idx + 1}`, name: item.trim() };
+          }
+          return {
+            id: item.id || `slot_${idx + 1}`,
+            name: (item.name || '').trim(),
+            assignedUserId: item.assignedUserId || null,
+            assignedUserName: item.assignedUserName || null,
+            deadline: item.deadline || null,
+            specificBrief: item.specificBrief || null,
+          };
+        }).filter((s: any) => s.name && s.name.length > 0);
+      }
     } catch {}
   }
 
@@ -136,8 +187,8 @@ export async function createTask(workspaceId: string, formData: FormData) {
 
   let finalDescription = description ? description.trim() : '';
   if (isDirectBrief) {
-    if (parsedCategories.length > 0) {
-      finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(parsedCategories)}]\n[DIRECT_BRIEF]\n${finalDescription}`;
+    if (parsedSlots.length > 0) {
+      finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(parsedSlots)}]\n[DIRECT_BRIEF]\n${finalDescription}`;
     } else if (!finalDescription.includes('[DIRECT_BRIEF]')) {
       finalDescription = `[DIRECT_BRIEF]\n${finalDescription}`;
     }
@@ -197,7 +248,23 @@ export async function createTask(workspaceId: string, formData: FormData) {
           .run();
       }
     } else if (isDirectBrief) {
-      // Mass auto-assign all active OJT / Trooper members of workspace when no specific assignee selected
+      // 1. Assign users assigned to specific slots
+      for (const slot of parsedSlots) {
+        if (slot.assignedUserId) {
+          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+          const slotDeadline = slot.deadline ? (parseIndonesiaDate(slot.deadline) ?? new Date(slot.deadline).getTime()) : deadline;
+          await db
+            .prepare(`
+              INSERT OR IGNORE INTO task_assignments
+                (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+              VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+            `)
+            .bind(assignId, taskId, slot.assignedUserId, slot.name, session.userId, slotDeadline, startAt)
+            .run();
+        }
+      }
+
+      // 2. Mass auto-assign all active OJT / Trooper members of workspace
       const { results: ojtMembers } = await db
         .prepare(`
           SELECT DISTINCT u.id AS user_id
@@ -572,9 +639,9 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
 
   try {
     const task = await db
-      .prepare('SELECT id, project_id, workspace_id, status, task_type, parent_task_id, start_at, deadline, extended_deadline FROM tasks WHERE id = ?')
+      .prepare('SELECT id, project_id, workspace_id, status, task_type, description, parent_task_id, start_at, deadline, extended_deadline FROM tasks WHERE id = ?')
       .bind(assignment.task_id)
-      .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; parent_task_id: string | null; start_at: number | null; deadline: number | null; extended_deadline: number | null } | null;
+      .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; description: string | null; parent_task_id: string | null; start_at: number | null; deadline: number | null; extended_deadline: number | null } | null;
 
     const nowMs = Date.now();
     if (task?.start_at && task.start_at > nowMs) {
@@ -599,7 +666,35 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
       }
     }
 
-    // Direct Brief Category Claim Validation
+    // Direct Brief Category Claim & Slot Validation
+    const effectiveCategory = (selectedCategory && selectedCategory.trim())
+      ? selectedCategory.trim()
+      : (assignment.assignment_role.startsWith('Kategori: ') ? assignment.assignment_role.replace('Kategori: ', '') : assignment.assignment_role);
+
+    if (task?.description && (task.description.includes('[DIRECT_BRIEF]') || task.task_type === 'DIRECT_BRIEF')) {
+      const slots = parseSlotsFromDescription(task.description);
+      const matchedSlot = slots.find(s => s.name.trim().toLowerCase() === effectiveCategory.toLowerCase());
+
+      if (matchedSlot) {
+        if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId) {
+          return {
+            success: false,
+            error: `Slot output "${matchedSlot.name}" dialokasikan khusus untuk ${matchedSlot.assignedUserName || 'peserta lain'}.`,
+          };
+        }
+
+        if (isFirstSubmission && matchedSlot.deadline) {
+          const slotDeadline = parseIndonesiaDate(matchedSlot.deadline) ?? new Date(matchedSlot.deadline).getTime();
+          if (slotDeadline && slotDeadline < nowMs) {
+            return {
+              success: false,
+              error: `Tenggat waktu (deadline) khusus slot "${matchedSlot.name}" telah berakhir.`,
+            };
+          }
+        }
+      }
+    }
+
     if (selectedCategory && selectedCategory.trim()) {
       const cleanCat = selectedCategory.trim();
       const existingClaim = await db
@@ -737,20 +832,49 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   const db = await getDB();
 
   const task = await db
-    .prepare('SELECT id, workspace_id, task_type FROM tasks WHERE id = ?')
+    .prepare('SELECT id, workspace_id, task_type, description, deadline, extended_deadline, start_at FROM tasks WHERE id = ?')
     .bind(taskId)
-    .first() as { id: string; workspace_id: string | null; task_type: string } | null;
+    .first() as { id: string; workspace_id: string | null; task_type: string; description: string | null; deadline: number | null; extended_deadline: number | null; start_at: number | null } | null;
 
   if (!task) return { success: false, error: 'Tugas tidak ditemukan.' };
 
+  const nowMs = Date.now();
+  if (task.start_at && task.start_at > nowMs) {
+    return { success: false, error: 'Tugas ini belum dimulai.' };
+  }
+
   // Check if an assignment already exists for this user in this task
   let assignment = await db
-    .prepare('SELECT id, status FROM task_assignments WHERE task_id = ? AND user_id = ?')
+    .prepare('SELECT id, status, submitted_at, result_url FROM task_assignments WHERE task_id = ? AND user_id = ?')
     .bind(taskId, session.userId)
-    .first() as { id: string; status: string } | null;
+    .first() as { id: string; status: string; submitted_at: number | null; result_url: string | null } | null;
+
+  const isFirstSubmission = !assignment || (!assignment.submitted_at && (!assignment.result_url || assignment.result_url.trim() === ''));
 
   if (selectedCategory && selectedCategory.trim()) {
     const cleanCat = selectedCategory.trim();
+    const slots = parseSlotsFromDescription(task.description);
+    const matchedSlot = slots.find(s => s.name.trim().toLowerCase() === cleanCat.toLowerCase());
+
+    if (matchedSlot) {
+      if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId) {
+        return {
+          success: false,
+          error: `Slot output "${matchedSlot.name}" dialokasikan khusus untuk ${matchedSlot.assignedUserName || 'peserta lain'}.`,
+        };
+      }
+
+      if (isFirstSubmission && matchedSlot.deadline) {
+        const slotDeadline = parseIndonesiaDate(matchedSlot.deadline) ?? new Date(matchedSlot.deadline).getTime();
+        if (slotDeadline && slotDeadline < nowMs) {
+          return {
+            success: false,
+            error: `Tenggat waktu (deadline) khusus untuk slot "${matchedSlot.name}" telah berakhir.`,
+          };
+        }
+      }
+    }
+
     const existingClaim = await db
       .prepare(`
         SELECT ta.id, u.name as user_name
@@ -776,6 +900,11 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   const roleValue = selectedCategory && selectedCategory.trim() ? selectedCategory.trim() : (task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : task.task_type === 'OTHER' ? 'CREATOR' : 'DESIGNER');
 
   if (!assignment) {
+    const effectiveDeadline = Math.max(task?.extended_deadline || 0, task?.deadline || 0) || null;
+    if (isFirstSubmission && effectiveDeadline && effectiveDeadline < nowMs) {
+      return { success: false, error: 'Tenggat waktu (deadline) submit pertama telah berakhir. Pengumpulan tugas ditutup.' };
+    }
+
     const newId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
     await db
       .prepare(`

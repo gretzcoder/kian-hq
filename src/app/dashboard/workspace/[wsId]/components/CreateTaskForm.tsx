@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { createTask } from '@/modules/tasks/actions';
 import TiptapEditor from '@/components/editor/TiptapEditor';
+import { DirectBriefOutputSlot } from '@/modules/tasks/components/TaskActions';
 
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
 
@@ -26,7 +27,10 @@ export default function CreateTaskForm({
   const [loading, setLoading] = useState(false);
   const [outputType, setOutputType] = useState<'DESIGN' | 'VIDEO' | 'OTHER'>('DESIGN');
   const [isDirectBrief, setIsDirectBrief] = useState(false);
-  const [categories, setCategories] = useState<string[]>(['Desain Feed Post 1', 'Desain Feed Post 2']);
+  const [outputSlots, setOutputSlots] = useState<DirectBriefOutputSlot[]>([
+    { id: 'slot_1', name: 'Desain Feed Post 1', assignedUserId: '', assignedUserName: '', deadline: '', specificBrief: '' },
+    { id: 'slot_2', name: 'Desain Feed Post 2', assignedUserId: '', assignedUserName: '', deadline: '', specificBrief: '' },
+  ]);
   const [priority, setPriority] = useState<'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
   const [parentTaskId, setParentTaskId] = useState('');
   const [assigneeUserId, setAssigneeUserId] = useState('');
@@ -62,6 +66,10 @@ export default function CreateTaskForm({
         form.reset();
         setOutputType('DESIGN');
         setIsDirectBrief(false);
+        setOutputSlots([
+          { id: 'slot_1', name: 'Desain Feed Post 1', assignedUserId: '', assignedUserName: '', deadline: '', specificBrief: '' },
+          { id: 'slot_2', name: 'Desain Feed Post 2', assignedUserId: '', assignedUserName: '', deadline: '', specificBrief: '' },
+        ]);
         setPriority('NORMAL');
         setParentTaskId('');
         setAssigneeUserId('');
@@ -122,61 +130,154 @@ export default function CreateTaskForm({
             )}
           </div>
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-            Centang opsi ini hanya bila rincian brief tugas diberikan langsung oleh Koordinator.
+            Centang opsi ini untuk membuat task dengan brief general dan slot output spesifik (custom brief, asset, penugasan per orang, dan custom deadline).
           </p>
         </div>
       </div>
 
-      {/* Dynamic Categories Section for Direct Brief */}
+      {/* Dynamic Enriched Output Slots Section for Direct Brief */}
       {isDirectBrief && (
-        <div className="p-4 rounded-2xl bg-blue-500/5 dark:bg-blue-500/[0.04] border border-blue-500/20 space-y-3">
+        <div className="p-4 sm:p-5 rounded-2xl bg-blue-500/5 dark:bg-blue-500/[0.04] border border-blue-500/20 space-y-4">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="text-base">🎯</span>
+              <span className="text-lg">🎯</span>
               <div>
                 <h4 className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wide">
                   Kategori & Slot Output Karya (Direct Brief)
                 </h4>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  Tentukan kategori/rincian output karya yang wajib dipilih oleh peserta saat submit (minimal 2 kategori). Setiap kategori hanya dapat di-submit 1x oleh 1 peserta.
+                  Tentukan rincian setiap slot output karya. Anda dapat menentukan peserta khusus (assign), deadline spesifik, serta brief/asset tambahan per output.
                 </p>
               </div>
             </div>
-            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
-              {categories.filter(c => c.trim()).length} Slot Output Defined
+            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-full border border-blue-500/20">
+              {outputSlots.filter(c => c.name.trim()).length} Slot Terdefinisi
             </span>
           </div>
 
-          <div className="space-y-2 pt-1">
-            {categories.map((cat, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <span className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 bg-blue-500/10 w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border border-blue-500/20">
-                  #{idx + 1}
-                </span>
-                <input
-                  type="text"
-                  value={cat}
-                  onChange={(e) => {
-                    const updated = [...categories];
-                    updated[idx] = e.target.value;
-                    setCategories(updated);
-                  }}
-                  placeholder={idx === 0 ? "misal: Desain Feed Instagram - Post 1" : idx === 1 ? "misal: Desain Feed Instagram - Post 2" : `Nama Kategori Output #${idx + 1}`}
-                  className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-blue-500 font-medium text-zinc-900 dark:text-zinc-100"
-                />
-                {categories.length > 2 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = categories.filter((_, i) => i !== idx);
-                      setCategories(updated);
-                    }}
-                    className="p-2 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
-                    title="Hapus Kategori"
-                  >
-                    🗑️
-                  </button>
-                )}
+          <div className="space-y-3 pt-1">
+            {outputSlots.map((slot, idx) => (
+              <div
+                key={slot.id || idx}
+                className="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-zinc-900/90 border border-blue-500/20 shadow-xs space-y-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-black text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md border border-blue-500/20">
+                      Slot #{idx + 1}
+                    </span>
+                    <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                      {slot.name.trim() ? slot.name : `Output #${idx + 1}`}
+                    </span>
+                  </div>
+                  {outputSlots.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = outputSlots.filter((_, i) => i !== idx);
+                        setOutputSlots(updated);
+                      }}
+                      className="p-1.5 text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors text-xs font-bold flex items-center gap-1 cursor-pointer"
+                      title="Hapus Slot Output"
+                    >
+                      <span>🗑️</span>
+                      <span className="hidden sm:inline">Hapus Slot</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Slot Name & Assignee */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                      Nama Output / Kategori <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={slot.name}
+                      onChange={(e) => {
+                        const updated = [...outputSlots];
+                        updated[idx].name = e.target.value;
+                        setOutputSlots(updated);
+                      }}
+                      placeholder={idx === 0 ? "misal: Feed Post 1 - Promosi Event" : idx === 1 ? "misal: Feed Post 2 - Guest Star" : `Nama Kategori Output #${idx + 1}`}
+                      className="w-full bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 font-semibold text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                      Assign Peserta Khusus (Opsional)
+                    </label>
+                    <select
+                      value={slot.assignedUserId || ''}
+                      onChange={(e) => {
+                        const uid = e.target.value;
+                        const matched = members.find((m) => (m.userId || m.id) === uid);
+                        const uname = matched ? (matched.userName || matched.name || matched.userEmail || '') : '';
+                        const updated = [...outputSlots];
+                        updated[idx].assignedUserId = uid || null;
+                        updated[idx].assignedUserName = uname || null;
+                        setOutputSlots(updated);
+                      }}
+                      className="w-full bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                    >
+                      <option value="">-- Terbuka Untuk Siapa Saja (Open Claim) --</option>
+                      {members.map((m) => {
+                        const uid = m.userId || m.id || '';
+                        const uname = m.userName || m.name || m.userEmail || 'Anggota';
+                        if (!uid) return null;
+                        return (
+                          <option key={uid} value={uid}>
+                            👤 {uname}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Custom Slot Deadline & Specific Brief / Asset Link */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1 flex items-center justify-between">
+                      <span>Deadline Khusus Slot (Opsional)</span>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={slot.deadline || ''}
+                      onChange={(e) => {
+                        const updated = [...outputSlots];
+                        updated[idx].deadline = e.target.value || null;
+                        setOutputSlots(updated);
+                      }}
+                      onClick={(e) => {
+                        try { e.currentTarget.showPicker?.(); } catch {}
+                      }}
+                      className="w-full bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 text-zinc-900 dark:text-zinc-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                    />
+                    <p className="text-[9px] text-zinc-400 mt-0.5 italic">
+                      *Kosongkan jika mengikuti deadline general task
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-1">
+                      Brief Lanjutan / Asset Khusus Slot (Opsional)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={slot.specificBrief || ''}
+                      onChange={(e) => {
+                        const updated = [...outputSlots];
+                        updated[idx].specificBrief = e.target.value || null;
+                        setOutputSlots(updated);
+                      }}
+                      placeholder="Paste link asset Google Drive / Figma / Canva / copy teks spesifik untuk slot ini..."
+                      className="w-full bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:border-blue-500 text-zinc-900 dark:text-zinc-100 leading-relaxed resize-y"
+                    />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -184,17 +285,33 @@ export default function CreateTaskForm({
           <div className="flex items-center justify-between pt-1">
             <button
               type="button"
-              onClick={() => setCategories((prev) => [...prev, ''])}
-              className="text-xs font-extrabold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-3 py-1.5 rounded-xl border border-blue-500/20 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+              onClick={() =>
+                setOutputSlots((prev) => [
+                  ...prev,
+                  {
+                    id: `slot_${prev.length + 1}`,
+                    name: '',
+                    assignedUserId: '',
+                    assignedUserName: '',
+                    deadline: '',
+                    specificBrief: '',
+                  },
+                ])
+              }
+              className="text-xs font-extrabold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-3.5 py-2 rounded-xl border border-blue-500/20 transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-xs"
             >
               <span>➕</span>
-              <span>Tambah Kategori Output</span>
+              <span>Tambah Slot Output</span>
             </button>
             <span className="text-[10px] text-zinc-400 italic">
-              *Peserta bebas memilih 1 kategori yang tersedia saat submit
+              *Tiap slot dapat memiliki brief, asset, deadline, & penugasan sendiri
             </span>
           </div>
-          <input type="hidden" name="directBriefCategories" value={JSON.stringify(categories.filter(c => c.trim()))} />
+          <input
+            type="hidden"
+            name="directBriefCategories"
+            value={JSON.stringify(outputSlots.filter((s) => s.name && s.name.trim().length > 0))}
+          />
         </div>
       )}
 
