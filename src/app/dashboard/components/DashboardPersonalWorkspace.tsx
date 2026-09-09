@@ -535,7 +535,8 @@ export default function DashboardPersonalWorkspace({
   // This ensures parentTask.assignments ALWAYS retains all workflow steps (realtime live status).
   const allGroupedTasks = groupTasksByParent(combinedRawTasks);
 
-  const nowUnix = Math.floor(Date.now() / 1000);
+  const nowMs = Date.now();
+  const toMs = (ts: number | null | undefined) => (!ts ? 0 : ts < 1e11 ? ts * 1000 : ts);
 
   // Helper to check if a GroupedTask belongs to a Mentor Workspace
   const isMentorGroupedTask = (gt: GroupedTask) =>
@@ -550,7 +551,7 @@ export default function DashboardPersonalWorkspace({
   const activeGrouped = allGroupedTasks.filter((gt) =>
     gt.assignments.some(
       (t) =>
-        (!t.start_at || t.start_at <= nowUnix) &&
+        (!t.start_at || toMs(t.start_at) <= nowMs) &&
         !['APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(t.status)
     )
   );
@@ -589,13 +590,13 @@ export default function DashboardPersonalWorkspace({
 
   // Filter 5: Task Plan (Dijadwalkan / Draft)
   const taskPlanGrouped = allGroupedTasks.filter((gt) =>
-    gt.assignments.some((t) => (t.start_at && t.start_at > nowUnix) || t.status === 'DRAFT')
+    gt.assignments.some((t) => (t.start_at && toMs(t.start_at) > nowMs) || t.status === 'DRAFT')
   );
 
   // Filter 6: Expired Task
   const expiredGrouped = allGroupedTasks.filter((gt) =>
     gt.deadline != null &&
-    gt.deadline < nowUnix &&
+    toMs(gt.deadline) < nowMs &&
     gt.assignments.some((t) => !['APPROVED', 'DONE', 'LOCKED', 'PUBLISHED', 'ARCHIVED'].includes(t.status))
   );
 

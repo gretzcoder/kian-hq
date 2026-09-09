@@ -139,7 +139,7 @@ export default async function DashboardPage() {
           AND (
             ((t.task_type = 'ASSESSMENT' OR ws.workspace_type = 'ASSESSMENT') AND t.status = 'APPROVED')
             OR
-            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'DRAFT', 'BRIEF_PENDING', 'WAITING_REVIEW'))
+            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'ARCHIVED'))
           )
         ORDER BY ta.submitted_at ASC, t.deadline ASC
         LIMIT 150
@@ -225,7 +225,7 @@ export default async function DashboardPage() {
           AND (
             ((t.task_type = 'ASSESSMENT' OR ws.workspace_type = 'ASSESSMENT') AND t.status = 'APPROVED')
             OR
-            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'DRAFT', 'BRIEF_PENDING', 'WAITING_REVIEW'))
+            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'ARCHIVED'))
           )
         ORDER BY t.deadline ASC
         LIMIT 30
@@ -264,7 +264,7 @@ export default async function DashboardPage() {
           AND (
             ((t.task_type = 'ASSESSMENT' OR ws.workspace_type = 'ASSESSMENT') AND t.status = 'APPROVED')
             OR
-            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'DRAFT', 'BRIEF_PENDING', 'WAITING_REVIEW'))
+            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'ARCHIVED'))
           )
         ORDER BY t.deadline ASC
         LIMIT 50
@@ -344,7 +344,7 @@ export default async function DashboardPage() {
           AND (
             ((t.task_type = 'ASSESSMENT' OR ws.workspace_type = 'ASSESSMENT') AND t.status = 'APPROVED')
             OR
-            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'DRAFT', 'BRIEF_PENDING', 'WAITING_REVIEW'))
+            (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'ARCHIVED'))
           )
         ORDER BY t.deadline ASC
         LIMIT 25
