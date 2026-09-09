@@ -10,6 +10,7 @@ import { sendPushNotificationToUser, sendPushNotificationToUsers } from '@/modul
 import { parseIndonesiaDate } from '@/lib/dateUtils';
 import { invalidateWorkspaceTaskCache } from '@/modules/workspaces/taskPollActions';
 import { invalidateLeaderboardCache } from '@/modules/leaderboard/actions';
+import { syncGroupAndTeamTaskAssignments } from '@/modules/workspaces/assessmentActions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -667,6 +668,9 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
       `)
       .bind(nextStatus, resultUrl.trim(), now, updatedRole, isLeader ? 1 : 0, isMentor ? 1 : 0, isCoordinator ? 1 : 0, assignmentId)
       .run();
+
+    // Auto-sync group members if task has group assignments
+    await syncGroupAndTeamTaskAssignments(db, workspaceId, assignment.task_id);
     if (task) {
       await logWorkflowEvent({
         entityType: 'task',
@@ -982,6 +986,7 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
       await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
     }
+    await syncGroupAndTeamTaskAssignments(db, task.workspace_id || undefined, task.id);
     await invalidateLeaderboardCache();
     revalidatePath('/dashboard/review');
     revalidatePath('/dashboard/workspace');
@@ -1979,6 +1984,9 @@ export async function syncAndRepairTaskStatuses(db: any, workspaceId?: string) {
           .run();
       }
     }
+
+    // Auto-sync group/team assignments
+    await syncGroupAndTeamTaskAssignments(db, workspaceId);
   } catch (err) {
     console.error('syncAndRepairTaskStatuses error:', err);
   }

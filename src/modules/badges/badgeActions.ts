@@ -14,6 +14,7 @@ import {
   RequirementItemProgress,
   RequirementType,
 } from './badgeTypes';
+import { syncGroupAndTeamTaskAssignments } from '@/modules/workspaces/assessmentActions';
 
 
 
@@ -122,6 +123,9 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
       badgeColumnsEnsured = true;
     }
 
+    // Auto-sync team/group assignments across all users
+    await syncGroupAndTeamTaskAssignments(db);
+
     // 1. Fetch active badges with requirements
     const { results: rawBadges } = await db
       .prepare("SELECT id, name, category, requirement_type, requirement_data, is_continuous_earning, sparks_reward FROM badges WHERE requirement_type IN ('TASK', 'WORKSPACE', 'ACHIEVEMENT')")
@@ -139,11 +143,26 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
 
       const { results: approvedAssignments } = await db
         .prepare(`
-          SELECT ta.user_id, ta.task_id
+          SELECT DISTINCT ta.user_id, ta.task_id
           FROM task_assignments ta
           JOIN tasks t ON ta.task_id = t.id
           LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-          WHERE ta.status IN ('APPROVED', 'DONE', 'PUBLISHED')
+          WHERE (
+            ta.status IN ('APPROVED', 'DONE', 'PUBLISHED')
+            OR t.status = 'COMPLETED'
+            OR (
+              (t.assessment_category = 'GROUP' OR (ta.group_name IS NOT NULL AND TRIM(ta.group_name) != ''))
+              AND EXISTS (
+                SELECT 1 FROM task_assignments ta2
+                WHERE ta2.task_id = ta.task_id
+                  AND (
+                    (ta.group_name IS NOT NULL AND TRIM(ta.group_name) != '' AND ta2.group_name = ta.group_name)
+                    OR (t.assessment_category = 'GROUP')
+                  )
+                  AND ta2.status IN ('APPROVED', 'DONE', 'PUBLISHED')
+              )
+            )
+          )
             AND t.status != 'DELETED'
             AND (ws.id IS NULL OR ws.deleted_at IS NULL)
             ${userClause}
@@ -554,10 +573,19 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       });
     });
 
-    // 4. Fetch user's task assignments & task statuses for requirement checking
+    // 4. Fetch user's task assignments & task statuses for requirement checking (including group completion)
     const { results: userAssignments } = await db
       .prepare(`
-        SELECT ta.task_id, ta.status AS assignment_status, t.status AS task_status, t.workspace_id
+        SELECT DISTINCT ta.task_id, ta.status AS assignment_status, t.status AS task_status, t.workspace_id,
+               EXISTS (
+                 SELECT 1 FROM task_assignments ta2
+                 WHERE ta2.task_id = ta.task_id
+                   AND (
+                     (ta.group_name IS NOT NULL AND TRIM(ta.group_name) != '' AND ta2.group_name = ta.group_name)
+                     OR (t.assessment_category = 'GROUP')
+                   )
+                   AND ta2.status IN ('APPROVED', 'DONE', 'PUBLISHED')
+               ) AS is_group_approved
         FROM task_assignments ta
         JOIN tasks t ON ta.task_id = t.id
         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
@@ -570,7 +598,11 @@ export async function getAllBadgesWithUserProgress(): Promise<{
 
     const userCompletedTaskIds = new Set<string>();
     (userAssignments as any[]).forEach((row) => {
-      if (['APPROVED', 'DONE', 'PUBLISHED'].includes(row.assignment_status)) {
+      if (
+        ['APPROVED', 'DONE', 'PUBLISHED'].includes(row.assignment_status) ||
+        row.task_status === 'COMPLETED' ||
+        Boolean(row.is_group_approved)
+      ) {
         userCompletedTaskIds.add(row.task_id);
       }
     });

@@ -1,5 +1,6 @@
 import { getDB } from '@/db/client';
 import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
+import { syncGroupAndTeamTaskAssignments } from '@/modules/workspaces/assessmentActions';
 import { getCategoryMultipliers } from './settingsCache';
 
 export interface UserSparksSummary {
@@ -27,6 +28,7 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
   const db = await getDB();
 
   try {
+    await syncGroupAndTeamTaskAssignments(db);
     await evaluateAndAutoAwardBadges(targetUserId);
   } catch (_e) {}
 

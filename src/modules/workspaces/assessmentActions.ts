@@ -911,18 +911,30 @@ export async function requestAssessmentRevision(
     .bind(assignment.task_id)
     .first() as { id: string; workspace_id: string | null; created_by: string | null; assessment_category: string | null } | null;
 
+  const isGroup = task?.assessment_category === 'GROUP' && assignment.group_name;
   const targetWsId = workspaceId || task?.workspace_id || '';
   try {
     const nextStatus = 'REVISION_REQUESTED';
 
-    await db
-      .prepare(`
-        UPDATE task_assignments
-        SET status = ?, revision_note = ?, reviewed_at = strftime('%s', 'now'), mentor_approved = 0, coordinator_approved = 0
-        WHERE id = ?
-      `)
-      .bind(nextStatus, revisionNote.trim(), assignmentId)
-      .run();
+    if (isGroup) {
+      await db
+        .prepare(`
+          UPDATE task_assignments
+          SET status = ?, revision_note = ?, reviewed_at = strftime('%s', 'now'), mentor_approved = 0, coordinator_approved = 0
+          WHERE task_id = ? AND group_name = ?
+        `)
+        .bind(nextStatus, revisionNote.trim(), assignment.task_id, assignment.group_name)
+        .run();
+    } else {
+      await db
+        .prepare(`
+          UPDATE task_assignments
+          SET status = ?, revision_note = ?, reviewed_at = strftime('%s', 'now'), mentor_approved = 0, coordinator_approved = 0
+          WHERE id = ?
+        `)
+        .bind(nextStatus, revisionNote.trim(), assignmentId)
+        .run();
+    }
 
     await logWorkflowEvent({
       entityType: 'task_assignment',
@@ -932,8 +944,6 @@ export async function requestAssessmentRevision(
       triggeredBy: session.userId,
       note: revisionNote.trim(),
     });
-
-
 
     if (targetWsId) {
       revalidatePath(`/dashboard/workspace/${targetWsId}`);
@@ -1330,8 +1340,152 @@ export async function repairAssessmentTaskStatuses(db: any, workspaceId?: string
         }
       }
     }
+
+    // Auto-sync team/group submissions and approval sparks across all team members
+    await syncGroupAndTeamTaskAssignments(db, workspaceId);
   } catch (err) {
     console.error('repairAssessmentTaskStatuses error:', err);
+  }
+}
+
+/**
+ * Automatically synchronizes submissions, reviews, approval status, and Sparks
+ * across ALL group members for team/group assessment tasks and tasks with group_name.
+ * When 1 team member represents the group and submits/gets approved, ALL members
+ * in that group automatically get:
+ * - status = 'APPROVED' (or 'WAITING_REVIEW' / 'REVISION_REQUESTED')
+ * - matching sparks (default 8)
+ * - matching result_url, appreciation_note, submitted_at, reviewed_at
+ * - lead_approved = 1, mentor_approved = 1, coordinator_approved = 1
+ */
+export async function syncGroupAndTeamTaskAssignments(db: any, workspaceId?: string, targetTaskId?: string) {
+  try {
+    const wsFilter = workspaceId ? 'AND t.workspace_id = ?' : '';
+    const taskFilter = targetTaskId ? 'AND t.id = ?' : '';
+    const params: string[] = [];
+    if (workspaceId) params.push(workspaceId);
+    if (targetTaskId) params.push(targetTaskId);
+
+    // 1. Fetch all distinct group clusters
+    const { results: groupClusters } = await db.prepare(`
+      SELECT DISTINCT ta.task_id, COALESCE(ta.group_name, '') AS group_name
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      WHERE (t.assessment_category = 'GROUP' OR (ta.group_name IS NOT NULL AND TRIM(ta.group_name) != ''))
+        AND t.status != 'DELETED'
+        ${wsFilter}
+        ${taskFilter}
+    `).bind(...params).all();
+
+    if (!groupClusters || groupClusters.length === 0) return;
+
+    for (const cluster of groupClusters as { task_id: string; group_name: string }[]) {
+      const gName = cluster.group_name;
+      const gCondition = gName ? 'AND ta.group_name = ?' : "AND (ta.group_name IS NULL OR TRIM(ta.group_name) = '')";
+      const gParams = gName ? [cluster.task_id, gName] : [cluster.task_id];
+
+      const { results: members } = await db.prepare(`
+        SELECT ta.id, ta.user_id, ta.status, ta.result_url, ta.sparks,
+               ta.appreciation_note, ta.revision_note, ta.submitted_at, ta.reviewed_at,
+               ta.lead_approved, ta.mentor_approved, ta.coordinator_approved
+        FROM task_assignments ta
+        WHERE ta.task_id = ? ${gCondition}
+      `).bind(...gParams).all();
+
+      if (!members || members.length === 0) continue;
+
+      const memberList = members as any[];
+      const approvedRep = memberList.find((m) => m.status === 'APPROVED');
+
+      if (approvedRep) {
+        // Find best fields across any approved records
+        const repSparks = memberList.reduce((max, m) => Math.max(max, Number(m.sparks) || 0), Number(approvedRep.sparks) || 8) || 8;
+        const repResultUrl = memberList.find((m) => m.result_url && m.result_url.trim())?.result_url || approvedRep.result_url;
+        const repSubmittedAt = memberList.find((m) => m.submitted_at)?.submitted_at || approvedRep.submitted_at || Math.floor(Date.now() / 1000);
+        const repReviewedAt = memberList.find((m) => m.reviewed_at)?.reviewed_at || approvedRep.reviewed_at || Math.floor(Date.now() / 1000);
+        const repAppreciation = memberList.find((m) => m.appreciation_note && m.appreciation_note.trim())?.appreciation_note || approvedRep.appreciation_note;
+
+        // Check if any member is unsynced
+        const needsSync = memberList.some(
+          (m) =>
+            m.status !== 'APPROVED' ||
+            m.sparks !== repSparks ||
+            !m.result_url ||
+            !m.mentor_approved ||
+            !m.coordinator_approved
+        );
+
+        if (needsSync) {
+          const updateParams = gName
+            ? [repSparks, repResultUrl, repSubmittedAt, repReviewedAt, repAppreciation, cluster.task_id, gName]
+            : [repSparks, repResultUrl, repSubmittedAt, repReviewedAt, repAppreciation, cluster.task_id];
+
+          await db.prepare(`
+            UPDATE task_assignments
+            SET status = 'APPROVED',
+                sparks = ?,
+                result_url = COALESCE(result_url, ?),
+                submitted_at = COALESCE(submitted_at, ?),
+                reviewed_at = COALESCE(reviewed_at, ?),
+                lead_approved = 1,
+                mentor_approved = 1,
+                coordinator_approved = 1,
+                appreciation_note = COALESCE(?, appreciation_note),
+                revision_note = NULL
+            WHERE task_id = ? ${gCondition}
+          `).bind(...updateParams).run();
+        }
+      } else {
+        // If not approved, check if submitted (WAITING_REVIEW / RESUBMITTED)
+        const submittedRep = memberList.find((m) => ['WAITING_REVIEW', 'RESUBMITTED'].includes(m.status) || (m.result_url && m.result_url.trim()));
+        if (submittedRep) {
+          const repResultUrl = submittedRep.result_url;
+          const repSubmittedAt = submittedRep.submitted_at || Math.floor(Date.now() / 1000);
+
+          const needsSubmitSync = memberList.some((m) => m.status !== 'WAITING_REVIEW' || !m.result_url);
+          if (needsSubmitSync) {
+            const updateParams = gName
+              ? [repResultUrl, repSubmittedAt, cluster.task_id, gName]
+              : [repResultUrl, repSubmittedAt, cluster.task_id];
+
+            await db.prepare(`
+              UPDATE task_assignments
+              SET status = 'WAITING_REVIEW',
+                  result_url = COALESCE(result_url, ?),
+                  submitted_at = COALESCE(submitted_at, ?),
+                  revision_note = NULL,
+                  mentor_approved = 0,
+                  coordinator_approved = 0,
+                  lead_approved = 0
+              WHERE task_id = ? ${gCondition}
+                AND status != 'APPROVED'
+            `).bind(...updateParams).run();
+          }
+        } else {
+          // If revision requested
+          const revRep = memberList.find((m) => m.status === 'REVISION_REQUESTED');
+          if (revRep) {
+            const repRevNote = revRep.revision_note;
+            const needsRevSync = memberList.some((m) => m.status !== 'REVISION_REQUESTED');
+            if (needsRevSync) {
+              const updateParams = gName
+                ? [repRevNote, cluster.task_id, gName]
+                : [repRevNote, cluster.task_id];
+
+              await db.prepare(`
+                UPDATE task_assignments
+                SET status = 'REVISION_REQUESTED',
+                    revision_note = COALESCE(?, revision_note)
+                WHERE task_id = ? ${gCondition}
+                  AND status != 'APPROVED'
+              `).bind(...updateParams).run();
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('syncGroupAndTeamTaskAssignments error:', err);
   }
 }
 
