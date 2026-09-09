@@ -444,16 +444,14 @@ export async function getAllBadgesWithUserProgress(): Promise<{
     ctx.permissions.has('ADMIN_SYSTEM');
 
   try {
-    // 0. Auto-evaluate and award badges for current user (throttled)
-    await evaluateAndAutoAwardBadges(session.userId);
-
-    // Parallel fetch for all required badge data in ONE round-trip
+    // Parallel fetch for all required badge data in ONE optimized round-trip
     const [
       rawBadgesRes,
       userEarnedRes,
       claimedSparksRes,
-      allOwnersRawRes,
-      userAssignmentsRes,
+      ownerCountsRes,
+      recentOwnersRawRes,
+      userCompletedTasksRes,
       allTasksRawRes,
       allWorkspacesRawRes,
       allAchievementsRawRes,
@@ -461,6 +459,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       db.prepare('SELECT * FROM badges ORDER BY created_at DESC').all(),
       db.prepare('SELECT badge_id, awarded_at, claimed_at, claim_count FROM user_badges WHERE user_id = ?').bind(session.userId).all(),
       db.prepare("SELECT badge_id, note FROM sparks_adjustments WHERE user_id = ? AND category = 'BADGE_REWARD'").bind(session.userId).all(),
+      db.prepare('SELECT badge_id, COUNT(*) AS total_count FROM user_badges GROUP BY badge_id').all(),
       db.prepare(`
         SELECT ub.badge_id, ub.user_id, ub.awarded_at, ub.awarded_by,
                u.name AS user_name, u.email AS user_email, u.user_type, u.avatar_url
@@ -468,32 +467,26 @@ export async function getAllBadgesWithUserProgress(): Promise<{
         JOIN users u ON ub.user_id = u.id
         WHERE u.status = 'ACTIVE'
         ORDER BY ub.awarded_at DESC
+        LIMIT 100
       `).all(),
       db.prepare(`
-        SELECT DISTINCT ta.task_id, ta.status AS assignment_status, t.status AS task_status, t.workspace_id,
-               EXISTS (
-                 SELECT 1 FROM task_assignments ta2
-                 WHERE ta2.task_id = ta.task_id
-                   AND (
-                     (ta.group_name IS NOT NULL AND TRIM(ta.group_name) != '' AND ta2.group_name = ta.group_name)
-                     OR (t.assessment_category = 'GROUP')
-                   )
-                   AND ta2.status IN ('APPROVED', 'DONE', 'PUBLISHED')
-               ) AS is_group_approved
+        SELECT DISTINCT ta.task_id
         FROM task_assignments ta
         JOIN tasks t ON ta.task_id = t.id
-        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
         WHERE ta.user_id = ?
+          AND (ta.status IN ('APPROVED', 'DONE', 'PUBLISHED') OR t.status = 'COMPLETED')
           AND t.status != 'DELETED'
-          AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      `).bind(session.userId).all(),
-      db.prepare(`
-        SELECT t.id, t.title, t.workspace_id, t.status
-        FROM tasks t
-        LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-        WHERE t.status != 'DELETED'
-          AND (ws.id IS NULL OR ws.deleted_at IS NULL)
-      `).all(),
+        UNION
+        SELECT DISTINCT ta1.task_id
+        FROM task_assignments ta1
+        JOIN task_assignments ta2 ON ta1.task_id = ta2.task_id AND ta1.group_name = ta2.group_name
+        JOIN tasks t ON ta1.task_id = t.id
+        WHERE ta1.user_id = ?
+          AND ta1.group_name IS NOT NULL AND TRIM(ta1.group_name) != ''
+          AND ta2.status IN ('APPROVED', 'DONE', 'PUBLISHED')
+          AND t.status != 'DELETED'
+      `).bind(session.userId, session.userId).all(),
+      db.prepare("SELECT id, title, workspace_id, status FROM tasks WHERE status != 'DELETED'").all(),
       db.prepare('SELECT id, name FROM workspaces WHERE deleted_at IS NULL').all(),
       db.prepare('SELECT user_id, category, period, earned_at, rank FROM achievement_history WHERE user_id = ?').bind(session.userId).all(),
     ]);
@@ -513,8 +506,13 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       if (row.note) claimedBadgeNotesSet.add(row.note.toLowerCase());
     });
 
+    const badgeOwnerCountsMap = new Map<string, number>();
+    (ownerCountsRes.results as any[] || []).forEach((row) => {
+      badgeOwnerCountsMap.set(row.badge_id, Number(row.total_count) || 0);
+    });
+
     const badgeOwnersMap = new Map<string, BadgeOwner[]>();
-    (allOwnersRawRes.results as any[] || []).forEach((row) => {
+    (recentOwnersRawRes.results as any[] || []).forEach((row) => {
       const bId = row.badge_id;
       if (!badgeOwnersMap.has(bId)) {
         badgeOwnersMap.set(bId, []);
@@ -531,12 +529,8 @@ export async function getAllBadgesWithUserProgress(): Promise<{
     });
 
     const userCompletedTaskIds = new Set<string>();
-    (userAssignmentsRes.results as any[] || []).forEach((row) => {
-      if (
-        ['APPROVED', 'DONE', 'PUBLISHED'].includes(row.assignment_status) ||
-        row.task_status === 'COMPLETED' ||
-        Boolean(row.is_group_approved)
-      ) {
+    (userCompletedTasksRes.results as any[] || []).forEach((row) => {
+      if (row.task_id) {
         userCompletedTaskIds.add(row.task_id);
       }
     });
@@ -556,6 +550,8 @@ export async function getAllBadgesWithUserProgress(): Promise<{
     // Process badges and check auto-award eligibility
     const badges: BadgeItem[] = [];
     let userOwnedCount = 0;
+    const batchAutoAwardStatements: any[] = [];
+    const now = Date.now();
 
     for (const b of rawBadges as any[]) {
       const badgeId = b.id;
@@ -641,7 +637,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
           const periodName = cond.periodType === 'WEEKLY' ? 'Weekly' : cond.periodType === 'MONTHLY' ? 'Monthly' : 'Semua Periode';
           const dateNotice = cond.startDate ? ` [Cutoff: ≥ ${cond.startDate}]` : '';
 
-          const nowSec = Math.floor(Date.now() / 1000);
+          const nowSec = Math.floor(now / 1000);
           const filteredMyAch = filterAchievementsForCondition(myAchievements, cond, nowSec);
 
           let currentVal = 0;
@@ -678,42 +674,42 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       }
 
       // Auto-award badge if user fulfilled all requirements and doesn't own it yet
+      let isNewlyAwarded = false;
       if (!isOwned && reqType !== 'NONE' && totalReqs > 0 && completedCount === totalReqs) {
-        const now = Date.now();
         const userBadgeId = `ub_${crypto.randomUUID().replace(/-/g, '')}`;
-        try {
-          await db
-            .prepare(`
-              INSERT OR IGNORE INTO user_badges (id, user_id, badge_id, awarded_by, awarded_at)
-              VALUES (?, ?, ?, 'SYSTEM_AUTO', ?)
-            `)
-            .bind(userBadgeId, session.userId, badgeId, now)
-            .run();
+        batchAutoAwardStatements.push(
+          db.prepare(`
+            INSERT OR IGNORE INTO user_badges (id, user_id, badge_id, awarded_by, awarded_at, claim_count)
+            VALUES (?, ?, ?, 'SYSTEM_AUTO', ?, 1)
+          `).bind(userBadgeId, session.userId, badgeId, now)
+        );
 
-          isOwned = true;
-          awardedAt = now;
-          claimedAt = null;
-          isSparksClaimed = false;
-          progressPercent = 100;
+        isOwned = true;
+        isNewlyAwarded = true;
+        awardedAt = now;
+        claimedAt = null;
+        isSparksClaimed = false;
+        progressPercent = 100;
 
-          // Add to owners list
-          const existingOwners = badgeOwnersMap.get(badgeId) || [];
-          existingOwners.unshift({
-            userId: session.userId,
-            userName: session.name || 'Anda',
-            userEmail: session.email,
-            userType: ctx.userType || null,
-            avatarUrl: session.avatar || null,
-            awardedAt: now,
-            awardedBy: 'SYSTEM_AUTO',
-          });
-          badgeOwnersMap.set(badgeId, existingOwners);
-        } catch (_e) {}
+        // Add to owners list
+        const existingOwners = badgeOwnersMap.get(badgeId) || [];
+        existingOwners.unshift({
+          userId: session.userId,
+          userName: session.name || 'Anda',
+          userEmail: session.email,
+          userType: ctx.userType || null,
+          avatarUrl: session.avatar || null,
+          awardedAt: now,
+          awardedBy: 'SYSTEM_AUTO',
+        });
+        badgeOwnersMap.set(badgeId, existingOwners);
       }
 
       if (isOwned) userOwnedCount++;
 
       const owners = badgeOwnersMap.get(badgeId) || [];
+      const baseOwnerCount = badgeOwnerCountsMap.get(badgeId) || owners.length;
+      const totalOwners = baseOwnerCount + (isNewlyAwarded ? 1 : 0);
 
       badges.push({
         id: b.id,
@@ -735,8 +731,14 @@ export async function getAllBadgesWithUserProgress(): Promise<{
         progressPercent,
         requirements,
         owners,
-        totalOwners: owners.length,
+        totalOwners,
       });
+    }
+
+    if (batchAutoAwardStatements.length > 0) {
+      try {
+        await db.batch(batchAutoAwardStatements);
+      } catch (_batchErr) {}
     }
 
     return {
