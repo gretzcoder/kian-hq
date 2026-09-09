@@ -420,10 +420,17 @@ export default function TaskAccordion({
             className={`border bg-white dark:bg-[#09090b]/40 rounded-3xl shadow-sm overflow-hidden transition-all duration-300 ${borderColor}`}
           >
               {/* Accordion Header — always visible, click to toggle */}
-              <button
-                type="button"
+              <div
+                role="button"
+                tabIndex={0}
                 onClick={() => toggle(task.id)}
-                className="w-full text-left p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3 group hover:bg-zinc-50/60 dark:hover:bg-white/[0.02] transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggle(task.id);
+                  }
+                }}
+                className="w-full text-left p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-3 group hover:bg-zinc-50/60 dark:hover:bg-white/[0.02] transition-colors cursor-pointer select-none"
               >
                 <div className="min-w-0 flex-1">
                   {/* Badges row */}
@@ -554,7 +561,7 @@ export default function TaskAccordion({
                   </svg>
                 </span>
               </div>
-            </button>
+            </div>
 
             {/* Accordion Body — collapsible */}
             <div
