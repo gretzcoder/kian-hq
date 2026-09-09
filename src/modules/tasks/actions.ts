@@ -600,6 +600,52 @@ export async function createTask(workspaceId: string, formData: FormData) {
   }
 }
 
+/**
+ * Automatically syncs the overall task status based on the current state of its assignments.
+ */
+export async function syncTaskOverallStatus(db: any, taskId: string): Promise<string> {
+  const { results: assignments } = await db
+    .prepare('SELECT status FROM task_assignments WHERE task_id = ?')
+    .bind(taskId)
+    .all();
+
+  const task = await db
+    .prepare('SELECT id, status FROM tasks WHERE id = ?')
+    .bind(taskId)
+    .first() as { id: string; status: string } | null;
+
+  if (!task) return 'TODO';
+
+  const rows = (assignments as any[]) || [];
+  let nextStatus = 'IN_PROGRESS';
+
+  if (rows.length === 0) {
+    nextStatus = 'TODO';
+  } else {
+    const isAllApproved = rows.every((a) => ['APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED'].includes(a.status));
+    if (isAllApproved) {
+      nextStatus = 'APPROVED';
+    } else {
+      const isAllWaitingReview = rows.every((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(a.status)) &&
+        rows.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status));
+      if (isAllWaitingReview) {
+        nextStatus = 'WAITING_REVIEW';
+      } else {
+        nextStatus = 'IN_PROGRESS';
+      }
+    }
+  }
+
+  if (task.status !== nextStatus && task.status !== 'DELETED') {
+    await db
+      .prepare('UPDATE tasks SET status = ? WHERE id = ?')
+      .bind(nextStatus, taskId)
+      .run();
+  }
+
+  return nextStatus;
+}
+
 // ---------------------------------------------------------------------------
 // ASSIGN CREATOR TO TASK
 // ---------------------------------------------------------------------------
@@ -653,6 +699,8 @@ export async function assignCreatorToTask(
       triggeredBy: session.userId,
       note: `Assigned as ${role}`,
     });
+
+    await syncTaskOverallStatus(db, taskId);
 
     if (task.workspace_id) {
       await invalidateWorkspaceTaskCache(task.workspace_id);
@@ -726,6 +774,8 @@ export async function assignMultipleCreatorsToTask(
       });
     }
 
+    await syncTaskOverallStatus(db, taskId);
+
     if (task.workspace_id) {
       await invalidateWorkspaceTaskCache(task.workspace_id);
       revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
@@ -756,13 +806,13 @@ export async function removeTaskAssignment(assignmentId: string) {
 
   const assignment = await db
     .prepare(`
-      SELECT ta.id, t.project_id, t.workspace_id
+      SELECT ta.id, ta.task_id, t.project_id, t.workspace_id
       FROM task_assignments ta
       JOIN tasks t ON ta.task_id = t.id
       WHERE ta.id = ?
     `)
     .bind(assignmentId)
-    .first() as { id: string; project_id: string; workspace_id: string | null } | null;
+    .first() as { id: string; task_id: string; project_id: string; workspace_id: string | null } | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
@@ -777,6 +827,8 @@ export async function removeTaskAssignment(assignmentId: string) {
       .prepare('DELETE FROM task_assignments WHERE id = ?')
       .bind(assignmentId)
       .run();
+
+    await syncTaskOverallStatus(db, assignment.task_id);
 
     if (assignment.workspace_id) {
       await invalidateWorkspaceTaskCache(assignment.workspace_id);
@@ -836,6 +888,22 @@ export async function startWork(assignmentId: string) {
     if (!ojtCheck.allowed) {
       return { success: false, error: ojtCheck.error };
     }
+
+    await db
+      .prepare("UPDATE task_assignments SET status = 'IN_PROGRESS' WHERE id = ?")
+      .bind(assignmentId)
+      .run();
+
+    await logWorkflowEvent({
+      entityType: 'task_assignment',
+      entityId: assignmentId,
+      fromStatus: assignment.status,
+      toStatus: 'IN_PROGRESS',
+      triggeredBy: session.userId,
+      note: 'Started work',
+    });
+
+    await syncTaskOverallStatus(db, assignment.task_id);
 
     if (task?.workspace_id) {
       await invalidateWorkspaceTaskCache(task.workspace_id);
@@ -1056,6 +1124,8 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
       toStatus: nextStatus,
       triggeredBy: session.userId,
     });
+
+    await syncTaskOverallStatus(db, assignment.task_id);
 
     if (task?.workspace_id) {
       await invalidateWorkspaceTaskCache(task.workspace_id);
@@ -1381,40 +1451,7 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
       }
     }
 
-    if (nextStatus === 'APPROVED') {
-      const { results: pending } = await db
-        .prepare("SELECT id FROM task_assignments WHERE task_id = ? AND status NOT IN ('APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED')")
-        .bind(task.id)
-        .all();
-
-      if (pending.length === 0) {
-        await db
-          .prepare('UPDATE tasks SET status = ?, revision_note = NULL WHERE id = ?')
-          .bind('APPROVED', task.id)
-          .run();
-
-        await logWorkflowEvent({
-          entityType: 'task',
-          entityId: task.id,
-          fromStatus: task.status,
-          toStatus: 'APPROVED',
-          triggeredBy: session.userId,
-          note: `Task stage auto-progressed to APPROVED`,
-        });
-      } else if (task.status === 'APPROVED') {
-        await db
-          .prepare("UPDATE tasks SET status = 'IN_PROGRESS' WHERE id = ?")
-          .bind(task.id)
-          .run();
-      }
-    } else if (isOjtRole) {
-      if (task.status !== 'WAITING_REVIEW' && task.status !== 'APPROVED') {
-        await db
-          .prepare('UPDATE tasks SET status = ? WHERE id = ?')
-          .bind('WAITING_REVIEW', task.id)
-          .run();
-      }
-    }
+    await syncTaskOverallStatus(db, task.id);
 
     if (task.workspace_id) {
       await invalidateWorkspaceTaskCache(task.workspace_id);
@@ -1589,6 +1626,8 @@ export async function requestRevision(assignmentId: string, note: string) {
       .prepare('UPDATE task_assignments SET status = ?, revision_note = ?, reviewed_at = ?, lead_approved = 0, mentor_approved = 0, coordinator_approved = 0 WHERE id = ?')
       .bind(nextStatus, note.trim(), Math.floor(Date.now() / 1000), assignmentId)
       .run();
+
+    await syncTaskOverallStatus(db, task?.id || assignment.task_id);
 
 
 

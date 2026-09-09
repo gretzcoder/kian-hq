@@ -406,11 +406,13 @@ export default function TaskAccordion({
         const isOpen = openTaskId === task.id;
         const isTarget = targetTaskId === task.id;
         const taskAssignments = assignmentsByTask[task.id] ?? [];
-        const cfg = statusConfig[task.status] ?? statusConfig.DRAFT;
+        const isTrulyApproved = taskAssignments.length > 0 && taskAssignments.every((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status));
+        const effectiveStatus = isTrulyApproved ? 'APPROVED' : (task.status === 'APPROVED' ? 'IN_PROGRESS' : task.status);
+        const cfg = statusConfig[effectiveStatus] ?? statusConfig.DRAFT;
         const pCfg = priorityConfig[task.priority] ?? priorityConfig.NORMAL;
         const borderColor = isTarget
           ? 'border-purple-500 ring-2 ring-purple-500 shadow-xl shadow-purple-500/20'
-          : getBorderColor(task.status);
+          : getBorderColor(effectiveStatus);
         const totalTaskSparks = taskAssignments.reduce((acc, a) => acc + ((a as any).sparks || 0), 0);
 
         return (
@@ -504,7 +506,7 @@ export default function TaskAccordion({
                   </span>
                 )}
 
-                {getTaskDeadlineBadge(task.deadline, task.status, task.extended_deadline)}
+                {getTaskDeadlineBadge(task.deadline, effectiveStatus, task.extended_deadline)}
 
                 {(workspaceType === 'MENTOR' ? isCoordinator : (canDeleteTask || isLeader || isMentor || isCoordinator || (task.created_by != null && task.created_by === currentUserId))) && (
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
