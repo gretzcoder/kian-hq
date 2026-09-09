@@ -66,6 +66,8 @@ function parseCutoffTimestamp(dateStr?: string | null): number {
 function filterAchievementsForCondition(achievements: any[], cond: any, nowSec: number): any[] {
   const catKey = cond.category;
   const periodType = cond.periodType || 'ANY';
+  const maxRankAllowed = typeof cond.maxRank === 'number' ? cond.maxRank : 1;
+  const startTs = cond.startDate ? parseCutoffTimestamp(cond.startDate) : 0;
 
   return achievements.filter((a) => {
     // 1. Must be a completed/earned achievement up to now (earned_at <= nowSec)
@@ -78,7 +80,6 @@ function filterAchievementsForCondition(achievements: any[], cond: any, nowSec: 
     if (catKey !== 'ALL' && a.category !== catKey) return false;
 
     // 3. Rank check: for CHAMPION or specific title requirement, must be rank 1 unless maxRank specified
-    const maxRankAllowed = typeof cond.maxRank === 'number' ? cond.maxRank : 1;
     if (typeof a.rank === 'number' && a.rank > maxRankAllowed) return false;
 
     // 4. Period type check (WEEKLY vs MONTHLY)
@@ -86,10 +87,7 @@ function filterAchievementsForCondition(achievements: any[], cond: any, nowSec: 
     if (periodType === 'MONTHLY' && a.period.toLowerCase().includes('week')) return false;
 
     // 5. Cutoff date check
-    if (cond.startDate) {
-      const startTs = parseCutoffTimestamp(cond.startDate);
-      if (startTs > 0 && itemEarnedSec < startTs) return false;
-    }
+    if (startTs > 0 && itemEarnedSec < startTs) return false;
 
     return true;
   });
@@ -116,13 +114,6 @@ export async function evaluateAndAutoAwardBadges(targetUserId?: string): Promise
   const db = await getDB();
 
   try {
-    // 0. Ensure D1 columns exist (run once)
-    if (!badgeColumnsEnsured) {
-      try { await db.prepare("ALTER TABLE badges ADD COLUMN is_continuous_earning INTEGER DEFAULT 0").run(); } catch {}
-      try { await db.prepare("ALTER TABLE user_badges ADD COLUMN claim_count INTEGER DEFAULT 1").run(); } catch {}
-      badgeColumnsEnsured = true;
-    }
-
     // 1. Fetch active badges with requirements
     const { results: rawBadges } = await db
       .prepare("SELECT id, name, category, requirement_type, requirement_data, is_continuous_earning, sparks_reward FROM badges WHERE requirement_type IN ('TASK', 'WORKSPACE', 'ACHIEVEMENT')")
@@ -456,7 +447,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       allWorkspacesRawRes,
       allAchievementsRawRes,
     ] = await Promise.all([
-      db.prepare('SELECT * FROM badges ORDER BY created_at DESC').all(),
+      db.prepare('SELECT id, name, category, icon_url, description, requirement_type, requirement_data, is_continuous_earning, sparks_reward, created_by, created_at FROM badges ORDER BY created_at DESC').all(),
       db.prepare('SELECT badge_id, awarded_at, claimed_at, claim_count FROM user_badges WHERE user_id = ?').bind(session.userId).all(),
       db.prepare("SELECT badge_id, note FROM sparks_adjustments WHERE user_id = ? AND category = 'BADGE_REWARD'").bind(session.userId).all(),
       db.prepare('SELECT badge_id, COUNT(*) AS total_count FROM user_badges GROUP BY badge_id').all(),
@@ -467,32 +458,26 @@ export async function getAllBadgesWithUserProgress(): Promise<{
         JOIN users u ON ub.user_id = u.id
         WHERE u.status = 'ACTIVE'
         ORDER BY ub.awarded_at DESC
-        LIMIT 100
+        LIMIT 30
       `).all(),
       db.prepare(`
         SELECT DISTINCT ta.task_id
         FROM task_assignments ta
-        JOIN tasks t ON ta.task_id = t.id
-        WHERE ta.user_id = ?
-          AND (ta.status IN ('APPROVED', 'DONE', 'PUBLISHED') OR t.status = 'COMPLETED')
-          AND t.status != 'DELETED'
+        WHERE ta.user_id = ? AND ta.status IN ('APPROVED', 'DONE', 'PUBLISHED')
         UNION
         SELECT DISTINCT ta1.task_id
         FROM task_assignments ta1
         JOIN task_assignments ta2 ON ta1.task_id = ta2.task_id AND ta1.group_name = ta2.group_name
-        JOIN tasks t ON ta1.task_id = t.id
         WHERE ta1.user_id = ?
-          AND ta1.group_name IS NOT NULL AND TRIM(ta1.group_name) != ''
+          AND ta1.group_name IS NOT NULL AND ta1.group_name != ''
           AND ta2.status IN ('APPROVED', 'DONE', 'PUBLISHED')
-          AND t.status != 'DELETED'
       `).bind(session.userId, session.userId).all(),
-      db.prepare("SELECT id, title, workspace_id, status FROM tasks WHERE status != 'DELETED'").all(),
+      db.prepare("SELECT id, title, workspace_id FROM tasks WHERE status != 'DELETED'").all(),
       db.prepare('SELECT id, name FROM workspaces WHERE deleted_at IS NULL').all(),
-      db.prepare('SELECT user_id, category, period, earned_at, rank FROM achievement_history WHERE user_id = ?').bind(session.userId).all(),
+      db.prepare('SELECT category, period, earned_at, rank FROM achievement_history WHERE user_id = ?').bind(session.userId).all(),
     ]);
 
     const rawBadges = rawBadgesRes.results || [];
-    const allTasksRaw = allTasksRawRes.results || [];
 
     const userEarnedMap = new Map<string, { awardedAt: number; claimedAt: number | null; claimCount: number }>();
     (userEarnedRes.results as any[] || []).forEach((ub) => {
@@ -503,7 +488,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
     const claimedBadgeNotesSet = new Set<string>();
     (claimedSparksRes.results as any[] || []).forEach((row) => {
       if (row.badge_id) claimedBadgeIds.add(row.badge_id);
-      if (row.note) claimedBadgeNotesSet.add(row.note.toLowerCase());
+      if (row.note) claimedBadgeNotesSet.add(row.note.toLowerCase().trim());
     });
 
     const badgeOwnerCountsMap = new Map<string, number>();
@@ -514,18 +499,22 @@ export async function getAllBadgesWithUserProgress(): Promise<{
     const badgeOwnersMap = new Map<string, BadgeOwner[]>();
     (recentOwnersRawRes.results as any[] || []).forEach((row) => {
       const bId = row.badge_id;
-      if (!badgeOwnersMap.has(bId)) {
-        badgeOwnersMap.set(bId, []);
+      let list = badgeOwnersMap.get(bId);
+      if (!list) {
+        list = [];
+        badgeOwnersMap.set(bId, list);
       }
-      badgeOwnersMap.get(bId)!.push({
-        userId: row.user_id,
-        userName: row.user_name || row.user_email || 'User',
-        userEmail: row.user_email || '',
-        userType: row.user_type || null,
-        avatarUrl: row.avatar_url || null,
-        awardedAt: row.awarded_at,
-        awardedBy: row.awarded_by,
-      });
+      if (list.length < 5) {
+        list.push({
+          userId: row.user_id,
+          userName: row.user_name || row.user_email || 'User',
+          userEmail: row.user_email || '',
+          userType: row.user_type || null,
+          avatarUrl: row.avatar_url || null,
+          awardedAt: row.awarded_at,
+          awardedBy: row.awarded_by,
+        });
+      }
     });
 
     const userCompletedTaskIds = new Set<string>();
@@ -535,9 +524,18 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       }
     });
 
-    const taskMap = new Map<string, { title: string; workspace_id: string | null; status: string }>();
-    (allTasksRaw as any[]).forEach((t) => {
-      taskMap.set(t.id, { title: t.title, workspace_id: t.workspace_id, status: t.status });
+    const taskTitleMap = new Map<string, string>();
+    const workspaceTasksMap = new Map<string, string[]>();
+    (allTasksRawRes.results as any[] || []).forEach((t) => {
+      if (t.title) taskTitleMap.set(t.id, t.title);
+      if (t.workspace_id) {
+        let arr = workspaceTasksMap.get(t.workspace_id);
+        if (!arr) {
+          arr = [];
+          workspaceTasksMap.set(t.workspace_id, arr);
+        }
+        arr.push(t.id);
+      }
     });
 
     const workspaceMap = new Map<string, string>();
@@ -562,7 +560,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       let isSparksClaimed =
         Boolean(claimedAt) ||
         claimedBadgeIds.has(badgeId) ||
-        Array.from(claimedBadgeNotesSet).some((note) => note.includes(b.name.toLowerCase()));
+        claimedBadgeNotesSet.has(`claim reward badge: ${b.name.toLowerCase()}`);
 
       let reqIds: string[] = [];
       if (b.requirement_data) {
@@ -577,13 +575,13 @@ export async function getAllBadgesWithUserProgress(): Promise<{
 
       if (reqType === 'TASK') {
         reqIds.forEach((tId) => {
-          const tInfo = taskMap.get(tId);
+          const tTitle = taskTitleMap.get(tId);
           const isDone = userCompletedTaskIds.has(tId);
           if (isDone) completedCount++;
 
           requirements.push({
             id: tId,
-            title: tInfo ? tInfo.title : `Task #${tId.slice(0, 6)}`,
+            title: tTitle || `Task #${tId.slice(0, 6)}`,
             type: 'TASK',
             completed: isDone,
             statusText: isDone ? '✅ ACC / Disetujui' : '⏳ Belum Disetujui',
@@ -592,9 +590,12 @@ export async function getAllBadgesWithUserProgress(): Promise<{
       } else if (reqType === 'WORKSPACE') {
         reqIds.forEach((wsId) => {
           const wsName = workspaceMap.get(wsId) || `Workspace #${wsId.slice(0, 6)}`;
-          const wsTasks = (allTasksRaw as any[]).filter((t) => t.workspace_id === wsId);
-          const totalWsTasks = wsTasks.length;
-          const completedWsTasks = wsTasks.filter((t) => userCompletedTaskIds.has(t.id)).length;
+          const wsTaskIds = workspaceTasksMap.get(wsId) || [];
+          const totalWsTasks = wsTaskIds.length;
+          let completedWsTasks = 0;
+          for (let i = 0; i < totalWsTasks; i++) {
+            if (userCompletedTaskIds.has(wsTaskIds[i])) completedWsTasks++;
+          }
           const isWsDone = totalWsTasks > 0 && completedWsTasks === totalWsTasks;
 
           if (isWsDone) completedCount++;
@@ -629,8 +630,6 @@ export async function getAllBadgesWithUserProgress(): Promise<{
           ALL: '🌟 Semua Kategori Gelar',
         };
 
-        const myAchievements = userAchievementsList.filter((a) => a.user_id === session.userId);
-
         condItems.forEach((cond) => {
           const catName = catLabelMap[cond.category] || cond.category;
           const typeName = cond.conditionType === 'STREAK' ? 'Streak Beruntun' : 'Total Menang';
@@ -638,7 +637,7 @@ export async function getAllBadgesWithUserProgress(): Promise<{
           const dateNotice = cond.startDate ? ` [Cutoff: ≥ ${cond.startDate}]` : '';
 
           const nowSec = Math.floor(now / 1000);
-          const filteredMyAch = filterAchievementsForCondition(myAchievements, cond, nowSec);
+          const filteredMyAch = filterAchievementsForCondition(userAchievementsList, cond, nowSec);
 
           let currentVal = 0;
           if (cond.conditionType === 'COUNT') {
