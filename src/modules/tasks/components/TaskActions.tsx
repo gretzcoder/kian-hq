@@ -857,12 +857,12 @@ export default function TaskActions({
                                                 </div>
                                               )}
                                             </form>
-                                          ) : isPastDeadline ? (
-                                            <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-[11px] font-bold flex items-center gap-2">
-                                              <span>⏰</span>
-                                              <span>Tenggat waktu (deadline) tugas ini telah berakhir. Pengumpulan ditutup.</span>
-                                            </div>
-                                          ) : (
+                                          ) : (isPastDeadline && !assign.result_url && !(assign as any).submitted_at && !['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED', 'APPROVED', 'DONE', 'PUBLISHED'].includes(assign.status)) ? (
+                                             <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-[11px] font-bold flex items-center gap-2">
+                                               <span>⏰</span>
+                                               <span>Tenggat waktu (deadline) submit pertama telah berakhir. Pengumpulan tugas ditutup.</span>
+                                             </div>
+                                           ) : (
                                             <div className="flex items-center gap-2 flex-wrap">
                                               {assign.status === 'ASSIGNED' && !assign.result_url && (
                                                 <button

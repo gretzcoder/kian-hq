@@ -181,8 +181,9 @@ export function getTaskAssignmentStatusMeta(
   status: string,
   startAt?: number | null,
   deadline?: number | null,
-  extendedDeadline?: number | null
-): { label: string; badgeClass: string; isPastDeadline: boolean; isNotStarted: boolean; isExtended: boolean; penaltyPercent: number } {
+  extendedDeadline?: number | null,
+  hasSubmittedFirst?: boolean
+): { label: string; badgeClass: string; isPastDeadline: boolean; isNotStarted: boolean; isExtended: boolean; penaltyPercent: number; isFirstSubmitOverdue: boolean } {
   const now = Date.now();
   const effectiveDeadline = Math.max(extendedDeadline || 0, deadline || 0) || null;
   const isNotStarted = Boolean(startAt && startAt > now);
@@ -207,6 +208,19 @@ export function getTaskAssignmentStatusMeta(
       isNotStarted: false,
       isExtended: false,
       penaltyPercent: 0,
+      isFirstSubmitOverdue: false,
+    };
+  }
+
+  if (status === 'REVISION_REQUESTED') {
+    return {
+      label: '🔄 Perlu Revisi',
+      badgeClass: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-bold animate-pulse',
+      isPastDeadline: false,
+      isNotStarted: false,
+      isExtended,
+      penaltyPercent,
+      isFirstSubmitOverdue: false,
     };
   }
 
@@ -219,6 +233,7 @@ export function getTaskAssignmentStatusMeta(
       isNotStarted: false,
       isExtended,
       penaltyPercent,
+      isFirstSubmitOverdue: false,
     };
   }
 
@@ -230,18 +245,20 @@ export function getTaskAssignmentStatusMeta(
       isNotStarted: true,
       isExtended: false,
       penaltyPercent: 0,
+      isFirstSubmitOverdue: false,
     };
   }
 
   if (isPastDeadline) {
-    if (status === 'REVISION_REQUESTED') {
+    if (hasSubmittedFirst) {
       return {
-        label: '🚨 Revisi Terlambat',
-        badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 font-black animate-pulse',
-        isPastDeadline: true,
+        label: '⏳ On Progress',
+        badgeClass: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-bold',
+        isPastDeadline: false,
         isNotStarted: false,
         isExtended,
         penaltyPercent,
+        isFirstSubmitOverdue: false,
       };
     }
     return {
@@ -251,6 +268,7 @@ export function getTaskAssignmentStatusMeta(
       isNotStarted: false,
       isExtended,
       penaltyPercent,
+      isFirstSubmitOverdue: true,
     };
   }
 
@@ -258,22 +276,12 @@ export function getTaskAssignmentStatusMeta(
     const hLabel = daysExtended > 0 ? `H+${daysExtended}` : 'Extend';
     return {
       label: `⏳ Extended (${hLabel} • Sparks -${penaltyPercent}%)`,
-      badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25 font-black',
+      badgeClass: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 font-bold',
       isPastDeadline: false,
       isNotStarted: false,
       isExtended: true,
       penaltyPercent,
-    };
-  }
-
-  if (status === 'REVISION_REQUESTED') {
-    return {
-      label: '↩ Revisi Diminta',
-      badgeClass: 'bg-red-500/8 text-red-600 dark:text-red-400 border-red-500/15 font-bold',
-      isPastDeadline: false,
-      isNotStarted: false,
-      isExtended: false,
-      penaltyPercent: 0,
+      isFirstSubmitOverdue: false,
     };
   }
 
@@ -285,6 +293,7 @@ export function getTaskAssignmentStatusMeta(
       isNotStarted: false,
       isExtended: false,
       penaltyPercent: 0,
+      isFirstSubmitOverdue: false,
     };
   }
 
@@ -295,6 +304,7 @@ export function getTaskAssignmentStatusMeta(
     isNotStarted: false,
     isExtended: false,
     penaltyPercent: 0,
+    isFirstSubmitOverdue: false,
   };
 }
 
@@ -975,8 +985,20 @@ function OJTSubmitForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline, task.extended_deadline);
-  const isLocked = assignment.status === 'APPROVED' || meta.isPastDeadline || meta.isNotStarted;
+  const hasSubmittedFirst = Boolean(
+    assignment.submitted_at ||
+    assignment.result_url ||
+    ['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED', 'APPROVED'].includes(assignment.status)
+  );
+
+  const meta = getTaskAssignmentStatusMeta(
+    assignment.status,
+    task.start_at,
+    task.deadline,
+    task.extended_deadline,
+    hasSubmittedFirst
+  );
+  const isLocked = assignment.status === 'APPROVED' || meta.isNotStarted || (!hasSubmittedFirst && meta.isPastDeadline);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1028,10 +1050,10 @@ function OJTSubmitForm({
         </div>
       )}
 
-      {meta.isPastDeadline && (
+      {meta.isPastDeadline && !hasSubmittedFirst && (
         <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-300 text-xs font-bold flex items-center gap-2">
           <span>⏰</span>
-          <span>Tenggat waktu (deadline) assessment ini telah berakhir. Pengumpulan tugas ditutup.</span>
+          <span>Tenggat waktu (deadline) submit pertama telah berakhir. Pengumpulan tugas ditutup.</span>
         </div>
       )}
 
@@ -1102,7 +1124,13 @@ function OJTSubmitForm({
           disabled={pending || !isFormValid}
           className="w-full py-2.5 text-xs font-bold bg-purple-600 hover:bg-purple-500 text-white rounded-xl transition-all disabled:opacity-50 cursor-pointer shadow-md shadow-purple-500/20"
         >
-          {pending ? 'Mengumpulkan...' : assignment.status === 'WAITING_REVIEW' ? '🔄 Update Submission' : '📤 Kumpulkan Submission'}
+          {pending
+            ? 'Mengumpulkan...'
+            : assignment.status === 'REVISION_REQUESTED'
+            ? '📤 Kirim Hasil Revisi'
+            : assignment.status === 'WAITING_REVIEW'
+            ? '🔄 Update Submission'
+            : '📤 Kumpulkan Submission'}
         </button>
       )}
     </form>
@@ -1159,8 +1187,8 @@ function MentorSubmissionCard({
 
   const isSubmitted   = ['WAITING_REVIEW', 'RESUBMITTED'].includes(assignment.status);
   const isApproved    = assignment.status === 'APPROVED';
-  const hasSubmission = !!assignment.result_url || isSubmitted || isApproved;
-  const meta          = getTaskAssignmentStatusMeta(assignment.status, taskStartAt, taskDeadline, taskExtendedDeadline);
+  const hasSubmission = !!assignment.result_url || isSubmitted || isApproved || assignment.status === 'REVISION_REQUESTED';
+  const meta          = getTaskAssignmentStatusMeta(assignment.status, taskStartAt, taskDeadline, taskExtendedDeadline, hasSubmission);
   const statusBadge   = meta.badgeClass;
   const statusLabel   = meta.label;
   const currentSparkMeta = getSparkMeta(sparks);
@@ -3118,7 +3146,18 @@ function OJTTaskCard({
   const [pending, startTransition] = useTransition();
   const execLabel = EXEC_TYPE_LABEL[assignment.assignment_role] ?? assignment.assignment_role;
   const assignedMentorNames = getTaskAssignedMentorNames(task.assigned_mentors, task.creator_name, allWorkspaceMembers);
-  const meta = getTaskAssignmentStatusMeta(assignment.status, task.start_at, task.deadline, task.extended_deadline);
+  const hasSubmittedFirst = Boolean(
+    assignment.submitted_at ||
+    assignment.result_url ||
+    ['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED', 'APPROVED'].includes(assignment.status)
+  );
+  const meta = getTaskAssignmentStatusMeta(
+    assignment.status,
+    task.start_at,
+    task.deadline,
+    task.extended_deadline,
+    hasSubmittedFirst
+  );
   const statusBadge = meta.badgeClass;
   const statusLabel = meta.label;
 
@@ -3353,7 +3392,53 @@ export function AssessmentPanel({
   const isTaskOverdue = (t: TaskRow) => {
     if (isTaskFinished(t)) return false;
     const dl = getTaskActiveDeadline(t);
-    return dl !== null && dl < nowMs;
+    if (!dl || dl >= nowMs) return false;
+
+    const allAss = assignmentsByTask[t.id] ?? [];
+    if (canManage) {
+      if (t.assessment_category === 'GROUP') {
+        const groupMap: Record<string, AssignmentRow[]> = {};
+        allAss.forEach((a) => {
+          const gName = a.group_name || 'Kelompok Tim';
+          if (!groupMap[gName]) groupMap[gName] = [];
+          groupMap[gName].push(a);
+        });
+        const gList = Object.values(groupMap);
+        return gList.some(
+          (gRows) =>
+            !gRows.some(
+              (a) =>
+                a.submitted_at != null ||
+                (a.result_url != null && a.result_url.trim() !== '') ||
+                ['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED', 'APPROVED'].includes(a.status)
+            )
+        );
+      }
+      return allAss.some(
+        (a) =>
+          !a.submitted_at &&
+          (!a.result_url || a.result_url.trim() === '') &&
+          !['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED', 'APPROVED'].includes(a.status)
+      );
+    } else {
+      const myAss = allAss.find((a) => a.user_id === currentUserId);
+      if (!myAss) return false;
+      if (t.assessment_category === 'GROUP' && myAss.group_name) {
+        const groupMembers = allAss.filter((a) => (a.group_name || '') === myAss.group_name);
+        const hasAnyGroupSubmit = groupMembers.some(
+          (a) =>
+            a.submitted_at != null ||
+            (a.result_url != null && a.result_url.trim() !== '') ||
+            ['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED', 'APPROVED'].includes(a.status)
+        );
+        return !hasAnyGroupSubmit;
+      }
+      const hasMySubmit =
+        myAss.submitted_at != null ||
+        (myAss.result_url != null && myAss.result_url.trim() !== '') ||
+        ['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED', 'APPROVED'].includes(myAss.status);
+      return !hasMySubmit;
+    }
   };
 
   const isTaskOnProgress = (t: TaskRow) => {

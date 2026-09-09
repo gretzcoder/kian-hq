@@ -522,9 +522,9 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
 
   // Security: only the assigned user can submit
   const assignment = await db
-    .prepare('SELECT id, task_id, user_id, group_name, status FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, user_id, group_name, status, submitted_at, result_url FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as { id: string; task_id: string; user_id: string; group_name: string | null; status: string } | null;
+    .first() as { id: string; task_id: string; user_id: string; group_name: string | null; status: string; submitted_at: number | null; result_url: string | null } | null;
 
   if (!assignment) return { success: false, error: 'Assignment tidak ditemukan.' };
   if (assignment.user_id !== session.userId) return { success: false, error: 'Forbidden.' };
@@ -545,9 +545,26 @@ export async function submitAssessmentWork(assignmentId: string, resultUrl: stri
     return { success: false, error: 'Assessment ini belum dimulai.' };
   }
 
+  // Check if this is a first submission or a revision / resubmission
+  const isIndividualFirstSubmit = !assignment.submitted_at && (!assignment.result_url || assignment.result_url.trim() === '') && !['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED'].includes(assignment.status);
+
+  let isGroupFirstSubmit = false;
+  if (parentTask.assessment_category === 'GROUP' && assignment.group_name) {
+    const { results: groupRows } = await db
+      .prepare('SELECT submitted_at, result_url, status FROM task_assignments WHERE task_id = ? AND group_name = ?')
+      .bind(assignment.task_id, assignment.group_name)
+      .all();
+    const groupHasSubmitted = (groupRows as any[]).some(
+      (r) => r.submitted_at != null || (r.result_url != null && r.result_url.trim() !== '') || ['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED', 'APPROVED'].includes(r.status)
+    );
+    isGroupFirstSubmit = !groupHasSubmitted;
+  }
+
+  const isFirstSubmission = parentTask.assessment_category === 'GROUP' && assignment.group_name ? isGroupFirstSubmit : isIndividualFirstSubmit;
+
   const effectiveDeadline = Math.max(parentTask.extended_deadline || 0, parentTask.deadline || 0) || null;
-  if (effectiveDeadline && effectiveDeadline < now) {
-    return { success: false, error: 'Tenggat waktu (deadline) assessment ini telah berakhir. Pengumpulan tidak dapat dilakukan.' };
+  if (isFirstSubmission && effectiveDeadline && effectiveDeadline < now) {
+    return { success: false, error: 'Tenggat waktu (deadline) submit pertama telah berakhir. Pengumpulan tidak dapat dilakukan.' };
   }
 
   try {

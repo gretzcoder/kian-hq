@@ -557,9 +557,9 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
   const db = await getDB();
 
   const assignment = await db
-    .prepare('SELECT id, task_id, user_id, status, assignment_role FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, task_id, user_id, status, assignment_role, submitted_at, result_url FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as (AssignmentRow & { assignment_role: string }) | null;
+    .first() as (AssignmentRow & { assignment_role: string; submitted_at?: number | null; result_url?: string | null }) | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
@@ -581,9 +581,11 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
       return { success: false, error: 'Tugas ini belum dimulai.' };
     }
 
+    const isFirstSubmission = !assignment.submitted_at && (!assignment.result_url || assignment.result_url.trim() === '') && !['WAITING_REVIEW', 'REVISION_REQUESTED', 'RESUBMITTED', 'APPROVED', 'DONE', 'PUBLISHED'].includes(assignment.status);
+
     const effectiveDeadline = Math.max(task?.extended_deadline || 0, task?.deadline || 0) || null;
-    if (effectiveDeadline && effectiveDeadline < nowMs) {
-      return { success: false, error: 'Tenggat waktu (deadline) tugas ini telah berakhir. Pengumpulkan tidak dapat dilakukan.' };
+    if (isFirstSubmission && effectiveDeadline && effectiveDeadline < nowMs) {
+      return { success: false, error: 'Tenggat waktu (deadline) submit pertama telah berakhir. Pengumpulan tugas ditutup.' };
     }
 
     if (task?.parent_task_id) {
