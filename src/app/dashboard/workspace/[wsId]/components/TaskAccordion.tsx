@@ -603,23 +603,10 @@ export default function TaskAccordion({
                         isMentor={isMentor}
                         isCoordinator={isCoordinator}
                         isOjt={isOjtWorkspace}
+                        members={members}
+                        users={users}
                       />
                     </div>
-
-                    {/* Assignment Panel — Leader/Mentor only (Not needed for Direct Brief Tasks) */}
-                    {canAssignTask && !isDirectBriefTask && (
-                      <div className="border-t border-zinc-100 dark:border-zinc-900 bg-zinc-50/50 dark:bg-zinc-900/20 px-5 py-4">
-                        <TaskAssignmentPanel
-                          taskId={task.id}
-                          taskType={task.task_type}
-                          taskDeadline={task.deadline}
-                          existingAssignments={taskAssignments}
-                          users={users}
-                          members={members}
-                          isOjt={isOjtWorkspace}
-                        />
-                      </div>
-                    )}
                   </>
                 );
               })()}

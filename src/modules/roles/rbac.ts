@@ -374,6 +374,13 @@ export async function hasWorkspacePermission(
     isTaskCreatorInWs
   );
 
+  const { results: localRoles } = await db
+    .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
+    .bind(workspaceId, userId)
+    .all();
+
+  const isLeader = Boolean(localRoles && (localRoles as any[]).some((r) => r.team_role === 'LEADER'));
+
   // 1. Workspace editing: Coordinator / Admin / Designated Mentor
   if (['UPDATE_WORKSPACE', 'WORKSPACE_MANAGE'].includes(permissionName)) {
     return isCoordinator || isDesignatedMentor;
@@ -384,17 +391,12 @@ export async function hasWorkspacePermission(
     return isCoordinator || isDesignatedMentor;
   }
 
-  // 3. Tasks in other workspaces: Designated mentor or Coordinator / Admin
+  // 3. Tasks in other workspaces: Designated mentor, Leader, or Coordinator / Admin
   if (['TASK_CREATE', 'TASK_ASSIGN', 'CREATE_TASK', 'ASSIGN_TASK', 'DELETE', 'UPDATE', 'REQUEST_REVISION', 'TASK_REVIEW'].includes(permissionName)) {
-    return isDesignatedMentor || isCoordinator;
+    return isDesignatedMentor || isCoordinator || isLeader;
   }
 
   // 4. General interaction / viewing: Member, Designated Mentor, or Coordinator
-  const { results: localRoles } = await db
-    .prepare('SELECT team_role FROM workspace_members WHERE workspace_id = ? AND user_id = ?')
-    .bind(workspaceId, userId)
-    .all();
-
   const isMember = localRoles && localRoles.length > 0;
   return isMember || isDesignatedMentor || isCoordinator;
 }

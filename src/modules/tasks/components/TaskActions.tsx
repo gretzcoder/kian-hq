@@ -2,7 +2,17 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { submitResult, submitDirectTaskResult, deleteTask, approveAssignment, requestRevision, startWork, updateSparks } from '../actions';
+import {
+  submitResult,
+  submitDirectTaskResult,
+  deleteTask,
+  approveAssignment,
+  requestRevision,
+  startWork,
+  updateSparks,
+  assignCreatorToTask,
+  removeTaskAssignment,
+} from '../actions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
@@ -12,7 +22,7 @@ import { cleanAppreciationNote } from '@/lib/noteUtils';
 import SendReminderButton from '@/components/SendReminderButton';
 import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
 
-import { formatIndonesiaDate } from '@/lib/dateUtils';
+import { formatIndonesiaDate, parseIndonesiaDate } from '@/lib/dateUtils';
 
 export interface DirectBriefOutputSlot {
   id: string;
@@ -197,6 +207,13 @@ interface TaskActionsProps {
   isMentor?: boolean;
   isCoordinator?: boolean;
   isOjt?: boolean;
+  members?: Array<{
+    userId: string;
+    userName: string | null;
+    userEmail: string;
+    teamRoles: ('LEADER' | 'RESEARCHER' | 'PLANNER' | 'CREATOR')[];
+  }>;
+  users?: Array<{ id: string; name: string }>;
 }
 
 const statusColors: Record<string, string> = {
@@ -232,6 +249,8 @@ export default function TaskActions({
   isMentor = false,
   isCoordinator = false,
   isOjt = false,
+  members = [],
+  users = [],
 }: TaskActionsProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -245,7 +264,15 @@ export default function TaskActions({
   const [showRevisionMap, setShowRevisionMap] = useState<Record<string, boolean>>({});
   const [errorMap, setErrorMap] = useState<Record<string, string>>({});
 
+  // Per-step assignment management states
+  const [showAddMemberStep, setShowAddMemberStep] = useState<Record<string, boolean>>({});
+  const [stepNewUser, setStepNewUser] = useState<Record<string, string>>({});
+  const [stepNewDeadline, setStepNewDeadline] = useState<Record<string, string>>({});
+  const [addingMemberStep, setAddingMemberStep] = useState<string | null>(null);
+  const [removingAssignId, setRemovingAssignId] = useState<string | null>(null);
+
   const isTaskCreator = Boolean(taskCreatedBy && taskCreatedBy === currentUserId);
+  const canManageAssignments = (isLeader || isMentor || isCoordinator || isTaskCreator) && !isDirectBrief;
 
 
   const getDrivePreviewUrl = (url: string) => {
@@ -382,6 +409,64 @@ export default function TaskActions({
       toast(e.message, 'error');
     } finally {
       setLoading(null);
+    }
+  };
+
+  const handleAddMemberToStep = async (role: string) => {
+    const userId = stepNewUser[role];
+    if (!userId) {
+      toast('Pilih anggota tim terlebih dahulu.', 'warning');
+      return;
+    }
+
+    const deadlineStr = stepNewDeadline[role];
+    const deadline = deadlineStr ? parseIndonesiaDate(deadlineStr) : (taskDeadline || null);
+
+    if (deadline && taskDeadline && deadline > taskDeadline) {
+      const taskDeadlineFormatted = new Date(taskDeadline).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+      toast(`Deadline step tidak boleh melebihi batas akhir task (${taskDeadlineFormatted}).`, 'warning');
+      return;
+    }
+
+    setAddingMemberStep(role);
+    try {
+      const res = await assignCreatorToTask(taskId, userId, role as any, deadline);
+      if (res.success) {
+        toast('Anggota berhasil ditambahkan ke step!', 'success');
+        setStepNewUser((prev) => ({ ...prev, [role]: '' }));
+        setStepNewDeadline((prev) => ({ ...prev, [role]: '' }));
+        setShowAddMemberStep((prev) => ({ ...prev, [role]: false }));
+      } else {
+        toast(res.error || 'Gagal menambahkan anggota.', 'error');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Gagal menambahkan anggota.', 'error');
+    } finally {
+      setAddingMemberStep(null);
+    }
+  };
+
+  const handleRemoveAssignee = async (assignmentId: string, userName: string) => {
+    const isConfirmed = await confirmModal({
+      title: 'Hapus Penugasan',
+      message: `Apakah Anda yakin ingin menghapus ${userName} dari step ini?`,
+      confirmText: 'Ya, Hapus',
+      variant: 'danger',
+    });
+    if (!isConfirmed) return;
+
+    setRemovingAssignId(assignmentId);
+    try {
+      const res = await removeTaskAssignment(assignmentId);
+      if (res.success) {
+        toast('Penugasan berhasil dihapus.', 'success');
+      } else {
+        toast(res.error || 'Gagal menghapus penugasan.', 'error');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Gagal menghapus penugasan.', 'error');
+    } finally {
+      setRemovingAssignId(null);
     }
   };
 
@@ -684,12 +769,30 @@ export default function TaskActions({
                             <div className="flex items-center justify-between gap-2 font-bold">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-zinc-500 dark:text-zinc-400">Assignee:</span>
-                                <span className="text-zinc-800 dark:text-zinc-200">{assign.user_name}</span>
+                                <Link
+                                  href={assign.user_id ? `/dashboard/profile?userId=${assign.user_id}` : '/dashboard/profile'}
+                                  className="text-zinc-800 dark:text-zinc-200 hover:text-purple-600 dark:hover:text-purple-400 hover:underline"
+                                >
+                                  {assign.user_name}
+                                </Link>
                                 {isMe && <span className="text-[9px] text-purple-600 dark:text-purple-400 font-black">(you)</span>}
                               </div>
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${assignStatusBadge}`}>
-                                {displayStatusLabel}
-                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${assignStatusBadge}`}>
+                                  {displayStatusLabel}
+                                </span>
+                                {canManageAssignments && (
+                                  <button
+                                    type="button"
+                                    disabled={removingAssignId === assign.id}
+                                    onClick={() => handleRemoveAssignee(assign.id, assign.user_name || 'Anggota')}
+                                    className="text-[11px] text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 rounded-lg hover:bg-rose-500/10 transition-colors disabled:opacity-50"
+                                    title="Hapus penugasan anggota ini dari step"
+                                  >
+                                    {removingAssignId === assign.id ? '⏳' : '✕'}
+                                  </button>
+                                )}
+                              </div>
                             </div>
 
                             {/* Result Content / Link - Collapsible (Default Open for Mentor/Coordinator Review) */}
@@ -979,6 +1082,87 @@ export default function TaskActions({
                         );
                       })
                     )}
+                    {/* Inline Member Assigner for Managers */}
+                    {canManageAssignments && (() => {
+                      const eligibleMembersForStep = (members || []).filter((m) => {
+                        return !allStepAssignments.some((a) => a.user_id === m.userId);
+                      });
+                      const candidateList = eligibleMembersForStep.length > 0
+                        ? eligibleMembersForStep
+                        : (users || [])
+                            .filter((u) => !allStepAssignments.some((a) => a.user_id === u.id))
+                            .map((u) => ({ userId: u.id, userName: u.name, userEmail: u.name, teamRoles: [] as any[] }));
+
+                      return (
+                        <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-800/80">
+                          {!showAddMemberStep[step.role] ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowAddMemberStep((prev) => ({ ...prev, [step.role]: true }))}
+                              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-500 py-1.5 px-3 rounded-xl hover:bg-purple-500/10 transition-all border border-dashed border-purple-500/30"
+                            >
+                              <span>+ Tambah Anggota ke {step.label}</span>
+                            </button>
+                          ) : (
+                            <div className="bg-purple-500/[0.03] dark:bg-purple-500/[0.02] border border-purple-500/20 rounded-2xl p-3.5 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-purple-700 dark:text-purple-300">
+                                  + Tambah Anggota ke {step.label}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowAddMemberStep((prev) => ({ ...prev, [step.role]: false }))}
+                                  className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+                                >
+                                  Batal
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div>
+                                  <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 block mb-1">
+                                    Pilih Anggota Tim:
+                                  </label>
+                                  <select
+                                    value={stepNewUser[step.role] || ''}
+                                    onChange={(e) => setStepNewUser((prev) => ({ ...prev, [step.role]: e.target.value }))}
+                                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3 py-2 text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:border-purple-500"
+                                  >
+                                    <option value="">-- Pilih Anggota --</option>
+                                    {candidateList.map((m) => (
+                                      <option key={m.userId} value={m.userId}>
+                                        {m.userName || m.userEmail}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div>
+                                  <label className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 block mb-1">
+                                    Target Deadline (Opsional):
+                                  </label>
+                                  <input
+                                    type="datetime-local"
+                                    value={stepNewDeadline[step.role] || ''}
+                                    onChange={(e) => setStepNewDeadline((prev) => ({ ...prev, [step.role]: e.target.value }))}
+                                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs rounded-xl px-3 py-1.5 text-zinc-900 dark:text-zinc-100 font-medium focus:outline-none focus:border-purple-500"
+                                  />
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                disabled={addingMemberStep === step.role || !stepNewUser[step.role]}
+                                onClick={() => handleAddMemberToStep(step.role)}
+                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs py-2 px-4 rounded-xl transition-all disabled:opacity-50 active:scale-95 shadow-sm"
+                              >
+                                {addingMemberStep === step.role ? 'Menambahkan...' : `✓ Simpan Penugasan (${step.label})`}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
               </div>

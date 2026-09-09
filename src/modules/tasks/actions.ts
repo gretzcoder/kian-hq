@@ -752,8 +752,6 @@ export async function removeTaskAssignment(assignmentId: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  await checkPermission(session.userId, 'ASSIGN_TASK');
-
   const db = await getDB();
 
   const assignment = await db
@@ -767,6 +765,12 @@ export async function removeTaskAssignment(assignmentId: string) {
     .first() as { id: string; project_id: string; workspace_id: string | null } | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
+
+  const workspaceId = assignment.workspace_id || '';
+  const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'ASSIGN_TASK');
+  if (!authorized) {
+    throw new Error('Forbidden: You do not have permission to modify task assignments in this workspace.');
+  }
 
   try {
     await db
