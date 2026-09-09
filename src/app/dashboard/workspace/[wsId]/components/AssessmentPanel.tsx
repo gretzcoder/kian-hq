@@ -2423,18 +2423,19 @@ function MentorTaskCard({
     });
     const groupsList = Object.values(groupMap);
     total = groupsList.length;
-    if (task.status === 'APPROVED') {
-      submitted = groupsList.filter((gRows) =>
-        gRows.some((a) => a.status === 'APPROVED' || a.status === 'RESUBMITTED' || (a.status === 'WAITING_REVIEW' && a.result_url != null))
-      ).length;
-    }
+    submitted = groupsList.filter((gRows) =>
+      gRows.some((a) => a.status === 'APPROVED' || a.status === 'RESUBMITTED' || (a.status === 'WAITING_REVIEW' && a.result_url != null) || (a.result_url != null && a.result_url.trim() !== ''))
+    ).length;
     approved = groupsList.filter((gRows) =>
       gRows.some((a) => a.status === 'APPROVED')
     ).length;
-  } else if (task.status === 'APPROVED') {
-    submitted = assignments.filter((a) => a.status === 'APPROVED' || a.status === 'RESUBMITTED' || (a.status === 'WAITING_REVIEW' && a.result_url != null)).length;
+  } else {
+    submitted = assignments.filter((a) => a.status === 'APPROVED' || a.status === 'RESUBMITTED' || (a.status === 'WAITING_REVIEW' && a.result_url != null) || (a.result_url != null && a.result_url.trim() !== '')).length;
     approved = assignments.filter((a) => a.status === 'APPROVED').length;
   }
+
+  // Ensure submitted count is at least the number of approved submissions
+  submitted = Math.max(submitted, approved);
 
   const execType = assignments[0]?.assignment_role ?? 'DESIGNER';
   const execLabel = EXEC_TYPE_LABEL[execType] ?? execType;
@@ -2992,17 +2993,23 @@ function MentorTaskCard({
       <button
         type="button"
         onClick={() => setShowSubmissions((p) => !p)}
-        className="w-full flex items-center justify-between px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 text-xs font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-all"
+        className="w-full flex items-center justify-between px-5 py-3 border-t border-zinc-100 dark:border-zinc-800 text-xs font-bold text-zinc-500 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-all cursor-pointer"
       >
         <span>
           {showSubmissions ? '▲ Tutup Daftar Submission' : `▼ Lihat Semua (${total} ${task.assessment_category === 'GROUP' ? 'kelompok' : 'peserta'})`}
         </span>
         <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
-          submitted === total
+          approved === total && total > 0
             ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+            : submitted === total && total > 0
+            ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
             : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400'
         }`}>
-          {submitted === total ? '✅ Semua Submit' : `⏳ ${total - submitted} ${task.assessment_category === 'GROUP' ? 'Kelompok ' : ''}Belum`}
+          {approved === total && total > 0
+            ? '✅ Semua Disetujui'
+            : submitted === total && total > 0
+            ? '✅ Semua Submit'
+            : `⏳ ${total - submitted} ${task.assessment_category === 'GROUP' ? 'Kelompok ' : ''}Belum`}
         </span>
       </button>
 
@@ -3301,11 +3308,76 @@ export function AssessmentPanel({
   const canManage = isLeader || isCoordinator;
   const isOJTTrooper = isOJT && !isLeader;
 
+  // Category filter state: ALL, OVERDUE, ON_PROGRESS, COMPLETED
+  const [filterCategory, setFilterCategory] = useState<'ALL' | 'OVERDUE' | 'ON_PROGRESS' | 'COMPLETED'>('ALL');
+
   // Track reload trigger (simple key increment after creation)
   const [, setReload] = useState(0);
 
   // Filter assessment tasks only
   const assessmentTasks = tasks.filter((t) => t.status !== 'DELETED');
+
+  const nowMs = Date.now();
+
+  const isTaskFinished = (t: TaskRow) => {
+    if (['COMPLETED', 'ARCHIVED', 'PUBLISHED', 'DONE'].includes(t.status)) return true;
+    const allAss = assignmentsByTask[t.id] ?? [];
+    if (allAss.length === 0) return false;
+
+    if (canManage) {
+      if (t.assessment_category === 'GROUP') {
+        const groupMap: Record<string, AssignmentRow[]> = {};
+        allAss.forEach((a) => {
+          const gName = a.group_name || 'Kelompok Tim';
+          if (!groupMap[gName]) groupMap[gName] = [];
+          groupMap[gName].push(a);
+        });
+        const gList = Object.values(groupMap);
+        return gList.length > 0 && gList.every((gRows) => gRows.some((a) => a.status === 'APPROVED'));
+      }
+      return allAss.every((a) => a.status === 'APPROVED');
+    } else {
+      const myAss = allAss.find((a) => a.user_id === currentUserId);
+      return myAss ? myAss.status === 'APPROVED' : false;
+    }
+  };
+
+  const getTaskActiveDeadline = (t: TaskRow) =>
+    Math.max(t.extended_deadline || 0, t.deadline || 0) || null;
+
+  const isTaskOverdue = (t: TaskRow) => {
+    if (isTaskFinished(t)) return false;
+    const dl = getTaskActiveDeadline(t);
+    return dl !== null && dl < nowMs;
+  };
+
+  const isTaskOnProgress = (t: TaskRow) => {
+    if (isTaskFinished(t)) return false;
+    return !isTaskOverdue(t);
+  };
+
+  // For OJT, only count and display tasks assigned to this trooper
+  const visibleTasks = canManage
+    ? assessmentTasks
+    : assessmentTasks.filter((t) => (assignmentsByTask[t.id] ?? []).some((a) => a.user_id === currentUserId));
+
+  const overdueCount = visibleTasks.filter(isTaskOverdue).length;
+  const onProgressCount = visibleTasks.filter(isTaskOnProgress).length;
+  const completedCount = visibleTasks.filter(isTaskFinished).length;
+
+  const sortedTasks = [...visibleTasks].sort((a, b) => {
+    if (!a.deadline && !b.deadline) return a.created_at - b.created_at;
+    if (!a.deadline) return 1;
+    if (!b.deadline) return -1;
+    return a.deadline - b.deadline;
+  });
+
+  const filteredTasks = sortedTasks.filter((task) => {
+    if (filterCategory === 'OVERDUE') return isTaskOverdue(task);
+    if (filterCategory === 'ON_PROGRESS') return isTaskOnProgress(task);
+    if (filterCategory === 'COMPLETED') return isTaskFinished(task);
+    return true;
+  });
 
   if (assessmentTasks.length === 0 && !canManage) {
     return (
@@ -3347,19 +3419,102 @@ export function AssessmentPanel({
         <div className="flex items-center gap-2">
           <h2 className="text-sm font-black text-zinc-800 dark:text-zinc-200">Assessment Saya</h2>
           <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 bg-purple-500/8 border border-purple-500/15 px-2 py-0.5 rounded-full">
-            {assessmentTasks.length} tugas
+            {visibleTasks.length} tugas
           </span>
         </div>
       )}
 
+      {/* Category Filter Pills (Semua Task, Terlewat Deadline, On Progress, Selesai) */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full no-scrollbar scrollbar-none">
+        <button
+          type="button"
+          onClick={() => setFilterCategory('ALL')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+            filterCategory === 'ALL'
+              ? 'bg-purple-600 text-white border-purple-600 shadow-sm shadow-purple-500/20'
+              : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
+          }`}
+        >
+          <span>📋 Semua Task</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+            filterCategory === 'ALL'
+              ? 'bg-white/20 text-white'
+              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+          }`}>
+            {visibleTasks.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterCategory('OVERDUE')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+            filterCategory === 'OVERDUE'
+              ? 'bg-red-600 text-white border-red-600 shadow-sm shadow-red-500/20'
+              : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
+          }`}
+        >
+          <span>⏰ Terlewat Deadline</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+            filterCategory === 'OVERDUE'
+              ? 'bg-white/20 text-white'
+              : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20'
+          }`}>
+            {overdueCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterCategory('ON_PROGRESS')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+            filterCategory === 'ON_PROGRESS'
+              ? 'bg-yellow-600 text-white border-yellow-600 shadow-sm shadow-yellow-500/20'
+              : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
+          }`}
+        >
+          <span>⚙️ On Progress</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+            filterCategory === 'ON_PROGRESS'
+              ? 'bg-white/20 text-white'
+              : 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20'
+          }`}>
+            {onProgressCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setFilterCategory('COMPLETED')}
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all shrink-0 border cursor-pointer ${
+            filterCategory === 'COMPLETED'
+              ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-500/20'
+              : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300 dark:hover:border-zinc-700'
+          }`}
+        >
+          <span>✅ Selesai</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+            filterCategory === 'COMPLETED'
+              ? 'bg-white/20 text-white'
+              : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+          }`}>
+            {completedCount}
+          </span>
+        </button>
+      </div>
+
       {/* Task list */}
       <div className="space-y-4">
-        {[...assessmentTasks].sort((a, b) => {
-          if (!a.deadline && !b.deadline) return a.created_at - b.created_at;
-          if (!a.deadline) return 1;
-          if (!b.deadline) return -1;
-          return a.deadline - b.deadline;
-        }).map((task) => {
+        {filteredTasks.length === 0 && (
+          <div className="border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-10 text-center">
+            <p className="text-2xl mb-2">📋</p>
+            <p className="text-zinc-500 font-bold dark:text-zinc-400 text-xs">
+              Tidak ada task pada kategori &ldquo;{filterCategory === 'OVERDUE' ? 'Terlewat Deadline' : filterCategory === 'ON_PROGRESS' ? 'On Progress' : filterCategory === 'COMPLETED' ? 'Selesai' : 'Semua'}&rdquo;.
+            </p>
+          </div>
+        )}
+
+        {filteredTasks.map((task) => {
           const allAssignments = assignmentsByTask[task.id] ?? [];
           const isTarget = targetTaskId === task.id;
 
