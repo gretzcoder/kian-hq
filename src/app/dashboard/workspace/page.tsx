@@ -67,11 +67,10 @@ export default async function WorkspacePage() {
       if (isGlobalWorkspaceManager) {
         return db.prepare(`
           SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
-                 wm.team_role AS my_team_role,
+                 (SELECT wm.team_role FROM workspace_members wm WHERE wm.workspace_id = ws.id AND wm.user_id = ? ORDER BY CASE wm.team_role WHEN 'LEADER' THEN 1 WHEN 'MEMBER' THEN 9 ELSE 2 END LIMIT 1) AS my_team_role,
                  ws.created_at AS latest_activity_ts
           FROM workspaces ws
           JOIN projects p ON ws.project_id = p.id
-          LEFT JOIN workspace_members wm ON (ws.id = wm.workspace_id AND wm.user_id = ?)
           WHERE ws.deleted_at IS NULL
           ORDER BY ws.created_at DESC
         `).bind(session.userId).all();
@@ -81,13 +80,12 @@ export default async function WorkspacePage() {
 
       return db.prepare(`
         SELECT ws.id, ws.name, ws.description, ws.status, ws.project_id, ws.ojt_coordinator_id, ws.workspace_type, p.name AS project_name,
-               wm.team_role AS my_team_role,
+               (SELECT wm.team_role FROM workspace_members wm WHERE wm.workspace_id = ws.id AND wm.user_id = ? ORDER BY CASE wm.team_role WHEN 'LEADER' THEN 1 WHEN 'MEMBER' THEN 9 ELSE 2 END LIMIT 1) AS my_team_role,
                ws.created_at AS latest_activity_ts
         FROM workspaces ws
         JOIN projects p ON ws.project_id = p.id
-        LEFT JOIN workspace_members wm ON (ws.id = wm.workspace_id AND wm.user_id = ?)
         WHERE (
-            wm.workspace_id IS NOT NULL
+            EXISTS (SELECT 1 FROM workspace_members wm WHERE wm.workspace_id = ws.id AND wm.user_id = ?)
             OR ws.ojt_coordinator_id = ?
             OR EXISTS (SELECT 1 FROM workspace_mentors wment WHERE wment.workspace_id = ws.id AND wment.user_id = ?)
             OR EXISTS (SELECT 1 FROM project_coordinators pc WHERE pc.project_id = ws.project_id AND pc.user_id = ?)
@@ -127,6 +125,10 @@ export default async function WorkspacePage() {
           WHEN 'IN_PROGRESS'        THEN 4
           WHEN 'ASSIGNED'           THEN 5
           ELSE 6
+        END,
+        CASE
+          WHEN ta.assignment_role NOT IN ('DESIGNER', 'VIDEO_EDITOR', 'CREATOR', 'RESEARCHER', 'PLANNER') THEN 1
+          ELSE 2
         END,
         t.deadline ASC NULLS LAST
     `).bind(session.userId).all()),
@@ -169,9 +171,16 @@ export default async function WorkspacePage() {
     redirect(`/dashboard/projects/${mentoredProjects[0].id}`);
   }
 
-  // Group assignments by workspace
+  // Group assignments by workspace, deduplicating by task_id per user so multiple assignment rows on the same task do not show twice
   const grouped: Record<string, { workspaceName: string; projectName: string; projectId: string; workspaceId: string | null; items: AssignmentRow[] }> = {};
+  const seenTaskIds = new Set<string>();
+
   for (const a of assignments) {
+    if (seenTaskIds.has(a.task_id)) {
+      continue;
+    }
+    seenTaskIds.add(a.task_id);
+
     const key = a.workspace_id ?? a.project_id;
     if (!grouped[key]) {
       grouped[key] = {

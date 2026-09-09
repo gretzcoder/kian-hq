@@ -248,9 +248,11 @@ export async function createTask(workspaceId: string, formData: FormData) {
           .run();
       }
     } else if (isDirectBrief) {
+      const assignedSlotUserIds = new Set<string>();
       // 1. Assign users assigned to specific slots
       for (const slot of parsedSlots) {
         if (slot.assignedUserId) {
+          assignedSlotUserIds.add(slot.assignedUserId);
           const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
           const slotDeadline = slot.deadline ? (parseIndonesiaDate(slot.deadline) ?? new Date(slot.deadline).getTime()) : deadline;
           await db
@@ -264,30 +266,32 @@ export async function createTask(workspaceId: string, formData: FormData) {
         }
       }
 
-      // 2. Mass auto-assign all active OJT / Trooper members of workspace
-      const { results: ojtMembers } = await db
-        .prepare(`
-          SELECT DISTINCT u.id AS user_id
-          FROM users u
-          JOIN workspace_members wm ON u.id = wm.user_id
-          WHERE wm.workspace_id = ?
-            AND wm.team_role != 'LEADER'
-            AND (u.user_type IS NULL OR u.user_type != 'STAFF')
-            AND u.status = 'ACTIVE'
-        `)
-        .bind(workspaceId)
-        .all();
-
-      for (const m of (ojtMembers as { user_id: string }[])) {
-        const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-        await db
+      // 2. Mass auto-assign active OJT / Trooper members of workspace ONLY if no specific slots were assigned
+      if (assignedSlotUserIds.size === 0) {
+        const { results: ojtMembers } = await db
           .prepare(`
-            INSERT OR IGNORE INTO task_assignments
-              (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
-            VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+            SELECT DISTINCT u.id AS user_id
+            FROM users u
+            JOIN workspace_members wm ON u.id = wm.user_id
+            WHERE wm.workspace_id = ?
+              AND wm.team_role != 'LEADER'
+              AND (u.user_type IS NULL OR u.user_type != 'STAFF')
+              AND u.status = 'ACTIVE'
           `)
-          .bind(assignId, taskId, m.user_id, defaultRole, session.userId, deadline, startAt)
-          .run();
+          .bind(workspaceId)
+          .all();
+
+        for (const m of (ojtMembers as { user_id: string }[])) {
+          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+          await db
+            .prepare(`
+              INSERT OR IGNORE INTO task_assignments
+                (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+              VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+            `)
+            .bind(assignId, taskId, m.user_id, defaultRole, session.userId, deadline, startAt)
+            .run();
+        }
       }
     } else if (ws.workspace_type === 'MENTOR') {
       // Auto-assign all mentor members ONLY if no specific assignee was selected
@@ -753,6 +757,15 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
 
     const updatedRole = selectedCategory && selectedCategory.trim() ? selectedCategory.trim() : assignment.assignment_role;
 
+    // Delete any conflicting unsubmitted duplicate assignment record for the same user and role to prevent UNIQUE constraint collisions
+    await db
+      .prepare(`
+        DELETE FROM task_assignments 
+        WHERE task_id = ? AND user_id = ? AND assignment_role = ? AND id != ?
+      `)
+      .bind(assignment.task_id, session.userId, updatedRole, assignmentId)
+      .run();
+
     await db
       .prepare(`
         UPDATE task_assignments
@@ -843,16 +856,38 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
     return { success: false, error: 'Tugas ini belum dimulai.' };
   }
 
-  // Check if an assignment already exists for this user in this task
-  let assignment = await db
-    .prepare('SELECT id, status, submitted_at, result_url FROM task_assignments WHERE task_id = ? AND user_id = ?')
+  const cleanCat = selectedCategory ? selectedCategory.trim() : null;
+
+  // Check all assignments for this user on this task
+  const { results: userAssignments } = await db
+    .prepare('SELECT id, assignment_role, status, submitted_at, result_url FROM task_assignments WHERE task_id = ? AND user_id = ?')
     .bind(taskId, session.userId)
-    .first() as { id: string; status: string; submitted_at: number | null; result_url: string | null } | null;
+    .all();
+
+  const allAss = (userAssignments || []) as { id: string; assignment_role: string; status: string; submitted_at: number | null; result_url: string | null }[];
+
+  // 1. Prefer assignment matching the selected category slot
+  let assignment = cleanCat
+    ? allAss.find(a => a.assignment_role.toLowerCase() === cleanCat.toLowerCase() || a.assignment_role.toLowerCase() === `kategori: ${cleanCat.toLowerCase()}`)
+    : null;
+
+  // 2. Otherwise pick the first assignment
+  if (!assignment && allAss.length > 0) {
+    assignment = allAss[0];
+  }
+
+  // 3. Clean up any redundant unsubmitted duplicate assignments for this user on this task
+  if (assignment && allAss.length > 1) {
+    for (const a of allAss) {
+      if (a.id !== assignment.id && !a.result_url && a.status === 'ASSIGNED') {
+        await db.prepare('DELETE FROM task_assignments WHERE id = ?').bind(a.id).run();
+      }
+    }
+  }
 
   const isFirstSubmission = !assignment || (!assignment.submitted_at && (!assignment.result_url || assignment.result_url.trim() === ''));
 
-  if (selectedCategory && selectedCategory.trim()) {
-    const cleanCat = selectedCategory.trim();
+  if (cleanCat) {
     const slots = parseSlotsFromDescription(task.description);
     const matchedSlot = slots.find(s => s.name.trim().toLowerCase() === cleanCat.toLowerCase());
 
@@ -897,7 +932,7 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const roleValue = selectedCategory && selectedCategory.trim() ? selectedCategory.trim() : (task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : task.task_type === 'OTHER' ? 'CREATOR' : 'DESIGNER');
+  const roleValue = cleanCat || (task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : task.task_type === 'OTHER' ? 'CREATOR' : 'DESIGNER');
 
   if (!assignment) {
     const effectiveDeadline = Math.max(task?.extended_deadline || 0, task?.deadline || 0) || null;

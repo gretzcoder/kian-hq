@@ -381,8 +381,21 @@ export default async function DashboardPage() {
       `).bind(session.userId).all(),
     ]);
 
-    personalTasks = (activeRes.results || []) as unknown as PersonalTaskRow[];
-    completedTasks = (completedRes.results || []) as unknown as PersonalTaskRow[];
+    const rawPersonal = (activeRes.results || []) as unknown as PersonalTaskRow[];
+    const seenActiveTaskIds = new Set<string>();
+    personalTasks = rawPersonal.filter((t) => {
+      if (seenActiveTaskIds.has(t.id)) return false;
+      seenActiveTaskIds.add(t.id);
+      return true;
+    });
+
+    const rawCompleted = (completedRes.results || []) as unknown as PersonalTaskRow[];
+    const seenCompletedTaskIds = new Set<string>();
+    completedTasks = rawCompleted.filter((t) => {
+      if (seenCompletedTaskIds.has(t.id)) return false;
+      seenCompletedTaskIds.add(t.id);
+      return true;
+    });
   }
 
   // ── Resolve assigned_mentors names for DashboardPersonalWorkspace ──
