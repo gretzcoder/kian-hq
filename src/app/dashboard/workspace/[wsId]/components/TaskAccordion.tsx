@@ -213,8 +213,31 @@ export default function TaskAccordion({
 
   const nowMs = Date.now();
 
-  const isTaskFinished = (t: TaskRow) =>
-    ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(t.status);
+  const getTaskEffectiveStatus = (t: TaskRow) => {
+    const taskAss = assignmentsByTask[t.id] ?? [];
+    if (taskAss.length > 0) {
+      const isAllApproved = taskAss.every((a) =>
+        ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status)
+      );
+      if (isAllApproved) return 'APPROVED';
+
+      const isAllWaiting = taskAss.every((a) =>
+        ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status)
+      ) && taskAss.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status));
+      if (isAllWaiting) return 'WAITING_REVIEW';
+
+      const hasStarted = taskAss.some((a) =>
+        ['IN_PROGRESS', 'WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'REVISION_REQUESTED', 'APPROVED'].includes(a.status)
+      );
+      return hasStarted ? 'IN_PROGRESS' : 'DRAFT';
+    }
+    return t.status;
+  };
+
+  const isTaskFinished = (t: TaskRow) => {
+    const eff = getTaskEffectiveStatus(t);
+    return ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(eff);
+  };
 
   const getTaskActiveDeadline = (t: TaskRow) =>
     Math.max(t.extended_deadline || 0, t.deadline || 0) || null;
@@ -406,8 +429,7 @@ export default function TaskAccordion({
         const isOpen = openTaskId === task.id;
         const isTarget = targetTaskId === task.id;
         const taskAssignments = assignmentsByTask[task.id] ?? [];
-        const isTrulyApproved = taskAssignments.length > 0 && taskAssignments.every((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status));
-        const effectiveStatus = isTrulyApproved ? 'APPROVED' : (task.status === 'APPROVED' ? 'IN_PROGRESS' : task.status);
+        const effectiveStatus = getTaskEffectiveStatus(task);
         const cfg = statusConfig[effectiveStatus] ?? statusConfig.DRAFT;
         const pCfg = priorityConfig[task.priority] ?? priorityConfig.NORMAL;
         const borderColor = isTarget
