@@ -187,12 +187,19 @@ export default function FloatingNotificationDrawer({
   // Filtered Display List
   const displayItems = activeItems.filter((item) => {
     if (filter === 'ALL') return true;
-    if (filter === 'WORKSPACE') return item.category === 'WORKSPACE';
+    if (filter === 'WORKSPACE') {
+      return (
+        item.category === 'WORKSPACE' ||
+        item.category === 'DOCUMENT' ||
+        item.category === 'ANNOUNCEMENT' ||
+        item.category === 'BRIEF'
+      );
+    }
     if (filter === 'CHAT') return item.category === 'CHAT_WORKSPACE' || item.category === 'CHAT_COMMUNITY';
     if (filter === 'CHAT_WS') return item.category === 'CHAT_WORKSPACE';
     if (filter === 'CHAT_COMM') return item.category === 'CHAT_COMMUNITY';
     if (filter === 'REVIEW') return item.category === 'REVIEW';
-    if (filter === 'SPARKS') return item.category === 'SPARKS' || item.category === 'ANNOUNCEMENT';
+    if (filter === 'SPARKS') return item.category === 'SPARKS';
     return true;
   });
 
@@ -293,10 +300,10 @@ export default function FloatingNotificationDrawer({
 
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                 {[
-                  { id: 'ALL', label: '⚡ Semua Workflow' },
-                  { id: 'WORKSPACE', label: '⚡ Task & Workflow' },
+                  { id: 'ALL', label: '⚡ Semua' },
+                  { id: 'WORKSPACE', label: '⚡ Tugas & Info' },
                   ...(canReview ? [{ id: 'REVIEW', label: '📋 Reviews' }] : []),
-                  { id: 'SPARKS', label: '✨ Sparks & Info' },
+                  { id: 'SPARKS', label: '✨ Sparks' },
                 ].map((f) => (
                   <button
                     key={f.id}

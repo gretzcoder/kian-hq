@@ -18,7 +18,7 @@ export interface SidebarCounts {
 
 export interface NotificationFeedItem {
   id: string;
-  category: 'WORKSPACE' | 'CHAT_WORKSPACE' | 'CHAT_COMMUNITY' | 'REVIEW' | 'BRIEF' | 'ANNOUNCEMENT' | 'SPARKS';
+  category: 'WORKSPACE' | 'CHAT_WORKSPACE' | 'CHAT_COMMUNITY' | 'REVIEW' | 'BRIEF' | 'ANNOUNCEMENT' | 'SPARKS' | 'DOCUMENT';
   typeLabel: string;
   icon: string;
   title: string;
@@ -29,6 +29,7 @@ export interface NotificationFeedItem {
   statusBadge?: string;
   color: string;
 }
+
 
 const sidebarCountsMemoryCache = new Map<string, { data: SidebarCounts; ts: number }>();
 const SIDEBAR_CACHE_TTL_MS = 30_000; // 30 seconds
@@ -526,6 +527,84 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     }
   } catch (err) {
     console.error('fetchUserNotifications reminder query error:', err);
+  }
+
+  // 7. Fetch Official Documents & Letters (Surat Tugas, Undangan, dll.)
+  try {
+
+
+    const userRow: any = await db
+      .prepare('SELECT id, name, email FROM users WHERE id = ?')
+      .bind(session.userId)
+      .first();
+
+    const currentUserName = (userRow?.name || session.name || '').trim().toLowerCase();
+    const isDocManager =
+      ctx.userType === 'STAFF' ||
+      ctx.roles.includes('COORDINATOR') ||
+      ctx.roles.includes('EXECUTIVE') ||
+      ctx.can('DOCUMENT_MANAGE') ||
+      ctx.can('DOCUMENT_CREATE');
+
+    const { results: docRows } = await db
+      .prepare(
+        `SELECT id, document_number, title, type_code, form_data, created_by, created_at
+         FROM generated_documents
+         ORDER BY created_at DESC
+         LIMIT 25`
+      )
+      .all();
+
+    for (const doc of (docRows as any[])) {
+      const isCreator = doc.created_by === session.userId;
+      let isAssignee = false;
+      let assigneeRole = '';
+
+      try {
+        const parsedForm =
+          typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
+        if (Array.isArray(parsedForm?.assignees)) {
+          const match = parsedForm.assignees.find((a: any) => {
+            if (!a) return false;
+            const aName = (a.name || '').trim().toLowerCase();
+            return (
+              currentUserName &&
+              (aName === currentUserName ||
+                aName.includes(currentUserName) ||
+                currentUserName.includes(aName))
+            );
+          });
+          if (match) {
+            isAssignee = true;
+            assigneeRole = match.role || match.tugas || '';
+          }
+        }
+      } catch (_e) {}
+
+      // Include notification if user is an assignee, creator, or document manager
+      if (isAssignee || isCreator || isDocManager) {
+        feedItems.push({
+          id: `notif_doc_${doc.id}`,
+          category: 'DOCUMENT',
+          typeLabel: isAssignee ? 'Surat Tugas Masuk' : 'Dokumen Resmi',
+          icon: '📑',
+          title: isAssignee
+            ? `Surat Tugas Baru: ${doc.title || 'Penugasan Event'}`
+            : `Dokumen Resmi: ${doc.title || doc.document_number}`,
+          subtitle: isAssignee
+            ? `No: ${doc.document_number}${assigneeRole ? ` • Peran: ${assigneeRole}` : ''} • Klik untuk lihat & download PDF`
+            : `No: ${doc.document_number} • Klik untuk melihat arsip dokumen`,
+          targetUrl: `/dashboard/documents/${doc.id}`,
+          createdAt: Number(doc.created_at) || 0,
+          statusBadge: isAssignee ? 'PETUGAS' : (doc.type_code || 'SURAT'),
+          color: isAssignee
+            ? 'border-purple-500/30 bg-purple-500/10'
+            : 'border-cyan-500/20 bg-cyan-500/5',
+        });
+      }
+    }
+  } catch (err) {
+    console.error('fetchUserNotifications documents query error:', err);
   }
 
   // Sort all notifications by newest timestamp

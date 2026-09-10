@@ -311,4 +311,45 @@ input[type="reset"] {
   margin-right: 0 !important;
 }
 
+/* Document & Letter Engine Print Styles */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide navigation, sidebar, headers, badges when printing document */
+  nav, aside, header, footer, button, .no-print, [role="navigation"], .document-non-printable {
+    display: none !important;
+  }
+
+  /* Target Document Pages */
+  .document-print-page {
+    width: 210mm !important;
+    min-width: 210mm !important;
+    max-width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    box-shadow: none !important;
+    border: none !important;
+    transform: none !important;
+    overflow: hidden !important;
+  }
+}
+
+
 
