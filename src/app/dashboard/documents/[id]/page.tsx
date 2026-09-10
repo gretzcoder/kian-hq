@@ -34,7 +34,7 @@ export default async function DocumentDetailPage({
   return (
     <div className="space-y-6 pb-16 max-w-7xl mx-auto">
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4 no-print">
         <div>
           <Link
             href="/dashboard/documents"
@@ -65,15 +65,15 @@ export default async function DocumentDetailPage({
       </div>
 
       {/* Historical Immutability Badge */}
-      <div className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
+      <div className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-400 flex items-center justify-between no-print">
         <span>
           🔒 <strong>Historical Snapshot:</strong> Dokumen ini dirender dari snapshot permanen template <strong>{doc.template_name} (v{doc.template_version})</strong>. Tampilan tidak akan terpengaruh oleh perubahan template atau profil organisasi di masa depan.
         </span>
       </div>
 
       {/* A4 Canvas Container */}
-      <div className="bg-zinc-100 dark:bg-zinc-950 p-6 sm:p-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center overflow-x-auto shadow-inner">
-        <div className="transform origin-top scale-[0.80] sm:scale-[0.90] xl:scale-[1] transition-transform duration-200">
+      <div className="bg-zinc-100 dark:bg-zinc-950 p-6 sm:p-10 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center overflow-x-auto shadow-inner print:p-0 print:m-0 print:bg-white print:border-none print:shadow-none">
+        <div className="transform origin-top scale-[0.80] sm:scale-[0.90] xl:scale-[1] transition-transform duration-200 print:transform-none print:scale-100">
           <DocumentCanvas
             formData={compiledData}
             layoutConfig={snapshot.layout_config}
