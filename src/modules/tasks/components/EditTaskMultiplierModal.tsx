@@ -4,9 +4,9 @@ import { useState, useTransition, useEffect } from 'react';
 import {
   updateTaskSparksMultiplierAction,
   updateSlotSparksMultiplierAction,
-  calculateEffectiveSparksMultiplier,
 } from '@/modules/sparks/multiplierActions';
-import { parseDirectBriefSlots, DirectBriefOutputSlot } from '@/modules/tasks/components/TaskActions';
+import { calculateEffectiveSparksMultiplier } from '@/lib/sparksUtils';
+import { parseDirectBriefSlots, DirectBriefOutputSlot } from '@/lib/slotUtils';
 import { useUI } from '@/components/ui/UIProvider';
 
 interface EditTaskMultiplierModalProps {

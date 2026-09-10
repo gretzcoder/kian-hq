@@ -5,8 +5,8 @@ import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { revalidatePath } from 'next/cache';
 import { getCategoryMultipliers } from './settingsCache';
-import { calculateEffectiveSparksMultiplier } from './multiplierActions';
-import { parseSlotsFromDescription } from '@/modules/tasks/actions';
+import { calculateEffectiveSparksMultiplier } from '@/lib/sparksUtils';
+import { parseSlotsFromDescription } from '@/lib/slotUtils';
 
 export interface UserSparksRankItem {
   rank: number;

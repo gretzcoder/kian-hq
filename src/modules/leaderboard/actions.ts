@@ -5,8 +5,8 @@ import { getSession } from '@/modules/auth/session';
 import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
 import { getUserStreakBadgeMapAction } from '@/modules/achievements/actions';
 import { getCategoryMultipliers } from '@/modules/sparks/settingsCache';
-import { calculateEffectiveSparksMultiplier } from '@/modules/sparks/multiplierActions';
-import { parseSlotsFromDescription } from '@/modules/tasks/actions';
+import { calculateEffectiveSparksMultiplier } from '@/lib/sparksUtils';
+import { parseSlotsFromDescription } from '@/lib/slotUtils';
 import { getOrSetCache, invalidateCachePrefix } from '@/lib/sharedCache';
 
 export async function invalidateLeaderboardCache() {

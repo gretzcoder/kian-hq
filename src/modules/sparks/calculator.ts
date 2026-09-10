@@ -3,8 +3,8 @@ import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
 import { syncGroupAndTeamTaskAssignments } from '@/modules/workspaces/assessmentActions';
 import { getCategoryMultipliers } from './settingsCache';
 
-import { calculateEffectiveSparksMultiplier } from './multiplierActions';
-import { parseSlotsFromDescription } from '@/modules/tasks/actions';
+import { calculateEffectiveSparksMultiplier } from '@/lib/sparksUtils';
+import { parseSlotsFromDescription } from '@/lib/slotUtils';
 
 export interface UserSparksSummary {
   userId: string;
