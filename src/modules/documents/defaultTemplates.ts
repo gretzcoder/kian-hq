@@ -29,6 +29,35 @@ export const DEFAULT_SURAT_TUGAS_LAYOUT: TemplateLayoutConfig = {
   fontSizeBasePt: 10.5,
   primaryColor: '#002B7F',
   annexThresholdRows: 4, // If assignees >= 4 or overflows page 1, automatically paginate as Lampiran
+  kopConfig: {
+    frameAssetUrl: '',
+    frameOpacity: 1,
+    kopHeightPx: 215,
+    logo: {
+      enabled: true,
+      x: 56,
+      y: 44,
+      width: 220,
+      height: 48,
+    },
+    tagline: {
+      enabled: true,
+      text: 'Kreasi Inovasi Anak Nusantara',
+      x: 56,
+      y: 92,
+      fontSizePt: 8.5,
+      color: '#4B5563',
+    },
+    titleBlock: {
+      enabled: true,
+      x: 56,
+      y: 138,
+      width: 682,
+      align: 'center',
+      titleFontSizePt: 13,
+      numberFontSizePt: 10,
+    },
+  },
   tableColumns: [
     { key: 'no', label: 'No', widthPercent: 8, align: 'center' },
     { key: 'nip', label: 'NIP', widthPercent: 22, align: 'center' },

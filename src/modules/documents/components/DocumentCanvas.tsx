@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   AssigneeRow,
+  KopSuratConfig,
   OrganizationSnapshot,
   TemplateLayoutConfig,
 } from '../documentTypes';
@@ -20,12 +21,16 @@ interface DocumentCanvasProps {
   };
   className?: string;
   previewMode?: boolean;
+  isBuilderInteractive?: boolean;
+  selectedKopElement?: 'logo' | 'tagline' | 'titleBlock' | 'flowLimit' | null;
+  onSelectKopElement?: (elem: 'logo' | 'tagline' | 'titleBlock' | 'flowLimit' | null) => void;
+  onKopConfigChange?: (newKop: KopSuratConfig) => void;
 }
 
 // Decorative Corner Shapes SVG
 const CornerAccentTopRight = () => (
   <svg
-    className="absolute top-0 right-0 w-28 h-28 pointer-events-none"
+    className="absolute top-0 right-0 w-28 h-28 pointer-events-none z-1"
     viewBox="0 0 120 120"
     fill="none"
   >
@@ -37,7 +42,7 @@ const CornerAccentTopRight = () => (
 
 const CornerAccentBottomLeft = () => (
   <svg
-    className="absolute bottom-0 left-0 w-28 h-28 pointer-events-none"
+    className="absolute bottom-0 left-0 w-28 h-28 pointer-events-none z-1"
     viewBox="0 0 120 120"
     fill="none"
   >
@@ -47,9 +52,9 @@ const CornerAccentBottomLeft = () => (
   </svg>
 );
 
-// KIAN Troopers Brand Logo Header
-const BrandLogoHeader = () => (
-  <div className="flex flex-col">
+// KIAN Troopers Brand Logo Header Vector
+const BrandLogoHeader = ({ className = '' }: { className?: string }) => (
+  <div className={`flex flex-col select-none ${className}`}>
     <div className="flex items-center gap-2">
       <span className="text-2xl font-black italic tracking-tighter text-[#0066CC]">
         KI<span className="text-[#002B7F]">AN</span>
@@ -58,9 +63,6 @@ const BrandLogoHeader = () => (
         TROOPERS
       </span>
     </div>
-    <span className="text-[9px] text-zinc-700 tracking-tight font-medium font-sans">
-      Kreasi Inovasi Anak Nusantara
-    </span>
   </div>
 );
 
@@ -71,10 +73,43 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
   signatory,
   className = '',
   previewMode = false,
+  isBuilderInteractive = false,
+  selectedKopElement = null,
+  onSelectKopElement,
+  onKopConfigChange,
 }) => {
   const assignees: AssigneeRow[] = Array.isArray(formData.assignees)
     ? formData.assignees
     : [];
+
+  const kop: KopSuratConfig = layoutConfig?.kopConfig || {
+    frameAssetUrl: layoutConfig?.frameAssetUrl || '',
+    kopHeightPx: 215,
+    logo: {
+      enabled: true,
+      x: 56,
+      y: 44,
+      width: 220,
+      height: 48,
+    },
+    tagline: {
+      enabled: true,
+      text: 'Kreasi Inovasi Anak Nusantara',
+      x: 56,
+      y: 92,
+      fontSizePt: 8.5,
+      color: '#4B5563',
+    },
+    titleBlock: {
+      enabled: true,
+      x: 56,
+      y: 138,
+      width: 682,
+      align: 'center',
+      titleFontSizePt: 13,
+      numberFontSizePt: 10,
+    },
+  };
 
   const threshold = layoutConfig?.annexThresholdRows ?? 4;
   const isMultiPageAnnex = assignees.length >= threshold;
@@ -123,6 +158,109 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
     ? formData.cc_list
     : ['1. CEO', '2. CBO', '3. Ybs'];
 
+  // Drag-and-drop state inside interactive builder
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [draggingTarget, setDraggingTarget] = useState<
+    'logo' | 'tagline' | 'titleBlock' | 'flowLimit' | null
+  >(null);
+  const [dragStartPos, setDragStartPos] = useState<{
+    mouseX: number;
+    mouseY: number;
+    origX: number;
+    origY: number;
+  }>({ mouseX: 0, mouseY: 0, origX: 0, origY: 0 });
+
+  const handleStartDrag = (
+    e: React.MouseEvent,
+    target: 'logo' | 'tagline' | 'titleBlock' | 'flowLimit'
+  ) => {
+    if (!isBuilderInteractive || !onKopConfigChange) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    if (onSelectKopElement) onSelectKopElement(target);
+    setDraggingTarget(target);
+
+    let initialX = 0;
+    let initialY = 0;
+    if (target === 'logo') {
+      initialX = kop.logo.x;
+      initialY = kop.logo.y;
+    } else if (target === 'tagline') {
+      initialX = kop.tagline.x;
+      initialY = kop.tagline.y;
+    } else if (target === 'titleBlock') {
+      initialX = kop.titleBlock.x;
+      initialY = kop.titleBlock.y;
+    } else if (target === 'flowLimit') {
+      initialX = 0;
+      initialY = kop.kopHeightPx;
+    }
+
+    setDragStartPos({
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      origX: initialX,
+      origY: initialY,
+    });
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!draggingTarget || !onKopConfigChange) return;
+
+      const deltaX = Math.round(e.clientX - dragStartPos.mouseX);
+      const deltaY = Math.round(e.clientY - dragStartPos.mouseY);
+
+      if (draggingTarget === 'logo') {
+        const nextX = Math.max(10, Math.min(600, dragStartPos.origX + deltaX));
+        const nextY = Math.max(10, Math.min(300, dragStartPos.origY + deltaY));
+        onKopConfigChange({
+          ...kop,
+          logo: { ...kop.logo, x: nextX, y: nextY },
+        });
+      } else if (draggingTarget === 'tagline') {
+        const nextX = Math.max(10, Math.min(600, dragStartPos.origX + deltaX));
+        const nextY = Math.max(10, Math.min(300, dragStartPos.origY + deltaY));
+        onKopConfigChange({
+          ...kop,
+          tagline: { ...kop.tagline, x: nextX, y: nextY },
+        });
+      } else if (draggingTarget === 'titleBlock') {
+        const nextX = Math.max(0, Math.min(400, dragStartPos.origX + deltaX));
+        const nextY = Math.max(40, Math.min(400, dragStartPos.origY + deltaY));
+        onKopConfigChange({
+          ...kop,
+          titleBlock: { ...kop.titleBlock, x: nextX, y: nextY },
+        });
+      } else if (draggingTarget === 'flowLimit') {
+        const nextH = Math.max(140, Math.min(450, dragStartPos.origY + deltaY));
+        onKopConfigChange({
+          ...kop,
+          kopHeightPx: nextH,
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (draggingTarget) {
+        setDraggingTarget(null);
+      }
+    };
+
+    if (draggingTarget) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggingTarget, dragStartPos, kop, onKopConfigChange]);
+
+  const hasCustomFrame = Boolean(kop.frameAssetUrl && kop.frameAssetUrl.trim().length > 0);
+
   return (
     <div
       className={`flex flex-col items-center gap-8 print:gap-0 select-text ${className}`}
@@ -131,6 +269,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
       {/* PAGE 1: SURAT UTAMA                                      */}
       {/* ======================================================== */}
       <div
+        ref={canvasRef}
         id="document-page-1"
         className="document-print-page relative bg-white text-zinc-900 shadow-2xl print:shadow-none box-border flex flex-col justify-between overflow-hidden"
         style={{
@@ -142,39 +281,174 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           boxSizing: 'border-box',
         }}
       >
-        {/* Frame Outer Border & Corner Accents */}
-        <div className="absolute inset-5 border-[1.5px] border-[#002B7F]/80 pointer-events-none" />
-        <CornerAccentTopRight />
-        <CornerAccentBottomLeft />
+        {/* Frame Background Layer: Custom uploaded image or Default crisp vector frame */}
+        {hasCustomFrame ? (
+          <img
+            src={kop.frameAssetUrl}
+            alt="Custom Frame"
+            className="absolute inset-0 w-full h-full object-fill pointer-events-none z-0 select-none"
+            style={{ opacity: kop.frameOpacity ?? 1 }}
+          />
+        ) : (
+          <>
+            <div className="absolute inset-5 border-[1.5px] border-[#002B7F]/80 pointer-events-none z-1" />
+            <CornerAccentTopRight />
+            <CornerAccentBottomLeft />
+          </>
+        )}
 
-        {/* Content Container (Flow layout) */}
-        <div className="relative z-10 flex flex-col flex-1">
-          {/* 1. Header / Logo */}
-          <div className="flex items-center justify-between pb-3">
-            <BrandLogoHeader />
-          </div>
+        {/* ======================================================== */}
+        {/* KOP SURAT LAYER (ABSOLUTE POSITIONED & CUSTOMIZABLE)     */}
+        {/* ======================================================== */}
+        <div className="absolute inset-x-0 top-0 pointer-events-auto z-10">
+          {/* 1. LOGO ELEMENT */}
+          {kop.logo.enabled && (
+            <div
+              onMouseDown={(e) => handleStartDrag(e, 'logo')}
+              onClick={() => onSelectKopElement && onSelectKopElement('logo')}
+              className={`absolute transition-shadow duration-150 ${
+                isBuilderInteractive
+                  ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-500 rounded p-1'
+                  : ''
+              } ${
+                isBuilderInteractive && selectedKopElement === 'logo'
+                  ? 'ring-2 ring-purple-600 bg-purple-500/10 shadow-lg'
+                  : ''
+              }`}
+              style={{
+                left: `${kop.logo.x}px`,
+                top: `${kop.logo.y}px`,
+                width: `${kop.logo.width}px`,
+              }}
+            >
+              {kop.logo.assetUrl ? (
+                <img
+                  src={kop.logo.assetUrl}
+                  alt="Logo"
+                  className="w-full object-contain pointer-events-none select-none max-h-16"
+                />
+              ) : (
+                <BrandLogoHeader />
+              )}
+              {isBuilderInteractive && (
+                <span className="absolute -top-4 -left-1 text-[8px] bg-purple-600 text-white font-mono font-bold px-1 rounded">
+                  Logo (Drag)
+                </span>
+              )}
+            </div>
+          )}
 
-          {/* 2. Document Title & Number */}
-          <div className="text-center my-4">
-            <h1 className="text-base font-bold tracking-wider underline uppercase text-black">
-              {documentTitle}
-            </h1>
-            <p className="text-xs font-normal text-zinc-800 mt-1">
-              Nomor : {docNumber}
-            </p>
-          </div>
+          {/* 2. TAGLINE ELEMENT */}
+          {kop.tagline.enabled && (
+            <div
+              onMouseDown={(e) => handleStartDrag(e, 'tagline')}
+              onClick={() => onSelectKopElement && onSelectKopElement('tagline')}
+              className={`absolute transition-shadow duration-150 ${
+                isBuilderInteractive
+                  ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-500 rounded px-1'
+                  : ''
+              } ${
+                isBuilderInteractive && selectedKopElement === 'tagline'
+                  ? 'ring-2 ring-purple-600 bg-purple-500/10 shadow-lg'
+                  : ''
+              }`}
+              style={{
+                left: `${kop.tagline.x}px`,
+                top: `${kop.tagline.y}px`,
+                fontSize: `${kop.tagline.fontSizePt}pt`,
+                color: kop.tagline.color || '#4B5563',
+                fontFamily: 'Arial, sans-serif',
+              }}
+            >
+              <span className="select-none tracking-tight font-medium">
+                {kop.tagline.text}
+              </span>
+              {isBuilderInteractive && (
+                <span className="absolute -top-3.5 -left-1 text-[8px] bg-purple-600 text-white font-mono font-bold px-1 rounded">
+                  Tagline (Drag)
+                </span>
+              )}
+            </div>
+          )}
 
-          {/* 3. Opening Intro Text */}
+          {/* 3. TITLE & DOCUMENT NUMBER BLOCK */}
+          {kop.titleBlock.enabled && (
+            <div
+              onMouseDown={(e) => handleStartDrag(e, 'titleBlock')}
+              onClick={() => onSelectKopElement && onSelectKopElement('titleBlock')}
+              className={`absolute transition-shadow duration-150 ${
+                isBuilderInteractive
+                  ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-500 rounded p-1'
+                  : ''
+              } ${
+                isBuilderInteractive && selectedKopElement === 'titleBlock'
+                  ? 'ring-2 ring-purple-600 bg-purple-500/10 shadow-lg'
+                  : ''
+              }`}
+              style={{
+                left: `${kop.titleBlock.x}px`,
+                top: `${kop.titleBlock.y}px`,
+                width: `${kop.titleBlock.width}px`,
+                textAlign: kop.titleBlock.align || 'center',
+              }}
+            >
+              <h1
+                className="font-bold tracking-wider underline uppercase text-black select-none"
+                style={{ fontSize: `${kop.titleBlock.titleFontSizePt}pt` }}
+              >
+                {documentTitle}
+              </h1>
+              <p
+                className="font-normal text-zinc-800 mt-1 select-none"
+                style={{ fontSize: `${kop.titleBlock.numberFontSizePt}pt` }}
+              >
+                Nomor : {docNumber}
+              </p>
+              {isBuilderInteractive && (
+                <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] bg-purple-600 text-white font-mono font-bold px-1.5 rounded">
+                  Judul &amp; Nomor (Drag)
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* 4. VISUAL FLOW START LIMIT GUIDE (IN BUILDER MODE ONLY) */}
+          {isBuilderInteractive && (
+            <div
+              onMouseDown={(e) => handleStartDrag(e, 'flowLimit')}
+              className="absolute inset-x-4 flex items-center justify-between cursor-row-resize group z-30"
+              style={{ top: `${kop.kopHeightPx}px` }}
+              title="Drag ke atas/bawah untuk mengatur batas mulai isi konten"
+            >
+              <div className="flex-1 border-t-2 border-dashed border-purple-500 opacity-70 group-hover:opacity-100" />
+              <span className="bg-purple-600 text-white text-[9px] font-mono font-bold px-2 py-0.5 rounded shadow-sm">
+                ▼ Mulai Isi Konten Dinamis ({kop.kopHeightPx}px)
+              </span>
+              <div className="flex-1 border-t-2 border-dashed border-purple-500 opacity-70 group-hover:opacity-100" />
+            </div>
+          )}
+        </div>
+
+        {/* ======================================================== */}
+        {/* DYNAMIC FLOW CONTENT CONTAINER (STARTS BELOW KOP SURAT)  */}
+        {/* ======================================================== */}
+        <div
+          className="relative z-10 flex flex-col flex-1"
+          style={{
+            marginTop: `${Math.max(120, kop.kopHeightPx - 48)}px`,
+          }}
+        >
+          {/* Opening Intro Text */}
           <div className="text-xs leading-relaxed text-zinc-900 mb-3 text-justify">
             <p>{introText}</p>
           </div>
 
-          {/* 4. Assignee Section: Inline Table or Multi-Page Lampiran Pointer */}
+          {/* Assignee Section: Inline Table or Multi-Page Lampiran Pointer */}
           {!isMultiPageAnnex ? (
             <div className="mb-4">
-              <table className="w-full border-collapse border border-zinc-800 text-xs text-zinc-900">
+              <table className="w-full border-collapse border border-zinc-800 text-xs text-zinc-900 bg-white/90">
                 <thead>
-                  <tr className="bg-zinc-100/50">
+                  <tr className="bg-zinc-100/70">
                     <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">
                       No
                     </th>
@@ -210,7 +484,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               </table>
             </div>
           ) : (
-            <div className="mb-4 p-3 bg-zinc-50 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
+            <div className="mb-4 p-3 bg-zinc-50/90 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
               <span>
                 📋 <strong>Daftar Nama Petugas ({assignees.length} Personil)</strong> terlampir lengkap pada <strong>Lampiran Surat Tugas</strong> (Halaman 2).
               </span>
@@ -220,7 +494,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
             </div>
           )}
 
-          {/* 5. Event Details */}
+          {/* Event Details */}
           <div className="text-xs leading-relaxed text-zinc-900 mb-3">
             <p className="mb-1.5 text-justify">{eventIntro}</p>
             <div className="grid grid-cols-[80px_12px_1fr] gap-y-1 pl-6 text-xs">
@@ -238,12 +512,12 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
             </div>
           </div>
 
-          {/* 6. Closing Text */}
+          {/* Closing Text */}
           <div className="text-xs leading-relaxed text-zinc-900 mb-4 text-justify">
             <p>{closingText}</p>
           </div>
 
-          {/* 7. Signature Block (Right Aligned) */}
+          {/* Signature Block (Right Aligned) */}
           <div className="flex justify-end mt-2 mb-2 pr-4">
             <div className="flex flex-col items-center text-center w-64">
               <p className="text-xs text-zinc-900">{docDatePlace}</p>
@@ -335,7 +609,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
             </div>
           </div>
 
-          {/* 8. Tembusan List (Bottom Left) */}
+          {/* Tembusan List (Bottom Left) */}
           {ccList.length > 0 && (
             <div className="mt-auto pt-2 pl-2 text-[11px] text-zinc-800">
               <p className="font-bold mb-0.5">Tembusan :</p>
@@ -348,26 +622,28 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           )}
         </div>
 
-        {/* 9. Fixed Bottom Footer */}
-        <div className="relative z-10 pt-3 border-t border-zinc-200 mt-3 flex items-end justify-between text-[8.5px] leading-tight text-zinc-600 font-sans">
-          <div className="max-w-[420px]">
-            <p>{organization.address_line_1}</p>
-            <p>{organization.address_line_2}</p>
-            <p className="mt-0.5 font-medium text-zinc-700">
-              Telp. {organization.phone}, Email : {organization.email}
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <span className="font-semibold text-zinc-800">
-              {organization.website}
-            </span>
-            <div className="flex items-center gap-1">
-              <span className="w-3 h-1.5 bg-[#0066CC] rounded-xs" />
-              <span className="w-3 h-1.5 bg-[#E52320] rounded-xs" />
-              <span className="w-3 h-1.5 bg-[#002B7F] rounded-xs" />
+        {/* Fixed Bottom Footer */}
+        {!hasCustomFrame && (
+          <div className="relative z-10 pt-3 border-t border-zinc-200 mt-3 flex items-end justify-between text-[8.5px] leading-tight text-zinc-600 font-sans">
+            <div className="max-w-[420px]">
+              <p>{organization.address_line_1}</p>
+              <p>{organization.address_line_2}</p>
+              <p className="mt-0.5 font-medium text-zinc-700">
+                Telp. {organization.phone}, Email : {organization.email}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <span className="font-semibold text-zinc-800">
+                {organization.website}
+              </span>
+              <div className="flex items-center gap-1">
+                <span className="w-3 h-1.5 bg-[#0066CC] rounded-xs" />
+                <span className="w-3 h-1.5 bg-[#E52320] rounded-xs" />
+                <span className="w-3 h-1.5 bg-[#002B7F] rounded-xs" />
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ======================================================== */}
@@ -392,10 +668,21 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 boxSizing: 'border-box',
               }}
             >
-              {/* Frame Outer Border & Corner Accents */}
-              <div className="absolute inset-5 border-[1.5px] border-[#002B7F]/80 pointer-events-none" />
-              <CornerAccentTopRight />
-              <CornerAccentBottomLeft />
+              {/* Frame Background Layer */}
+              {hasCustomFrame ? (
+                <img
+                  src={kop.frameAssetUrl}
+                  alt="Custom Frame"
+                  className="absolute inset-0 w-full h-full object-fill pointer-events-none z-0 select-none"
+                  style={{ opacity: kop.frameOpacity ?? 1 }}
+                />
+              ) : (
+                <>
+                  <div className="absolute inset-5 border-[1.5px] border-[#002B7F]/80 pointer-events-none z-1" />
+                  <CornerAccentTopRight />
+                  <CornerAccentBottomLeft />
+                </>
+              )}
 
               <div className="relative z-10 flex flex-col flex-1">
                 {/* Header Logo */}
@@ -421,7 +708,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
                 {/* Full Paginated Assignee Table */}
                 <div className="mb-4">
-                  <table className="w-full border-collapse border border-zinc-800 text-xs text-zinc-900">
+                  <table className="w-full border-collapse border border-zinc-800 text-xs text-zinc-900 bg-white/90">
                     <thead>
                       <tr className="bg-zinc-100">
                         <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">
@@ -516,12 +803,14 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               </div>
 
               {/* Annex Page Footer */}
-              <div className="relative z-10 pt-2 border-t border-zinc-200 mt-2 flex items-center justify-between text-[8px] text-zinc-500 font-sans">
-                <span>
-                  Lampiran Surat Tugas Resmi KIAN Troopers - {docNumber}
-                </span>
-                <span>{organization.website}</span>
-              </div>
+              {!hasCustomFrame && (
+                <div className="relative z-10 pt-2 border-t border-zinc-200 mt-2 flex items-center justify-between text-[8px] text-zinc-500 font-sans">
+                  <span>
+                    Lampiran Surat Tugas Resmi KIAN Troopers - {docNumber}
+                  </span>
+                  <span>{organization.website}</span>
+                </div>
+              )}
             </div>
           );
         })}

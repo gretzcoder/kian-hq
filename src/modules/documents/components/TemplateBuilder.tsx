@@ -6,6 +6,7 @@ import {
   DocumentTemplateItem,
   DocumentTypeItem,
   FormFieldSchema,
+  KopSuratConfig,
   TemplateLayoutConfig,
 } from '../documentTypes';
 import {
@@ -53,9 +54,125 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     initialTemplate?.sample_data || defaultValues
   );
 
-  const [activeTab, setActiveTab] = useState<'INFO' | 'LAYOUT' | 'FIELDS' | 'DEFAULTS'>('INFO');
+  const [activeTab, setActiveTab] = useState<'INFO' | 'KOP_SURAT' | 'LAYOUT' | 'DEFAULTS'>('KOP_SURAT');
+  const [selectedKopElement, setSelectedKopElement] = useState<'logo' | 'tagline' | 'titleBlock' | 'flowLimit' | null>('logo');
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const kopConfig: KopSuratConfig = layoutConfig.kopConfig || {
+    frameAssetUrl: '',
+    frameOpacity: 1,
+    kopHeightPx: 215,
+    logo: {
+      enabled: true,
+      x: 56,
+      y: 44,
+      width: 220,
+      height: 48,
+    },
+    tagline: {
+      enabled: true,
+      text: 'Kreasi Inovasi Anak Nusantara',
+      x: 56,
+      y: 92,
+      fontSizePt: 8.5,
+      color: '#4B5563',
+    },
+    titleBlock: {
+      enabled: true,
+      x: 56,
+      y: 138,
+      width: 682,
+      align: 'center',
+      titleFontSizePt: 13,
+      numberFontSizePt: 10,
+    },
+  };
+
+  const handleKopChange = (newKop: KopSuratConfig) => {
+    setLayoutConfig((prev) => ({
+      ...prev,
+      kopConfig: newKop,
+    }));
+  };
+
+  // Upload custom frame PNG/JPG
+  const handleUploadFrame = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 3 * 1024 * 1024) {
+      alert('Ukuran file frame maksimal 3MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      handleKopChange({
+        ...kopConfig,
+        frameAssetUrl: base64,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Upload custom logo PNG/JPG
+  const handleUploadLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Ukuran file logo maksimal 2MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      handleKopChange({
+        ...kopConfig,
+        logo: {
+          ...kopConfig.logo,
+          assetUrl: base64,
+        },
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetKopLayout = () => {
+    if (!confirm('Kembalikan posisi Kop Surat ke default standar KIAN?')) return;
+    handleKopChange({
+      ...kopConfig,
+      kopHeightPx: 215,
+      logo: {
+        enabled: true,
+        assetUrl: kopConfig.logo.assetUrl,
+        x: 56,
+        y: 44,
+        width: 220,
+        height: 48,
+      },
+      tagline: {
+        enabled: true,
+        text: 'Kreasi Inovasi Anak Nusantara',
+        x: 56,
+        y: 92,
+        fontSizePt: 8.5,
+        color: '#4B5563',
+      },
+      titleBlock: {
+        enabled: true,
+        x: 56,
+        y: 138,
+        width: 682,
+        align: 'center',
+        titleFontSizePt: 13,
+        numberFontSizePt: 10,
+      },
+    });
+  };
 
   const handleSaveTemplate = async () => {
     if (!name.trim()) {
@@ -135,8 +252,8 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
             {isEditing
-              ? `Versi saat ini: v${initialTemplate?.current_version} • Perubahan akan disimpan sebagai versi baru yang aman tanpa merusak dokumen lama.`
-              : 'Rancang konfigurasi layout, schema input, penomoran, dan default value surat.'}
+              ? `Versi saat ini: v${initialTemplate?.current_version} • Perubahan disimpan sebagai versi baru tanpa merusak dokumen lama.`
+              : 'Upload frame, custom logo & posisi kop surat secara bebas dengan drag & drop.'}
           </p>
         </div>
 
@@ -186,17 +303,18 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
         {/* Left Column: Template Config Inspector */}
         <div className="lg:col-span-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-sm space-y-5">
           {/* Tab Selector */}
-          <div className="flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl">
+          <div className="flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl overflow-x-auto">
             {[
+              { id: 'KOP_SURAT', label: '📐 Kop & Frame' },
               { id: 'INFO', label: '1. Info' },
-              { id: 'LAYOUT', label: '2. Layout' },
-              { id: 'DEFAULTS', label: '3. Konten & Default' },
+              { id: 'LAYOUT', label: '2. Lampiran' },
+              { id: 'DEFAULTS', label: '3. Konten' },
             ].map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setActiveTab(t.id as any)}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                   activeTab === t.id
                     ? 'bg-white dark:bg-zinc-900 text-purple-600 dark:text-purple-400 shadow-xs'
                     : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
@@ -206,6 +324,316 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
               </button>
             ))}
           </div>
+
+          {/* TAB: KOP SURAT & FRAME DESIGNER */}
+          {activeTab === 'KOP_SURAT' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 rounded-xl text-[11px] text-purple-700 dark:text-purple-300">
+                ✨ <strong>Drag &amp; Drop Kop Surat Aktif:</strong> Anda dapat langsung mengklik &amp; menggeser <strong>Logo</strong>, <strong>Tagline</strong>, <strong>Judul Surat</strong>, atau <strong>Garis Batas Mulai Isi Konten</strong> langsung pada Canvas A4 di sebelah kanan!
+              </div>
+
+              {/* 1. Upload Custom Frame Background */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <span>🖼️</span> Frame Background Dokumen (PNG/JPG)
+                  </label>
+                  {kopConfig.frameAssetUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleKopChange({ ...kopConfig, frameAssetUrl: '' })}
+                      className="text-[10px] text-red-500 hover:underline font-bold"
+                    >
+                      Hapus Frame Custom
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={handleUploadFrame}
+                  className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer"
+                />
+
+                {kopConfig.frameAssetUrl ? (
+                  <div className="flex items-center gap-2 pt-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                    <span>✓ Frame gambar custom aktif</span>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-zinc-400">
+                    Gunakan frame vector bawaan KIAN Troopers, atau upload background PNG format A4 Anda sendiri.
+                  </p>
+                )}
+              </div>
+
+              {/* 2. Upload Custom Logo */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                    <span>👑</span> Logo Kop Surat
+                  </label>
+                  {kopConfig.logo.assetUrl && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleKopChange({
+                          ...kopConfig,
+                          logo: { ...kopConfig.logo, assetUrl: undefined },
+                        })
+                      }
+                      className="text-[10px] text-red-500 hover:underline font-bold"
+                    >
+                      Reset Logo Vektor
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                  onChange={handleUploadLogo}
+                  className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer"
+                />
+              </div>
+
+              {/* 3. Kop Elements Coordinate Inspector */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
+                    Posisi Presisi Elemen Kop
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleResetKopLayout}
+                    className="text-[10px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 font-bold"
+                  >
+                    ↺ Reset Posisi
+                  </button>
+                </div>
+
+                {/* LOGO INSPECTOR */}
+                <div
+                  onClick={() => setSelectedKopElement('logo')}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                    selectedKopElement === 'logo'
+                      ? 'border-purple-500 bg-purple-500/5 ring-1 ring-purple-500'
+                      : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                      1. Logo Header
+                    </span>
+                    <span className="text-[10px] text-purple-600 font-mono">
+                      X: {kopConfig.logo.x}px | Y: {kopConfig.logo.y}px
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-zinc-500">Posisi X (px)</label>
+                      <input
+                        type="number"
+                        value={kopConfig.logo.x}
+                        onChange={(e) =>
+                          handleKopChange({
+                            ...kopConfig,
+                            logo: { ...kopConfig.logo, x: parseInt(e.target.value, 10) || 0 },
+                          })
+                        }
+                        className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500">Posisi Y (px)</label>
+                      <input
+                        type="number"
+                        value={kopConfig.logo.y}
+                        onChange={(e) =>
+                          handleKopChange({
+                            ...kopConfig,
+                            logo: { ...kopConfig.logo, y: parseInt(e.target.value, 10) || 0 },
+                          })
+                        }
+                        className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500">Lebar (px)</label>
+                      <input
+                        type="number"
+                        value={kopConfig.logo.width}
+                        onChange={(e) =>
+                          handleKopChange({
+                            ...kopConfig,
+                            logo: { ...kopConfig.logo, width: parseInt(e.target.value, 10) || 100 },
+                          })
+                        }
+                        className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* TAGLINE INSPECTOR */}
+                <div
+                  onClick={() => setSelectedKopElement('tagline')}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                    selectedKopElement === 'tagline'
+                      ? 'border-purple-500 bg-purple-500/5 ring-1 ring-purple-500'
+                      : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                      2. Subtitle / Tagline
+                    </span>
+                    <span className="text-[10px] text-purple-600 font-mono">
+                      X: {kopConfig.tagline.x}px | Y: {kopConfig.tagline.y}px
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={kopConfig.tagline.text}
+                      onChange={(e) =>
+                        handleKopChange({
+                          ...kopConfig,
+                          tagline: { ...kopConfig.tagline, text: e.target.value },
+                        })
+                      }
+                      placeholder="Teks Tagline..."
+                      className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-zinc-500">Posisi X (px)</label>
+                        <input
+                          type="number"
+                          value={kopConfig.tagline.x}
+                          onChange={(e) =>
+                            handleKopChange({
+                              ...kopConfig,
+                              tagline: { ...kopConfig.tagline, x: parseInt(e.target.value, 10) || 0 },
+                            })
+                          }
+                          className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500">Posisi Y (px)</label>
+                        <input
+                          type="number"
+                          value={kopConfig.tagline.y}
+                          onChange={(e) =>
+                            handleKopChange({
+                              ...kopConfig,
+                              tagline: { ...kopConfig.tagline, y: parseInt(e.target.value, 10) || 0 },
+                            })
+                          }
+                          className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* TITLE & NUMBER INSPECTOR */}
+                <div
+                  onClick={() => setSelectedKopElement('titleBlock')}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                    selectedKopElement === 'titleBlock'
+                      ? 'border-purple-500 bg-purple-500/5 ring-1 ring-purple-500'
+                      : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                      3. Blok Judul &amp; Nomor Surat
+                    </span>
+                    <span className="text-[10px] text-purple-600 font-mono">
+                      Y: {kopConfig.titleBlock.y}px
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-zinc-500">Posisi Y (px)</label>
+                      <input
+                        type="number"
+                        value={kopConfig.titleBlock.y}
+                        onChange={(e) =>
+                          handleKopChange({
+                            ...kopConfig,
+                            titleBlock: { ...kopConfig.titleBlock, y: parseInt(e.target.value, 10) || 0 },
+                          })
+                        }
+                        className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500">Alignment</label>
+                      <select
+                        value={kopConfig.titleBlock.align}
+                        onChange={(e) =>
+                          handleKopChange({
+                            ...kopConfig,
+                            titleBlock: { ...kopConfig.titleBlock, align: e.target.value as any },
+                          })
+                        }
+                        className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                      >
+                        <option value="center">Tengah (Center)</option>
+                        <option value="left">Kiri (Left)</option>
+                        <option value="right">Kanan (Right)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-500">Ukuran Font</label>
+                      <input
+                        type="number"
+                        value={kopConfig.titleBlock.titleFontSizePt}
+                        onChange={(e) =>
+                          handleKopChange({
+                            ...kopConfig,
+                            titleBlock: { ...kopConfig.titleBlock, titleFontSizePt: parseInt(e.target.value, 10) || 12 },
+                          })
+                        }
+                        className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* FLOW START LIMIT HEIGHT */}
+                <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      Tinggi Kop Surat / Batas Awal Konten Dinamis
+                    </label>
+                    <span className="text-xs font-mono font-bold text-purple-600">
+                      {kopConfig.kopHeightPx} px
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={140}
+                    max={400}
+                    value={kopConfig.kopHeightPx}
+                    onChange={(e) =>
+                      handleKopChange({
+                        ...kopConfig,
+                        kopHeightPx: parseInt(e.target.value, 10),
+                      })
+                    }
+                    className="w-full accent-purple-600 cursor-pointer"
+                  />
+                  <p className="text-[10px] text-zinc-400">
+                    Isi surat (paragraf, tabel petugas, rincian event) akan otomatis mengalir di bawah batas tinggi ini.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* TAB 1: BASIC INFO */}
           {activeTab === 'INFO' && (
@@ -287,7 +715,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           {activeTab === 'LAYOUT' && (
             <div className="space-y-4">
               <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 rounded-xl text-[11px] text-purple-700 dark:text-purple-300">
-                ⚡ <strong>Hybrid Flow Layout Engine:</strong> Frame tepi dan sudut dekoratif diposisikan tetap, sementara tabel petugas, rincian event, penutup, dan tanda tangan mengalir secara dinamis.
+                ⚡ <strong>Hybrid Flow Layout Engine:</strong> Frame tepi dan posisi kop surat dapat Anda sesuaikan bebas, sementara tabel petugas, rincian event, penutup, dan tanda tangan mengalir secara dinamis.
               </div>
 
               <div className="space-y-1">
@@ -314,7 +742,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                  Ukuran Dokumen & Font Dasar
+                  Ukuran Dokumen &amp; Font Dasar
                 </label>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl font-mono font-semibold text-center">
@@ -402,14 +830,14 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           )}
         </div>
 
-        {/* Right Column: Live A4 Visual Canvas Preview */}
+        {/* Right Column: Interactive A4 Visual Canvas Preview & Drag Area */}
         <div className="lg:col-span-7 bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center overflow-x-auto shadow-inner">
           <div className="w-full flex items-center justify-between pb-3 mb-3 border-b border-zinc-200 dark:border-zinc-800">
             <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
-              <span>👁️</span> Live Canvas Preview (A4 Scale)
+              <span>🖱️</span> Drag Canvas Kop Surat (A4)
             </span>
             <span className="text-[10px] bg-purple-500/10 text-purple-600 dark:text-purple-400 font-mono px-2 py-0.5 rounded-full font-bold">
-              Surat Tugas KIAN
+              Klik &amp; Drag Elemen
             </span>
           </div>
 
@@ -418,6 +846,10 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
               formData={previewData}
               layoutConfig={layoutConfig}
               previewMode
+              isBuilderInteractive
+              selectedKopElement={selectedKopElement}
+              onSelectKopElement={setSelectedKopElement}
+              onKopConfigChange={handleKopChange}
             />
           </div>
         </div>

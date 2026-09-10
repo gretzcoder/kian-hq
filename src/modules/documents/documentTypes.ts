@@ -84,6 +84,37 @@ export interface FlowSectionConfig {
   styles?: Record<string, any>;
 }
 
+export interface KopSuratConfig {
+  frameAssetUrl?: string; // Uploaded frame image (Base64 Data URI or static URL)
+  frameOpacity?: number;
+  kopHeightPx: number; // Offset Y where dynamic content starts (default ~210px)
+  logo: {
+    enabled: boolean;
+    assetUrl?: string; // Custom uploaded logo or default vector
+    x: number; // X offset in px (0 - 794)
+    y: number; // Y offset in px (0 - 1123)
+    width: number; // Width in px
+    height?: number;
+  };
+  tagline: {
+    enabled: boolean;
+    text: string;
+    x: number;
+    y: number;
+    fontSizePt: number;
+    color: string;
+  };
+  titleBlock: {
+    enabled: boolean;
+    x: number; // X center or offset in px
+    y: number; // Y offset in px
+    width: number;
+    align: 'left' | 'center' | 'right';
+    titleFontSizePt: number;
+    numberFontSizePt: number;
+  };
+}
+
 export interface TemplateLayoutConfig {
   pageSize: 'A4';
   orientation: 'portrait';
@@ -98,6 +129,7 @@ export interface TemplateLayoutConfig {
   primaryColor?: string;
   fontFamily?: 'Times New Roman' | 'Arial' | 'Helvetica' | 'Inter';
   fontSizeBasePt?: number;
+  kopConfig?: KopSuratConfig;
   tableColumns: TableColumnConfig[];
   flowSections: FlowSectionConfig[];
   annexThresholdRows?: number; // Rows >= threshold will be paginated as Lampiran on Page 2+
