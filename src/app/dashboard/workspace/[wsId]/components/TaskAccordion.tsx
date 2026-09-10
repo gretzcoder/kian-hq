@@ -618,6 +618,7 @@ export default function TaskAccordion({
                         taskType={task.task_type}
                         taskDescription={task.description}
                         taskCreatedBy={task.created_by}
+                        sparksMultiplier={task.sparks_multiplier || 1.0}
                         isDirectBrief={isDirectBriefTask}
                         workspaceType={workspaceType}
                         assignments={taskAssignments}
@@ -653,6 +654,7 @@ export default function TaskAccordion({
         <EditTaskMultiplierModal
           taskId={multiplierTask.id}
           taskTitle={multiplierTask.title}
+          taskDescription={multiplierTask.description}
           currentMultiplier={multiplierTask.sparks_multiplier || 1.0}
           isOpen={!!multiplierTask}
           onClose={() => setMultiplierTask(null)}
@@ -980,6 +982,41 @@ function EditTaskModal({
                             }}
                             className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-blue-500 text-zinc-900 dark:text-zinc-100 cursor-pointer [&::-webkit-calendar-picker-indicator]:cursor-pointer"
                           />
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <label className="block text-[9px] font-bold text-zinc-500 uppercase tracking-wider">
+                              ⚡ Sparks Multiplier Slot (Opsional)
+                            </label>
+                            <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 font-mono">
+                              {slot.sparksMultiplier && slot.sparksMultiplier > 1.0 ? `${slot.sparksMultiplier}x` : '1.0x (Default)'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {[1.0, 1.25, 1.5, 2.0, 2.5, 3.0].map((p) => {
+                              const currentSlotP = Number(slot.sparksMultiplier) || 1.0;
+                              const isSel = currentSlotP === p;
+                              return (
+                                <button
+                                  key={p}
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = [...editSlots];
+                                    updated[idx].sparksMultiplier = p > 1.0 ? p : null;
+                                    setEditSlots(updated);
+                                  }}
+                                  className={`py-1 px-2.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                    isSel
+                                      ? 'bg-amber-600 text-white shadow-xs'
+                                      : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+                                  }`}
+                                >
+                                  {p}x
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
 
                         <div>

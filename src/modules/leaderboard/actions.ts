@@ -5,6 +5,8 @@ import { getSession } from '@/modules/auth/session';
 import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
 import { getUserStreakBadgeMapAction } from '@/modules/achievements/actions';
 import { getCategoryMultipliers } from '@/modules/sparks/settingsCache';
+import { calculateEffectiveSparksMultiplier } from '@/modules/sparks/multiplierActions';
+import { parseSlotsFromDescription } from '@/modules/tasks/actions';
 import { getOrSetCache, invalidateCachePrefix } from '@/lib/sharedCache';
 
 export async function invalidateLeaderboardCache() {
@@ -595,8 +597,10 @@ export async function getSparksHistory(
 
   const pStartTs = await getLeaderboardPeriodStartTimestamp(period);
   let timeClause = '';
+  let taskTimeClause = '';
   if (pStartTs > 0) {
     timeClause = `AND COALESCE(ta.reviewed_at, ta.submitted_at) >= ${pStartTs}`;
+    taskTimeClause = `AND t.created_at >= ${pStartTs}`;
   }
 
   let roleFilter = '';
@@ -621,6 +625,7 @@ export async function getSparksHistory(
         ta.id   AS assignmentId,
         t.title AS taskTitle,
         t.task_type AS taskType,
+        t.description AS taskDesc,
         COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
         ta.assignment_role                                                              AS assignmentRole,
         ws.name                                                                         AS workspaceName,
@@ -658,7 +663,7 @@ export async function getSparksHistory(
         FROM tasks t
         JOIN projects p ON t.project_id = p.id
         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
-        WHERE t.created_by = ? AND t.task_type = 'ASSESSMENT' AND t.status IN ('APPROVED', 'COMPLETED') AND t.sparks IS NOT NULL
+        WHERE ${idClause.replace('ta.user_id', 't.created_by')} AND t.task_type = 'ASSESSMENT' AND t.status IN ('APPROVED', 'COMPLETED') AND t.sparks IS NOT NULL ${taskTimeClause}
         ORDER BY COALESCE(t.start_at, t.created_at) DESC
       `
       )
@@ -701,7 +706,23 @@ export async function getSparksHistory(
     const isVideo = r.assignmentRole === 'VIDEO_EDITOR' || r.taskType === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
-    const coordinatorMultiplier = customTaskMult !== 1.0 ? customTaskMult : catMult;
+
+    let slotMult = 1.0;
+    if (r.taskDesc && r.taskDesc.includes('[DIRECT_BRIEF_CATEGORIES:')) {
+      const slots = parseSlotsFromDescription(r.taskDesc);
+      const cleanRole = (r.assignmentRole || '').replace(/^Kategori:\s*/i, '').trim().toLowerCase();
+      const matchedSlot = slots.find(
+        (s) =>
+          s.name.trim().toLowerCase() === cleanRole ||
+          cleanRole.includes(s.name.trim().toLowerCase()) ||
+          s.name.trim().toLowerCase().includes(cleanRole)
+      );
+      if (matchedSlot && matchedSlot.sparksMultiplier && matchedSlot.sparksMultiplier > 1.0) {
+        slotMult = Number(matchedSlot.sparksMultiplier);
+      }
+    }
+
+    const coordinatorMultiplier = calculateEffectiveSparksMultiplier(customTaskMult, slotMult, catMult);
 
     const calculatedSparks = Math.round(rawSparks * roleMultiplier * qualityMultiplier * coordinatorMultiplier);
 

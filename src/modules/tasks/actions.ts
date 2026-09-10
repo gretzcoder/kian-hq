@@ -75,13 +75,14 @@ async function checkOJTPrerequisites(db: any, taskId: string, role: string, user
 // ---------------------------------------------------------------------------
 // Helper: Parse Direct Brief Output Slots
 // ---------------------------------------------------------------------------
-function parseSlotsFromDescription(description: string | null | undefined): Array<{
+export function parseSlotsFromDescription(description: string | null | undefined): Array<{
   id: string;
   name: string;
   assignedUserId?: string | null;
   assignedUserName?: string | null;
   deadline?: string | null;
   specificBrief?: string | null;
+  sparksMultiplier?: number | null;
 }> {
   if (!description) return [];
   const match = description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]/);
@@ -100,6 +101,7 @@ function parseSlotsFromDescription(description: string | null | undefined): Arra
             assignedUserName: item.assignedUserName || null,
             deadline: item.deadline || null,
             specificBrief: item.specificBrief || null,
+            sparksMultiplier: item.sparksMultiplier !== undefined && item.sparksMultiplier !== null ? Number(item.sparksMultiplier) : (item.multiplier !== undefined && item.multiplier !== null ? Number(item.multiplier) : null),
           };
         }).filter((s) => s.name.length > 0);
       }

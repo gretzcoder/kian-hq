@@ -31,6 +31,7 @@ export interface DirectBriefOutputSlot {
   assignedUserName?: string | null;
   deadline?: string | null;
   specificBrief?: string | null;
+  sparksMultiplier?: number | null;
 }
 
 export function parseDirectBriefSlots(description: string | null | undefined): DirectBriefOutputSlot[] {
@@ -54,6 +55,7 @@ export function parseDirectBriefSlots(description: string | null | undefined): D
             assignedUserName: item.assignedUserName || null,
             deadline: item.deadline || null,
             specificBrief: item.specificBrief || null,
+            sparksMultiplier: item.sparksMultiplier !== undefined && item.sparksMultiplier !== null ? Number(item.sparksMultiplier) : (item.multiplier !== undefined && item.multiplier !== null ? Number(item.multiplier) : null),
           };
         }).filter((s) => s.name.length > 0);
       }
@@ -187,8 +189,24 @@ interface TaskAssignment {
   deadline?: number | null;
 }
 
-
 import { ExtendDeadlineModal } from '@/components/ExtendDeadlineModal';
+import EditSparksModal from './EditSparksModal';
+import EditTaskMultiplierModal from './EditTaskMultiplierModal';
+import { calculateEffectiveSparksMultiplier } from '@/modules/sparks/multiplierActions';
+
+const statusColors: Record<string, string> = {
+  DRAFT: 'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700',
+  ASSIGNED: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/40',
+  IN_PROGRESS: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800/40',
+  SUBMITTED: 'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/15',
+  WAITING_REVIEW: 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 border-yellow-500/15',
+  REVISION_REQUESTED: 'text-red-600 dark:text-red-400 bg-red-500/5 border-red-500/15',
+  RESUBMITTED: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/5 border-indigo-500/15',
+  APPROVED: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',
+  LOCKED: 'text-zinc-700 dark:text-zinc-300 bg-zinc-500/10 border-zinc-500/20',
+  PUBLISHED: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15',
+  DECLINED: 'text-red-800 dark:text-red-500 bg-red-800/10 border-red-800/20',
+};
 
 interface TaskActionsProps {
   taskId: string;
@@ -198,6 +216,7 @@ interface TaskActionsProps {
   taskType?: string;
   taskDescription?: string | null;
   taskCreatedBy?: string | null;
+  sparksMultiplier?: number | null;
   isDirectBrief?: boolean;
   workspaceType?: string;
   assignments: TaskAssignment[];
@@ -216,22 +235,6 @@ interface TaskActionsProps {
   users?: Array<{ id: string; name: string }>;
 }
 
-const statusColors: Record<string, string> = {
-  DRAFT: 'text-zinc-500 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700',
-  ASSIGNED: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/40',
-  IN_PROGRESS: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800/40',
-  SUBMITTED: 'text-orange-600 dark:text-orange-400 bg-orange-500/5 border-orange-500/15',
-  WAITING_REVIEW: 'text-yellow-600 dark:text-yellow-400 bg-yellow-500/5 border-yellow-500/15',
-  REVISION_REQUESTED: 'text-red-600 dark:text-red-400 bg-red-500/5 border-red-500/15',
-  RESUBMITTED: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/5 border-indigo-500/15',
-  APPROVED: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 border-emerald-500/15',
-  LOCKED: 'text-zinc-700 dark:text-zinc-300 bg-zinc-500/10 border-zinc-500/20',
-  PUBLISHED: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15',
-  DECLINED: 'text-red-800 dark:text-red-500 bg-red-800/10 border-red-800/20',
-};
-
-import EditSparksModal from './EditSparksModal';
-
 export default function TaskActions({
   taskId,
   taskTitle,
@@ -240,6 +243,7 @@ export default function TaskActions({
   taskType,
   taskDescription,
   taskCreatedBy,
+  sparksMultiplier = 1.0,
   isDirectBrief = false,
   workspaceType,
   assignments,
@@ -263,6 +267,7 @@ export default function TaskActions({
   const [revisionInputs, setRevisionInputs] = useState<Record<string, string>>({});
   const [showRevisionMap, setShowRevisionMap] = useState<Record<string, boolean>>({});
   const [errorMap, setErrorMap] = useState<Record<string, string>>({});
+  const [multiplierModalSlotId, setMultiplierModalSlotId] = useState<string | null>(null);
 
   // Per-step assignment management states
   const [showAddMemberStep, setShowAddMemberStep] = useState<Record<string, boolean>>({});
@@ -1452,6 +1457,44 @@ export default function TaskActions({
                           🌐 Open Claim
                         </span>
                       )}
+
+                      {/* Slot Multiplier Badge */}
+                      {(() => {
+                        const slotMult = Number(slot.sparksMultiplier) || 1.0;
+                        const taskMult = Number(sparksMultiplier) || 1.0;
+                        const totalSlotMult = calculateEffectiveSparksMultiplier(taskMult, slotMult);
+
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {slotMult > 1.0 ? (
+                              <span
+                                className="text-[10px] font-black text-amber-600 dark:text-amber-300 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1 font-mono shadow-xs"
+                                title={`Multiplier Slot: ${slotMult}x | Task General: ${taskMult}x | Total Efektif: ${totalSlotMult}x`}
+                              >
+                                <span>⚡</span> {totalSlotMult}x {taskMult > 1.0 ? `(Task ${taskMult}x + Slot ${slotMult}x)` : `(Slot ${slotMult}x)`}
+                              </span>
+                            ) : taskMult > 1.0 ? (
+                              <span
+                                className="text-[10px] font-bold text-purple-600 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20 flex items-center gap-1 font-mono"
+                                title={`Task General Multiplier: ${taskMult}x`}
+                              >
+                                <span>⚡</span> {taskMult}x
+                              </span>
+                            ) : null}
+
+                            {(isCoordinator || isTaskCreator) && (
+                              <button
+                                type="button"
+                                onClick={() => setMultiplierModalSlotId(slot.id)}
+                                className="text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-0.5 rounded-lg border border-amber-500/25 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                                title="Atur Multiplier Khusus Kategori/Slot Ini"
+                              >
+                                <span>⚡</span> {slotMult > 1.0 ? `${slotMult}x` : 'Set Multiplier'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {isTaken && categoryAss ? (
@@ -1966,6 +2009,23 @@ export default function TaskActions({
           currentExtendedDeadline={taskExtendedDeadline || null}
           isOpen={showExtendModal}
           onClose={() => setShowExtendModal(false)}
+        />
+      )}
+
+      {/* Edit Slot/Task Multiplier Modal */}
+      {multiplierModalSlotId && (
+        <EditTaskMultiplierModal
+          taskId={taskId}
+          taskTitle={taskTitle || 'Tugas Workspace'}
+          taskDescription={taskDescription}
+          currentMultiplier={sparksMultiplier || 1.0}
+          initialSlotId={multiplierModalSlotId}
+          isOpen={!!multiplierModalSlotId}
+          onClose={() => setMultiplierModalSlotId(null)}
+          onSuccess={() => {
+            setMultiplierModalSlotId(null);
+            if (typeof window !== 'undefined') window.location.reload();
+          }}
         />
       )}
     </div>

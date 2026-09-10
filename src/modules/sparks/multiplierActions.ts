@@ -133,3 +133,110 @@ export async function updateCategoryMultiplierAction(category: 'DESIGN' | 'VIDEO
     message: `Sparks multiplier untuk kategori ${category} berhasil diatur ke ${validMult}x!`,
   };
 }
+
+/**
+ * Calculates the fair combined multiplier when general task multiplier and slot-specific multiplier exist
+ * Formula: M_effective = M_task + (M_slot - 1.0)
+ */
+export function calculateEffectiveSparksMultiplier(
+  customTaskMult: number = 1.0,
+  slotMult: number = 1.0,
+  categoryMult: number = 1.0
+): number {
+  const baseTask = customTaskMult !== 1.0 ? customTaskMult : categoryMult;
+  if (slotMult > 1.0) {
+    if (baseTask > 1.0) {
+      // Fair Additive Boost: Base Task Multiplier + (Slot Bonus)
+      return Math.round((baseTask + (slotMult - 1.0)) * 100) / 100;
+    }
+    return slotMult;
+  }
+  return baseTask;
+}
+
+/** Update sparks multiplier for a specific Direct Brief slot / category output */
+export async function updateSlotSparksMultiplierAction(
+  taskId: string,
+  slotIdOrName: string,
+  multiplier: number
+) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  if (!(await canManageMultipliers(session.userId))) {
+    return { success: false, error: 'Forbidden: Hanya Koordinator atau Admin yang dapat mengatur multiplier Sparks.' };
+  }
+
+  const validMult = Math.max(0.5, Math.min(10.0, Number(multiplier) || 1.0));
+  const db = await getDB();
+
+  const task = await db
+    .prepare('SELECT id, workspace_id, description FROM tasks WHERE id = ?')
+    .bind(taskId)
+    .first() as { id: string; workspace_id: string | null; description: string | null } | null;
+
+  if (!task) return { success: false, error: 'Tugas tidak ditemukan.' };
+
+  const rawDesc = task.description || '';
+  const match = rawDesc.match(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]/);
+  if (!match || !match[1]) {
+    return { success: false, error: 'Tugas ini tidak memiliki slot Direct Brief.' };
+  }
+
+  let slots: any[] = [];
+  try {
+    slots = JSON.parse(match[1]);
+  } catch {
+    return { success: false, error: 'Format slot Direct Brief tidak valid.' };
+  }
+
+  let slotFound = false;
+  const updatedSlots = slots.map((s, idx) => {
+    const slotId = s.id || `slot_${idx + 1}`;
+    const slotName = typeof s === 'string' ? s : s.name;
+    const isTarget = slotId === slotIdOrName || (slotName && slotName.trim().toLowerCase() === slotIdOrName.trim().toLowerCase());
+
+    if (isTarget) {
+      slotFound = true;
+      if (typeof s === 'string') {
+        return {
+          id: slotId,
+          name: slotName,
+          sparksMultiplier: validMult > 1.0 ? validMult : null,
+        };
+      }
+      return {
+        ...s,
+        sparksMultiplier: validMult > 1.0 ? validMult : null,
+      };
+    }
+    return s;
+  });
+
+  if (!slotFound) {
+    return { success: false, error: `Slot "${slotIdOrName}" tidak ditemukan pada tugas ini.` };
+  }
+
+  const newCategoriesTag = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(updatedSlots)}]`;
+  const newDescription = rawDesc.replace(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]/, newCategoriesTag);
+
+  await db
+    .prepare('UPDATE tasks SET description = ? WHERE id = ?')
+    .bind(newDescription, taskId)
+    .run();
+
+  if (task.workspace_id) {
+    revalidatePath(`/dashboard/workspace/${task.workspace_id}`);
+  }
+  revalidatePath('/dashboard/workspace');
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/sparks');
+  revalidatePath('/dashboard/review');
+
+  return {
+    success: true,
+    multiplier: validMult,
+    message: `Multiplier slot "${slotIdOrName}" berhasil diatur ke ${validMult}x!`,
+  };
+}
+
