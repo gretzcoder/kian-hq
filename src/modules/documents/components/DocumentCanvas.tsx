@@ -3,8 +3,10 @@
 import React, { useRef, useState, useEffect } from 'react';
 import {
   AssigneeRow,
+  CustomKopTextElement,
   KopSuratConfig,
   OrganizationSnapshot,
+  SignatureStampConfig,
   TemplateLayoutConfig,
 } from '../documentTypes';
 import { DEFAULT_ORGANIZATION_PROFILE } from '../defaultTemplates';
@@ -22,9 +24,10 @@ interface DocumentCanvasProps {
   className?: string;
   previewMode?: boolean;
   isBuilderInteractive?: boolean;
-  selectedKopElement?: 'logo' | 'tagline' | 'titleBlock' | 'flowLimit' | null;
-  onSelectKopElement?: (elem: 'logo' | 'tagline' | 'titleBlock' | 'flowLimit' | null) => void;
+  selectedKopElement?: string | null;
+  onSelectKopElement?: (elemId: string | null) => void;
   onKopConfigChange?: (newKop: KopSuratConfig) => void;
+  onSignatureConfigChange?: (newSig: SignatureStampConfig) => void;
 }
 
 // Decorative Corner Shapes SVG
@@ -77,6 +80,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
   selectedKopElement = null,
   onSelectKopElement,
   onKopConfigChange,
+  onSignatureConfigChange,
 }) => {
   const assignees: AssigneeRow[] = Array.isArray(formData.assignees)
     ? formData.assignees
@@ -109,6 +113,20 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
       titleFontSizePt: 13,
       numberFontSizePt: 10,
     },
+    customTexts: [],
+  };
+
+  const sigConfig: SignatureStampConfig = layoutConfig?.signatureConfig || {
+    align: 'right',
+    showStamp: true,
+    stampScale: 1,
+    stampOffsetX: -12,
+    stampOffsetY: 0,
+    stampOpacity: 0.85,
+    stampRotation: 0,
+    signatureScale: 1,
+    signatureOffsetX: 0,
+    signatureOffsetY: 0,
   };
 
   const threshold = layoutConfig?.annexThresholdRows ?? 4;
@@ -152,17 +170,21 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
     'Program Director Kian Troopers';
   const signatoryName =
     formData.signatory_name || signatory?.name || 'Mohamad Abi';
-  const showStamp = formData.show_stamp !== false;
+  const showStamp = (formData.show_stamp !== false) && sigConfig.showStamp;
 
   const ccList: string[] = Array.isArray(formData.cc_list)
     ? formData.cc_list
     : ['1. CEO', '2. CBO', '3. Ybs'];
 
+  // Global typography
+  const baseFontFamily = layoutConfig?.fontFamily || 'Times New Roman, Times, serif';
+  const baseFontSize = layoutConfig?.fontSizeBasePt ? `${layoutConfig.fontSizeBasePt}pt` : '10.5pt';
+  const tableFontFamily = layoutConfig?.tableFontFamily || baseFontFamily;
+  const tableFontSize = layoutConfig?.tableFontSizePt ? `${layoutConfig.tableFontSizePt}pt` : '9.5pt';
+
   // Drag-and-drop state inside interactive builder
   const canvasRef = useRef<HTMLDivElement>(null);
-  const [draggingTarget, setDraggingTarget] = useState<
-    'logo' | 'tagline' | 'titleBlock' | 'flowLimit' | null
-  >(null);
+  const [draggingTarget, setDraggingTarget] = useState<string | null>(null);
   const [dragStartPos, setDragStartPos] = useState<{
     mouseX: number;
     mouseY: number;
@@ -172,29 +194,37 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
   const handleStartDrag = (
     e: React.MouseEvent,
-    target: 'logo' | 'tagline' | 'titleBlock' | 'flowLimit'
+    targetId: string
   ) => {
     if (!isBuilderInteractive || !onKopConfigChange) return;
     e.stopPropagation();
     e.preventDefault();
 
-    if (onSelectKopElement) onSelectKopElement(target);
-    setDraggingTarget(target);
+    if (onSelectKopElement) onSelectKopElement(targetId);
+    setDraggingTarget(targetId);
 
     let initialX = 0;
     let initialY = 0;
-    if (target === 'logo') {
+
+    if (targetId === 'logo') {
       initialX = kop.logo.x;
       initialY = kop.logo.y;
-    } else if (target === 'tagline') {
+    } else if (targetId === 'tagline') {
       initialX = kop.tagline.x;
       initialY = kop.tagline.y;
-    } else if (target === 'titleBlock') {
+    } else if (targetId === 'titleBlock') {
       initialX = kop.titleBlock.x;
       initialY = kop.titleBlock.y;
-    } else if (target === 'flowLimit') {
+    } else if (targetId === 'flowLimit') {
       initialX = 0;
       initialY = kop.kopHeightPx;
+    } else if (targetId.startsWith('customText_')) {
+      const cId = targetId.replace('customText_', '');
+      const item = (kop.customTexts || []).find((c) => c.id === cId);
+      if (item) {
+        initialX = item.x;
+        initialY = item.y;
+      }
     }
 
     setDragStartPos({
@@ -239,6 +269,22 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           ...kop,
           kopHeightPx: nextH,
         });
+      } else if (draggingTarget.startsWith('customText_')) {
+        const cId = draggingTarget.replace('customText_', '');
+        const updatedList = (kop.customTexts || []).map((item) => {
+          if (item.id === cId) {
+            return {
+              ...item,
+              x: Math.max(0, Math.min(700, dragStartPos.origX + deltaX)),
+              y: Math.max(0, Math.min(1000, dragStartPos.origY + deltaY)),
+            };
+          }
+          return item;
+        });
+        onKopConfigChange({
+          ...kop,
+          customTexts: updatedList,
+        });
       }
     };
 
@@ -264,6 +310,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
   return (
     <div
       className={`flex flex-col items-center gap-8 print:gap-0 select-text ${className}`}
+      style={{ fontFamily: baseFontFamily }}
     >
       {/* ======================================================== */}
       {/* PAGE 1: SURAT UTAMA                                      */}
@@ -277,11 +324,12 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           minHeight: '1123px', // Standard A4 height @ 96 DPI (297mm)
           height: '1123px',
           padding: '48px 56px 42px 56px',
-          fontFamily: "'Times New Roman', Times, serif",
+          fontFamily: baseFontFamily,
+          fontSize: baseFontSize,
           boxSizing: 'border-box',
         }}
       >
-        {/* Frame Background Layer: Custom uploaded image or Default crisp vector frame */}
+        {/* Frame Background Layer */}
         {hasCustomFrame ? (
           <img
             src={kop.frameAssetUrl}
@@ -298,7 +346,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
         )}
 
         {/* ======================================================== */}
-        {/* KOP SURAT LAYER (ABSOLUTE POSITIONED & CUSTOMIZABLE)     */}
+        {/* KOP SURAT LAYER (ABSOLUTE POSITIONED & DRAGGABLE)        */}
         {/* ======================================================== */}
         <div className="absolute inset-x-0 top-0 pointer-events-auto z-10">
           {/* 1. LOGO ELEMENT */}
@@ -356,8 +404,9 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 left: `${kop.tagline.x}px`,
                 top: `${kop.tagline.y}px`,
                 fontSize: `${kop.tagline.fontSizePt}pt`,
+                fontFamily: kop.tagline.fontFamily || 'Arial, sans-serif',
+                fontWeight: kop.tagline.fontWeight || '500',
                 color: kop.tagline.color || '#4B5563',
-                fontFamily: 'Arial, sans-serif',
               }}
             >
               <span className="select-none tracking-tight font-medium">
@@ -390,6 +439,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 top: `${kop.titleBlock.y}px`,
                 width: `${kop.titleBlock.width}px`,
                 textAlign: kop.titleBlock.align || 'center',
+                fontFamily: kop.titleBlock.fontFamily || baseFontFamily,
               }}
             >
               <h1
@@ -412,7 +462,46 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
             </div>
           )}
 
-          {/* 4. VISUAL FLOW START LIMIT GUIDE (IN BUILDER MODE ONLY) */}
+          {/* 4. CUSTOM ADDED TEXT ELEMENTS (Alamat, Website, Kontak, dll.) */}
+          {(kop.customTexts || []).map((ct) => (
+            <div
+              key={ct.id}
+              onMouseDown={(e) => handleStartDrag(e, `customText_${ct.id}`)}
+              onClick={() => onSelectKopElement && onSelectKopElement(`customText_${ct.id}`)}
+              className={`absolute transition-shadow duration-150 ${
+                isBuilderInteractive
+                  ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-500 rounded px-1'
+                  : ''
+              } ${
+                isBuilderInteractive && selectedKopElement === `customText_${ct.id}`
+                  ? 'ring-2 ring-purple-600 bg-purple-500/10 shadow-lg'
+                  : ''
+              }`}
+              style={{
+                left: `${ct.x}px`,
+                top: `${ct.y}px`,
+                width: ct.width ? `${ct.width}px` : 'auto',
+                fontSize: `${ct.fontSizePt}pt`,
+                fontFamily: ct.fontFamily || baseFontFamily,
+                fontWeight: ct.fontWeight || 'normal',
+                color: ct.color || '#333333',
+                textAlign: ct.align || 'left',
+                fontStyle: ct.isItalic ? 'italic' : 'normal',
+                textDecoration: ct.isUnderline ? 'underline' : 'none',
+              }}
+            >
+              <span className="select-none whitespace-pre-wrap leading-tight">
+                {ct.text}
+              </span>
+              {isBuilderInteractive && (
+                <span className="absolute -top-3.5 -left-1 text-[8px] bg-indigo-600 text-white font-mono font-bold px-1 rounded">
+                  {ct.name || 'Custom Teks'} (Drag)
+                </span>
+              )}
+            </div>
+          ))}
+
+          {/* 5. VISUAL FLOW START LIMIT GUIDE (IN BUILDER MODE ONLY) */}
           {isBuilderInteractive && (
             <div
               onMouseDown={(e) => handleStartDrag(e, 'flowLimit')}
@@ -436,17 +525,21 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           className="relative z-10 flex flex-col flex-1"
           style={{
             marginTop: `${Math.max(120, kop.kopHeightPx - 48)}px`,
+            fontSize: baseFontSize,
           }}
         >
           {/* Opening Intro Text */}
-          <div className="text-xs leading-relaxed text-zinc-900 mb-3 text-justify">
+          <div className="leading-relaxed text-zinc-900 mb-3 text-justify">
             <p>{introText}</p>
           </div>
 
           {/* Assignee Section: Inline Table or Multi-Page Lampiran Pointer */}
           {!isMultiPageAnnex ? (
             <div className="mb-4">
-              <table className="w-full border-collapse border border-zinc-800 text-xs text-zinc-900 bg-white/90">
+              <table
+                className="w-full border-collapse border border-zinc-800 text-zinc-900 bg-white/90"
+                style={{ fontFamily: tableFontFamily, fontSize: tableFontSize }}
+              >
                 <thead>
                   <tr className="bg-zinc-100/70">
                     <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">
@@ -495,9 +588,9 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           )}
 
           {/* Event Details */}
-          <div className="text-xs leading-relaxed text-zinc-900 mb-3">
+          <div className="leading-relaxed text-zinc-900 mb-3">
             <p className="mb-1.5 text-justify">{eventIntro}</p>
-            <div className="grid grid-cols-[80px_12px_1fr] gap-y-1 pl-6 text-xs">
+            <div className="grid grid-cols-[80px_12px_1fr] gap-y-1 pl-6">
               <span className="font-normal">Hari</span>
               <span>:</span>
               <span className="font-medium">{eventDays}</span>
@@ -513,118 +606,153 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           </div>
 
           {/* Closing Text */}
-          <div className="text-xs leading-relaxed text-zinc-900 mb-4 text-justify">
+          <div className="leading-relaxed text-zinc-900 mb-3 text-justify">
             <p>{closingText}</p>
           </div>
 
-          {/* Signature Block (Right Aligned) */}
-          <div className="flex justify-end mt-2 mb-2 pr-4">
-            <div className="flex flex-col items-center text-center w-64">
-              <p className="text-xs text-zinc-900">{docDatePlace}</p>
-              <p className="text-xs font-normal text-zinc-900 mb-2">
-                {signatoryPos}
-              </p>
+          {/* Signature & Tembusan Section (Clean layout that never overlaps bottom corner graphics!) */}
+          <div className="mt-2 mb-2">
+            {/* Signature Block */}
+            <div
+              className={`flex pr-4 mb-2 ${
+                sigConfig.align === 'center'
+                  ? 'justify-center'
+                  : sigConfig.align === 'left'
+                  ? 'justify-start'
+                  : 'justify-end'
+              }`}
+            >
+              <div className="flex flex-col items-center text-center w-64">
+                <p className="text-zinc-900">{docDatePlace}</p>
+                <p className="font-normal text-zinc-900 mb-1">
+                  {signatoryPos}
+                </p>
 
-              {/* Signature Graphic & Stamp Overlay */}
-              <div className="relative w-48 h-20 flex items-center justify-center my-1">
-                {/* Stamp / Cap overlay */}
-                {showStamp && (
-                  <div className="absolute -left-2 top-0 w-24 h-24 pointer-events-none opacity-85 z-10">
-                    <svg viewBox="0 0 100 100" className="w-full h-full">
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="45"
-                        stroke="#0066CC"
-                        strokeWidth="2.5"
-                        fill="none"
-                        strokeDasharray="4 2"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="38"
-                        stroke="#0066CC"
-                        strokeWidth="1.5"
-                        fill="none"
-                      />
-                      <text
-                        x="50"
-                        y="34"
-                        textAnchor="middle"
-                        fill="#0066CC"
-                        fontSize="7"
-                        fontWeight="900"
-                        letterSpacing="1"
-                      >
-                        KIAN TROOPERS
-                      </text>
-                      <text
-                        x="50"
-                        y="52"
-                        textAnchor="middle"
-                        fill="#002B7F"
-                        fontSize="12"
-                        fontWeight="900"
-                      >
-                        ★ KIAN ★
-                      </text>
-                      <text
-                        x="50"
-                        y="68"
-                        textAnchor="middle"
-                        fill="#0066CC"
-                        fontSize="6"
-                        fontWeight="bold"
-                      >
-                        INDONESIA
-                      </text>
+                {/* Signature Graphic & Stamp Overlay */}
+                <div className="relative w-48 h-20 flex items-center justify-center my-1">
+                  {/* Custom Stamp / Cap overlay */}
+                  {showStamp && (
+                    <div
+                      className="absolute pointer-events-none z-10"
+                      style={{
+                        left: `${sigConfig.stampOffsetX ?? -12}px`,
+                        top: `${sigConfig.stampOffsetY ?? 0}px`,
+                        transform: `scale(${sigConfig.stampScale ?? 1}) rotate(${sigConfig.stampRotation ?? 0}deg)`,
+                        opacity: sigConfig.stampOpacity ?? 0.85,
+                        width: '96px',
+                        height: '96px',
+                      }}
+                    >
+                      {sigConfig.stampAssetUrl ? (
+                        <img
+                          src={sigConfig.stampAssetUrl}
+                          alt="Stamp"
+                          className="w-full h-full object-contain"
+                        />
+                      ) : (
+                        <svg viewBox="0 0 100 100" className="w-full h-full">
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="45"
+                            stroke="#0066CC"
+                            strokeWidth="2.5"
+                            fill="none"
+                            strokeDasharray="4 2"
+                          />
+                          <circle
+                            cx="50"
+                            cy="50"
+                            r="38"
+                            stroke="#0066CC"
+                            strokeWidth="1.5"
+                            fill="none"
+                          />
+                          <text
+                            x="50"
+                            y="34"
+                            textAnchor="middle"
+                            fill="#0066CC"
+                            fontSize="7"
+                            fontWeight="900"
+                            letterSpacing="1"
+                          >
+                            KIAN TROOPERS
+                          </text>
+                          <text
+                            x="50"
+                            y="52"
+                            textAnchor="middle"
+                            fill="#002B7F"
+                            fontSize="12"
+                            fontWeight="900"
+                          >
+                            ★ KIAN ★
+                          </text>
+                          <text
+                            x="50"
+                            y="68"
+                            textAnchor="middle"
+                            fill="#0066CC"
+                            fontSize="6"
+                            fontWeight="bold"
+                          >
+                            INDONESIA
+                          </text>
+                        </svg>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Hand Signature Graphic */}
+                  {sigConfig.signatureAssetUrl || signatory?.signature_url ? (
+                    <img
+                      src={sigConfig.signatureAssetUrl || signatory?.signature_url || ''}
+                      alt="Signature"
+                      className="max-h-16 object-contain z-20"
+                      style={{
+                        transform: `scale(${sigConfig.signatureScale ?? 1})`,
+                      }}
+                    />
+                  ) : (
+                    <svg
+                      viewBox="0 0 200 80"
+                      className="w-40 h-16 text-zinc-900 z-20 stroke-current fill-none"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      style={{
+                        transform: `scale(${sigConfig.signatureScale ?? 1})`,
+                      }}
+                    >
+                      <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40 M 60 45 Q 110 50 170 38" />
                     </svg>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* Hand Signature Graphic */}
-                {signatory?.signature_url ? (
-                  <img
-                    src={signatory.signature_url}
-                    alt="Signature"
-                    className="max-h-16 object-contain z-20"
-                  />
-                ) : (
-                  <svg
-                    viewBox="0 0 200 80"
-                    className="w-40 h-16 text-zinc-900 z-20 stroke-current fill-none"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40 M 60 45 Q 110 50 170 38" />
-                  </svg>
-                )}
+                <p className="font-bold text-zinc-950 underline mt-1">
+                  {signatoryName}
+                </p>
               </div>
-
-              <p className="text-xs font-bold text-zinc-950 underline mt-1">
-                {signatoryName}
-              </p>
             </div>
+
+            {/* FIXED TEMBUSAN: Placed with safe left padding (pl-8) and minimum bottom clearance so it NEVER collides with bottom-left graphics */}
+            {ccList.length > 0 && (
+              <div className="pt-2 pl-8 text-[10.5px] text-zinc-800 max-w-[360px]">
+                <p className="font-bold mb-0.5">Tembusan :</p>
+                <ul className="space-y-0.5 pl-1">
+                  {ccList.map((item, idx) => (
+                    <li key={idx}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-
-          {/* Tembusan List (Bottom Left) */}
-          {ccList.length > 0 && (
-            <div className="mt-auto pt-2 pl-2 text-[11px] text-zinc-800">
-              <p className="font-bold mb-0.5">Tembusan :</p>
-              <ul className="space-y-0.5 pl-1">
-                {ccList.map((item, idx) => (
-                  <li key={idx}>{item}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
 
-        {/* Fixed Bottom Footer */}
+        {/* Fixed Bottom Footer (Only rendered when not using custom background frame) */}
         {!hasCustomFrame && (
-          <div className="relative z-10 pt-3 border-t border-zinc-200 mt-3 flex items-end justify-between text-[8.5px] leading-tight text-zinc-600 font-sans">
+          <div className="relative z-10 pt-3 border-t border-zinc-200 mt-2 flex items-end justify-between text-[8.5px] leading-tight text-zinc-600 font-sans">
             <div className="max-w-[420px]">
               <p>{organization.address_line_1}</p>
               <p>{organization.address_line_2}</p>
@@ -664,7 +792,8 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 minHeight: '1123px',
                 height: '1123px',
                 padding: '48px 56px 42px 56px',
-                fontFamily: "'Times New Roman', Times, serif",
+                fontFamily: baseFontFamily,
+                fontSize: baseFontSize,
                 boxSizing: 'border-box',
               }}
             >
@@ -708,7 +837,10 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
                 {/* Full Paginated Assignee Table */}
                 <div className="mb-4">
-                  <table className="w-full border-collapse border border-zinc-800 text-xs text-zinc-900 bg-white/90">
+                  <table
+                    className="w-full border-collapse border border-zinc-800 text-zinc-900 bg-white/90"
+                    style={{ fontFamily: tableFontFamily, fontSize: tableFontSize }}
+                  >
                     <thead>
                       <tr className="bg-zinc-100">
                         <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">
@@ -754,47 +886,68 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 {isLastPage && (
                   <div className="flex justify-end mt-auto mb-2 pr-4">
                     <div className="flex flex-col items-center text-center w-64">
-                      <p className="text-xs text-zinc-900">{docDatePlace}</p>
-                      <p className="text-xs font-normal text-zinc-900 mb-1">
+                      <p className="text-zinc-900">{docDatePlace}</p>
+                      <p className="font-normal text-zinc-900 mb-1">
                         {signatoryPos}
                       </p>
 
                       <div className="relative w-44 h-16 flex items-center justify-center">
                         {showStamp && (
-                          <div className="absolute -left-2 top-0 w-20 h-20 pointer-events-none opacity-85 z-10">
-                            <svg viewBox="0 0 100 100" className="w-full h-full">
-                              <circle
-                                cx="50"
-                                cy="50"
-                                r="45"
-                                stroke="#0066CC"
-                                strokeWidth="2.5"
-                                fill="none"
-                                strokeDasharray="4 2"
+                          <div
+                            className="absolute pointer-events-none z-10"
+                            style={{
+                              left: `${sigConfig.stampOffsetX ?? -12}px`,
+                              top: `${sigConfig.stampOffsetY ?? 0}px`,
+                              transform: `scale(${sigConfig.stampScale ?? 1}) rotate(${sigConfig.stampRotation ?? 0}deg)`,
+                              opacity: sigConfig.stampOpacity ?? 0.85,
+                              width: '80px',
+                              height: '80px',
+                            }}
+                          >
+                            {sigConfig.stampAssetUrl ? (
+                              <img
+                                src={sigConfig.stampAssetUrl}
+                                alt="Stamp"
+                                className="w-full h-full object-contain"
                               />
-                              <text
-                                x="50"
-                                y="52"
-                                textAnchor="middle"
-                                fill="#002B7F"
-                                fontSize="12"
-                                fontWeight="900"
-                              >
-                                ★ KIAN ★
-                              </text>
-                            </svg>
+                            ) : (
+                              <svg viewBox="0 0 100 100" className="w-full h-full">
+                                <circle
+                                  cx="50"
+                                  cy="50"
+                                  r="45"
+                                  stroke="#0066CC"
+                                  strokeWidth="2.5"
+                                  fill="none"
+                                  strokeDasharray="4 2"
+                                />
+                                <text
+                                  x="50"
+                                  y="52"
+                                  textAnchor="middle"
+                                  fill="#002B7F"
+                                  fontSize="12"
+                                  fontWeight="900"
+                                >
+                                  ★ KIAN ★
+                                </text>
+                              </svg>
+                            )}
                           </div>
                         )}
                         <svg
                           viewBox="0 0 200 80"
                           className="w-36 h-14 text-zinc-900 z-20 stroke-current fill-none"
                           strokeWidth="2.5"
+                          style={{
+                            transform: `scale(${sigConfig.signatureScale ?? 1})`,
+                          }}
                         >
                           <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40" />
                         </svg>
                       </div>
 
-                      <p className="text-xs font-bold text-zinc-950 underline">
+                      <p className="font-bold text-zinc-950 underline">
                         {signatoryName}
                       </p>
                     </div>

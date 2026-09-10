@@ -3,10 +3,12 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  CustomKopTextElement,
   DocumentTemplateItem,
   DocumentTypeItem,
   FormFieldSchema,
   KopSuratConfig,
+  SignatureStampConfig,
   TemplateLayoutConfig,
 } from '../documentTypes';
 import {
@@ -24,6 +26,17 @@ interface TemplateBuilderProps {
   initialTemplate?: DocumentTemplateItem | null;
   documentTypes: DocumentTypeItem[];
 }
+
+const AVAILABLE_FONTS = [
+  { label: 'Times New Roman (Klasik / Resmi)', value: "'Times New Roman', Times, serif" },
+  { label: 'Arial (Modern Sans)', value: 'Arial, sans-serif' },
+  { label: 'Helvetica (Clean)', value: 'Helvetica, Arial, sans-serif' },
+  { label: 'Georgia (Serif Elegan)', value: 'Georgia, serif' },
+  { label: 'Inter (UI Modern)', value: 'Inter, sans-serif' },
+  { label: 'Roboto (Google Standard)', value: 'Roboto, sans-serif' },
+  { label: 'Montserrat (Geometric)', value: 'Montserrat, sans-serif' },
+  { label: 'Courier New (Monospace / Ketik)', value: "'Courier New', Courier, monospace" },
+];
 
 export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
   initialTemplate,
@@ -54,8 +67,8 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     initialTemplate?.sample_data || defaultValues
   );
 
-  const [activeTab, setActiveTab] = useState<'INFO' | 'KOP_SURAT' | 'LAYOUT' | 'DEFAULTS'>('KOP_SURAT');
-  const [selectedKopElement, setSelectedKopElement] = useState<'logo' | 'tagline' | 'titleBlock' | 'flowLimit' | null>('logo');
+  const [activeTab, setActiveTab] = useState<'KOP_SURAT' | 'TYPOGRAPHY' | 'SIGNATURE' | 'INFO' | 'LAYOUT' | 'DEFAULTS'>('KOP_SURAT');
+  const [selectedKopElement, setSelectedKopElement] = useState<string | null>('logo');
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -87,12 +100,33 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
       titleFontSizePt: 13,
       numberFontSizePt: 10,
     },
+    customTexts: [],
+  };
+
+  const sigConfig: SignatureStampConfig = layoutConfig.signatureConfig || {
+    align: 'right',
+    showStamp: true,
+    stampScale: 1,
+    stampOffsetX: -12,
+    stampOffsetY: 0,
+    stampOpacity: 0.85,
+    stampRotation: 0,
+    signatureScale: 1,
+    signatureOffsetX: 0,
+    signatureOffsetY: 0,
   };
 
   const handleKopChange = (newKop: KopSuratConfig) => {
     setLayoutConfig((prev) => ({
       ...prev,
       kopConfig: newKop,
+    }));
+  };
+
+  const handleSigChange = (newSig: SignatureStampConfig) => {
+    setLayoutConfig((prev) => ({
+      ...prev,
+      signatureConfig: newSig,
     }));
   };
 
@@ -141,6 +175,86 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     reader.readAsDataURL(file);
   };
 
+  // Upload custom stamp PNG
+  const handleUploadStamp = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      handleSigChange({
+        ...sigConfig,
+        stampAssetUrl: base64,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Upload custom signature PNG
+  const handleUploadSignature = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      handleSigChange({
+        ...sigConfig,
+        signatureAssetUrl: base64,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Custom Text element handlers for Kop Surat (Website, Alamat, No SK, etc.)
+  const handleAddCustomText = () => {
+    const newId = `ct_${Date.now()}`;
+    const newCustomText: CustomKopTextElement = {
+      id: newId,
+      name: 'Teks Baru (Alamat / Website)',
+      text: 'www.kianorganizer.com | Jl. Dewi Sartika No.289, Jakarta',
+      x: 56,
+      y: Math.min(kopConfig.kopHeightPx - 25, 115),
+      fontSizePt: 8.5,
+      fontFamily: layoutConfig.fontFamily || 'Arial, sans-serif',
+      color: '#4B5563',
+      align: 'left',
+      fontWeight: 'normal',
+    };
+
+    const updatedList = [...(kopConfig.customTexts || []), newCustomText];
+    handleKopChange({
+      ...kopConfig,
+      customTexts: updatedList,
+    });
+    setSelectedKopElement(`customText_${newId}`);
+  };
+
+  const handleUpdateCustomText = (id: string, updates: Partial<CustomKopTextElement>) => {
+    const updatedList = (kopConfig.customTexts || []).map((item) => {
+      if (item.id === id) {
+        return { ...item, ...updates };
+      }
+      return item;
+    });
+    handleKopChange({
+      ...kopConfig,
+      customTexts: updatedList,
+    });
+  };
+
+  const handleDeleteCustomText = (id: string) => {
+    const updatedList = (kopConfig.customTexts || []).filter((item) => item.id !== id);
+    handleKopChange({
+      ...kopConfig,
+      customTexts: updatedList,
+    });
+    if (selectedKopElement === `customText_${id}`) {
+      setSelectedKopElement('logo');
+    }
+  };
+
   const handleResetKopLayout = () => {
     if (!confirm('Kembalikan posisi Kop Surat ke default standar KIAN?')) return;
     handleKopChange({
@@ -171,6 +285,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
         titleFontSizePt: 13,
         numberFontSizePt: 10,
       },
+      customTexts: [],
     });
   };
 
@@ -253,7 +368,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
             {isEditing
               ? `Versi saat ini: v${initialTemplate?.current_version} • Perubahan disimpan sebagai versi baru tanpa merusak dokumen lama.`
-              : 'Upload frame, custom logo & posisi kop surat secara bebas dengan drag & drop.'}
+              : 'Atur frame, custom logo, teks kop surat (alamat/web), font family, font size, stempel & tanda tangan.'}
           </p>
         </div>
 
@@ -305,10 +420,12 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           {/* Tab Selector */}
           <div className="flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl overflow-x-auto">
             {[
-              { id: 'KOP_SURAT', label: '📐 Kop & Frame' },
-              { id: 'INFO', label: '1. Info' },
-              { id: 'LAYOUT', label: '2. Lampiran' },
-              { id: 'DEFAULTS', label: '3. Konten' },
+              { id: 'KOP_SURAT', label: '📐 Kop & Teks' },
+              { id: 'TYPOGRAPHY', label: '🔤 Font & Ukuran' },
+              { id: 'SIGNATURE', label: '🖋️ TTD & Cap' },
+              { id: 'INFO', label: 'ℹ️ Info' },
+              { id: 'LAYOUT', label: '📄 Lampiran' },
+              { id: 'DEFAULTS', label: '📝 Default' },
             ].map((t) => (
               <button
                 key={t.id}
@@ -325,11 +442,11 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
             ))}
           </div>
 
-          {/* TAB: KOP SURAT & FRAME DESIGNER */}
+          {/* TAB 1: KOP SURAT & CUSTOM TEXTS */}
           {activeTab === 'KOP_SURAT' && (
             <div className="space-y-4">
               <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 rounded-xl text-[11px] text-purple-700 dark:text-purple-300">
-                ✨ <strong>Drag &amp; Drop Kop Surat Aktif:</strong> Anda dapat langsung mengklik &amp; menggeser <strong>Logo</strong>, <strong>Tagline</strong>, <strong>Judul Surat</strong>, atau <strong>Garis Batas Mulai Isi Konten</strong> langsung pada Canvas A4 di sebelah kanan!
+                ✨ <strong>Drag &amp; Drop Interaktif:</strong> Klik &amp; geser <strong>Logo</strong>, <strong>Judul Surat</strong>, atau <strong>Teks Tambahan</strong> langsung pada Canvas A4 di sebelah kanan!
               </div>
 
               {/* 1. Upload Custom Frame Background */}
@@ -355,16 +472,6 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                   onChange={handleUploadFrame}
                   className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer"
                 />
-
-                {kopConfig.frameAssetUrl ? (
-                  <div className="flex items-center gap-2 pt-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                    <span>✓ Frame gambar custom aktif</span>
-                  </div>
-                ) : (
-                  <p className="text-[10px] text-zinc-400">
-                    Gunakan frame vector bawaan KIAN Troopers, atau upload background PNG format A4 Anda sendiri.
-                  </p>
-                )}
               </div>
 
               {/* 2. Upload Custom Logo */}
@@ -397,11 +504,122 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                 />
               </div>
 
-              {/* 3. Kop Elements Coordinate Inspector */}
+              {/* 3. ADD CUSTOM TEXT BLOCKS (ALAMAT, WEBSITE, NO TELP, DLL) */}
+              <div className="p-3.5 bg-indigo-50/50 dark:bg-indigo-950/30 rounded-xl border border-indigo-200 dark:border-indigo-800/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                      <span>🏷️</span> Teks Tambahan Kop (Alamat, Web, dsb.)
+                    </label>
+                    <p className="text-[10px] text-indigo-600/80 dark:text-indigo-300/80">
+                      Tambahkan teks bebas yang bisa digeser dan diatur ukurannya.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddCustomText}
+                    className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] transition-all shadow-xs"
+                  >
+                    + Tambah Teks
+                  </button>
+                </div>
+
+                {/* Custom texts list */}
+                <div className="space-y-2.5">
+                  {(kopConfig.customTexts || []).length === 0 ? (
+                    <p className="text-[10px] text-zinc-400 italic text-center py-2">
+                      Belum ada teks tambahan. Klik &quot;+ Tambah Teks&quot; untuk menambahkan website/alamat perusahaan.
+                    </p>
+                  ) : (
+                    (kopConfig.customTexts || []).map((ct, idx) => (
+                      <div
+                        key={ct.id}
+                        onClick={() => setSelectedKopElement(`customText_${ct.id}`)}
+                        className={`p-3 rounded-xl border transition-all ${
+                          selectedKopElement === `customText_${ct.id}`
+                            ? 'border-indigo-500 bg-white dark:bg-zinc-900 ring-2 ring-indigo-500/30'
+                            : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <input
+                            type="text"
+                            value={ct.name}
+                            onChange={(e) => handleUpdateCustomText(ct.id, { name: e.target.value })}
+                            className="text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-transparent border-0 p-0 focus:ring-0"
+                            placeholder="Label (contoh: Alamat)"
+                          />
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono text-zinc-400">
+                              X:{ct.x} Y:{ct.y}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteCustomText(ct.id);
+                              }}
+                              className="text-red-500 hover:text-red-700 text-xs font-bold p-0.5"
+                              title="Hapus Teks Ini"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        </div>
+
+                        <textarea
+                          value={ct.text}
+                          onChange={(e) => handleUpdateCustomText(ct.id, { text: e.target.value })}
+                          rows={2}
+                          placeholder="Ketik isi teks di sini..."
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs resize-none"
+                        />
+
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          <div>
+                            <label className="text-[9px] text-zinc-500">Ukuran (pt)</label>
+                            <input
+                              type="number"
+                              value={ct.fontSizePt}
+                              onChange={(e) => handleUpdateCustomText(ct.id, { fontSizePt: parseFloat(e.target.value) || 8.5 })}
+                              className="w-full px-2 py-1 rounded border border-zinc-200 dark:border-zinc-700 text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-500">Warna Teks</label>
+                            <input
+                              type="color"
+                              value={ct.color || '#333333'}
+                              onChange={(e) => handleUpdateCustomText(ct.id, { color: e.target.value })}
+                              className="w-full h-7 p-0.5 rounded border border-zinc-200 dark:border-zinc-700 cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-500">Font</label>
+                            <select
+                              value={ct.fontFamily || layoutConfig.fontFamily}
+                              onChange={(e) => handleUpdateCustomText(ct.id, { fontFamily: e.target.value })}
+                              className="w-full px-1.5 py-1 rounded border border-zinc-200 dark:border-zinc-700 text-[10px]"
+                            >
+                              {AVAILABLE_FONTS.map((f) => (
+                                <option key={f.value} value={f.value}>
+                                  {f.label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* 4. Kop Elements Coordinate Inspector */}
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
-                    Posisi Presisi Elemen Kop
+                    Posisi Presisi Logo &amp; Judul
                   </span>
                   <button
                     type="button"
@@ -423,7 +641,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                      1. Logo Header
+                      Logo Header
                     </span>
                     <span className="text-[10px] text-purple-600 font-mono">
                       X: {kopConfig.logo.x}px | Y: {kopConfig.logo.y}px
@@ -475,69 +693,6 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                   </div>
                 </div>
 
-                {/* TAGLINE INSPECTOR */}
-                <div
-                  onClick={() => setSelectedKopElement('tagline')}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                    selectedKopElement === 'tagline'
-                      ? 'border-purple-500 bg-purple-500/5 ring-1 ring-purple-500'
-                      : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                      2. Subtitle / Tagline
-                    </span>
-                    <span className="text-[10px] text-purple-600 font-mono">
-                      X: {kopConfig.tagline.x}px | Y: {kopConfig.tagline.y}px
-                    </span>
-                  </div>
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={kopConfig.tagline.text}
-                      onChange={(e) =>
-                        handleKopChange({
-                          ...kopConfig,
-                          tagline: { ...kopConfig.tagline, text: e.target.value },
-                        })
-                      }
-                      placeholder="Teks Tagline..."
-                      className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-zinc-500">Posisi X (px)</label>
-                        <input
-                          type="number"
-                          value={kopConfig.tagline.x}
-                          onChange={(e) =>
-                            handleKopChange({
-                              ...kopConfig,
-                              tagline: { ...kopConfig.tagline, x: parseInt(e.target.value, 10) || 0 },
-                            })
-                          }
-                          className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-zinc-500">Posisi Y (px)</label>
-                        <input
-                          type="number"
-                          value={kopConfig.tagline.y}
-                          onChange={(e) =>
-                            handleKopChange({
-                              ...kopConfig,
-                              tagline: { ...kopConfig.tagline, y: parseInt(e.target.value, 10) || 0 },
-                            })
-                          }
-                          className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
                 {/* TITLE & NUMBER INSPECTOR */}
                 <div
                   onClick={() => setSelectedKopElement('titleBlock')}
@@ -549,7 +704,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                      3. Blok Judul &amp; Nomor Surat
+                      Blok Judul &amp; Nomor Surat
                     </span>
                     <span className="text-[10px] text-purple-600 font-mono">
                       Y: {kopConfig.titleBlock.y}px
@@ -588,7 +743,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                       </select>
                     </div>
                     <div>
-                      <label className="text-[10px] text-zinc-500">Ukuran Font</label>
+                      <label className="text-[10px] text-zinc-500">Ukuran Judul (pt)</label>
                       <input
                         type="number"
                         value={kopConfig.titleBlock.titleFontSizePt}
@@ -627,15 +782,247 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                     }
                     className="w-full accent-purple-600 cursor-pointer"
                   />
-                  <p className="text-[10px] text-zinc-400">
-                    Isi surat (paragraf, tabel petugas, rincian event) akan otomatis mengalir di bawah batas tinggi ini.
-                  </p>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 1: BASIC INFO */}
+          {/* TAB 2: TYPOGRAPHY (FONT & UKURAN TEKS UNTUK SEMUA ELEMENT) */}
+          {activeTab === 'TYPOGRAPHY' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
+                <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
+                  Tipografi Isi Dokumen (Body Text)
+                </h3>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                    Jenis Font Utama
+                  </label>
+                  <select
+                    value={layoutConfig.fontFamily || "'Times New Roman', Times, serif"}
+                    onChange={(e) =>
+                      setLayoutConfig({
+                        ...layoutConfig,
+                        fontFamily: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-medium"
+                  >
+                    {AVAILABLE_FONTS.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      Ukuran Teks Utama (pt)
+                    </label>
+                    <input
+                      type="number"
+                      step={0.5}
+                      min={8}
+                      max={16}
+                      value={layoutConfig.fontSizeBasePt || 10.5}
+                      onChange={(e) =>
+                        setLayoutConfig({
+                          ...layoutConfig,
+                          fontSizeBasePt: parseFloat(e.target.value) || 10.5,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                      Ukuran Teks Tabel (pt)
+                    </label>
+                    <input
+                      type="number"
+                      step={0.5}
+                      min={7}
+                      max={14}
+                      value={layoutConfig.tableFontSizePt || 9.5}
+                      onChange={(e) =>
+                        setLayoutConfig({
+                          ...layoutConfig,
+                          tableFontSizePt: parseFloat(e.target.value) || 9.5,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
+                <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">
+                  Tipografi Tabel Petugas
+                </h3>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                    Jenis Font Tabel
+                  </label>
+                  <select
+                    value={layoutConfig.tableFontFamily || layoutConfig.fontFamily || "'Times New Roman', Times, serif"}
+                    onChange={(e) =>
+                      setLayoutConfig({
+                        ...layoutConfig,
+                        tableFontFamily: e.target.value,
+                      })
+                    }
+                    className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-medium"
+                  >
+                    {AVAILABLE_FONTS.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: SIGNATURE & STAMP CUSTOMIZATION */}
+          {activeTab === 'SIGNATURE' && (
+            <div className="space-y-4">
+              {/* STAMP SETTINGS */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                    <span>🔵</span> Stempel / Cap Resmi
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sigConfig.showStamp}
+                      onChange={(e) => handleSigChange({ ...sigConfig, showStamp: e.target.checked })}
+                      className="rounded text-purple-600"
+                    />
+                    <span>Aktifkan Stempel</span>
+                  </label>
+                </div>
+
+                {sigConfig.showStamp && (
+                  <>
+                    <div>
+                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                        Upload Gambar Stempel Custom (PNG transparan)
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/png, image/webp"
+                        onChange={handleUploadStamp}
+                        className="w-full text-xs mt-1 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-zinc-500">Skala Ukuran ({sigConfig.stampScale ?? 1}x)</label>
+                        <input
+                          type="range"
+                          min={0.5}
+                          max={1.8}
+                          step={0.1}
+                          value={sigConfig.stampScale ?? 1}
+                          onChange={(e) => handleSigChange({ ...sigConfig, stampScale: parseFloat(e.target.value) })}
+                          className="w-full accent-blue-600 cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500">Rotasi ({sigConfig.stampRotation ?? 0}°)</label>
+                        <input
+                          type="range"
+                          min={-30}
+                          max={30}
+                          step={2}
+                          value={sigConfig.stampRotation ?? 0}
+                          onChange={(e) => handleSigChange({ ...sigConfig, stampRotation: parseInt(e.target.value, 10) })}
+                          className="w-full accent-blue-600 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-zinc-500">Offset X ({sigConfig.stampOffsetX ?? -12}px)</label>
+                        <input
+                          type="number"
+                          value={sigConfig.stampOffsetX ?? -12}
+                          onChange={(e) => handleSigChange({ ...sigConfig, stampOffsetX: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500">Offset Y ({sigConfig.stampOffsetY ?? 0}px)</label>
+                        <input
+                          type="number"
+                          value={sigConfig.stampOffsetY ?? 0}
+                          onChange={(e) => handleSigChange({ ...sigConfig, stampOffsetY: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* SIGNATURE GRAPHIC SETTINGS */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
+                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                  <span>🖋️</span> Tanda Tangan (Signature)
+                </label>
+
+                <div>
+                  <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                    Upload Tanda Tangan PNG Transparan
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/png, image/webp"
+                    onChange={handleUploadSignature}
+                    className="w-full text-xs mt-1 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-white"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-zinc-500">Skala TTD ({sigConfig.signatureScale ?? 1}x)</label>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={1.8}
+                      step={0.1}
+                      value={sigConfig.signatureScale ?? 1}
+                      onChange={(e) => handleSigChange({ ...sigConfig, signatureScale: parseFloat(e.target.value) })}
+                      className="w-full accent-purple-600 cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-500">Posisi Blok TTD</label>
+                    <select
+                      value={sigConfig.align || 'right'}
+                      onChange={(e) => handleSigChange({ ...sigConfig, align: e.target.value as any })}
+                      className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-xs"
+                    >
+                      <option value="right">Kanan (Standar)</option>
+                      <option value="center">Tengah</option>
+                      <option value="left">Kiri</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: BASIC INFO */}
           {activeTab === 'INFO' && (
             <div className="space-y-4">
               <div className="space-y-1">
@@ -681,7 +1068,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                       onChange={() => setStatus('ACTIVE')}
                       className="text-purple-600"
                     />
-                    <span>🟢 Active (Dapat digunakan user)</span>
+                    <span>🟢 Active</span>
                   </label>
                   <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
                     <input
@@ -698,12 +1085,12 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
 
               <div className="space-y-1">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                  Deskripsi / Petunjuk Penggunaan
+                  Deskripsi / Petunjuk
                 </label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Deskripsi singkat fungsi template ini..."
+                  placeholder="Deskripsi template ini..."
                   rows={3}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-medium resize-none"
                 />
@@ -711,13 +1098,9 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
             </div>
           )}
 
-          {/* TAB 2: LAYOUT SETTINGS */}
+          {/* TAB: LAYOUT SETTINGS */}
           {activeTab === 'LAYOUT' && (
             <div className="space-y-4">
-              <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 rounded-xl text-[11px] text-purple-700 dark:text-purple-300">
-                ⚡ <strong>Hybrid Flow Layout Engine:</strong> Frame tepi dan posisi kop surat dapat Anda sesuaikan bebas, sementara tabel petugas, rincian event, penutup, dan tanda tangan mengalir secara dinamis.
-              </div>
-
               <div className="space-y-1">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
                   Ambang Batas Lampiran Otomatis (Annex Threshold)
@@ -739,30 +1122,12 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                   Jika personil &ge; {layoutConfig.annexThresholdRows ?? 4}, tabel otomatis dipindahkan ke Lampiran Halaman 2+.
                 </p>
               </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                  Ukuran Dokumen &amp; Font Dasar
-                </label>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl font-mono font-semibold text-center">
-                    A4 Portrait (210mm × 297mm)
-                  </div>
-                  <div className="p-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl font-serif text-center">
-                    Times New Roman (10.5pt)
-                  </div>
-                </div>
-              </div>
             </div>
           )}
 
-          {/* TAB 3: DEFAULT VALUES */}
+          {/* TAB: DEFAULT VALUES */}
           {activeTab === 'DEFAULTS' && (
             <div className="space-y-3">
-              <p className="text-[11px] text-zinc-500">
-                Nilai bawaan ini akan otomatis terisi saat koordinator membuat surat baru.
-              </p>
-
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400">
                   Default Judul Dokumen
@@ -850,6 +1215,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
               selectedKopElement={selectedKopElement}
               onSelectKopElement={setSelectedKopElement}
               onKopConfigChange={handleKopChange}
+              onSignatureConfigChange={handleSigChange}
             />
           </div>
         </div>

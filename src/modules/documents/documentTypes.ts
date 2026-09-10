@@ -84,6 +84,37 @@ export interface FlowSectionConfig {
   styles?: Record<string, any>;
 }
 
+export interface CustomKopTextElement {
+  id: string;
+  name: string; // e.g. "Alamat Perusahaan", "Website", "No Telp"
+  text: string;
+  x: number; // px from left
+  y: number; // px from top
+  width?: number; // px max-width
+  fontSizePt: number;
+  fontFamily?: string;
+  fontWeight?: 'normal' | 'bold' | '500' | '600' | '700' | '800';
+  color?: string;
+  align?: 'left' | 'center' | 'right';
+  isItalic?: boolean;
+  isUnderline?: boolean;
+}
+
+export interface SignatureStampConfig {
+  align: 'left' | 'center' | 'right';
+  showStamp: boolean;
+  stampAssetUrl?: string; // Custom stamp image
+  stampScale?: number; // default 1
+  stampOffsetX?: number; // px offset from signature
+  stampOffsetY?: number; // px offset
+  stampOpacity?: number; // 0.1 to 1.0
+  stampRotation?: number; // deg e.g. -5 to 15
+  signatureAssetUrl?: string; // Custom signature graphic
+  signatureScale?: number; // default 1
+  signatureOffsetX?: number;
+  signatureOffsetY?: number;
+}
+
 export interface KopSuratConfig {
   frameAssetUrl?: string; // Uploaded frame image (Base64 Data URI or static URL)
   frameOpacity?: number;
@@ -102,6 +133,8 @@ export interface KopSuratConfig {
     x: number;
     y: number;
     fontSizePt: number;
+    fontFamily?: string;
+    fontWeight?: string;
     color: string;
   };
   titleBlock: {
@@ -110,9 +143,11 @@ export interface KopSuratConfig {
     y: number; // Y offset in px
     width: number;
     align: 'left' | 'center' | 'right';
+    fontFamily?: string;
     titleFontSizePt: number;
     numberFontSizePt: number;
   };
+  customTexts?: CustomKopTextElement[]; // Custom added text elements (Alamat, Website, Kontak, dll.)
 }
 
 export interface TemplateLayoutConfig {
@@ -127,9 +162,14 @@ export interface TemplateLayoutConfig {
   frameAssetUrl?: string; // PNG Frame background
   logoAssetUrl?: string;  // Top header logo
   primaryColor?: string;
-  fontFamily?: 'Times New Roman' | 'Arial' | 'Helvetica' | 'Inter';
+  fontFamily?: string; // 'Times New Roman' | 'Arial' | 'Helvetica' | 'Inter' | 'Georgia' | 'Montserrat' | 'Roboto'
   fontSizeBasePt?: number;
+  headingFontFamily?: string;
+  titleFontSizePt?: number;
+  tableFontFamily?: string;
+  tableFontSizePt?: number;
   kopConfig?: KopSuratConfig;
+  signatureConfig?: SignatureStampConfig;
   tableColumns: TableColumnConfig[];
   flowSections: FlowSectionConfig[];
   annexThresholdRows?: number; // Rows >= threshold will be paginated as Lampiran on Page 2+
