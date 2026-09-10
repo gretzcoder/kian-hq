@@ -1213,23 +1213,35 @@ export default function TaskActions({
       const categories = directSlots.length > 0 ? directSlots.map(s => s.name) : getDirectBriefCategories(taskDescription);
 
       if (mySubmission && !showDirectForm) {
+        const canEditDirectSubmission = (mySubmission.mentor_approved !== 1) && (mySubmission.coordinator_approved !== 1) && !['APPROVED', 'DONE', 'PUBLISHED'].includes(mySubmission.status);
         return (
-          <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs mb-3">
-            <div className="flex items-center gap-2">
+          <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs mb-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center gap-1">
                 <span>✓</span> Anda Sudah Mengumpulkan Karya
               </span>
-              <span className="text-[10px] text-zinc-400 dark:text-zinc-500">
+              <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
                 ({mySubmission.status.replace('_', ' ')})
               </span>
+              {canEditDirectSubmission && (
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20 font-medium">
+                  ✏️ Link dapat diedit sebelum di-QC Mentor
+                </span>
+              )}
             </div>
-            <button
-              type="button"
-              onClick={() => setShowDirectForm(true)}
-              className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:underline bg-purple-500/10 px-3 py-1 rounded-xl border border-purple-500/20 cursor-pointer"
-            >
-              📤 Kirim Ulang (Resubmit)
-            </button>
+            {canEditDirectSubmission && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDirectForm(true);
+                  setDirectUrlInput(mySubmission.result_url || '');
+                  setSelectedDirectCategory(mySubmission.assignment_role.replace(/^Kategori:\s*/i, ''));
+                }}
+                className="text-[11px] font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 bg-purple-500/10 px-3.5 py-1.5 rounded-xl border border-purple-500/25 cursor-pointer transition-all flex items-center gap-1.5 active:scale-95"
+              >
+                <span>✏️</span> Edit / Ganti Link Karya
+              </button>
+            )}
           </div>
         );
       }
@@ -1517,41 +1529,68 @@ export default function TaskActions({
                         </div>
                       )}
 
-                      {/* Resubmit button if it's my submission and in revision/assigned status */}
-                      {isMine && ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(categoryAss.status) && (
-                        <div className="pt-1">
-                          {showSubmitMap[categoryAss.id] ? (
-                            <form onSubmit={(e) => handleSubmitResult(e, categoryAss.id)} className="flex gap-2">
-                              <input
-                                type="url"
-                                value={urlInputs[categoryAss.id] ?? ''}
-                                onChange={(e) => setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: e.target.value }))}
-                                placeholder="Paste URL Karya (Google Drive / Figma / Canva / Youtube)..."
-                                required
-                                className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
-                              />
-                              <button
-                                type="submit"
-                                disabled={loading === categoryAss.id}
-                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer font-bold"
-                              >
-                                {loading === categoryAss.id ? '...' : 'Submit'}
-                              </button>
-                            </form>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setShowSubmitMap((prev) => ({ ...prev, [categoryAss.id]: true }));
-                                setCategoryInputs((prev) => ({ ...prev, [categoryAss.id]: cat }));
-                              }}
-                              className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer"
-                            >
-                              📤 Kirim Ulang (Resubmit) untuk Kategori Ini
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      {/* Resubmit / Edit Link button if it's my submission and not yet approved by mentor */}
+                      {(() => {
+                        const canEditSlotSubmission = isMine && (categoryAss.mentor_approved !== 1) && (categoryAss.coordinator_approved !== 1) && !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(categoryAss.status);
+                        if (!canEditSlotSubmission) return null;
+
+                        return (
+                          <div className="pt-2">
+                            {showSubmitMap[categoryAss.id] ? (
+                              <form onSubmit={(e) => handleSubmitResult(e, categoryAss.id)} className="space-y-2 bg-purple-500/5 dark:bg-purple-500/10 p-3 rounded-2xl border border-purple-500/20">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-1">
+                                    <span>✏️</span> Edit Link Hasil Karya
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowSubmitMap((prev) => ({ ...prev, [categoryAss.id]: false }))}
+                                    className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer"
+                                  >
+                                    Batal
+                                  </button>
+                                </div>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="url"
+                                    value={urlInputs[categoryAss.id] ?? categoryAss.result_url ?? ''}
+                                    onChange={(e) => setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: e.target.value }))}
+                                    placeholder="Paste URL Karya (Google Drive / Figma / Canva / Youtube)..."
+                                    required
+                                    className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+                                  />
+                                  <button
+                                    type="submit"
+                                    disabled={loading === categoryAss.id}
+                                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 cursor-pointer active:scale-95 shrink-0"
+                                  >
+                                    {loading === categoryAss.id ? 'Menyimpan...' : '💾 Simpan Perubahan'}
+                                  </button>
+                                </div>
+                              </form>
+                            ) : (
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: categoryAss.result_url ?? '' }));
+                                    setShowSubmitMap((prev) => ({ ...prev, [categoryAss.id]: true }));
+                                    setCategoryInputs((prev) => ({ ...prev, [categoryAss.id]: cat }));
+                                  }}
+                                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+                                >
+                                  <span>✏️</span> {categoryAss.status === 'REVISION_REQUESTED' ? 'Kirim Ulang Hasil Revisi' : categoryAss.result_url ? 'Edit / Ganti Link Karya' : '📤 Submit Hasil Karya'}
+                                </button>
+                                {categoryAss.result_url && (
+                                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">
+                                    Link dapat diedit selama belum ada tindakan QC Mentor
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ) : (
                     /* Slot Available Form / Submit Button */
@@ -1730,37 +1769,67 @@ export default function TaskActions({
                   <SubmittedLinkPreviewer url={a.result_url} autoExpand={true} />
                 </div>
               )}
-              {isMe && ['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(a.status) && (
-                <div className="pt-1">
-                  {showSubmitMap[a.id] ? (
-                    <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="flex gap-2">
-                      <input
-                        type="url"
-                        value={urlInputs[a.id] ?? ''}
-                        onChange={(e) => setUrlInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
-                        placeholder="Paste Google Drive / Figma / Result URL..."
-                        required
-                        className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
-                      />
-                      <button
-                        type="submit"
-                        disabled={loading === a.id}
-                        className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm"
-                      >
-                        {loading === a.id ? '...' : 'Submit'}
-                      </button>
-                    </form>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowSubmitMap((prev) => ({ ...prev, [a.id]: true }))}
-                      className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98]"
-                    >
-                      {a.status === 'REVISION_REQUESTED' ? '📤 Resubmit Hasil Karya' : '📤 Submit Hasil Karya'}
-                    </button>
-                  )}
-                </div>
-              )}
+              {/* Resubmit / Edit Link for Generic Assignment */}
+              {(() => {
+                const canEditGeneric = isMe && (['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(a.status) || (['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status) && a.mentor_approved !== 1 && a.coordinator_approved !== 1));
+                if (!canEditGeneric) return null;
+
+                return (
+                  <div className="pt-2">
+                    {showSubmitMap[a.id] ? (
+                      <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="space-y-2 bg-purple-500/5 dark:bg-purple-500/10 p-3 rounded-2xl border border-purple-500/20">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-1">
+                            <span>✏️</span> Edit Link Hasil Karya
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setShowSubmitMap((prev) => ({ ...prev, [a.id]: false }))}
+                            className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            value={urlInputs[a.id] ?? a.result_url ?? ''}
+                            onChange={(e) => setUrlInputs((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                            placeholder="Paste Google Drive / Figma / Result URL..."
+                            required
+                            className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100"
+                          />
+                          <button
+                            type="submit"
+                            disabled={loading === a.id}
+                            className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 cursor-pointer active:scale-95 shrink-0"
+                          >
+                            {loading === a.id ? 'Menyimpan...' : '💾 Simpan Perubahan'}
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUrlInputs((prev) => ({ ...prev, [a.id]: a.result_url ?? '' }));
+                            setShowSubmitMap((prev) => ({ ...prev, [a.id]: true }));
+                          }}
+                          className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+                        >
+                          <span>✏️</span> {a.status === 'REVISION_REQUESTED' ? 'Kirim Ulang Hasil Revisi' : a.result_url ? 'Edit / Ganti Link Karya' : '📤 Submit Hasil Karya'}
+                        </button>
+                        {a.result_url && (
+                          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">
+                            Link dapat diedit selama belum ada tindakan QC Mentor
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {/* QC Approver Actions: Only non-submitter, and for MENTOR workspace ONLY Coordinator or Task Creator */}
               {['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status) &&
                 a.user_id !== currentUserId &&
