@@ -949,11 +949,16 @@ function EditTaskModal({
                               className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-blue-500 text-zinc-700 dark:text-zinc-300 cursor-pointer"
                             >
                               <option value="">-- Open Claim (Siapa Saja) --</option>
-                              {members.map((m) => (
-                                <option key={m.userId} value={m.userId}>
-                                  👤 {m.userName || m.userEmail || 'Anggota'}
-                                </option>
-                              ))}
+                              {members
+                                .filter((m: any) => {
+                                  const role = (m.teamRole || m.role || '').toUpperCase();
+                                  return role !== 'MENTOR' && m.userType !== 'STAFF';
+                                })
+                                .map((m) => (
+                                  <option key={m.userId} value={m.userId}>
+                                    👤 {m.userName || m.userEmail || 'Anggota'}
+                                  </option>
+                                ))}
                             </select>
                           </div>
                         )}

@@ -104,6 +104,30 @@ function groupTasksByParent(rawAssignments: any[]): GroupedTask[] {
     item.assignments.push(row);
   }
 
+  // Post-process assignments per task: clean up direct brief obsolete assignments
+  for (const task of map.values()) {
+    const isDirectBrief =
+      task.task_type === 'DIRECT_BRIEF' ||
+      task.assignments.some(
+        (a: any) => a.is_direct_brief || (!ROLE_ORDER.includes(a.assignment_role) && a.assignment_role !== 'PIC')
+      );
+
+    if (isDirectBrief) {
+      const hasCustomSlots = task.assignments.some(
+        (a) => !ROLE_ORDER.includes(a.assignment_role) && a.assignment_role !== 'PIC'
+      );
+      if (hasCustomSlots) {
+        // Filter out unsubmitted generic role assignments (e.g. 'DESIGN', 'DESIGNER')
+        task.assignments = task.assignments.filter((a) => {
+          if (ROLE_ORDER.includes(a.assignment_role) || a.assignment_role === 'DESIGN') {
+            return a.status !== 'ASSIGNED' || (a.result_url && a.result_url.trim() !== '');
+          }
+          return true;
+        });
+      }
+    }
+  }
+
   return Array.from(map.values());
 }
 

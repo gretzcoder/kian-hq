@@ -272,16 +272,21 @@ export default function CreateTaskForm({
                       className="w-full bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 text-zinc-700 dark:text-zinc-300 cursor-pointer"
                     >
                       <option value="">-- Terbuka Untuk Siapa Saja (Open Claim) --</option>
-                      {members.map((m) => {
-                        const uid = m.userId || m.id || '';
-                        const uname = m.userName || m.name || m.userEmail || 'Anggota';
-                        if (!uid) return null;
-                        return (
-                          <option key={uid} value={uid}>
-                            👤 {uname}
-                          </option>
-                        );
-                      })}
+                      {members
+                        .filter((m: any) => {
+                          const role = (m.teamRole || m.role || '').toUpperCase();
+                          return role !== 'MENTOR' && m.userType !== 'STAFF';
+                        })
+                        .map((m) => {
+                          const uid = m.userId || m.id || '';
+                          const uname = m.userName || m.name || m.userEmail || 'Anggota';
+                          if (!uid) return null;
+                          return (
+                            <option key={uid} value={uid}>
+                              👤 {uname}
+                            </option>
+                          );
+                        })}
                     </select>
                   </div>
                 </div>

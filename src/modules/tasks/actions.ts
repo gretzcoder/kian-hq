@@ -464,8 +464,10 @@ export async function createTask(workspaceId: string, formData: FormData) {
             SELECT DISTINCT u.id AS user_id
             FROM users u
             JOIN workspace_members wm ON u.id = wm.user_id
+            LEFT JOIN workspace_mentors wmen ON wmen.workspace_id = wm.workspace_id AND wmen.user_id = u.id
             WHERE wm.workspace_id = ?
-              AND wm.team_role != 'LEADER'
+              AND wmen.user_id IS NULL
+              AND wm.team_role NOT IN ('LEADER', 'MENTOR')
               AND (u.user_type IS NULL OR u.user_type != 'STAFF')
               AND u.status = 'ACTIVE'
           `)
@@ -1749,6 +1751,98 @@ export async function updateTask(taskId: string, formData: FormData) {
       `)
       .bind(deadline, startAt, taskId)
       .run();
+
+    // Sync DIRECT_BRIEF slots & cleanup unsubmitted mentor/generic assignments
+    const isDirectBrief = Boolean(
+      (description && description.includes('[DIRECT_BRIEF]')) ||
+      outputType === 'DIRECT_BRIEF'
+    );
+
+    if (isDirectBrief && description) {
+      const slots = parseSlotsFromDescription(description);
+      const assignedSlotUserIds = new Set<string>();
+
+      if (slots.length > 0) {
+        for (const slot of slots) {
+          if (slot.assignedUserId) {
+            assignedSlotUserIds.add(slot.assignedUserId);
+            const slotDeadline = slot.deadline
+              ? (parseIndonesiaDate(slot.deadline) ?? new Date(slot.deadline).getTime())
+              : deadline;
+
+            const existingAssign = (await db
+              .prepare('SELECT id, status, result_url FROM task_assignments WHERE task_id = ? AND user_id = ?')
+              .bind(taskId, slot.assignedUserId)
+              .first()) as { id: string; status: string; result_url: string | null } | null;
+
+            if (existingAssign) {
+              if (
+                existingAssign.status === 'ASSIGNED' &&
+                (!existingAssign.result_url || existingAssign.result_url.trim() === '')
+              ) {
+                await db
+                  .prepare(
+                    'UPDATE task_assignments SET assignment_role = ?, deadline = ?, start_at = ? WHERE id = ?'
+                  )
+                  .bind(slot.name, slotDeadline, startAt, existingAssign.id)
+                  .run();
+              }
+            } else {
+              const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+              await db
+                .prepare(`
+                  INSERT OR IGNORE INTO task_assignments
+                    (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+                  VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+                `)
+                .bind(assignId, taskId, slot.assignedUserId, slot.name, session.userId, slotDeadline, startAt)
+                .run();
+            }
+          }
+        }
+
+        // Cleanup: remove unsubmitted generic role assignments when custom slots exist
+        await db
+          .prepare(`
+            DELETE FROM task_assignments
+            WHERE task_id = ?
+              AND status = 'ASSIGNED'
+              AND (result_url IS NULL OR TRIM(result_url) = '')
+              AND assignment_role IN ('DESIGN', 'DESIGNER', 'VIDEO_EDITOR', 'CREATOR', 'PLANNER', 'RESEARCHER')
+          `)
+          .bind(taskId)
+          .run();
+
+        // If specific slots were assigned, remove unsubmitted assignments for users not in slots
+        if (assignedSlotUserIds.size > 0) {
+          const placeholders = Array.from(assignedSlotUserIds).map(() => '?').join(',');
+          await db
+            .prepare(`
+              DELETE FROM task_assignments
+              WHERE task_id = ?
+                AND status = 'ASSIGNED'
+                AND (result_url IS NULL OR TRIM(result_url) = '')
+                AND user_id NOT IN (${placeholders})
+            `)
+            .bind(taskId, ...Array.from(assignedSlotUserIds))
+            .run();
+        }
+      }
+
+      // Always remove unsubmitted assignments of workspace mentors on Troopers direct brief tasks
+      if (task.workspace_id) {
+        await db
+          .prepare(`
+            DELETE FROM task_assignments
+            WHERE task_id = ?
+              AND status = 'ASSIGNED'
+              AND (result_url IS NULL OR TRIM(result_url) = '')
+              AND user_id IN (SELECT user_id FROM workspace_mentors WHERE workspace_id = ?)
+          `)
+          .bind(taskId, task.workspace_id)
+          .run();
+      }
+    }
 
     if (task.workspace_id) {
       await invalidateWorkspaceTaskCache(task.workspace_id);
