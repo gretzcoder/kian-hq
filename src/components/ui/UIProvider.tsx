@@ -34,6 +34,8 @@ export function useUI() {
   return context;
 }
 
+import { VersionMismatchListener } from '@/components/VersionMismatchListener';
+
 export function UIProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [confirmState, setConfirmState] = useState<{
@@ -79,6 +81,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastContext.Provider value={{ toast, confirm }}>
+      <VersionMismatchListener />
       {children}
 
       {/* Toast Render Container */}

@@ -1,39 +1,44 @@
 /**
- * Safely executes a Next.js Server Action with fallback to API or soft page reload
- * when a stale Server Action ID error occurs due to a server deployment/rebuild.
+ * Utility to detect and handle Next.js stale Server Action hashes & chunk mismatch errors
  */
-export async function safeExecuteAction<T>(
-  actionFn: () => Promise<T>,
-  fallbackApiFn?: () => Promise<T>
+export function isServerActionMismatchError(error: any): boolean {
+  if (!error) return false;
+  const str = String(error?.message || error?.reason?.message || error?.digest || error || '');
+  return (
+    str.includes('was not found on the server') ||
+    str.includes('failed-to-find-server-action') ||
+    str.includes('Failed to find Server Action') ||
+    str.includes('Failed to fetch dynamically imported module') ||
+    str.includes('ChunkLoadError') ||
+    str.includes('Loading chunk') ||
+    str.includes('NEXT_NOT_FOUND')
+  );
+}
+
+/**
+ * Safely executes a server action with automatic reload on deployment mismatch
+ */
+export async function executeSafeAction<T>(
+  actionPromise: () => Promise<T>,
+  onErrorMessage?: (msg: string) => void
 ): Promise<T> {
   try {
-    return await actionFn();
+    return await actionPromise();
   } catch (err: any) {
-    const msg = err?.message || String(err || '');
-    const isStaleServerAction =
-      msg.includes('Server Action') ||
-      msg.includes('failed-to-find-server-action') ||
-      msg.includes('was not found on the server') ||
-      msg.includes('Failed to find Server Action');
-
-    if (isStaleServerAction) {
-      if (fallbackApiFn) {
-        try {
-          const fallbackRes = await fallbackApiFn();
-          return fallbackRes;
-        } catch {
-          // If fallback API fails too, proceed to reload
+    if (isServerActionMismatchError(err)) {
+      if (typeof window !== 'undefined') {
+        const lastReload = Number(sessionStorage.getItem('kian_last_version_reload') || '0');
+        if (Date.now() - lastReload > 5000) {
+          sessionStorage.setItem('kian_last_version_reload', String(Date.now()));
+          window.location.reload();
         }
       }
-
-      if (typeof window !== 'undefined') {
-        setTimeout(() => {
-          window.location.reload();
-        }, 1000);
-      }
-      throw new Error('Sesi server telah diperbarui. Memuat ulang halaman...');
     }
-
+    if (onErrorMessage) {
+      onErrorMessage(err?.message || 'Terjadi kesalahan sistem.');
+    }
     throw err;
   }
 }
+
+export const safeExecuteAction = executeSafeAction;

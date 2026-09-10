@@ -4,15 +4,15 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   submitResult,
-  submitDirectTaskResult,
-  deleteTask,
   approveAssignment,
   requestRevision,
   startWork,
-  updateSparks,
+  deleteTask,
   assignCreatorToTask,
   removeTaskAssignment,
-} from '../actions';
+  submitDirectTaskResult,
+} from '@/modules/tasks/actions';
+import { isServerActionMismatchError } from '@/lib/safeAction';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
@@ -327,6 +327,11 @@ export default function TaskActions({
         toast('Pengerjaan tugas dimulai!', 'success');
       }
     } catch (e: any) {
+      if (isServerActionMismatchError(e)) {
+        toast('Pembaruan sistem terdeteksi. Memuat versi terbaru...', 'info');
+        setTimeout(() => window.location.reload(), 600);
+        return;
+      }
       setErrorMap((prev) => ({ ...prev, [assignmentId]: e.message }));
       toast(e.message, 'error');
     } finally {
@@ -360,6 +365,11 @@ export default function TaskActions({
         toast(msg, 'error');
       }
     } catch (e: any) {
+      if (isServerActionMismatchError(e)) {
+        toast('Pembaruan sistem terdeteksi. Memuat versi terbaru...', 'info');
+        setTimeout(() => window.location.reload(), 600);
+        return;
+      }
       setErrorMap((prev) => ({ ...prev, [assignmentId]: e.message }));
       toast(e.message, 'error');
     } finally {
@@ -380,6 +390,11 @@ export default function TaskActions({
         toast('Persetujuan QC berhasil disimpan!', 'success');
       }
     } catch (e: any) {
+      if (isServerActionMismatchError(e)) {
+        toast('Pembaruan sistem terdeteksi. Memuat versi terbaru...', 'info');
+        setTimeout(() => window.location.reload(), 600);
+        return;
+      }
       setErrorMap((prev) => ({ ...prev, [assignmentId]: e.message }));
       toast(e.message, 'error');
     } finally {
@@ -405,6 +420,11 @@ export default function TaskActions({
         toast(msg, 'error');
       }
     } catch (e: any) {
+      if (isServerActionMismatchError(e)) {
+        toast('Pembaruan sistem terdeteksi. Memuat versi terbaru...', 'info');
+        setTimeout(() => window.location.reload(), 600);
+        return;
+      }
       setErrorMap((prev) => ({ ...prev, [assignmentId]: e.message }));
       toast(e.message, 'error');
     } finally {
@@ -552,7 +572,12 @@ export default function TaskActions({
         alert(res.error ?? 'Gagal mengirimkan hasil karya.');
       }
     } catch (err: any) {
-      alert(err.message ?? 'Terjadi kesalahan.');
+      if (isServerActionMismatchError(err)) {
+        toast('Pembaruan sistem terdeteksi. Memuat versi terbaru...', 'info');
+        setTimeout(() => window.location.reload(), 600);
+        return;
+      }
+      toast(err.message ?? 'Terjadi kesalahan.', 'error');
     } finally {
       setLoading(null);
     }
@@ -1618,6 +1643,11 @@ export default function TaskActions({
                                     toast(res.error || 'Gagal submit.', 'error');
                                   }
                                 } catch (err: any) {
+                                  if (isServerActionMismatchError(err)) {
+                                    toast('Pembaruan sistem terdeteksi. Memuat versi terbaru...', 'info');
+                                    setTimeout(() => window.location.reload(), 600);
+                                    return;
+                                  }
                                   toast(err.message || 'Terjadi kesalahan.', 'error');
                                 } finally {
                                   setLoading(null);
