@@ -560,9 +560,17 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
       let isAssignee = false;
       let assigneeRole = '';
 
+      let eventName = '';
+
       try {
         const parsedForm =
           typeof doc.form_data === 'string' ? JSON.parse(doc.form_data) : doc.form_data;
+        eventName =
+          (parsedForm?.event_name ||
+            parsedForm?.nama_event ||
+            parsedForm?.event_title ||
+            '').trim();
+
         if (Array.isArray(parsedForm?.assignees)) {
           const match = parsedForm.assignees.find((a: any) => {
             if (!a) return false;
@@ -583,20 +591,25 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
 
       // Include notification if user is an assignee, creator, or document manager
       if (isAssignee || isCreator || isDocManager) {
+        const displayEvent = eventName || doc.title || 'Penugasan';
         feedItems.push({
           id: `notif_doc_${doc.id}`,
           category: 'DOCUMENT',
           typeLabel: isAssignee ? 'Surat Tugas Masuk' : 'Dokumen Resmi',
           icon: '📑',
           title: isAssignee
-            ? `Surat Tugas Baru: ${doc.title || 'Penugasan Event'}`
-            : `Dokumen Resmi: ${doc.title || doc.document_number}`,
+            ? `Surat Tugas Baru : ${displayEvent}`
+            : `Surat Baru : ${displayEvent}`,
           subtitle: isAssignee
-            ? `No: ${doc.document_number}${assigneeRole ? ` • Peran: ${assigneeRole}` : ''} • Klik untuk lihat & download PDF`
-            : `No: ${doc.document_number} • Klik untuk melihat arsip dokumen`,
+            ? (assigneeRole
+                ? `Peran : ${assigneeRole} • Klik untuk lihat & download PDF`
+                : 'Klik untuk melihat & download PDF')
+            : (eventName && doc.title && eventName !== doc.title
+                ? `${doc.title} • Klik untuk melihat dokumen`
+                : 'Klik untuk melihat dokumen'),
           targetUrl: `/dashboard/documents/${doc.id}`,
           createdAt: Number(doc.created_at) || 0,
-          statusBadge: isAssignee ? 'PETUGAS' : (doc.type_code || 'SURAT'),
+          statusBadge: isAssignee ? (assigneeRole || 'PETUGAS') : (doc.type_code || 'SURAT'),
           color: isAssignee
             ? 'border-purple-500/30 bg-purple-500/10'
             : 'border-cyan-500/20 bg-cyan-500/5',
