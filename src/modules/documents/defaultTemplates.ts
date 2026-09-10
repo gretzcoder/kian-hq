@@ -22,9 +22,11 @@ export const DEFAULT_SURAT_TUGAS_LAYOUT: TemplateLayoutConfig = {
   paddingMm: {
     top: 14,
     bottom: 14,
-    left: 18,
-    right: 18,
+    left: 15,
+    right: 15,
   },
+  contentPaddingLeftPx: 56,
+  contentPaddingRightPx: 56,
   fontFamily: 'Times New Roman',
   fontSizeBasePt: 10.5,
   primaryColor: '#002B7F',
@@ -39,14 +41,6 @@ export const DEFAULT_SURAT_TUGAS_LAYOUT: TemplateLayoutConfig = {
       y: 44,
       width: 220,
       height: 48,
-    },
-    tagline: {
-      enabled: true,
-      text: 'Kreasi Inovasi Anak Nusantara',
-      x: 56,
-      y: 92,
-      fontSizePt: 8.5,
-      color: '#4B5563',
     },
     titleBlock: {
       enabled: true,

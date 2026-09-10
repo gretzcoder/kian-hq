@@ -83,14 +83,6 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
       width: 220,
       height: 48,
     },
-    tagline: {
-      enabled: true,
-      text: 'Kreasi Inovasi Anak Nusantara',
-      x: 56,
-      y: 92,
-      fontSizePt: 8.5,
-      color: '#4B5563',
-    },
     titleBlock: {
       enabled: true,
       x: 56,
@@ -267,14 +259,6 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
         y: 44,
         width: 220,
         height: 48,
-      },
-      tagline: {
-        enabled: true,
-        text: 'Kreasi Inovasi Anak Nusantara',
-        x: 56,
-        y: 92,
-        fontSizePt: 8.5,
-        color: '#4B5563',
       },
       titleBlock: {
         enabled: true,
@@ -512,7 +496,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                       <span>🏷️</span> Teks Tambahan Kop (Alamat, Web, dsb.)
                     </label>
                     <p className="text-[10px] text-indigo-600/80 dark:text-indigo-300/80">
-                      Tambahkan teks bebas yang bisa digeser dan diatur ukurannya.
+                      Tambahkan teks bebas yang bisa digeser, diatur lebar maksimal, dan diformat.
                     </p>
                   </div>
                   <button
@@ -525,23 +509,23 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                 </div>
 
                 {/* Custom texts list */}
-                <div className="space-y-2.5">
+                <div className="space-y-3">
                   {(kopConfig.customTexts || []).length === 0 ? (
                     <p className="text-[10px] text-zinc-400 italic text-center py-2">
                       Belum ada teks tambahan. Klik &quot;+ Tambah Teks&quot; untuk menambahkan website/alamat perusahaan.
                     </p>
                   ) : (
-                    (kopConfig.customTexts || []).map((ct, idx) => (
+                    (kopConfig.customTexts || []).map((ct) => (
                       <div
                         key={ct.id}
                         onClick={() => setSelectedKopElement(`customText_${ct.id}`)}
-                        className={`p-3 rounded-xl border transition-all ${
+                        className={`p-3 rounded-xl border transition-all space-y-2.5 ${
                           selectedKopElement === `customText_${ct.id}`
-                            ? 'border-indigo-500 bg-white dark:bg-zinc-900 ring-2 ring-indigo-500/30'
-                            : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900'
+                            ? 'border-indigo-500 bg-white dark:bg-zinc-900 ring-2 ring-indigo-500/30 shadow-md'
+                            : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between">
                           <input
                             type="text"
                             value={ct.name}
@@ -550,7 +534,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                             placeholder="Label (contoh: Alamat)"
                           />
                           <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono text-zinc-400">
+                            <span className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 rounded">
                               X:{ct.x} Y:{ct.y}
                             </span>
                             <button
@@ -572,17 +556,71 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                           onChange={(e) => handleUpdateCustomText(ct.id, { text: e.target.value })}
                           rows={2}
                           placeholder="Ketik isi teks di sini..."
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs resize-none"
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs resize-none font-sans"
                         />
 
-                        <div className="grid grid-cols-3 gap-2 mt-2">
+                        {/* Max Width Controls */}
+                        <div className="p-2 bg-zinc-50 dark:bg-zinc-800/70 rounded-lg border border-zinc-200 dark:border-zinc-700/60 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300">
+                              Maksimal Lebar Teks (Max Width)
+                            </label>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-mono font-bold text-purple-600">
+                                {ct.width ? `${ct.width} px` : 'Auto'}
+                              </span>
+                              {ct.width && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateCustomText(ct.id, { width: undefined });
+                                  }}
+                                  className="text-[9px] text-zinc-400 hover:text-zinc-700 underline"
+                                >
+                                  Reset Auto
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="range"
+                              min={100}
+                              max={680}
+                              step={10}
+                              value={ct.width || 680}
+                              onChange={(e) =>
+                                handleUpdateCustomText(ct.id, { width: parseInt(e.target.value, 10) })
+                              }
+                              className="flex-1 accent-indigo-600 cursor-pointer"
+                            />
+                            <input
+                              type="number"
+                              min={50}
+                              max={700}
+                              value={ct.width || ''}
+                              placeholder="Auto"
+                              onChange={(e) =>
+                                handleUpdateCustomText(ct.id, {
+                                  width: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                                })
+                              }
+                              className="w-16 px-1.5 py-0.5 text-right rounded border border-zinc-300 dark:border-zinc-700 text-[10px] font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Text Styling & Attributes */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                           <div>
                             <label className="text-[9px] text-zinc-500">Ukuran (pt)</label>
                             <input
                               type="number"
+                              step={0.5}
                               value={ct.fontSizePt}
                               onChange={(e) => handleUpdateCustomText(ct.id, { fontSizePt: parseFloat(e.target.value) || 8.5 })}
-                              className="w-full px-2 py-1 rounded border border-zinc-200 dark:border-zinc-700 text-xs"
+                              className="w-full px-2 py-1 rounded border border-zinc-200 dark:border-zinc-700 text-xs font-mono"
                             />
                           </div>
                           <div>
@@ -608,6 +646,55 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                               ))}
                             </select>
                           </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-500">Format</label>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateCustomText(ct.id, {
+                                    fontWeight: ct.fontWeight === 'bold' ? 'normal' : 'bold',
+                                  });
+                                }}
+                                className={`flex-1 py-1 text-[10px] font-bold rounded border transition-all ${
+                                  ct.fontWeight === 'bold'
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                                }`}
+                              >
+                                B
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateCustomText(ct.id, { isItalic: !ct.isItalic });
+                                }}
+                                className={`flex-1 py-1 text-[10px] italic font-serif rounded border transition-all ${
+                                  ct.isItalic
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                                }`}
+                              >
+                                I
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateCustomText(ct.id, { isUnderline: !ct.isUnderline });
+                                }}
+                                className={`flex-1 py-1 text-[10px] underline font-bold rounded border transition-all ${
+                                  ct.isUnderline
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'
+                                }`}
+                              >
+                                U
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -615,7 +702,82 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                 </div>
               </div>
 
-              {/* 4. Kop Elements Coordinate Inspector */}
+              {/* 4. SAFE ZONE MARGIN KIRI & KANAN KONTEN DINAMIS */}
+              <div className="p-3.5 bg-purple-50/60 dark:bg-purple-950/30 rounded-xl border border-purple-200 dark:border-purple-800/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-900 dark:text-purple-200 flex items-center gap-1.5">
+                    <span>📐</span> Margin Konten Dinamis (Safe Zone)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLayoutConfig((prev) => ({
+                        ...prev,
+                        contentPaddingLeftPx: 56,
+                        contentPaddingRightPx: 56,
+                        paddingMm: { ...prev.paddingMm, left: 15, right: 15 },
+                      }));
+                    }}
+                    className="text-[10px] text-purple-600 hover:text-purple-800 font-bold"
+                  >
+                    ↺ Reset 56px
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Left Margin */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">
+                        Margin Kiri ({layoutConfig.contentPaddingLeftPx ?? 56}px)
+                      </label>
+                    </div>
+                    <input
+                      type="range"
+                      min={10}
+                      max={120}
+                      step={2}
+                      value={layoutConfig.contentPaddingLeftPx ?? 56}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setLayoutConfig((prev) => ({
+                          ...prev,
+                          contentPaddingLeftPx: val,
+                          paddingMm: { ...prev.paddingMm, left: Math.round(val / 3.78) },
+                        }));
+                      }}
+                      className="w-full accent-purple-600 cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Right Margin */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">
+                        Margin Kanan ({layoutConfig.contentPaddingRightPx ?? 56}px)
+                      </label>
+                    </div>
+                    <input
+                      type="range"
+                      min={10}
+                      max={120}
+                      step={2}
+                      value={layoutConfig.contentPaddingRightPx ?? 56}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setLayoutConfig((prev) => ({
+                          ...prev,
+                          contentPaddingRightPx: val,
+                          paddingMm: { ...prev.paddingMm, right: Math.round(val / 3.78) },
+                        }));
+                      }}
+                      className="w-full accent-purple-600 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 5. Kop Elements Coordinate Inspector */}
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-wider">
@@ -1101,6 +1263,71 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           {/* TAB: LAYOUT SETTINGS */}
           {activeTab === 'LAYOUT' && (
             <div className="space-y-4">
+              {/* Safe Zone Margins */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                    <span>📐</span> Margin Area Cetak Safe Zone (Kiri &amp; Kanan)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLayoutConfig((prev) => ({
+                        ...prev,
+                        contentPaddingLeftPx: 56,
+                        contentPaddingRightPx: 56,
+                        paddingMm: { ...prev.paddingMm, left: 15, right: 15 },
+                      }));
+                    }}
+                    className="text-[10px] text-purple-600 hover:text-purple-800 font-bold"
+                  >
+                    ↺ Reset 56px
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-zinc-500">Margin Kiri ({layoutConfig.contentPaddingLeftPx ?? 56}px)</label>
+                    <input
+                      type="range"
+                      min={10}
+                      max={120}
+                      step={2}
+                      value={layoutConfig.contentPaddingLeftPx ?? 56}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setLayoutConfig((prev) => ({
+                          ...prev,
+                          contentPaddingLeftPx: val,
+                          paddingMm: { ...prev.paddingMm, left: Math.round(val / 3.78) },
+                        }));
+                      }}
+                      className="w-full accent-purple-600 cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-zinc-500">Margin Kanan ({layoutConfig.contentPaddingRightPx ?? 56}px)</label>
+                    <input
+                      type="range"
+                      min={10}
+                      max={120}
+                      step={2}
+                      value={layoutConfig.contentPaddingRightPx ?? 56}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setLayoutConfig((prev) => ({
+                          ...prev,
+                          contentPaddingRightPx: val,
+                          paddingMm: { ...prev.paddingMm, right: Math.round(val / 3.78) },
+                        }));
+                      }}
+                      className="w-full accent-purple-600 cursor-pointer"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-1">
                 <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
                   Ambang Batas Lampiran Otomatis (Annex Threshold)

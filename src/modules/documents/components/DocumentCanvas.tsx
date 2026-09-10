@@ -96,14 +96,6 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
       width: 220,
       height: 48,
     },
-    tagline: {
-      enabled: true,
-      text: 'Kreasi Inovasi Anak Nusantara',
-      x: 56,
-      y: 92,
-      fontSizePt: 8.5,
-      color: '#4B5563',
-    },
     titleBlock: {
       enabled: true,
       x: 56,
@@ -176,14 +168,20 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
     ? formData.cc_list
     : ['1. CEO', '2. CBO', '3. Ybs'];
 
-  // Global typography
+  // Global typography & Safe Zone margins
   const baseFontFamily = layoutConfig?.fontFamily || 'Times New Roman, Times, serif';
   const baseFontSize = layoutConfig?.fontSizeBasePt ? `${layoutConfig.fontSizeBasePt}pt` : '10.5pt';
   const tableFontFamily = layoutConfig?.tableFontFamily || baseFontFamily;
   const tableFontSize = layoutConfig?.tableFontSizePt ? `${layoutConfig.tableFontSizePt}pt` : '9.5pt';
 
+  const contentPaddingLeft = layoutConfig?.contentPaddingLeftPx ?? (layoutConfig?.paddingMm?.left ? Math.round(layoutConfig.paddingMm.left * 3.78) : 56);
+  const contentPaddingRight = layoutConfig?.contentPaddingRightPx ?? (layoutConfig?.paddingMm?.right ? Math.round(layoutConfig.paddingMm.right * 3.78) : 56);
+
   // Drag-and-drop state inside interactive builder
   const canvasRef = useRef<HTMLDivElement>(null);
+  const kopRef = useRef(kop);
+  kopRef.current = kop;
+
   const [draggingTarget, setDraggingTarget] = useState<string | null>(null);
   const [dragStartPos, setDragStartPos] = useState<{
     mouseX: number;
@@ -203,24 +201,22 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
     if (onSelectKopElement) onSelectKopElement(targetId);
     setDraggingTarget(targetId);
 
+    const currentKop = kopRef.current;
     let initialX = 0;
     let initialY = 0;
 
     if (targetId === 'logo') {
-      initialX = kop.logo.x;
-      initialY = kop.logo.y;
-    } else if (targetId === 'tagline') {
-      initialX = kop.tagline.x;
-      initialY = kop.tagline.y;
+      initialX = currentKop.logo.x;
+      initialY = currentKop.logo.y;
     } else if (targetId === 'titleBlock') {
-      initialX = kop.titleBlock.x;
-      initialY = kop.titleBlock.y;
+      initialX = currentKop.titleBlock.x;
+      initialY = currentKop.titleBlock.y;
     } else if (targetId === 'flowLimit') {
       initialX = 0;
-      initialY = kop.kopHeightPx;
+      initialY = currentKop.kopHeightPx;
     } else if (targetId.startsWith('customText_')) {
       const cId = targetId.replace('customText_', '');
-      const item = (kop.customTexts || []).find((c) => c.id === cId);
+      const item = (currentKop.customTexts || []).find((c) => c.id === cId);
       if (item) {
         initialX = item.x;
         initialY = item.y;
@@ -239,50 +235,48 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
     const handleMouseMove = (e: MouseEvent) => {
       if (!draggingTarget || !onKopConfigChange) return;
 
-      const deltaX = Math.round(e.clientX - dragStartPos.mouseX);
-      const deltaY = Math.round(e.clientY - dragStartPos.mouseY);
+      const scale = canvasRef.current
+        ? canvasRef.current.getBoundingClientRect().width / 794
+        : 1;
+
+      const deltaX = Math.round((e.clientX - dragStartPos.mouseX) / (scale || 1));
+      const deltaY = Math.round((e.clientY - dragStartPos.mouseY) / (scale || 1));
+      const currentKop = kopRef.current;
 
       if (draggingTarget === 'logo') {
-        const nextX = Math.max(10, Math.min(600, dragStartPos.origX + deltaX));
-        const nextY = Math.max(10, Math.min(300, dragStartPos.origY + deltaY));
+        const nextX = Math.max(0, Math.min(650, dragStartPos.origX + deltaX));
+        const nextY = Math.max(0, Math.min(1000, dragStartPos.origY + deltaY));
         onKopConfigChange({
-          ...kop,
-          logo: { ...kop.logo, x: nextX, y: nextY },
-        });
-      } else if (draggingTarget === 'tagline') {
-        const nextX = Math.max(10, Math.min(600, dragStartPos.origX + deltaX));
-        const nextY = Math.max(10, Math.min(300, dragStartPos.origY + deltaY));
-        onKopConfigChange({
-          ...kop,
-          tagline: { ...kop.tagline, x: nextX, y: nextY },
+          ...currentKop,
+          logo: { ...currentKop.logo, x: nextX, y: nextY },
         });
       } else if (draggingTarget === 'titleBlock') {
-        const nextX = Math.max(0, Math.min(400, dragStartPos.origX + deltaX));
-        const nextY = Math.max(40, Math.min(400, dragStartPos.origY + deltaY));
+        const nextX = Math.max(0, Math.min(500, dragStartPos.origX + deltaX));
+        const nextY = Math.max(0, Math.min(1000, dragStartPos.origY + deltaY));
         onKopConfigChange({
-          ...kop,
-          titleBlock: { ...kop.titleBlock, x: nextX, y: nextY },
+          ...currentKop,
+          titleBlock: { ...currentKop.titleBlock, x: nextX, y: nextY },
         });
       } else if (draggingTarget === 'flowLimit') {
-        const nextH = Math.max(140, Math.min(450, dragStartPos.origY + deltaY));
+        const nextH = Math.max(100, Math.min(600, dragStartPos.origY + deltaY));
         onKopConfigChange({
-          ...kop,
+          ...currentKop,
           kopHeightPx: nextH,
         });
       } else if (draggingTarget.startsWith('customText_')) {
         const cId = draggingTarget.replace('customText_', '');
-        const updatedList = (kop.customTexts || []).map((item) => {
+        const updatedList = (currentKop.customTexts || []).map((item) => {
           if (item.id === cId) {
             return {
               ...item,
-              x: Math.max(0, Math.min(700, dragStartPos.origX + deltaX)),
-              y: Math.max(0, Math.min(1000, dragStartPos.origY + deltaY)),
+              x: Math.max(0, Math.min(750, dragStartPos.origX + deltaX)),
+              y: Math.max(0, Math.min(1080, dragStartPos.origY + deltaY)),
             };
           }
           return item;
         });
         onKopConfigChange({
-          ...kop,
+          ...currentKop,
           customTexts: updatedList,
         });
       }
@@ -303,7 +297,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingTarget, dragStartPos, kop, onKopConfigChange]);
+  }, [draggingTarget, dragStartPos, onKopConfigChange]);
 
   const hasCustomFrame = Boolean(kop.frameAssetUrl && kop.frameAssetUrl.trim().length > 0);
 
@@ -323,7 +317,10 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           width: '794px', // Standard A4 width @ 96 DPI (210mm)
           minHeight: '1123px', // Standard A4 height @ 96 DPI (297mm)
           height: '1123px',
-          padding: '48px 56px 42px 56px',
+          paddingTop: '48px',
+          paddingBottom: '42px',
+          paddingLeft: `${contentPaddingLeft}px`,
+          paddingRight: `${contentPaddingRight}px`,
           fontFamily: baseFontFamily,
           fontSize: baseFontSize,
           boxSizing: 'border-box',
@@ -345,16 +342,41 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
           </>
         )}
 
+        {/* Visual Safe Zone Margin Guides (In Interactive Builder Mode) */}
+        {isBuilderInteractive && (
+          <>
+            <div
+              className="absolute top-0 bottom-0 pointer-events-none border-r border-dashed border-indigo-400/50 z-20"
+              style={{ left: `${contentPaddingLeft}px` }}
+            >
+              <span className="absolute top-2 left-1 text-[8px] font-mono font-bold text-indigo-600 bg-indigo-50/90 px-1 py-0.5 rounded shadow-xs">
+                ◀ Margin Kiri ({contentPaddingLeft}px)
+              </span>
+            </div>
+            <div
+              className="absolute top-0 bottom-0 pointer-events-none border-l border-dashed border-indigo-400/50 z-20"
+              style={{ right: `${contentPaddingRight}px` }}
+            >
+              <span className="absolute top-2 right-1 text-[8px] font-mono font-bold text-indigo-600 bg-indigo-50/90 px-1 py-0.5 rounded shadow-xs">
+                Margin Kanan ({contentPaddingRight}px) ▶
+              </span>
+            </div>
+          </>
+        )}
+
         {/* ======================================================== */}
-        {/* KOP SURAT LAYER (ABSOLUTE POSITIONED & DRAGGABLE)        */}
+        {/* KOP & DRAGGABLE LAYER (ABSOLUTE POSITIONED & DRAGGABLE)  */}
         {/* ======================================================== */}
-        <div className="absolute inset-x-0 top-0 pointer-events-auto z-10">
+        <div className="absolute inset-0 pointer-events-none z-30">
           {/* 1. LOGO ELEMENT */}
           {kop.logo.enabled && (
             <div
               onMouseDown={(e) => handleStartDrag(e, 'logo')}
-              onClick={() => onSelectKopElement && onSelectKopElement('logo')}
-              className={`absolute transition-shadow duration-150 ${
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onSelectKopElement) onSelectKopElement('logo');
+              }}
+              className={`absolute pointer-events-auto transition-shadow duration-150 ${
                 isBuilderInteractive
                   ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-500 rounded p-1'
                   : ''
@@ -379,53 +401,22 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 <BrandLogoHeader />
               )}
               {isBuilderInteractive && (
-                <span className="absolute -top-4 -left-1 text-[8px] bg-purple-600 text-white font-mono font-bold px-1 rounded">
+                <span className="absolute -top-4 -left-1 text-[8px] bg-purple-600 text-white font-mono font-bold px-1 rounded shadow-xs">
                   Logo (Drag)
                 </span>
               )}
             </div>
           )}
 
-          {/* 2. TAGLINE ELEMENT */}
-          {kop.tagline.enabled && (
-            <div
-              onMouseDown={(e) => handleStartDrag(e, 'tagline')}
-              onClick={() => onSelectKopElement && onSelectKopElement('tagline')}
-              className={`absolute transition-shadow duration-150 ${
-                isBuilderInteractive
-                  ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-500 rounded px-1'
-                  : ''
-              } ${
-                isBuilderInteractive && selectedKopElement === 'tagline'
-                  ? 'ring-2 ring-purple-600 bg-purple-500/10 shadow-lg'
-                  : ''
-              }`}
-              style={{
-                left: `${kop.tagline.x}px`,
-                top: `${kop.tagline.y}px`,
-                fontSize: `${kop.tagline.fontSizePt}pt`,
-                fontFamily: kop.tagline.fontFamily || 'Arial, sans-serif',
-                fontWeight: kop.tagline.fontWeight || '500',
-                color: kop.tagline.color || '#4B5563',
-              }}
-            >
-              <span className="select-none tracking-tight font-medium">
-                {kop.tagline.text}
-              </span>
-              {isBuilderInteractive && (
-                <span className="absolute -top-3.5 -left-1 text-[8px] bg-purple-600 text-white font-mono font-bold px-1 rounded">
-                  Tagline (Drag)
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* 3. TITLE & DOCUMENT NUMBER BLOCK */}
+          {/* 2. TITLE & DOCUMENT NUMBER BLOCK */}
           {kop.titleBlock.enabled && (
             <div
               onMouseDown={(e) => handleStartDrag(e, 'titleBlock')}
-              onClick={() => onSelectKopElement && onSelectKopElement('titleBlock')}
-              className={`absolute transition-shadow duration-150 ${
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onSelectKopElement) onSelectKopElement('titleBlock');
+              }}
+              className={`absolute pointer-events-auto transition-shadow duration-150 ${
                 isBuilderInteractive
                   ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-500 rounded p-1'
                   : ''
@@ -455,32 +446,36 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 Nomor : {docNumber}
               </p>
               {isBuilderInteractive && (
-                <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] bg-purple-600 text-white font-mono font-bold px-1.5 rounded">
+                <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] bg-purple-600 text-white font-mono font-bold px-1.5 rounded shadow-xs">
                   Judul &amp; Nomor (Drag)
                 </span>
               )}
             </div>
           )}
 
-          {/* 4. CUSTOM ADDED TEXT ELEMENTS (Alamat, Website, Kontak, dll.) */}
+          {/* 3. CUSTOM ADDED TEXT ELEMENTS (Alamat, Website, Kontak, dll.) */}
           {(kop.customTexts || []).map((ct) => (
             <div
               key={ct.id}
               onMouseDown={(e) => handleStartDrag(e, `customText_${ct.id}`)}
-              onClick={() => onSelectKopElement && onSelectKopElement(`customText_${ct.id}`)}
-              className={`absolute transition-shadow duration-150 ${
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onSelectKopElement) onSelectKopElement(`customText_${ct.id}`);
+              }}
+              className={`absolute pointer-events-auto transition-shadow duration-150 ${
                 isBuilderInteractive
-                  ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-purple-500 rounded px-1'
+                  ? 'cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-indigo-500 rounded px-1'
                   : ''
               } ${
                 isBuilderInteractive && selectedKopElement === `customText_${ct.id}`
-                  ? 'ring-2 ring-purple-600 bg-purple-500/10 shadow-lg'
+                  ? 'ring-2 ring-indigo-600 bg-indigo-500/10 shadow-lg'
                   : ''
               }`}
               style={{
                 left: `${ct.x}px`,
                 top: `${ct.y}px`,
                 width: ct.width ? `${ct.width}px` : 'auto',
+                maxWidth: ct.width ? `${ct.width}px` : '680px',
                 fontSize: `${ct.fontSizePt}pt`,
                 fontFamily: ct.fontFamily || baseFontFamily,
                 fontWeight: ct.fontWeight || 'normal',
@@ -490,22 +485,22 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 textDecoration: ct.isUnderline ? 'underline' : 'none',
               }}
             >
-              <span className="select-none whitespace-pre-wrap leading-tight">
+              <span className="select-none whitespace-pre-wrap leading-tight block break-words">
                 {ct.text}
               </span>
               {isBuilderInteractive && (
-                <span className="absolute -top-3.5 -left-1 text-[8px] bg-indigo-600 text-white font-mono font-bold px-1 rounded">
+                <span className="absolute -top-3.5 -left-1 text-[8px] bg-indigo-600 text-white font-mono font-bold px-1 rounded shadow-xs">
                   {ct.name || 'Custom Teks'} (Drag)
                 </span>
               )}
             </div>
           ))}
 
-          {/* 5. VISUAL FLOW START LIMIT GUIDE (IN BUILDER MODE ONLY) */}
+          {/* 4. VISUAL FLOW START LIMIT GUIDE (IN BUILDER MODE ONLY) */}
           {isBuilderInteractive && (
             <div
               onMouseDown={(e) => handleStartDrag(e, 'flowLimit')}
-              className="absolute inset-x-4 flex items-center justify-between cursor-row-resize group z-30"
+              className="absolute inset-x-4 pointer-events-auto flex items-center justify-between cursor-row-resize group z-30"
               style={{ top: `${kop.kopHeightPx}px` }}
               title="Drag ke atas/bawah untuk mengatur batas mulai isi konten"
             >
@@ -791,7 +786,10 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 width: '794px',
                 minHeight: '1123px',
                 height: '1123px',
-                padding: '48px 56px 42px 56px',
+                paddingTop: '48px',
+                paddingBottom: '42px',
+                paddingLeft: `${contentPaddingLeft}px`,
+                paddingRight: `${contentPaddingRight}px`,
                 fontFamily: baseFontFamily,
                 fontSize: baseFontSize,
                 boxSizing: 'border-box',

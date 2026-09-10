@@ -127,7 +127,7 @@ export interface KopSuratConfig {
     width: number; // Width in px
     height?: number;
   };
-  tagline: {
+  tagline?: {
     enabled: boolean;
     text: string;
     x: number;
@@ -159,6 +159,8 @@ export interface TemplateLayoutConfig {
     left: number;
     right: number;
   };
+  contentPaddingLeftPx?: number; // Safe zone dynamic content left margin in px (default 56px)
+  contentPaddingRightPx?: number; // Safe zone dynamic content right margin in px (default 56px)
   frameAssetUrl?: string; // PNG Frame background
   logoAssetUrl?: string;  // Top header logo
   primaryColor?: string;
