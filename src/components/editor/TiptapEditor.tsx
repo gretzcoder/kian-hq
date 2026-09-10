@@ -13,6 +13,7 @@ import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { Image } from '@tiptap/extension-image';
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 
 interface TiptapEditorProps {
@@ -608,6 +609,29 @@ export function DocxDocumentViewer({
   roleName?: string;
   badgeText?: string;
 }) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isFullscreen]);
+
   if (!content) return null;
 
   const contentClean = content
@@ -619,50 +643,132 @@ export function DocxDocumentViewer({
   const charCount = textOnly.length;
 
   return (
-    <div className="border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden bg-zinc-200/60 dark:bg-zinc-950 shadow-lg transition-all my-3">
-      {/* 📄 DOCX Title Bar (Read-Only) */}
-      <div className="bg-zinc-900 text-white px-4 py-2.5 flex items-center justify-between gap-3 text-xs border-b border-zinc-800">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shadow-xs">
-            📄
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-white text-xs">{docTitle}</span>
-              <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-400/30">
-                {badgeText}
-              </span>
+    <>
+      <div className="border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden bg-zinc-200/60 dark:bg-zinc-950 shadow-lg transition-all my-3">
+        {/* 📄 DOCX Title Bar (Read-Only) */}
+        <div className="bg-zinc-900 text-white px-4 py-2.5 flex items-center justify-between gap-3 text-xs border-b border-zinc-800">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-blue-600 text-white font-extrabold flex items-center justify-center text-xs shadow-xs shrink-0">
+              📄
             </div>
-            <p className="text-[10px] text-zinc-400">{roleName}</p>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-white text-xs truncate">{docTitle}</span>
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-400/30 shrink-0">
+                  {badgeText}
+                </span>
+              </div>
+              <p className="text-[10px] text-zinc-400 truncate">{roleName}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-[10px] px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 font-medium border border-zinc-700/80 select-none">
+              👁️ Preview Only
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsFullscreen(true)}
+              className="inline-flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white font-semibold border border-blue-500/30 transition-all cursor-pointer active:scale-95 shadow-xs"
+              title="Lihat Brief Layar Penuh (Full Screen)"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+              </svg>
+              <span>Full Screen</span>
+            </button>
           </div>
         </div>
 
-        <div className="text-[10px] px-2.5 py-1 rounded-lg bg-zinc-800 text-zinc-300 font-medium border border-zinc-700/80">
-          👁️ Preview Only
+        {/* 📄 DOCX Paper Canvas Page */}
+        <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[560px] scroll-smooth">
+          <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[260px] p-6 sm:p-10 transition-all">
+            <MarkdownViewer content={contentClean} />
+          </div>
+        </div>
+
+        {/* 📊 DOCX Status Footer Bar */}
+        <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-4 py-2 flex flex-wrap items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
+          <div className="flex items-center gap-4">
+            <span>Halaman 1 dari 1</span>
+            <span>•</span>
+            <span><strong className="text-zinc-700 dark:text-zinc-300 font-bold">{wordCount}</strong> kata</span>
+            <span>•</span>
+            <span><strong className="text-zinc-700 dark:text-zinc-300 font-bold">{charCount}</strong> karakter</span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-zinc-400">
+            <span>Format Lembar Brief</span>
+          </div>
         </div>
       </div>
 
-      {/* 📄 DOCX Paper Canvas Page */}
-      <div className="bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 overflow-y-auto max-h-[560px] scroll-smooth">
-        <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-xl shadow-xl min-h-[260px] p-6 sm:p-10 transition-all">
-          <MarkdownViewer content={contentClean} />
-        </div>
-      </div>
+      {/* ⛶ Fullscreen Modal Overlay */}
+      {isFullscreen && mounted && typeof document !== 'undefined' && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex flex-col p-2 sm:p-4 md:p-6 overflow-hidden animate-in fade-in duration-200"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsFullscreen(false);
+          }}
+        >
+          {/* Fullscreen Header */}
+          <div className="max-w-5xl w-full mx-auto bg-zinc-900 text-white px-4 sm:px-6 py-3 rounded-t-2xl flex items-center justify-between gap-4 border border-zinc-800 border-b-0 shadow-2xl shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-600 text-white font-extrabold flex items-center justify-center text-sm shadow-md shrink-0">
+                📄
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-white text-sm sm:text-base truncate">{docTitle}</span>
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-400/30 shrink-0">
+                    {badgeText}
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400 truncate">{roleName}</p>
+              </div>
+            </div>
 
-      {/* 📊 DOCX Status Footer Bar */}
-      <div className="bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 px-4 py-2 flex flex-wrap items-center justify-between text-[11px] text-zinc-500 dark:text-zinc-400">
-        <div className="flex items-center gap-4">
-          <span>Halaman 1 dari 1</span>
-          <span>•</span>
-          <span><strong className="text-zinc-700 dark:text-zinc-300 font-bold">{wordCount}</strong> kata</span>
-          <span>•</span>
-          <span><strong className="text-zinc-700 dark:text-zinc-300 font-bold">{charCount}</strong> karakter</span>
-        </div>
-        <div className="flex items-center gap-2 text-[10px] text-zinc-400">
-          <span>Format Lembar Brief</span>
-        </div>
-      </div>
-    </div>
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <span className="hidden md:inline-flex text-[11px] text-zinc-400 px-2.5 py-1 bg-zinc-800/80 rounded-lg border border-zinc-700/60 font-mono">
+                ESC untuk keluar
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsFullscreen(false)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-red-500/20 text-zinc-200 hover:text-red-400 font-semibold border border-zinc-700 hover:border-red-500/30 transition-all text-xs cursor-pointer active:scale-95 shadow-xs"
+                title="Tutup Mode Layar Penuh"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+                <span className="hidden sm:inline">Tutup Full Screen</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Fullscreen Canvas Content */}
+          <div className="max-w-5xl w-full mx-auto bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-8 flex-1 overflow-y-auto border-x border-zinc-800 shadow-2xl scroll-smooth">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-2xl shadow-xl min-h-[400px] p-6 sm:p-12 transition-all">
+              <MarkdownViewer content={contentClean} />
+            </div>
+          </div>
+
+          {/* Fullscreen Footer */}
+          <div className="max-w-5xl w-full mx-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 border-t-0 rounded-b-2xl px-5 py-3 flex flex-wrap items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 shadow-2xl shrink-0">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <span>Halaman 1 dari 1</span>
+              <span>•</span>
+              <span><strong className="text-zinc-700 dark:text-zinc-300 font-bold">{wordCount}</strong> kata</span>
+              <span>•</span>
+              <span><strong className="text-zinc-700 dark:text-zinc-300 font-bold">{charCount}</strong> karakter</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] text-zinc-400">Mode Full Screen • Format Lembar Brief</span>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
 
