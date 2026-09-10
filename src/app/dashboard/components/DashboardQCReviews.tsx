@@ -119,6 +119,7 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
               isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.task_created_by === currentUserId && r.mentor_approved === 0}
               creatorName={r.creator_name}
               isStaffOrCoord={true}
+              isTaskMentor={r.task_created_by === currentUserId}
               mentorApproved={r.mentor_approved ?? 0}
               coordinatorApproved={r.coordinator_approved ?? 0}
               isMentorWs={

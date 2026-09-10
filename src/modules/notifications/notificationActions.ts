@@ -157,8 +157,6 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
       const isLead = r.workspace_id ? leaderWsSet.has(r.workspace_id) : false;
       const isMentor = (
         (r.workspace_id ? mentorWsSet.has(r.workspace_id) : false) ||
-        (r.ojt_coordinator_id === session.userId) ||
-        (r.project_id ? coordProjSet.has(r.project_id) : false) ||
         (r.task_created_by === session.userId) ||
         isAssignedTaskMentor
       );
@@ -181,8 +179,8 @@ export async function getSidebarCounts(): Promise<SidebarCounts | null> {
 
       const hasAssignedMentors = Boolean(
         (r.workspace_id && wsWithMentorsSet.has(r.workspace_id)) ||
-        r.ojt_coordinator_id != null ||
-        (r.assigned_mentors && r.assigned_mentors.length > 2)
+        (r.assigned_mentors && r.assigned_mentors.length > 2) ||
+        (r.task_created_by != null)
       );
 
       if (isCoordinator) {

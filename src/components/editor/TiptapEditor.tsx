@@ -1,6 +1,12 @@
 'use client';
 
-import { useEditor, EditorContent } from '@tiptap/react';
+import {
+  useEditor,
+  EditorContent,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  type NodeViewProps,
+} from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -12,9 +18,286 @@ import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { Image } from '@tiptap/extension-image';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
+
+/**
+ * Interactive Resizable Image Component for WYSIWYG Editor
+ */
+function ResizableImageComponent({ node, updateAttributes, deleteNode, selected }: NodeViewProps) {
+  const { src, alt, title, width = '100%', alignment = 'center' } = node.attrs;
+  const [isResizing, setIsResizing] = useState(false);
+  const [currentWidth, setCurrentWidth] = useState<string>(width || '100%');
+  const [showToolbar, setShowToolbar] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const startXRef = useRef<number>(0);
+  const startWidthRef = useRef<number>(0);
+
+  useEffect(() => {
+    setCurrentWidth(width || '100%');
+  }, [width]);
+
+  const handleStartResize = (e: React.MouseEvent | React.TouchEvent, direction: 'right' | 'left') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    startXRef.current = clientX;
+
+    if (containerRef.current) {
+      startWidthRef.current = containerRef.current.offsetWidth;
+    }
+
+    const parentWidth = containerRef.current?.parentElement?.offsetWidth || 800;
+
+    const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
+      const currentX = 'touches' in moveEvent ? moveEvent.touches[0].clientX : moveEvent.clientX;
+      const deltaX = direction === 'right' ? currentX - startXRef.current : startXRef.current - currentX;
+
+      const newPixelWidth = Math.max(100, Math.min(parentWidth, startWidthRef.current + deltaX));
+      const percentage = Math.round((newPixelWidth / parentWidth) * 100);
+      const clampedPercentage = Math.max(15, Math.min(100, percentage));
+
+      setCurrentWidth(`${clampedPercentage}%`);
+    };
+
+    const handleEnd = () => {
+      setIsResizing(false);
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+
+      if (containerRef.current) {
+        const pWidth = containerRef.current.parentElement?.offsetWidth || 800;
+        const currentPx = containerRef.current.offsetWidth;
+        const finalPct = Math.round((currentPx / pWidth) * 100);
+        const clampedPct = `${Math.max(15, Math.min(100, finalPct))}%`;
+        updateAttributes({ width: clampedPct });
+      }
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove);
+    window.addEventListener('touchend', handleEnd);
+  };
+
+  const setPresetWidth = (newWidth: string) => {
+    setCurrentWidth(newWidth);
+    updateAttributes({ width: newWidth });
+  };
+
+  const setCustomWidthPrompt = () => {
+    const custom = window.prompt(
+      'Masukkan ukuran lebar gambar (contoh: 50%, 400px, 80%, atau 650px):',
+      currentWidth
+    );
+    if (custom && custom.trim()) {
+      const val = custom.trim();
+      const validVal = /^\d+(%|px|rem|vw)$/.test(val) ? val : `${parseInt(val, 10)}px`;
+      setCurrentWidth(validVal);
+      updateAttributes({ width: validVal });
+    }
+  };
+
+  const setAlign = (newAlign: 'left' | 'center' | 'right') => {
+    updateAttributes({ alignment: newAlign });
+  };
+
+  // Alignment container classes
+  let alignContainerClass = 'mx-auto';
+  if (alignment === 'left') alignContainerClass = 'mr-auto ml-0';
+  if (alignment === 'right') alignContainerClass = 'ml-auto mr-0';
+
+  const isControlsVisible = selected || showToolbar || isResizing;
+
+  return (
+    <NodeViewWrapper
+      className={`relative my-4 transition-all block ${alignContainerClass}`}
+      style={{ width: currentWidth, maxWidth: '100%' }}
+      onMouseEnter={() => setShowToolbar(true)}
+      onMouseLeave={() => {
+        if (!selected && !isResizing) setShowToolbar(false);
+      }}
+    >
+      <div
+        ref={containerRef}
+        className={`relative group rounded-xl overflow-visible transition-all ${
+          selected ? 'ring-2 ring-blue-500 shadow-xl' : 'hover:ring-1 hover:ring-blue-400/50'
+        }`}
+      >
+        {/* Floating Quick Resize & Alignment Toolbar */}
+        {isControlsVisible && (
+          <div
+            className="absolute -top-12 left-1/2 -translate-x-1/2 z-30 bg-zinc-900/95 text-white backdrop-blur-md px-2.5 py-1.5 rounded-xl shadow-2xl border border-zinc-700/80 flex items-center gap-1 text-[11px] font-medium whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 select-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Presets */}
+            <span className="text-zinc-400 text-[10px] mr-0.5">Ukuran:</span>
+            {(['25%', '50%', '75%', '100%'] as const).map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setPresetWidth(preset)}
+                className={`px-2 py-0.5 rounded-md font-bold transition-all text-[10px] cursor-pointer ${
+                  currentWidth === preset
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+                }`}
+              >
+                {preset}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={setCustomWidthPrompt}
+              className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white font-bold transition-all text-[10px] cursor-pointer"
+              title="Kustomisasi ukuran lebar gambar (bebas px atau %)"
+            >
+              📐 Bebas
+            </button>
+
+            <span className="w-px h-3.5 bg-zinc-700 mx-1" />
+
+            {/* Alignment */}
+            <button
+              type="button"
+              onClick={() => setAlign('left')}
+              className={`p-1 rounded-md transition-all text-[10px] cursor-pointer ${
+                alignment === 'left' ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
+              title="Rata Kiri"
+            >
+              ⬅
+            </button>
+            <button
+              type="button"
+              onClick={() => setAlign('center')}
+              className={`p-1 rounded-md transition-all text-[10px] cursor-pointer ${
+                alignment === 'center' ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
+              title="Tengah"
+            >
+              ⬌
+            </button>
+            <button
+              type="button"
+              onClick={() => setAlign('right')}
+              className={`p-1 rounded-md transition-all text-[10px] cursor-pointer ${
+                alignment === 'right' ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
+              title="Rata Kanan"
+            >
+              ➡
+            </button>
+
+            <span className="w-px h-3.5 bg-zinc-700 mx-1" />
+
+            {/* Delete */}
+            <button
+              type="button"
+              onClick={deleteNode}
+              className="p-1 rounded-md bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white transition-all text-[10px] cursor-pointer"
+              title="Hapus Gambar"
+            >
+              🗑️
+            </button>
+          </div>
+        )}
+
+        {/* The Image element */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={alt || ''}
+          title={title || ''}
+          className="w-full h-auto rounded-xl shadow-md border border-zinc-200 dark:border-zinc-800 block pointer-events-auto cursor-pointer"
+          data-align={alignment}
+          style={{ width: '100%', height: 'auto' }}
+        />
+
+        {/* Drag Resize Handles */}
+        {isControlsVisible && (
+          <>
+            {/* Right Resize Handle */}
+            <div
+              onMouseDown={(e) => handleStartResize(e, 'right')}
+              onTouchStart={(e) => handleStartResize(e, 'right')}
+              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-4 h-10 bg-blue-600 border-2 border-white dark:border-zinc-900 rounded-full shadow-lg cursor-ew-resize flex items-center justify-center z-20 hover:scale-110 active:scale-95 transition-transform"
+              title="Tarik untuk mengubah ukuran lebar gambar"
+            >
+              <span className="w-0.5 h-4 bg-white rounded-full opacity-80" />
+            </div>
+
+            {/* Left Resize Handle */}
+            <div
+              onMouseDown={(e) => handleStartResize(e, 'left')}
+              onTouchStart={(e) => handleStartResize(e, 'left')}
+              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-10 bg-blue-600 border-2 border-white dark:border-zinc-900 rounded-full shadow-lg cursor-ew-resize flex items-center justify-center z-20 hover:scale-110 active:scale-95 transition-transform"
+              title="Tarik untuk mengubah ukuran lebar gambar"
+            >
+              <span className="w-0.5 h-4 bg-white rounded-full opacity-80" />
+            </div>
+
+            {/* Bottom-Right Corner Handle */}
+            <div
+              onMouseDown={(e) => handleStartResize(e, 'right')}
+              onTouchStart={(e) => handleStartResize(e, 'right')}
+              className="absolute right-0 bottom-0 translate-x-1/3 translate-y-1/3 w-4 h-4 bg-blue-600 border-2 border-white dark:border-zinc-900 rounded-md shadow-lg cursor-se-resize z-20 hover:scale-125 active:scale-95 transition-transform"
+              title="Tarik sudut untuk mengubah ukuran gambar"
+            />
+
+            {/* Current Size Indicator Badge while resizing */}
+            {isResizing && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[10px] font-bold px-3 py-1 rounded-full backdrop-blur-sm border border-white/20 shadow-lg z-30">
+                📐 Lebar: {currentWidth}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </NodeViewWrapper>
+  );
+}
+
+/**
+ * Extended Image Extension supporting flexible resizing and alignment
+ */
+const ResizableImage = Image.extend({
+  name: 'image',
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: '100%',
+        parseHTML: (element) => element.getAttribute('width') || element.style.width || '100%',
+        renderHTML: (attributes) => {
+          const width = attributes.width || '100%';
+          return {
+            width,
+            style: `width: ${width}; max-width: 100%; height: auto;`,
+          };
+        },
+      },
+      alignment: {
+        default: 'center',
+        parseHTML: (element) => element.getAttribute('data-align') || 'center',
+        renderHTML: (attributes) => {
+          return {
+            'data-align': attributes.alignment || 'center',
+          };
+        },
+      },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageComponent);
+  },
+});
 
 interface TiptapEditorProps {
   value: string;
@@ -71,10 +354,10 @@ export default function TiptapEditor({
       TableRow,
       TableHeader,
       TableCell,
-      Image.configure({
-        inline: true,
+      ResizableImage.configure({
+        inline: false,
         HTMLAttributes: {
-          class: 'rounded-xl shadow-md border border-zinc-200 dark:border-zinc-800 my-4 max-w-full block mx-auto',
+          class: 'rounded-xl shadow-md border border-zinc-200 dark:border-zinc-800 my-4 max-w-full block',
         },
       }),
       Link.configure({
@@ -454,6 +737,39 @@ export default function TiptapEditor({
                   title="Hapus Seluruh Tabel"
                 >
                   🗑️ Hapus Tabel
+                </button>
+              </div>
+            )}
+
+            {/* Active Image Operations Sub-Bar */}
+            {editor.isActive('image') && (
+              <div className="flex items-center gap-0.5 bg-emerald-500/10 dark:bg-emerald-500/20 p-0.5 rounded-lg border border-emerald-500/30 text-[10px]">
+                <span className="font-bold text-emerald-600 dark:text-emerald-300 px-1">🖼️ Ukuran:</span>
+                {(['25%', '50%', '75%', '100%'] as const).map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => editor.chain().focus().updateAttributes('image', { width: preset }).run()}
+                    className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-emerald-600 hover:text-white font-bold"
+                  >
+                    {preset}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const cur = editor.getAttributes('image').width || '100%';
+                    const custom = window.prompt('Ukuran lebar gambar (contoh: 50%, 400px):', cur);
+                    if (custom?.trim()) {
+                      const val = custom.trim();
+                      const valid = /^\d+(%|px|rem|vw)$/.test(val) ? val : `${parseInt(val, 10)}px`;
+                      editor.chain().focus().updateAttributes('image', { width: valid }).run();
+                    }
+                  }}
+                  className="px-1.5 py-0.5 rounded bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-emerald-600 hover:text-white font-bold"
+                  title="Ubah lebar gambar secara bebas"
+                >
+                  📐 Bebas
                 </button>
               </div>
             )}

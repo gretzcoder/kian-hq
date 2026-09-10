@@ -1333,18 +1333,24 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     } catch (_e) {}
   }
 
-  const isMentor = (await db
+  const isTaskMentor = (await db
+    .prepare(`
+      SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?
+    `)
+    .bind(workspaceId, session.userId)
+    .first()) !== null || isAssignedTaskMentor || (task.created_by != null && task.created_by === session.userId);
+
+  const isProjectCoordinator = (await db
     .prepare(`
       SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?
       UNION ALL
-      SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?
-      UNION ALL
       SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?
     `)
-    .bind(workspaceId, session.userId, workspaceId, session.userId, task.project_id || '', session.userId)
-    .first()) !== null || isAssignedTaskMentor || (task.created_by != null && task.created_by === session.userId);
+    .bind(workspaceId, session.userId, task.project_id || '', session.userId)
+    .first()) !== null;
 
   const isCoordinator =
+    isProjectCoordinator ||
     (ctx.userType === 'STAFF' &&
       (ctx.roles.includes('COORDINATOR') ||
         ctx.roles.includes('EXECUTIVE') ||
@@ -1358,13 +1364,24 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
   const isMentorWs = task.task_type === 'MENTOR' || (await db.prepare('SELECT workspace_type FROM workspaces WHERE id = ?').bind(workspaceId).first() as any)?.workspace_type === 'MENTOR';
   const isTaskCreator = (task.created_by != null && task.created_by === session.userId) || (assignment as any).assigned_by === session.userId;
 
+  const hasMentorsInWs = (await db
+    .prepare('SELECT 1 FROM workspace_mentors WHERE workspace_id = ?')
+    .bind(workspaceId)
+    .first()) !== null || Boolean(task.assigned_mentors && task.assigned_mentors.length > 2) || (task.created_by && task.created_by !== session.userId);
+
   if (isMentorWs) {
     if (!isCoordinator && !isTaskCreator) {
       return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat memberikan penilaian/QC pada workspace Mentor.' };
     }
   } else if (isOjtRole) {
-    if (!isLeader && !isMentor && !isCoordinator) {
+    if (!isLeader && !isTaskMentor && !isCoordinator) {
       throw new Error('Forbidden: You do not have permission to approve this step.');
+    }
+    if (assignment.mentor_approved === 0 && hasMentorsInWs && !isTaskMentor && isCoordinator) {
+      return {
+        success: false,
+        error: 'Tugas ini masih dalam Review Tahap 1 oleh Mentor. Koordinator belum dapat memberikan persetujuan & Sparks sebelum Mentor menyetujui hasil submit ini.',
+      };
     }
   } else {
     const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'APPROVE');
@@ -1383,11 +1400,14 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
       newCoordinatorApproved = 1;
       nextStatus = 'APPROVED';
     } else if (isOjtRole) {
-      if (isCoordinator) {
-        newCoordinatorApproved = 1;
+      if (isTaskMentor) {
         newMentorApproved = 1;
+        if (!hasMentorsInWs || isCoordinator) {
+          newCoordinatorApproved = 1;
+        }
         nextStatus = 'APPROVED';
-      } else if (isMentor) {
+      } else if (isCoordinator) {
+        newCoordinatorApproved = 1;
         newMentorApproved = 1;
         nextStatus = 'APPROVED';
       } else if (isLeader) {
@@ -1430,7 +1450,7 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
       fromStatus: assignment.status,
       toStatus: nextStatus,
       triggeredBy: session.userId,
-      note: `Approved by: ${isLeader ? 'Leader ' : ''}${isMentor ? 'Mentor ' : ''}${isCoordinator ? 'Coordinator ' : ''}(Status: ${nextStatus})${appreciationBadge ? ` [Sparks: ${appreciationBadge}]` : ''}${appreciationNote ? ` Note: ${appreciationNote}` : ''}`,
+      note: `Approved by: ${isLeader ? 'Leader ' : ''}${isTaskMentor ? 'Mentor ' : ''}${isCoordinator ? 'Coordinator ' : ''}(Status: ${nextStatus})${appreciationBadge ? ` [Sparks: ${appreciationBadge}]` : ''}${appreciationNote ? ` Note: ${appreciationNote}` : ''}`,
     });
 
     if (assignment.user_id) {

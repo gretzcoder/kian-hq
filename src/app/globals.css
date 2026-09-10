@@ -283,7 +283,8 @@ input[type="reset"] {
   max-width: 100% !important;
   height: auto !important;
   border-radius: 0.75rem !important;
-  margin: 1rem auto !important;
+  margin-top: 1rem !important;
+  margin-bottom: 1rem !important;
   display: block !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
   border: 1px solid rgba(226, 232, 240, 0.8) !important;
@@ -293,4 +294,21 @@ input[type="reset"] {
   border-color: rgba(39, 39, 42, 0.8) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
 }
+
+.tiptap img[data-align="left"], .prose-editor img[data-align="left"] {
+  margin-left: 0 !important;
+  margin-right: auto !important;
+}
+
+.tiptap img[data-align="center"], .prose-editor img[data-align="center"],
+.tiptap img:not([data-align]), .prose-editor img:not([data-align]) {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.tiptap img[data-align="right"], .prose-editor img[data-align="right"] {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+}
+
 

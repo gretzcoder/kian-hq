@@ -1071,6 +1071,7 @@ export default function TaskActions({
                                     canRequestRevision={isMentorWs ? (isCoordinator || isTaskCreator) : (isLeader || isMentor || isCoordinator)}
                                     canAwardBadge={isMentorWs ? (isCoordinator || isTaskCreator) : (isMentor || isCoordinator)}
                                     isStaffOrCoord={isCoordinator || isTaskCreator}
+                                    isTaskMentor={isMentor || isTaskCreator}
                                     mentorApproved={assign.mentor_approved ?? 0}
                                     coordinatorApproved={assign.coordinator_approved ?? 0}
                                     isMentorWs={isMentorWs}
@@ -1508,6 +1509,7 @@ export default function TaskActions({
                             canRequestRevision={isMentorWs ? (isCoordinator || isTaskCreator) : (isLeader || isMentor || isCoordinator)}
                             canAwardBadge={isMentorWs ? (isCoordinator || isTaskCreator) : (isMentor || isCoordinator)}
                             isStaffOrCoord={isCoordinator || isTaskCreator}
+                            isTaskMentor={isMentor || isTaskCreator}
                             mentorApproved={categoryAss.mentor_approved ?? 0}
                             coordinatorApproved={categoryAss.coordinator_approved ?? 0}
                             isMentorWs={isMentorWs}
@@ -1772,6 +1774,7 @@ export default function TaskActions({
                     canRequestRevision={isMentorWs ? (isCoordinator || isTaskCreator) : (isLeader || isMentor || isCoordinator)}
                     canAwardBadge={isMentorWs ? (isCoordinator || isTaskCreator) : (isMentor || isCoordinator)}
                     isStaffOrCoord={isCoordinator || isTaskCreator}
+                    isTaskMentor={isMentor || isTaskCreator}
                     mentorApproved={a.mentor_approved ?? 0}
                     coordinatorApproved={a.coordinator_approved ?? 0}
                     isMentorWs={isMentorWs}

@@ -185,8 +185,6 @@ export default async function ReviewPage() {
     const is_leader = r.workspace_id ? (leaderWsSet.has(r.workspace_id) ? 1 : 0) : 0;
     const is_mentor = (
       (r.workspace_id && mentorWsSet.has(r.workspace_id)) ||
-      r.ojt_coordinator_id === session.userId ||
-      (r.project_id && coordProjSet.has(r.project_id)) ||
       r.task_created_by === session.userId ||
       isAssignedTaskMentor
     ) ? 1 : 0;
@@ -243,8 +241,8 @@ export default async function ReviewPage() {
     // Stage 3 (Coordinator):
     const hasAssignedMentors = Boolean(
       (r.workspace_id && wsWithMentorsSet.has(r.workspace_id)) ||
-      r.ojt_coordinator_id != null ||
-      (r.assigned_mentors && r.assigned_mentors.length > 2)
+      (r.assigned_mentors && r.assigned_mentors.length > 2) ||
+      (r.task_created_by != null)
     );
 
     if (isCoordinator) {
