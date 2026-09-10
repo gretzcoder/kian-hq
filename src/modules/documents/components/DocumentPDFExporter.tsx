@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import html2canvas from 'html2canvas';
+import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 interface DocumentPDFExporterProps {
@@ -21,58 +21,11 @@ export const DocumentPDFExporter: React.FC<DocumentPDFExporterProps> = ({
 }) => {
   const [isExporting, setIsExporting] = useState(false);
 
-  // Helper to convert any remote images to in-memory Base64 Data URLs so canvas is never tainted
-  const convertImagesToDataUrls = async (container: HTMLElement) => {
-    const images = Array.from(container.querySelectorAll('img'));
-    await Promise.all(
-      images.map(async (img) => {
-        const src = img.getAttribute('src') || img.src;
-        if (!src || src.startsWith('data:')) return;
-
-        // Try direct canvas extraction if image is already loaded
-        try {
-          if (img.complete && img.naturalWidth > 0) {
-            const canvas = document.createElement('canvas');
-            canvas.width = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0);
-              const dataUri = canvas.toDataURL('image/png');
-              img.src = dataUri;
-              img.setAttribute('src', dataUri);
-              return;
-            }
-          }
-        } catch {
-          // If canvas drawImage triggers cross-origin warning, try fetch fallback
-        }
-
-        // Fetch fallback with blob reader
-        try {
-          const res = await fetch(src, { mode: 'cors' });
-          if (res.ok) {
-            const blob = await res.blob();
-            const dataUri = await new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => resolve(reader.result as string);
-              reader.readAsDataURL(blob);
-            });
-            img.src = dataUri;
-            img.setAttribute('src', dataUri);
-          }
-        } catch {
-          img.crossOrigin = 'anonymous';
-        }
-      })
-    );
-  };
-
   const handleExportPDF = async () => {
     setIsExporting(true);
     if (onExportStart) onExportStart();
 
-    // Temporarily disable parent CSS transforms for pixel-perfect bounding box calculation
+    // Temporarily disable parent CSS transforms during snapshot for exact A4 bounding box
     const scaledParents: { el: HTMLElement; origTransform: string; origTransition: string }[] = [];
     const elementsToReset = document.querySelectorAll('.transform, [class*="scale-"]');
     elementsToReset.forEach((el) => {
@@ -95,8 +48,8 @@ export const DocumentPDFExporter: React.FC<DocumentPDFExporterProps> = ({
         return;
       }
 
-      // Allow 80ms for layout reflow
-      await new Promise((r) => setTimeout(r, 80));
+      // Allow 100ms for layout reflow and font settling
+      await new Promise((r) => setTimeout(r, 100));
 
       const pdf = new jsPDF({
         orientation: 'portrait',
@@ -111,38 +64,21 @@ export const DocumentPDFExporter: React.FC<DocumentPDFExporterProps> = ({
       for (let i = 0; i < pageElements.length; i++) {
         const pageEl = pageElements[i] as HTMLElement;
 
-        // Convert any remote image URLs to safe data URIs before rendering
-        await convertImagesToDataUrls(pageEl);
-
         if (i > 0) {
           pdf.addPage('a4', 'portrait');
         }
 
-        const canvas = await html2canvas(pageEl, {
-          scale: 2, // 300 DPI high resolution
-          useCORS: true,
-          allowTaint: false, // Must be false to allow canvas.toDataURL() without SecurityError
+        // Generate high-resolution PNG using native SVG foreignObject pipeline (supports lab/oklch/Tailwind v4)
+        const dataUrl = await toPng(pageEl, {
+          quality: 0.98,
+          pixelRatio: 2, // 300 DPI high resolution
           backgroundColor: '#FFFFFF',
-          logging: false,
-          scrollX: 0,
-          scrollY: 0,
+          cacheBust: true,
           width: 794,
           height: 1123,
-          windowWidth: 794,
-          windowHeight: 1123,
-          onclone: (clonedDoc) => {
-            // Normalize all scales and transitions inside html2canvas internal clone
-            const allScaled = clonedDoc.querySelectorAll('.transform, [class*="scale-"]');
-            allScaled.forEach((node) => {
-              const el = node as HTMLElement;
-              el.style.transform = 'none';
-              el.style.transition = 'none';
-            });
-          },
         });
 
-        const imgData = canvas.toDataURL('image/png', 0.95);
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
+        pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
       }
 
       const sanitizedTitle = (documentTitle || 'Dokumen_KIAN')
@@ -194,6 +130,7 @@ export const DocumentPDFExporter: React.FC<DocumentPDFExporterProps> = ({
     </button>
   );
 };
+
 
 
 
