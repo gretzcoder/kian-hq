@@ -173,11 +173,15 @@ export default async function ReviewPage() {
 
   const allReviews = reviewRows.map((r) => {
     let isAssignedTaskMentor = false;
+    let hasExplicitMentors = false;
     if (r.assigned_mentors) {
       try {
         const ids: string[] = JSON.parse(r.assigned_mentors);
-        if (Array.isArray(ids) && ids.includes(session.userId)) {
-          isAssignedTaskMentor = true;
+        if (Array.isArray(ids) && ids.length > 0) {
+          hasExplicitMentors = true;
+          if (ids.includes(session.userId)) {
+            isAssignedTaskMentor = true;
+          }
         }
       } catch (_e) {}
     }
@@ -185,8 +189,8 @@ export default async function ReviewPage() {
     const is_leader = r.workspace_id ? (leaderWsSet.has(r.workspace_id) ? 1 : 0) : 0;
     const is_mentor = (
       (r.workspace_id && mentorWsSet.has(r.workspace_id)) ||
-      r.task_created_by === session.userId ||
-      isAssignedTaskMentor
+      isAssignedTaskMentor ||
+      (!hasExplicitMentors && r.task_created_by === session.userId)
     ) ? 1 : 0;
 
     return {

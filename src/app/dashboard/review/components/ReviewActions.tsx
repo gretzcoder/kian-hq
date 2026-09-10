@@ -204,174 +204,256 @@ export default function ReviewActions({
       )}
 
       {mode === 'NONE' ? (
-        isAssessmentMentorStep ? (
-          /* Assessment Step 1: Mentor creator — ACC Mentor + Request Revisi */
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={() => setMode('SPARK_MODAL')}
-              disabled={loading}
-              className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5"
-            >
-              <span>✓ ACC Mentor & Catatan Improvement</span>
-            </button>
-            <button
-              onClick={() => setMode('REVISION')}
-              disabled={loading}
-              className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
-            >
-              ↩ Request Revisi
-            </button>
-          </div>
-        ) : (
-        <div className="flex gap-2 flex-wrap items-center">
-          {mentorApproved === 0 && !isMentorWorkspace ? (
-            isStaffOrCoord && !isTaskMentor ? (
-              <div className="w-full p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-2.5">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                    <span>⏳ Menunggu Review Tahap 1 oleh Mentor</span>
-                    {creatorName && <strong className="text-zinc-900 dark:text-zinc-100">({creatorName})</strong>}
+        <div className="space-y-2.5">
+          {/* 📌 Review Stage Progress Stepper */}
+          {!isMentorWorkspace && (
+            <div className="bg-zinc-950/40 dark:bg-black/40 border border-zinc-200/60 dark:border-zinc-800/80 rounded-xl p-2.5">
+              <div className="flex items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider mb-2">
+                <span className="text-zinc-500 dark:text-zinc-400">Status Tahapan Review:</span>
+                {mentorApproved === 0 ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-500 dark:text-amber-400 border border-amber-500/20 font-black">
+                    🟡 Tahap 1: QC Mentor
                   </span>
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30">
-                    Belum ACC Mentor
+                ) : coordinatorApproved === 0 ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-500 dark:text-blue-400 border border-blue-500/20 font-black">
+                    🔵 Tahap 2: QC Koordinator & Sparks
                   </span>
-                </div>
-                <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 leading-relaxed">
-                  Koordinator belum dapat memberikan penilaian final & sparks sebelum mentor pembuat task menyetujui hasil submit ini.
-                </p>
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 border border-emerald-500/20 font-black">
+                    🟢 Selesai (ACC Final)
+                  </span>
+                )}
+              </div>
 
-                <div className="flex items-center gap-2 flex-wrap pt-1">
-                  <SendReminderButton
-                    assignmentId={assignmentId}
-                    targetRole="MENTOR"
-                    mentorName={creatorName}
-                    className="py-2 px-3 text-xs"
-                  />
-                  {canRequestRevision && (
-                    <button
-                      type="button"
-                      onClick={() => setMode('REVISION')}
-                      disabled={loading}
-                      className="px-3.5 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20 rounded-xl font-black text-xs transition-all active:scale-95 cursor-pointer"
-                    >
-                      ↩ Request Revisi
-                    </button>
-                  )}
+              {/* 2-Step Grid Visual */}
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {/* Step 1: QC Mentor */}
+                <div className={`p-2 rounded-lg border transition-all ${
+                  mentorApproved === 1
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300'
+                }`}>
+                  <div className="flex items-center justify-between text-[10px] font-black">
+                    <span>1. QC Mentor</span>
+                    <span>{mentorApproved === 1 ? '✓ Selesai ACC' : '⏳ Menunggu'}</span>
+                  </div>
+                  <p className="text-[9px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
+                    {creatorName ? `Mentor: ${creatorName}` : 'Pemeriksaan Hasil Karya'}
+                  </p>
+                </div>
+
+                {/* Step 2: QC Koordinator */}
+                <div className={`p-2 rounded-lg border transition-all ${
+                  coordinatorApproved === 1
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                    : mentorApproved === 1
+                      ? 'bg-blue-500/10 border-blue-500/30 text-blue-600 dark:text-blue-400'
+                      : 'bg-zinc-800/30 border-zinc-700/30 text-zinc-500'
+                }`}>
+                  <div className="flex items-center justify-between text-[10px] font-black">
+                    <span>2. QC Koordinator</span>
+                    <span>{coordinatorApproved === 1 ? '✓ Selesai ACC' : mentorApproved === 1 ? '⚡ Siap QC' : '🔒 Antre'}</span>
+                  </div>
+                  <p className="text-[9px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
+                    Pemberian Rating & Sparks
+                  </p>
                 </div>
               </div>
-            ) : (
-              <>
-                <button
-                  onClick={() => {
-                    setMode('SPARK_MODAL');
-                  }}
-                  disabled={loading}
-                  className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px]"
-                >
-                  <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ ACC & Catatan Improvement'}</span>
-                </button>
-                {canRequestRevision && (
-                  <>
-                    <button
-                      onClick={() => setMode('REVISION')}
-                      disabled={loading}
-                      className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[120px]"
-                    >
-                      Request Revision
-                    </button>
-                    <button
-                      onClick={() => setMode('DECLINE')}
-                      disabled={loading}
-                      className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[80px]"
-                    >
-                      Decline
-                    </button>
-                  </>
-                )}
-              </>
-            )
-          ) : mentorApproved === 1 && coordinatorApproved === 0 ? (
-            isStaffOrCoord ? (
-              <>
-                <button
-                  onClick={() => {
-                    setMode('SPARK_MODAL');
-                  }}
-                  disabled={loading}
-                  className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px]"
-                >
-                  <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ ACC & Catatan Improvement'}</span>
-                </button>
-                {canRequestRevision && (
-                  <>
-                    <button
-                      onClick={() => setMode('REVISION')}
-                      disabled={loading}
-                      className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[120px]"
-                    >
-                      Request Revision
-                    </button>
-                    <button
-                      onClick={() => setMode('DECLINE')}
-                      disabled={loading}
-                      className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[80px]"
-                    >
-                      Decline
-                    </button>
-                  </>
-                )}
-              </>
-            ) : (
-              <SendReminderButton
-                assignmentId={assignmentId}
-                targetRole="COORDINATOR"
-                className="py-2.5 w-full justify-center"
-              />
-            )
-          ) : (
-            <>
+            </div>
+          )}
+
+          {isAssessmentMentorStep ? (
+            /* Assessment Step 1: Mentor creator — ACC Mentor + Request Revisi */
+            <div className="flex gap-2 flex-wrap">
               <button
-                onClick={() => {
-                  setMode('SPARK_MODAL');
-                }}
+                onClick={() => setMode('SPARK_MODAL')}
                 disabled={loading}
-                className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px]"
+                className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5"
               >
-                <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ ACC & Catatan Improvement'}</span>
+                <span>✓ ACC Mentor & Catatan Improvement</span>
               </button>
-              {canRequestRevision && (
-                <>
-                  <button
-                    onClick={() => setMode('REVISION')}
-                    disabled={loading}
-                    className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[120px]"
-                  >
-                    Request Revision
-                  </button>
-                  <button
-                    onClick={() => setMode('DECLINE')}
-                    disabled={loading}
-                    className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[80px]"
-                  >
-                    Decline
-                  </button>
-                  {taskId && (
+              <button
+                onClick={() => setMode('REVISION')}
+                disabled={loading}
+                className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97]"
+              >
+                ↩ Request Revisi
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2 flex-wrap items-center">
+              {mentorApproved === 0 && !isMentorWorkspace ? (
+                isTaskMentor ? (
+                  /* TAHAP 1: Caller is the Mentor */
+                  <>
                     <button
                       type="button"
-                      onClick={() => setShowExtendModal(true)}
+                      onClick={() => setMode('SPARK_MODAL')}
                       disabled={loading}
-                      className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-bold text-xs px-3 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1 shrink-0 cursor-pointer"
-                      title="Extend Deadline Task"
+                      className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px] cursor-pointer"
                     >
-                      <span>⏳ Extend</span>
+                      <span>✓ ACC Mentor & Catatan Improvement</span>
                     </button>
+                    {canRequestRevision && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setMode('REVISION')}
+                          disabled={loading}
+                          className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[120px] cursor-pointer"
+                        >
+                          Request Revision
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMode('DECLINE')}
+                          disabled={loading}
+                          className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[80px] cursor-pointer"
+                        >
+                          Decline
+                        </button>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  /* TAHAP 1: Caller is NOT the mentor (e.g. Koordinator / Staff viewing) */
+                  <div className="w-full p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                        <span>⏳ Menunggu Review Tahap 1 oleh Mentor</span>
+                        {creatorName && <strong className="text-zinc-900 dark:text-zinc-100">({creatorName})</strong>}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30">
+                        Belum ACC Mentor
+                      </span>
+                    </div>
+                    <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 leading-relaxed">
+                      Koordinator belum dapat memberikan penilaian final & sparks sebelum mentor pembuat/pembimbing task menyetujui hasil submit ini.
+                    </p>
+
+                    <div className="flex items-center gap-2 flex-wrap pt-1">
+                      <SendReminderButton
+                        assignmentId={assignmentId}
+                        targetRole="MENTOR"
+                        mentorName={creatorName}
+                        className="py-2 px-3 text-xs"
+                      />
+                      {canRequestRevision && (
+                        <button
+                          type="button"
+                          onClick={() => setMode('REVISION')}
+                          disabled={loading}
+                          className="px-3.5 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border border-yellow-500/20 rounded-xl font-black text-xs transition-all active:scale-95 cursor-pointer"
+                        >
+                          ↩ Request Revisi
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              ) : mentorApproved === 1 && coordinatorApproved === 0 ? (
+                /* TAHAP 2: QC KOORDINATOR & PEMBERIAN SPARKS */
+                isStaffOrCoord ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setMode('SPARK_MODAL')}
+                      disabled={loading}
+                      className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px] cursor-pointer shadow-xs"
+                    >
+                      <span>✓ Setujui Final & Berikan Sparks ✨</span>
+                    </button>
+                    {canRequestRevision && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setMode('REVISION')}
+                          disabled={loading}
+                          className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[120px] cursor-pointer"
+                        >
+                          Request Revision
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMode('DECLINE')}
+                          disabled={loading}
+                          className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[80px] cursor-pointer"
+                        >
+                          Decline
+                        </button>
+                        {taskId && (
+                          <button
+                            type="button"
+                            onClick={() => setShowExtendModal(true)}
+                            disabled={loading}
+                            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-bold text-xs px-3 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center gap-1 shrink-0 cursor-pointer"
+                            title="Extend Deadline Task"
+                          >
+                            <span>⏳ Extend</span>
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  /* Mentor or non-coordinator viewing during Tahap 2 */
+                  <div className="w-full p-3 rounded-2xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-black text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
+                        <span>✓ Telah Disetujui Mentor</span>
+                      </p>
+                      <p className="text-[11px] text-blue-700 dark:text-blue-400">
+                        Menunggu verifikasi QC Final & Pemberian Sparks oleh Koordinator.
+                      </p>
+                    </div>
+                    <SendReminderButton
+                      assignmentId={assignmentId}
+                      targetRole="COORDINATOR"
+                      className="py-2 px-3 text-xs"
+                    />
+                  </div>
+                )
+              ) : coordinatorApproved === 1 ? (
+                /* COMPLETED STAGE */
+                <div className="w-full p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-2 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                  <span>✓ Seluruh tahapan QC selesai. Tugas telah disetujui & Sparks telah diberikan.</span>
+                </div>
+              ) : (
+                /* Single stage / Mentor Workspace / Fallback */
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setMode('SPARK_MODAL')}
+                    disabled={loading}
+                    className="flex-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] flex items-center justify-center gap-1.5 min-w-[140px] cursor-pointer"
+                  >
+                    <span>{canAwardBadge ? '✓ Approve & Award Sparks ✨' : '✓ ACC & Catatan Improvement'}</span>
+                  </button>
+                  {canRequestRevision && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setMode('REVISION')}
+                        disabled={loading}
+                        className="flex-1 bg-yellow-500/5 hover:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border border-yellow-500/15 dark:border-yellow-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[120px] cursor-pointer"
+                      >
+                        Request Revision
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMode('DECLINE')}
+                        disabled={loading}
+                        className="flex-1 bg-red-500/5 hover:bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/15 dark:border-red-500/25 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-50 active:scale-[0.97] min-w-[80px] cursor-pointer"
+                      >
+                        Decline
+                      </button>
+                    </>
                   )}
                 </>
               )}
-            </>
+            </div>
           )}
         </div>
-        )
       ) : mode === 'SPARK_MODAL' ? (
         <div className="space-y-3.5 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800">
           {!isAssessmentMentorStep && canAwardBadge && (
