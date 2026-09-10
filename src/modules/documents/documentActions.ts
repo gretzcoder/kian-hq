@@ -12,6 +12,9 @@ import {
 import { getTemplateById } from './templateActions';
 import {
   DEFAULT_ORGANIZATION_PROFILE,
+  DEFAULT_SURAT_TUGAS_LAYOUT,
+  DEFAULT_SURAT_TUGAS_SCHEMA,
+  DEFAULT_SURAT_TUGAS_VALUES,
 } from './defaultTemplates';
 import {
   formatDocumentNumber,
@@ -180,8 +183,9 @@ export async function generateDocumentAction(params: {
     let signatoryPosition = params.form_data.signatory_position || 'Program Director Kian Troopers';
     let signatureUrl: string | null = null;
     let stampUrl: string | null = null;
+    const cleanSignatoryId = params.signatory_id && params.signatory_id.trim() ? params.signatory_id.trim() : null;
 
-    if (params.signatory_id) {
+    if (cleanSignatoryId) {
       const sigRow = await db
         .prepare(`
           SELECT ds.name, ds.position, sa.asset_url AS signature_url, st.asset_url AS stamp_url
@@ -190,7 +194,7 @@ export async function generateDocumentAction(params: {
           LEFT JOIN document_assets st ON ds.stamp_asset_id = st.id
           WHERE ds.id = ?
         `)
-        .bind(params.signatory_id)
+        .bind(cleanSignatoryId)
         .first() as any;
 
       if (sigRow) {
@@ -204,8 +208,44 @@ export async function generateDocumentAction(params: {
     // 3. Organization Profile Snapshot
     const orgSnapshot: OrganizationSnapshot = DEFAULT_ORGANIZATION_PROFILE;
 
-    // 4. Compile Full Rendered Snapshot (Ensures 100% historical fidelity)
-    const activeVersionId = `tplv_${template.id}_v${template.current_version}`;
+    // 4. Resolve Template Version ID correctly from document_template_versions table
+    const versionRow = await db
+      .prepare('SELECT id FROM document_template_versions WHERE template_id = ? AND version = ?')
+      .bind(template.id, template.current_version)
+      .first() as { id: string } | null;
+
+    let activeVersionId = versionRow?.id;
+    if (!activeVersionId) {
+      const fallbackVersionRow = await db
+        .prepare('SELECT id FROM document_template_versions WHERE template_id = ? ORDER BY version DESC LIMIT 1')
+        .bind(template.id)
+        .first() as { id: string } | null;
+      activeVersionId = fallbackVersionRow?.id;
+    }
+
+    if (!activeVersionId) {
+      activeVersionId = `tplv_${crypto.randomUUID().replace(/-/g, '')}`;
+      await db
+        .prepare(`
+          INSERT INTO document_template_versions (
+            id, template_id, version, layout_config, form_schema, default_values, sample_data, created_by, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .bind(
+          activeVersionId,
+          template.id,
+          template.current_version || 1,
+          JSON.stringify(template.layout_config || DEFAULT_SURAT_TUGAS_LAYOUT),
+          JSON.stringify(template.form_schema || DEFAULT_SURAT_TUGAS_SCHEMA),
+          JSON.stringify(template.default_values || DEFAULT_SURAT_TUGAS_VALUES),
+          JSON.stringify(template.sample_data || DEFAULT_SURAT_TUGAS_VALUES),
+          session.userId,
+          nowSec
+        )
+        .run();
+    }
+
+    // 5. Compile Full Rendered Snapshot (Ensures 100% historical fidelity)
     const compiledSnapshot = {
       layout_config: template.layout_config,
       organization: orgSnapshot,
@@ -224,7 +264,7 @@ export async function generateDocumentAction(params: {
 
     const docTitle = params.form_data.document_title || template.name || 'Surat Tugas Resmi';
 
-    // 5. Persist to generated_documents
+    // 6. Persist to generated_documents
     await db
       .prepare(`
         INSERT INTO generated_documents (
@@ -241,14 +281,14 @@ export async function generateDocumentAction(params: {
         docTitle,
         JSON.stringify(params.form_data),
         JSON.stringify(compiledSnapshot),
-        params.signatory_id || null,
+        cleanSignatoryId,
         session.userId,
         nowSec,
         nowSec
       )
       .run();
 
-    // 6. Log Workflow Audit Event
+    // 7. Log Workflow Audit Event
     await logWorkflowEvent({
       entityType: 'project',
       entityId: docId,
@@ -274,14 +314,25 @@ export async function generateDocumentAction(params: {
 }
 
 /**
- * Fetches all generated documents with pagination and creator name.
+ * Fetches generated documents with permission filtering (Admin sees all, Users see assigned/created).
  */
 export async function getGeneratedDocuments(filter?: {
   type_code?: string;
   limit?: number;
 }): Promise<GeneratedDocumentItem[]> {
+  const session = await getSession();
+  if (!session) return [];
+
+  const ctx = await getSessionContext(session.userId);
+  const isPrivileged =
+    ctx.can('DOCUMENT_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.roles.includes('COORDINATOR');
+
   const db = await getDB();
-  const limit = filter?.limit || 50;
+  const limit = filter?.limit || 100;
   const typeFilter = filter?.type_code ? 'WHERE gd.type_code = ?' : '';
   const params = filter?.type_code ? [filter.type_code, limit] : [limit];
 
@@ -306,25 +357,74 @@ export async function getGeneratedDocuments(filter?: {
       .bind(...params)
       .all();
 
-    return (results || []).map((r: any) => ({
-      id: r.id,
-      template_id: r.template_id,
-      template_name: r.template_name || 'Custom Template',
-      template_version_id: r.template_version_id,
-      template_version: r.template_version || 1,
-      type_code: r.type_code,
-      document_number: r.document_number,
-      title: r.title,
-      form_data: JSON.parse(r.form_data || '{}'),
-      rendered_snapshot: JSON.parse(r.rendered_snapshot || '{}'),
-      status: r.status,
-      signatory_id: r.signatory_id,
-      signatory_name: r.signatory_name,
-      created_by: r.created_by,
-      created_by_name: r.created_by_name || 'Admin',
-      created_at: r.created_at,
-      updated_at: r.updated_at,
-    }));
+    // Fetch current user info for assignee matching
+    const currentUserRow = await db
+      .prepare('SELECT id, name, email, student_id_number FROM users WHERE id = ?')
+      .bind(session.userId)
+      .first() as { id: string; name: string; email: string; student_id_number: string | null } | null;
+
+    const currentUserName = currentUserRow?.name?.toLowerCase().trim() || '';
+    const currentUserNip = currentUserRow?.student_id_number?.toLowerCase().trim() || '';
+    const currentUserEmail = currentUserRow?.email?.toLowerCase().trim() || '';
+
+    const allDocs: GeneratedDocumentItem[] = (results || []).map((r: any) => {
+      let formData: Record<string, any> = {};
+      let renderedSnapshot: Record<string, any> = {};
+      try { formData = JSON.parse(r.form_data || '{}'); } catch {}
+      try { renderedSnapshot = JSON.parse(r.rendered_snapshot || '{}'); } catch {}
+
+      return {
+        id: r.id,
+        template_id: r.template_id,
+        template_name: r.template_name || 'Custom Template',
+        template_version_id: r.template_version_id,
+        template_version: r.template_version || 1,
+        type_code: r.type_code,
+        document_number: r.document_number,
+        title: r.title,
+        form_data: formData,
+        rendered_snapshot: renderedSnapshot as any,
+        status: r.status,
+        signatory_id: r.signatory_id,
+        signatory_name: r.signatory_name,
+        created_by: r.created_by,
+        created_by_name: r.created_by_name || 'Admin',
+        created_at: r.created_at,
+        updated_at: r.updated_at,
+      };
+    });
+
+    if (isPrivileged) {
+      return allDocs;
+    }
+
+    // For regular users / troopers, filter documents where they are either creator OR listed in assignees
+    return allDocs.filter((doc) => {
+      if (doc.created_by === session.userId) return true;
+
+      const assignees: any[] = Array.isArray(doc.form_data?.assignees)
+        ? doc.form_data.assignees
+        : Array.isArray((doc.rendered_snapshot as any)?.compiled_data?.assignees)
+        ? (doc.rendered_snapshot as any).compiled_data.assignees
+        : [];
+
+      return assignees.some((a) => {
+        const aName = (a.name || '').toLowerCase().trim();
+        const aNip = (a.nip || '').toLowerCase().trim();
+        const aEmail = (a.email || '').toLowerCase().trim();
+
+        if (currentUserName && (aName === currentUserName || aName.includes(currentUserName) || currentUserName.includes(aName))) {
+          return true;
+        }
+        if (currentUserNip && aNip && (aNip === currentUserNip || aNip.includes(currentUserNip))) {
+          return true;
+        }
+        if (currentUserEmail && aEmail && aEmail === currentUserEmail) {
+          return true;
+        }
+        return false;
+      });
+    });
   } catch (err) {
     console.error('getGeneratedDocuments error:', err);
     return [];
@@ -337,6 +437,17 @@ export async function getGeneratedDocuments(filter?: {
 export async function getGeneratedDocumentById(
   id: string
 ): Promise<GeneratedDocumentItem | null> {
+  const session = await getSession();
+  if (!session) return null;
+
+  const ctx = await getSessionContext(session.userId);
+  const isPrivileged =
+    ctx.can('DOCUMENT_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.roles.includes('COORDINATOR');
+
   const db = await getDB();
   try {
     const r = await db
@@ -359,7 +470,12 @@ export async function getGeneratedDocumentById(
 
     if (!r) return null;
 
-    return {
+    let formData: Record<string, any> = {};
+    let renderedSnapshot: Record<string, any> = {};
+    try { formData = JSON.parse(r.form_data || '{}'); } catch {}
+    try { renderedSnapshot = JSON.parse(r.rendered_snapshot || '{}'); } catch {}
+
+    const doc: GeneratedDocumentItem = {
       id: r.id,
       template_id: r.template_id,
       template_name: r.template_name || 'Custom Template',
@@ -368,8 +484,8 @@ export async function getGeneratedDocumentById(
       type_code: r.type_code,
       document_number: r.document_number,
       title: r.title,
-      form_data: JSON.parse(r.form_data || '{}'),
-      rendered_snapshot: JSON.parse(r.rendered_snapshot || '{}'),
+      form_data: formData,
+      rendered_snapshot: renderedSnapshot as any,
       status: r.status,
       signatory_id: r.signatory_id,
       signatory_name: r.signatory_name,
@@ -378,6 +494,49 @@ export async function getGeneratedDocumentById(
       created_at: r.created_at,
       updated_at: r.updated_at,
     };
+
+    if (isPrivileged || doc.created_by === session.userId) {
+      return doc;
+    }
+
+    // Verify if regular user is listed in assignees
+    const currentUserRow = await db
+      .prepare('SELECT id, name, email, student_id_number FROM users WHERE id = ?')
+      .bind(session.userId)
+      .first() as { id: string; name: string; email: string; student_id_number: string | null } | null;
+
+    const currentUserName = currentUserRow?.name?.toLowerCase().trim() || '';
+    const currentUserNip = currentUserRow?.student_id_number?.toLowerCase().trim() || '';
+    const currentUserEmail = currentUserRow?.email?.toLowerCase().trim() || '';
+
+    const assignees: any[] = Array.isArray(doc.form_data?.assignees)
+      ? doc.form_data.assignees
+      : Array.isArray((doc.rendered_snapshot as any)?.compiled_data?.assignees)
+      ? (doc.rendered_snapshot as any).compiled_data.assignees
+      : [];
+
+    const isAssigned = assignees.some((a) => {
+      const aName = (a.name || '').toLowerCase().trim();
+      const aNip = (a.nip || '').toLowerCase().trim();
+      const aEmail = (a.email || '').toLowerCase().trim();
+
+      if (currentUserName && (aName === currentUserName || aName.includes(currentUserName) || currentUserName.includes(aName))) {
+        return true;
+      }
+      if (currentUserNip && aNip && (aNip === currentUserNip || aNip.includes(currentUserNip))) {
+        return true;
+      }
+      if (currentUserEmail && aEmail && aEmail === currentUserEmail) {
+        return true;
+      }
+      return false;
+    });
+
+    if (!isAssigned) {
+      return null;
+    }
+
+    return doc;
   } catch (err) {
     console.error('getGeneratedDocumentById error:', err);
     return null;

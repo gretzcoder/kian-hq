@@ -33,17 +33,12 @@ export default async function DocumentsDashboardPage({
     ctx.can('DOCUMENT_CREATE') ||
     canManage;
 
-  const isOJT = ctx.userType === 'OJT';
-  if (isOJT && !canCreate) {
-    redirect('/dashboard');
-  }
-
   const resolvedParams = await searchParams;
-  const activeTab = resolvedParams.tab === 'templates' ? 'templates' : 'documents';
+  const activeTab = canManage && resolvedParams.tab === 'templates' ? 'templates' : 'documents';
 
   const [documents, templates] = await Promise.all([
     getGeneratedDocuments(),
-    getDocumentTemplates(),
+    canManage ? getDocumentTemplates() : Promise.resolve([]),
   ]);
 
   const activeTemplatesCount = templates.filter((t) => t.status === 'ACTIVE').length;
@@ -56,11 +51,13 @@ export default async function DocumentsDashboardPage({
           <div className="flex items-center gap-2">
             <span className="text-2xl sm:text-3xl">📑</span>
             <h1 className="text-xl sm:text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-100">
-              Dokumen &amp; Generator Surat Resmi
+              Dokumen &amp; Surat Resmi
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Engine penerbitan surat tugas, undangan, dan dokumen resmi KIAN Troopers dengan layout presisi A4 &amp; lampiran otomatis.
+            {canCreate
+              ? 'Engine penerbitan surat tugas, undangan, dan dokumen resmi KIAN Troopers dengan layout presisi A4 & lampiran otomatis.'
+              : 'Daftar surat tugas dan dokumen resmi KIAN Troopers yang ditugaskan kepada Anda.'}
           </p>
         </div>
 
@@ -86,10 +83,10 @@ export default async function DocumentsDashboardPage({
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className={`grid grid-cols-1 ${canManage ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
         <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
           <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-            Total Dokumen Diterbitkan
+            {canManage ? 'Total Dokumen Diterbitkan' : 'Dokumen Anda'}
           </p>
           <p className="text-2xl font-black text-zinc-900 dark:text-zinc-100 mt-1 font-mono">
             {documents.length}
@@ -99,55 +96,72 @@ export default async function DocumentsDashboardPage({
           </span>
         </div>
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
-          <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-            Template Aktif
-          </p>
-          <p className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1 font-mono">
-            {activeTemplatesCount}
-          </p>
-          <span className="text-[10px] text-zinc-500 font-medium">
-            Surat Tugas, Undangan, SK, dll.
-          </span>
-        </div>
+        {canManage ? (
+          <>
+            <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
+              <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                Template Aktif
+              </p>
+              <p className="text-2xl font-black text-purple-600 dark:text-purple-400 mt-1 font-mono">
+                {activeTemplatesCount}
+              </p>
+              <span className="text-[10px] text-zinc-500 font-medium">
+                Surat Tugas, Undangan, SK, dll.
+              </span>
+            </div>
 
-        <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
-          <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-            Format Penomoran
-          </p>
-          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-2 font-mono truncate">
-            &#123;seq&#125;/KIAN/TROOPERS/IX/2026
-          </p>
-          <span className="text-[10px] text-emerald-600 font-medium">
-            ✓ Auto sequence &amp; Concurrency Safe
-          </span>
-        </div>
+            <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
+              <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                Format Penomoran
+              </p>
+              <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-2 font-mono truncate">
+                &#123;seq&#125;/KIAN/TROOPERS/IX/2026
+              </p>
+              <span className="text-[10px] text-emerald-600 font-medium">
+                ✓ Auto sequence &amp; Concurrency Safe
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
+            <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+              Status Akses
+            </p>
+            <p className="text-sm font-bold text-emerald-600 mt-2 flex items-center gap-1">
+              <span>✓</span> Terverifikasi Resmi
+            </p>
+            <span className="text-[10px] text-zinc-500 font-medium">
+              Bisa dilihat dan diunduh format PDF A4
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-        <Link
-          href="/dashboard/documents"
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            activeTab === 'documents'
-              ? 'bg-purple-600 text-white shadow-xs'
-              : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-          }`}
-        >
-          <span>📜</span> Dokumen Diterbitkan ({documents.length})
-        </Link>
-        <Link
-          href="/dashboard/documents?tab=templates"
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            activeTab === 'templates'
-              ? 'bg-purple-600 text-white shadow-xs'
-              : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-          }`}
-        >
-          <span>📋</span> Katalog Template ({templates.length})
-        </Link>
-      </div>
-
+      {/* Tabs Navigation (Only shown for managers with multiple tabs) */}
+      {canManage && (
+        <div className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+          <Link
+            href="/dashboard/documents"
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'documents'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+            }`}
+          >
+            <span>📜</span> Dokumen Diterbitkan ({documents.length})
+          </Link>
+          <Link
+            href="/dashboard/documents?tab=templates"
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'templates'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+            }`}
+          >
+            <span>📋</span> Katalog Template ({templates.length})
+          </Link>
+        </div>
+      )}
       {/* Tab Content */}
       {activeTab === 'documents' ? (
         <DocumentListTable documents={documents} canManage={canManage} />

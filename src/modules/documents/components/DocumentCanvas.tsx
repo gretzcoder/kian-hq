@@ -400,7 +400,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               ) : (
                 <BrandLogoHeader />
               )}
-              {isBuilderInteractive && (
+              {isBuilderInteractive && selectedKopElement === 'logo' && (
                 <span className="absolute -top-4 -left-1 text-[8px] bg-purple-600 text-white font-mono font-bold px-1 rounded shadow-xs">
                   Logo (Drag)
                 </span>
@@ -445,7 +445,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               >
                 Nomor : {docNumber}
               </p>
-              {isBuilderInteractive && (
+              {isBuilderInteractive && selectedKopElement === 'titleBlock' && (
                 <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] bg-purple-600 text-white font-mono font-bold px-1.5 rounded shadow-xs">
                   Judul &amp; Nomor (Drag)
                 </span>
@@ -488,7 +488,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               <span className="select-none whitespace-pre-wrap leading-tight block break-words">
                 {ct.text}
               </span>
-              {isBuilderInteractive && (
+              {isBuilderInteractive && selectedKopElement === `customText_${ct.id}` && (
                 <span className="absolute -top-3.5 -left-1 text-[8px] bg-indigo-600 text-white font-mono font-bold px-1 rounded shadow-xs">
                   {ct.name || 'Custom Teks'} (Drag)
                 </span>
