@@ -41,6 +41,7 @@ interface SidebarProps {
   canCreateBrief:  boolean;
   canUseAI:        boolean;
   canManageSparks?: boolean;
+  canManageDocuments?: boolean;
   isOJT?:          boolean;
   isMentor?:       boolean;
   isLocked?:       boolean;
@@ -93,6 +94,7 @@ export default function DashboardSidebar({
   canCreateBrief,
   canUseAI,
   canManageSparks = false,
+  canManageDocuments = false,
   isOJT         = false,
   isLocked      = false,
   announcementTimestamps = [],
@@ -244,6 +246,9 @@ export default function DashboardSidebar({
           : []),
         ...(canManageSparks
           ? [{ href: '/dashboard/sparks', label: 'Sparks', icon: '✨', exact: false }]
+          : []),
+        ...(canManageDocuments
+          ? [{ href: '/dashboard/documents', label: 'Dokumen & Surat', icon: '📑', exact: false }]
           : []),
       ],
     },

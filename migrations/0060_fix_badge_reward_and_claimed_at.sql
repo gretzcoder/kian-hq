@@ -1,5 +1,7 @@
 -- Migration 0060: Fix Badge Reward and badge_id in sparks_adjustments
 ALTER TABLE sparks_adjustments ADD COLUMN badge_id TEXT;
+ALTER TABLE user_badges ADD COLUMN claimed_at INTEGER;
+ALTER TABLE user_badges ADD COLUMN claim_count INTEGER DEFAULT 1;
 
 CREATE INDEX IF NOT EXISTS idx_user_badges_claimed ON user_badges(claimed_at);
 CREATE INDEX IF NOT EXISTS idx_sparks_adjustments_badge ON sparks_adjustments(badge_id);

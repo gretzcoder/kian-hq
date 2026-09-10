@@ -11,4 +11,6 @@ INSERT OR IGNORE INTO community_categories (id, name, icon, sort_order) VALUES
   ('cat_work', 'KATEGORI KERJAAN', '💼', 1),
   ('cat_general', 'GENERAL & SANTAI', '💬', 2);
 
+ALTER TABLE community_channels ADD COLUMN is_default INTEGER DEFAULT 0;
+
 UPDATE community_channels SET is_default = 1 WHERE slug = 'general-chit-chat' OR id = 'chan_general';

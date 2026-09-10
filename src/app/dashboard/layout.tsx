@@ -82,6 +82,12 @@ export default async function DashboardLayout({
   const canCreateBrief  = ctx.can('BRIEF_CREATE') || ctx.can('BRIEF_REVIEW');
   const canUseAI        = ctx.can('USE_AI');
   const canViewProjects = ctx.can('PROJECT_CREATE') || ctx.can('PROJECT_MANAGE');
+  const canManageDocuments =
+    ctx.can('DOCUMENT_MANAGE') ||
+    ctx.can('DOCUMENT_CREATE') ||
+    ctx.can('MANAGE') ||
+    isCoordinator ||
+    ctx.permissions.has('ADMIN_SYSTEM');
   const isOJT           = ctx.userType === 'OJT';
 
   // Detect if OJT user is a project mentor (for simplified nav)
@@ -150,6 +156,7 @@ export default async function DashboardLayout({
             canCreateBrief={canCreateBrief}
             canUseAI={canUseAI}
             canManageSparks={canManageSparks}
+            canManageDocuments={canManageDocuments}
             isOJT={isOJT}
             isMentor={isMentor}
             isLocked={isDashboardLocked}

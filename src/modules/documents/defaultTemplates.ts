@@ -1,0 +1,208 @@
+import {
+  FormFieldSchema,
+  OrganizationSnapshot,
+  TemplateLayoutConfig,
+} from './documentTypes';
+
+export const DEFAULT_ORGANIZATION_PROFILE: OrganizationSnapshot = {
+  name: 'KIAN TROOPERS (Kreasi Inovasi Anak Nusantara)',
+  address_line_1:
+    'Jl. Dewi Sartika No.289, RT.4/RW.5, Cawang, Kec. Kramat jati,',
+  address_line_2:
+    'Kota Jakarta Timur, Daerah Khusus Ibukota Jakarta 13630',
+  phone: '0812-8275-0318',
+  email: 'kianeo.production@gmail.com',
+  website: 'www.kianorganizer.com',
+  logo_url: '/kian.ico',
+};
+
+export const DEFAULT_SURAT_TUGAS_LAYOUT: TemplateLayoutConfig = {
+  pageSize: 'A4',
+  orientation: 'portrait',
+  paddingMm: {
+    top: 14,
+    bottom: 14,
+    left: 18,
+    right: 18,
+  },
+  fontFamily: 'Times New Roman',
+  fontSizeBasePt: 10.5,
+  primaryColor: '#002B7F',
+  annexThresholdRows: 4, // If assignees >= 4 or overflows page 1, automatically paginate as Lampiran
+  tableColumns: [
+    { key: 'no', label: 'No', widthPercent: 8, align: 'center' },
+    { key: 'nip', label: 'NIP', widthPercent: 22, align: 'center' },
+    { key: 'name', label: 'NAMA', widthPercent: 42, align: 'left' },
+    { key: 'role', label: 'Tugas', widthPercent: 28, align: 'left' },
+  ],
+  flowSections: [
+    { id: 'sec_header', type: 'HEADER_LOGO', visible: true, spacingBottomMm: 8 },
+    { id: 'sec_title', type: 'TITLE_AND_NUMBER', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_intro', type: 'INTRO_TEXT', visible: true, spacingBottomMm: 4 },
+    { id: 'sec_table', type: 'ASSIGNEE_TABLE', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_event', type: 'EVENT_DETAILS', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_closing', type: 'CLOSING_TEXT', visible: true, spacingBottomMm: 8 },
+    { id: 'sec_sig', type: 'SIGNATURE_BLOCK', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_cc', type: 'TEMBUSAN_BLOCK', visible: true, spacingBottomMm: 4 },
+    { id: 'sec_footer', type: 'FOOTER_CONTACT', visible: true, spacingBottomMm: 0 },
+  ],
+};
+
+export const DEFAULT_SURAT_TUGAS_SCHEMA: FormFieldSchema[] = [
+  {
+    key: 'document_title',
+    label: 'Judul Dokumen',
+    type: 'text',
+    required: true,
+    defaultValue: 'SURAT TUGAS',
+    placeholder: 'Contoh: SURAT TUGAS',
+  },
+  {
+    key: 'signer_title_intro',
+    label: 'Jabatan Pemberi Tugas (Intro)',
+    type: 'text',
+    required: true,
+    defaultValue: 'Project Director Kian Troopers',
+    placeholder: 'Contoh: Project Director Kian Troopers',
+    helpText: 'Teks pengantar di bagian atas ("Yang bertanda tangan dibawah ini, ...")',
+  },
+  {
+    key: 'intro_text',
+    label: 'Kalimat Pembuka',
+    type: 'textarea',
+    required: true,
+    defaultValue:
+      'Yang bertanda tangan dibawah ini, {signer_title_intro}, menugaskan kepada :',
+    placeholder: 'Kalimat pembuka penugasan...',
+  },
+  {
+    key: 'assignees',
+    label: 'Daftar Petugas / Personil',
+    type: 'assignee_table',
+    required: true,
+    defaultValue: [
+      {
+        no: 1,
+        nip: '17250703',
+        name: 'Muhammad Naufal Revian',
+        role: 'Camera Operator',
+      },
+    ],
+    helpText: 'Tambah personil dari database users atau masukkan manual.',
+  },
+  {
+    key: 'event_intro_text',
+    label: 'Kalimat Pengantar Event',
+    type: 'textarea',
+    required: true,
+    defaultValue:
+      'Untuk berpartisipasi pada event {event_name}, dengan rincian sebagai berikut:',
+  },
+  {
+    key: 'event_name',
+    label: 'Nama Event / Proyek',
+    type: 'text',
+    required: true,
+    defaultValue: 'BKOT (Bincang Kampus Bersama Orang Tua) UBSI',
+    placeholder: 'Contoh: BKOT UBSI 2026',
+  },
+  {
+    key: 'event_days',
+    label: 'Hari / Tanggal Pelaksanaan',
+    type: 'text',
+    required: true,
+    defaultValue: "Jum'at - Sabtu, 11 - 12 September 2026",
+    placeholder: 'Contoh: Sabtu, 12 September 2026',
+  },
+  {
+    key: 'event_time',
+    label: 'Waktu / Pukul',
+    type: 'text',
+    required: true,
+    defaultValue: '07.30 WIB - Selesai',
+    placeholder: 'Contoh: 08.00 WIB - 17.00 WIB',
+  },
+  {
+    key: 'event_location',
+    label: 'Tempat / Lokasi',
+    type: 'text',
+    required: true,
+    defaultValue: 'Hotel Santika Depok',
+    placeholder: 'Contoh: Hotel Santika Depok / Gedung Graha Kian',
+  },
+  {
+    key: 'closing_text',
+    label: 'Kalimat Penutup',
+    type: 'textarea',
+    required: true,
+    defaultValue:
+      'Demikianlah penugasan ini agar dapat dilaksanakan sebagaimana mestinya. Atas perhatian dan kerja samanya, kami mengucapkan terima kasih.',
+  },
+  {
+    key: 'document_date_place',
+    label: 'Tempat & Tanggal Surat',
+    type: 'text',
+    required: true,
+    defaultValue: 'Jakarta, 10 September 2026',
+    placeholder: 'Contoh: Jakarta, 10 September 2026',
+  },
+  {
+    key: 'signatory_position',
+    label: 'Jabatan Penandatangan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Program Director Kian Troopers',
+    placeholder: 'Contoh: Program Director Kian Troopers',
+  },
+  {
+    key: 'signatory_name',
+    label: 'Nama Penandatangan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Mohamad Abi',
+    placeholder: 'Contoh: Mohamad Abi',
+  },
+  {
+    key: 'show_stamp',
+    label: 'Tampilkan Stempel KIAN',
+    type: 'checkbox',
+    required: false,
+    defaultValue: true,
+  },
+  {
+    key: 'cc_list',
+    label: 'Tembusan (CC)',
+    type: 'repeatable_list',
+    required: false,
+    defaultValue: ['1. CEO', '2. CBO', '3. Ybs'],
+    helpText: 'Daftar pihak yang menerima tembusan surat.',
+  },
+];
+
+export const DEFAULT_SURAT_TUGAS_VALUES = {
+  document_title: 'SURAT TUGAS',
+  signer_title_intro: 'Project Director Kian Troopers',
+  intro_text:
+    'Yang bertanda tangan dibawah ini, Project Director Kian Troopers, menugaskan kepada :',
+  assignees: [
+    {
+      no: 1,
+      nip: '17250703',
+      name: 'Muhammad Naufal Revian',
+      role: 'Camera Operator',
+    },
+  ],
+  event_intro_text:
+    'Untuk berpartisipasi pada event BKOT (Bincang Kampus Bersama Orang Tua) UBSI, dengan rincian sebagai berikut:',
+  event_name: 'BKOT (Bincang Kampus Bersama Orang Tua) UBSI',
+  event_days: "Jum'at - Sabtu, 11 - 12 September 2026",
+  event_time: '07.30 WIB - Selesai',
+  event_location: 'Hotel Santika Depok',
+  closing_text:
+    'Demikianlah penugasan ini agar dapat dilaksanakan sebagaimana mestinya. Atas perhatian dan kerja samanya, kami mengucapkan terima kasih.',
+  document_date_place: 'Jakarta, 10 September 2026',
+  signatory_position: 'Program Director Kian Troopers',
+  signatory_name: 'Mohamad Abi',
+  show_stamp: true,
+  cc_list: ['1. CEO', '2. CBO', '3. Ybs'],
+};
