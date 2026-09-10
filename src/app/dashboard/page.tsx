@@ -35,6 +35,7 @@ interface PersonalTaskRow {
   assignment_role?: string | null;
   workspace_type?: string | null;
   task_type?: string | null;
+  task_created_by?: string | null;
   assigned_mentors?: string | null;
   mentor_name?: string | null;
   creator_name?: string | null;
@@ -219,7 +220,12 @@ export default async function DashboardPage() {
         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
         LEFT JOIN users u ON ta.user_id = u.id
         LEFT JOIN users u_creator ON t.created_by = u_creator.id
-        WHERE (ta.user_id = ? OR t.created_by = ?)
+        WHERE (
+          ta.user_id = ?
+          OR t.created_by = ?
+          OR EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = ws.id AND wm.user_id = ?)
+          OR (t.assigned_mentors IS NOT NULL AND t.assigned_mentors LIKE '%' || ? || '%')
+        )
           AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
           AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
           AND (
@@ -228,8 +234,8 @@ export default async function DashboardPage() {
             (COALESCE(t.task_type, '') != 'ASSESSMENT' AND COALESCE(ws.workspace_type, '') != 'ASSESSMENT' AND t.status NOT IN ('DELETED', 'ARCHIVED'))
           )
         ORDER BY t.deadline ASC
-        LIMIT 30
-      `).bind(session.userId, session.userId).all(),
+        LIMIT 50
+      `).bind(session.userId, session.userId, session.userId, session.userId).all(),
 
       db.prepare(`
         SELECT
@@ -244,6 +250,7 @@ export default async function DashboardPage() {
           p.name AS project_name,
           u.name AS assigned_name,
           u_creator.name AS creator_name,
+          t.assigned_mentors,
           ta.assignment_role,
           ta.sparks,
           ta.appreciation_note AS appreciation_note,
@@ -258,7 +265,12 @@ export default async function DashboardPage() {
         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
         LEFT JOIN users u ON ta.user_id = u.id
         LEFT JOIN users u_creator ON t.created_by = u_creator.id
-        WHERE (t.created_by = ? OR ws.created_by = ?) AND ta.user_id != ?
+        WHERE (
+          t.created_by = ?
+          OR ws.created_by = ?
+          OR EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = ws.id AND wm.user_id = ?)
+          OR (t.assigned_mentors IS NOT NULL AND t.assigned_mentors LIKE '%' || ? || '%')
+        ) AND ta.user_id != ?
           AND ta.status NOT IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'ARCHIVED', 'DONE')
           AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
           AND (
@@ -268,7 +280,7 @@ export default async function DashboardPage() {
           )
         ORDER BY t.deadline ASC
         LIMIT 50
-      `).bind(session.userId, session.userId, session.userId).all(),
+      `).bind(session.userId, session.userId, session.userId, session.userId, session.userId).all(),
 
       db.prepare(`
         SELECT
@@ -282,6 +294,7 @@ export default async function DashboardPage() {
           p.name AS project_name,
           u.name AS assigned_name,
           u_creator.name AS creator_name,
+          t.assigned_mentors,
           ta.assignment_role,
           ta.sparks,
           ta.appreciation_note AS appreciation_note,
@@ -294,16 +307,23 @@ export default async function DashboardPage() {
         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
         LEFT JOIN users u ON ta.user_id = u.id
         LEFT JOIN users u_creator ON t.created_by = u_creator.id
-        WHERE (ta.user_id = ? OR t.created_by = ?)
+        WHERE (
+          ta.user_id = ?
+          OR t.created_by = ?
+          OR EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = ws.id AND wm.user_id = ?)
+          OR (t.assigned_mentors IS NOT NULL AND t.assigned_mentors LIKE '%' || ? || '%')
+        )
           AND ta.status IN ('APPROVED', 'LOCKED', 'PUBLISHED', 'DONE')
           AND t.status != 'DELETED' AND (ws.id IS NULL OR ws.deleted_at IS NULL)
         ORDER BY ta.reviewed_at DESC, ta.submitted_at DESC
-        LIMIT 30
-      `).bind(session.userId, session.userId).all(),
+        LIMIT 50
+      `).bind(session.userId, session.userId, session.userId, session.userId).all(),
     ]);
 
     personalTasks = (mActiveRes.results || []) as unknown as PersonalTaskRow[];
     trooperTasks = (tActiveRes.results || []) as unknown as PersonalTaskRow[];
+    mentorTasks = [];
+    reviewTasks = trooperTasks.filter((r) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(r.status));
     completedTasks = (cResultsRes.results || []) as unknown as PersonalTaskRow[];
   } else {
     // TROOPERS (OJT): show their own active assignments & completed work
@@ -362,6 +382,7 @@ export default async function DashboardPage() {
           p.name AS project_name,
           u.name AS assigned_name,
           u_creator.name AS creator_name,
+          t.assigned_mentors,
           ta.assignment_role,
           ta.sparks,
           ta.appreciation_note AS appreciation_note,
@@ -398,7 +419,24 @@ export default async function DashboardPage() {
     });
   }
 
-  // ── Resolve assigned_mentors names for DashboardPersonalWorkspace ──
+  // ── Resolve workspace_mentors and assigned_mentors names for Dashboard ──
+  const { results: allWsMentors } = await db
+    .prepare(`
+      SELECT wm.workspace_id, wm.user_id, u.name 
+      FROM workspace_mentors wm 
+      JOIN users u ON wm.user_id = u.id
+    `)
+    .all();
+
+  const wsMentorsMap: Record<string, { id: string; name: string }[]> = {};
+  let dashMentorMap: Record<string, string> = {};
+
+  ((allWsMentors as any[]) || []).forEach((row) => {
+    if (!wsMentorsMap[row.workspace_id]) wsMentorsMap[row.workspace_id] = [];
+    wsMentorsMap[row.workspace_id].push({ id: row.user_id, name: row.name });
+    dashMentorMap[row.user_id] = row.name;
+  });
+
   const allDashboardTasks = [...personalTasks, ...trooperTasks, ...mentorTasks, ...reviewTasks, ...completedTasks];
   const allAssignedMentorIds = new Set<string>();
   for (const tRow of allDashboardTasks) {
@@ -410,17 +448,18 @@ export default async function DashboardPage() {
     }
   }
 
-  let dashMentorMap: Record<string, string> = {};
   if (allAssignedMentorIds.size > 0) {
-    const idsArr = Array.from(allAssignedMentorIds);
-    const placeholders = idsArr.map(() => '?').join(',');
-    const { results: mentorUsers } = await db
-      .prepare(`SELECT id, name FROM users WHERE id IN (${placeholders})`)
-      .bind(...idsArr)
-      .all();
-    ((mentorUsers as any[]) || []).forEach((u) => {
-      dashMentorMap[u.id] = u.name;
-    });
+    const idsArr = Array.from(allAssignedMentorIds).filter((id) => !dashMentorMap[id]);
+    if (idsArr.length > 0) {
+      const placeholders = idsArr.map(() => '?').join(',');
+      const { results: mentorUsers } = await db
+        .prepare(`SELECT id, name FROM users WHERE id IN (${placeholders})`)
+        .bind(...idsArr)
+        .all();
+      ((mentorUsers as any[]) || []).forEach((u) => {
+        dashMentorMap[u.id] = u.name;
+      });
+    }
   }
 
   const mapMentorName = (tRow: PersonalTaskRow) => {
@@ -435,7 +474,16 @@ export default async function DashboardPage() {
         }
       } catch (_e) {}
     }
-    return { ...tRow, mentor_name: tRow.creator_name };
+    if (tRow.workspace_id && wsMentorsMap[tRow.workspace_id]?.length > 0) {
+      const names = wsMentorsMap[tRow.workspace_id]
+        .map((m) => (m.id === session.userId ? 'Anda' : m.name))
+        .filter(Boolean);
+      if (names.length > 0) return { ...tRow, mentor_name: names.join(', ') };
+    }
+    return {
+      ...tRow,
+      mentor_name: tRow.task_created_by === session.userId ? 'Anda' : (tRow.creator_name || null),
+    };
   };
 
   personalTasks = personalTasks.map(mapMentorName);
@@ -475,22 +523,23 @@ export default async function DashboardPage() {
       ws.ojt_coordinator_id,
       t.project_id,
       p.name           AS project_name,
-      u.name           AS creator_name,
+      u.name           AS submitter_name,
+      u_creator.name   AS task_creator_name,
       EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ? AND team_role = 'LEADER') AS is_lead,
       EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND team_role = 'LEADER') AS has_lead,
       EXISTS (SELECT 1 FROM workspace_members WHERE workspace_id = ws.id AND user_id = ta.user_id AND team_role = 'LEADER') AS submitter_is_lead,
       (
         (EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = ws.id AND wm.user_id = ?))
-      ) AS is_mentor,
+      ) AS is_ws_mentor,
       (
         (EXISTS (SELECT 1 FROM workspace_mentors wm WHERE wm.workspace_id = ws.id))
-        OR (t.assigned_mentors IS NOT NULL AND length(t.assigned_mentors) > 2)
-      ) AS has_mentor
+      ) AS ws_has_mentors
     FROM task_assignments ta
     JOIN tasks t       ON ta.task_id = t.id
     JOIN projects p    ON t.project_id = p.id
     LEFT JOIN workspaces ws ON t.workspace_id = ws.id
     LEFT JOIN users u  ON ta.user_id = u.id
+    LEFT JOIN users u_creator ON t.created_by = u_creator.id
     WHERE ta.status IN ('WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED')
       AND ta.result_url IS NOT NULL
       AND TRIM(ta.result_url) != ''
@@ -502,73 +551,99 @@ export default async function DashboardPage() {
     .bind(session.userId, session.userId)
     .all();
 
-  const allQCReviews = rawPendingQCReviews as unknown as (QCReviewItem & {
-    user_id?: string;
-    task_created_by?: string | null;
-    task_type?: string | null;
-    is_lead?: number;
-    has_lead?: number;
-    submitter_is_lead?: number;
-  })[];
+  const allQCReviews = (rawPendingQCReviews as any[]) || [];
 
-  const pendingQCReviews = allQCReviews.filter((r: any) => {
-    // ── Exclude own submissions ──
-    if (r.user_id === session.userId) return false;
+  const pendingQCReviews = allQCReviews
+    .map((r: any) => {
+      let isAssignedTaskMentor = Boolean(r.is_ws_mentor);
+      let hasExplicitMentors = Boolean(r.ws_has_mentors);
+      let mentorDisplayNames: string[] = [];
 
-    let isAssignedTaskMentor = Boolean(r.is_mentor);
-    let hasExplicitMentors = false;
-    if (r.assigned_mentors) {
-      try {
-        const ids = JSON.parse(r.assigned_mentors);
-        if (Array.isArray(ids) && ids.length > 0) {
-          hasExplicitMentors = true;
-          if (ids.includes(session.userId)) {
-            isAssignedTaskMentor = true;
+      if (r.assigned_mentors) {
+        try {
+          const ids = JSON.parse(r.assigned_mentors);
+          if (Array.isArray(ids) && ids.length > 0) {
+            hasExplicitMentors = true;
+            if (ids.includes(session.userId)) {
+              isAssignedTaskMentor = true;
+            }
+            mentorDisplayNames = ids
+              .map((id) => (id === session.userId ? 'Anda' : dashMentorMap[id] || null))
+              .filter((n): n is string => Boolean(n));
           }
+        } catch (_e) {}
+      }
+
+      if (mentorDisplayNames.length === 0 && r.workspace_id && wsMentorsMap[r.workspace_id]?.length > 0) {
+        mentorDisplayNames = wsMentorsMap[r.workspace_id]
+          .map((m) => (m.id === session.userId ? 'Anda' : m.name))
+          .filter((n): n is string => Boolean(n));
+      }
+
+      if (!hasExplicitMentors && r.task_created_by === session.userId) {
+        isAssignedTaskMentor = true;
+      }
+
+      const mentorName =
+        mentorDisplayNames.length > 0
+          ? mentorDisplayNames.join(', ')
+          : r.task_created_by === session.userId
+          ? 'Anda'
+          : r.task_creator_name || null;
+
+      return {
+        ...r,
+        is_mentor: isAssignedTaskMentor ? 1 : 0,
+        is_staff_coordinator: isStaffCoordinator,
+        has_mentor_on_task: hasExplicitMentors,
+        mentor_name: mentorName,
+        assignee_name: r.submitter_name,
+        creator_name: r.submitter_name,
+      };
+    })
+    .filter((r: any) => {
+      // ── Exclude own submissions ──
+      if (r.user_id === session.userId) return false;
+
+      // ── Mentor Workspaces: ONLY Coordinators/Admins evaluate submissions ──
+      if (
+        r.workspace_type === 'MENTOR' ||
+        r.task_type === 'MENTOR' ||
+        (r.project_name ? r.project_name.toUpperCase().includes('MENTOR') : false)
+      ) {
+        const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
+        if (!isStaffCoordinator && !isTaskCreator) return false;
+        return r.coordinator_approved === 0;
+      }
+
+      if (r.task_type === 'ASSESSMENT') {
+        if (r.is_mentor === 1 && r.mentor_approved === 0) return true;
+        if (isStaffCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
+        return false;
+      }
+
+      // Regular / Troopers:
+      // Stage 1 (Ketua Tim QC):
+      if (r.is_lead && r.lead_approved === 0) return true;
+
+      // Stage 2 (Mentor Review):
+      if (r.is_mentor === 1 && r.mentor_approved === 0) {
+        if (r.has_lead && !r.submitter_is_lead) {
+          // Must pass Ketua Tim QC first
+          return r.lead_approved === 1;
         }
-      } catch (_e) {}
-    }
-    if (!hasExplicitMentors && r.task_created_by === session.userId) {
-      isAssignedTaskMentor = true;
-    }
+        return true;
+      }
 
-    const hasMentorOnTask = Boolean(r.has_mentor || hasExplicitMentors);
-
-    // ── Mentor Workspaces: ONLY Coordinators/Admins evaluate submissions ──
-    if (r.workspace_type === 'MENTOR' || r.task_type === 'MENTOR' || (r.project_name ? r.project_name.toUpperCase().includes('MENTOR') : false)) {
-      const isTaskCreator = r.task_created_by != null && r.task_created_by === session.userId;
-      if (!isStaffCoordinator && !isTaskCreator) return false;
-      return r.coordinator_approved === 0;
-    }
-
-    if (r.task_type === 'ASSESSMENT') {
-      if (isAssignedTaskMentor && r.mentor_approved === 0) return true;
-      if (isStaffCoordinator && r.mentor_approved === 1 && r.coordinator_approved === 0) return true;
+      // Stage 3 (Coordinator Review):
+      if (isStaffCoordinator) {
+        if (r.has_mentor_on_task) {
+          return r.mentor_approved === 1 && r.coordinator_approved === 0;
+        }
+        return r.coordinator_approved === 0;
+      }
       return false;
-    }
-
-    // Regular / Troopers:
-    // Stage 1 (Ketua Tim QC):
-    if (r.is_lead && r.lead_approved === 0) return true;
-
-    // Stage 2 (Mentor Review):
-    if (isAssignedTaskMentor && r.mentor_approved === 0) {
-      if (r.has_lead && !r.submitter_is_lead) {
-        // Must pass Ketua Tim QC first
-        return r.lead_approved === 1;
-      }
-      return true;
-    }
-
-    // Stage 3 (Coordinator Review):
-    if (isStaffCoordinator) {
-      if (hasMentorOnTask) {
-        return r.mentor_approved === 1 && r.coordinator_approved === 0;
-      }
-      return r.coordinator_approved === 0;
-    }
-    return false;
-  });
+    });
 
   async function handlePostAnnouncement(formData: FormData) {
     'use server';

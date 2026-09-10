@@ -25,6 +25,7 @@ export default function ReviewActions({
   taskType,
   isAssessmentMentorStep = false,
   creatorName,
+  mentorName,
   isStaffOrCoord = false,
   mentorApproved = 0,
   coordinatorApproved = 0,
@@ -42,6 +43,7 @@ export default function ReviewActions({
   taskType?: string | null;
   isAssessmentMentorStep?: boolean;
   creatorName?: string | null;
+  mentorName?: string | null;
   isStaffOrCoord?: boolean;
   mentorApproved?: number;
   coordinatorApproved?: number;
@@ -53,6 +55,7 @@ export default function ReviewActions({
   taskExtendedDeadline?: number | null;
   workspaceId?: string;
 }) {
+  const displayMentorName = mentorName || creatorName;
   const isMentorWorkspace = isMentorWs || taskType === 'MENTOR';
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'NONE' | 'SPARK_MODAL' | 'REVISION' | 'DECLINE'>('NONE');
@@ -238,7 +241,7 @@ export default function ReviewActions({
                     <span>{mentorApproved === 1 ? '✓ Selesai ACC' : '⏳ Menunggu'}</span>
                   </div>
                   <p className="text-[9px] text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
-                    {creatorName ? `Mentor: ${creatorName}` : 'Pemeriksaan Hasil Karya'}
+                    {displayMentorName ? `Mentor: ${displayMentorName}` : 'Pemeriksaan Hasil Karya'}
                   </p>
                 </div>
 
@@ -321,7 +324,7 @@ export default function ReviewActions({
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="text-xs font-black text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
                         <span>⏳ Menunggu Review Tahap 1 oleh Mentor</span>
-                        {creatorName && <strong className="text-zinc-900 dark:text-zinc-100">({creatorName})</strong>}
+                        {displayMentorName && <strong className="text-zinc-900 dark:text-zinc-100">({displayMentorName})</strong>}
                       </span>
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-900 dark:text-amber-200 border border-amber-500/30">
                         Belum ACC Mentor
@@ -335,7 +338,7 @@ export default function ReviewActions({
                       <SendReminderButton
                         assignmentId={assignmentId}
                         targetRole="MENTOR"
-                        mentorName={creatorName}
+                        mentorName={displayMentorName}
                         className="py-2 px-3 text-xs"
                       />
                       {canRequestRevision && (

@@ -2278,7 +2278,7 @@ export async function sendTaskSmartReminder(taskId: string, categoryMode?: strin
   // Fetch all assignments for this task
   const { results: assignments } = await db
     .prepare(
-      `SELECT ta.id, ta.user_id, ta.status, u.name AS user_name
+      `SELECT ta.id, ta.user_id, ta.status, ta.mentor_approved, ta.coordinator_approved, u.name AS user_name
        FROM task_assignments ta
        LEFT JOIN users u ON ta.user_id = u.id
        WHERE ta.task_id = ?`
@@ -2340,31 +2340,74 @@ export async function sendTaskSmartReminder(taskId: string, categoryMode?: strin
     }
   }
 
-  // 3. Notify mentor if there are submissions waiting review (if in review tab or general batch)
+  // 3. Notify mentor/coordinator if there are submissions waiting review (if in review tab or general batch)
   if (waitingReview.length > 0 && (!categoryMode || isReviewCategory || categoryMode === 'ACTIVE' || categoryMode === 'MENTOR')) {
     if (!isRevisionCategory && !isUnsubmittedCategory) {
-      let targetMentorIds: string[] = [];
-      if (task.assigned_mentors) {
-        try {
-          const ids: string[] = JSON.parse(task.assigned_mentors);
-          if (Array.isArray(ids) && ids.length > 0) {
-            targetMentorIds = ids;
+      const waitingMentorStage = waitingReview.filter((a) => (a.mentor_approved ?? 0) === 0);
+      const waitingCoordStage = waitingReview.filter((a) => (a.mentor_approved ?? 0) === 1 && (a.coordinator_approved ?? 0) === 0);
+
+      if (waitingMentorStage.length > 0) {
+        let targetMentorIds: string[] = [];
+        if (task.assigned_mentors) {
+          try {
+            const ids: string[] = JSON.parse(task.assigned_mentors);
+            if (Array.isArray(ids) && ids.length > 0) {
+              targetMentorIds = ids;
+            }
+          } catch (_e) {}
+        }
+        if (targetMentorIds.length === 0 && task.workspace_id) {
+          const { results: wsMentors } = await db
+            .prepare(`SELECT user_id FROM workspace_mentors WHERE workspace_id = ?`)
+            .bind(task.workspace_id)
+            .all();
+          if (wsMentors && wsMentors.length > 0) {
+            targetMentorIds = (wsMentors as any[]).map((m) => m.user_id);
           }
-        } catch (_e) {}
-      }
-      if (targetMentorIds.length === 0 && task.created_by) {
-        targetMentorIds = [task.created_by];
+        }
+        if (targetMentorIds.length === 0 && task.created_by) {
+          targetMentorIds = [task.created_by];
+        }
+
+        const effectiveMentorIds = targetMentorIds.filter((id) => id !== session.userId);
+        const finalMentorIds = effectiveMentorIds.length > 0 ? effectiveMentorIds : targetMentorIds;
+
+        for (const mId of finalMentorIds) {
+          await sendPushNotificationToUser(mId, 'TASK', {
+            title: `🔔 Reminder Review Tahap 1: ${task.title}`,
+            body: `${senderName} mengingatkan Anda untuk segera meninjau ${waitingMentorStage.length} karya peserta (Review Tahap 1 Mentor).`,
+            url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard/review',
+          });
+          notifiedCount++;
+        }
+        if (finalMentorIds.length > 0) {
+          messagesSent.push(`Notifikasi review Tahap 1 dikirim ke Mentor`);
+        }
       }
 
-      for (const mId of targetMentorIds) {
-        await sendPushNotificationToUser(mId, 'TASK', {
-          title: `🔔 Reminder Review Tugas: ${task.title}`,
-          body: `${senderName} mengingatkan Anda untuk segera meninjau ${waitingReview.length} karya peserta yang telah diunggah.`,
-          url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard',
-        });
-        notifiedCount++;
+      if (waitingCoordStage.length > 0) {
+        const { results: coordUsers } = await db
+          .prepare(
+            `SELECT id FROM users 
+             WHERE (user_type = 'STAFF' AND (role_flags LIKE '%COORDINATOR%' OR role_flags LIKE '%EXECUTIVE%' OR role_flags LIKE '%ADMIN%'))
+                OR id IN (SELECT user_id FROM project_coordinators WHERE project_id = (SELECT project_id FROM tasks WHERE id = ?))`
+          )
+          .bind(taskId)
+          .all();
+
+        const coordIds = ((coordUsers as any[]) || []).map((u) => u.id).filter((id) => id !== session.userId);
+        for (const cId of coordIds) {
+          await sendPushNotificationToUser(cId, 'TASK', {
+            title: `⚡ Reminder QC Final & Sparks: ${task.title}`,
+            body: `${senderName} mengingatkan: ${waitingCoordStage.length} karya peserta telah disetujui Mentor & siap untuk QC Final / Sparks.`,
+            url: task.workspace_id ? `/dashboard/workspace/${task.workspace_id}` : '/dashboard/review',
+          });
+          notifiedCount++;
+        }
+        if (coordIds.length > 0) {
+          messagesSent.push(`Notifikasi review Tahap 2 dikirim ke Koordinator`);
+        }
       }
-      messagesSent.push(`Notifikasi review dikirim ke Mentor`);
     }
   }
 

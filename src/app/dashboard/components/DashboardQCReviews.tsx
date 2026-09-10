@@ -17,12 +17,17 @@ export interface QCReviewItem {
   task_priority: string;
   task_type?: string | null;
   task_created_by?: string | null;
+  assigned_mentors?: string | null;
   workspace_id: string | null;
   workspace_name: string | null;
   workspace_type?: string | null;
   project_id: string;
   project_name: string;
-  creator_name: string | null;
+  assignee_name?: string | null;
+  creator_name?: string | null;
+  mentor_name?: string | null;
+  is_mentor?: number | boolean;
+  is_staff_coordinator?: boolean;
 }
 
 interface DashboardQCReviewsProps {
@@ -78,12 +83,22 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
                 <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm truncate">
                   {r.task_title}
                 </h3>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Dikerjakan oleh:{' '}
-                  <span className="font-bold text-zinc-800 dark:text-zinc-200">
-                    {r.creator_name ?? 'Unknown'}
+                <div className="flex items-center gap-2 flex-wrap text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  <span>
+                    Dikerjakan oleh:{' '}
+                    <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                      {r.assignee_name || r.creator_name || 'Peserta'}
+                    </span>
                   </span>
-                </p>
+                  {r.mentor_name && (
+                    <span>
+                      • 🎓 Mentor:{' '}
+                      <span className="font-bold text-zinc-800 dark:text-zinc-200">
+                        {r.mentor_name}
+                      </span>
+                    </span>
+                  )}
+                </div>
               </div>
               <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full border text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/15 shrink-0 font-bold">
                 {r.assignment_role}
@@ -116,10 +131,11 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
               assignmentId={r.assignment_id}
               canRequestRevision={true}
               taskType={r.task_type}
-              isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && r.task_created_by === currentUserId && r.mentor_approved === 0}
-              creatorName={r.creator_name}
-              isStaffOrCoord={true}
-              isTaskMentor={r.task_created_by === currentUserId}
+              isAssessmentMentorStep={r.task_type === 'ASSESSMENT' && Boolean(r.is_mentor) && r.mentor_approved === 0}
+              mentorName={r.mentor_name}
+              creatorName={r.mentor_name}
+              isStaffOrCoord={Boolean(r.is_staff_coordinator)}
+              isTaskMentor={Boolean(r.is_mentor)}
               mentorApproved={r.mentor_approved ?? 0}
               coordinatorApproved={r.coordinator_approved ?? 0}
               isMentorWs={
@@ -127,6 +143,9 @@ export default function DashboardQCReviews({ pendingQCReviews, currentUserId }: 
                 r.task_type === 'MENTOR' ||
                 (r.project_name ? r.project_name.toUpperCase().includes('MENTOR') : false)
               }
+              taskId={r.task_id}
+              taskTitle={r.task_title}
+              workspaceId={r.workspace_id || ''}
             />
           </div>
         ))}
