@@ -65,9 +65,15 @@ const disciplineMultiplier = (alias: string) => `
   END
 `;
 
-/** Role weight multiplier CASE expression (2× for Creator roles). */
+/** Role weight multiplier CASE expression (2× for Creator roles: Designer & Video Editor). */
 const roleWeight = (alias: string) =>
-  `CASE WHEN ${alias}.assignment_role IN ('DESIGNER', 'VIDEO_EDITOR') THEN 2 ELSE 1 END`;
+  `CASE 
+    WHEN ${alias}.assignment_role IN ('DESIGNER', 'VIDEO_EDITOR') 
+      OR UPPER(${alias}.assignment_role) LIKE '%DESIGN%' 
+      OR UPPER(${alias}.assignment_role) LIKE '%VIDEO%' 
+    THEN 2 
+    ELSE 1 
+  END`;
 
 /** Full weighted sparks expression for a given alias. */
 const sparksExpr = (alias: string) => `
@@ -244,7 +250,17 @@ export async function getLeaderboardData(
           ta.user_id AS userId,
           ta.id AS assignmentId,
           ROUND(
-            (COALESCE(ta.sparks, 8) * ${roleWeight('ta')} * ${disciplineMultiplier('ta')}) *
+            (COALESCE(ta.sparks, 8) * 
+              CASE 
+                WHEN ta.assignment_role IN ('DESIGNER', 'VIDEO_EDITOR') 
+                  OR t.task_type IN ('DESIGN', 'VIDEO') 
+                  OR UPPER(t.title) LIKE '%DESIGN%' 
+                  OR UPPER(t.title) LIKE '%VIDEO%' 
+                  OR UPPER(ta.assignment_role) LIKE '%DESIGN%' 
+                  OR UPPER(ta.assignment_role) LIKE '%VIDEO%' 
+                THEN 2 
+                ELSE 1 
+              END * ${disciplineMultiplier('ta')}) *
             CASE
               WHEN t.sparks_multiplier IS NOT NULL AND t.sparks_multiplier != 1.0 THEN t.sparks_multiplier
               WHEN ta.assignment_role = 'DESIGNER' OR t.task_type = 'DESIGN' OR UPPER(t.title) LIKE '%DESIGN%' THEN ${designMultiplier}
@@ -693,7 +709,6 @@ export async function getSparksHistory(
 
   const assignmentItems: SparksHistoryItem[] = (assignmentResults as any[]).map((r) => {
     const rawSparks = Number(r.rawSparks) || 8;
-    const roleMultiplier = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.assignmentRole) ? 2 : 1;
     const isZeroRevision = Boolean(r.isZeroRevision);
     const isOnTime = Boolean(r.isOnTime);
 
@@ -702,9 +717,20 @@ export async function getSparksHistory(
     else if (isZeroRevision || isOnTime) qualityMultiplier = 1.10;
 
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
-    const isDesign = r.assignmentRole === 'DESIGNER' || r.taskType === 'DESIGN' || (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN'));
-    const isVideo = r.assignmentRole === 'VIDEO_EDITOR' || r.taskType === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
+    const isDesign =
+      r.assignmentRole === 'DESIGNER' ||
+      r.taskType === 'DESIGN' ||
+      (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN')) ||
+      (r.assignmentRole && r.assignmentRole.toUpperCase().includes('DESIGN')) ||
+      (r.taskDesc && r.taskDesc.toUpperCase().includes('[DESIGN]'));
+    const isVideo =
+      r.assignmentRole === 'VIDEO_EDITOR' ||
+      r.taskType === 'VIDEO' ||
+      (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO')) ||
+      (r.assignmentRole && r.assignmentRole.toUpperCase().includes('VIDEO')) ||
+      (r.taskDesc && r.taskDesc.toUpperCase().includes('[VIDEO]'));
 
+    const roleMultiplier = (isDesign || isVideo || ['DESIGNER', 'VIDEO_EDITOR'].includes(r.assignmentRole)) ? 2 : 1;
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
 
     let slotMult = 1.0;

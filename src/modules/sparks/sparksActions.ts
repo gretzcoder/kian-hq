@@ -124,8 +124,18 @@ export async function getSparksManagementOverview(
     }
     const raw = Number(r.sparks) || 8;
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
-    const isDesign = r.role === 'DESIGNER' || r.task_type === 'DESIGN' || (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN'));
-    const isVideo = r.role === 'VIDEO_EDITOR' || r.task_type === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
+    const isDesign =
+      r.role === 'DESIGNER' ||
+      r.task_type === 'DESIGN' ||
+      (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN')) ||
+      (r.role && r.role.toUpperCase().includes('DESIGN')) ||
+      (r.taskDesc && r.taskDesc.toUpperCase().includes('[DESIGN]'));
+    const isVideo =
+      r.role === 'VIDEO_EDITOR' ||
+      r.task_type === 'VIDEO' ||
+      (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO')) ||
+      (r.role && r.role.toUpperCase().includes('VIDEO')) ||
+      (r.taskDesc && r.taskDesc.toUpperCase().includes('[VIDEO]'));
 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
 
@@ -146,7 +156,7 @@ export async function getSparksManagementOverview(
 
     const effectiveTaskMult = calculateEffectiveSparksMultiplier(customTaskMult, slotMult, catMult);
 
-    const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
+    const roleMult = (isDesign || isVideo || ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role)) ? 2 : 1;
     let qualMult = 1.0;
     if (r.isZeroRev && r.isOnTime) qualMult = 1.21;
     else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;
@@ -407,7 +417,7 @@ export async function restoreUserSparksAction(
     if (category === 'TASKS') {
       const { results: taRows } = await db
         .prepare(`
-          SELECT ta.sparks, ta.assignment_role AS role,
+          SELECT ta.sparks, ta.assignment_role AS role, t.task_type, t.title AS taskTitle, t.description AS taskDesc,
                  CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev,
                  CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
           FROM task_assignments ta
@@ -419,7 +429,19 @@ export async function restoreUserSparksAction(
 
       for (const r of taRows as any[]) {
         const raw = Number(r.sparks) || 8;
-        const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
+        const isDesign =
+          r.role === 'DESIGNER' ||
+          r.task_type === 'DESIGN' ||
+          (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN')) ||
+          (r.role && r.role.toUpperCase().includes('DESIGN')) ||
+          (r.taskDesc && r.taskDesc.toUpperCase().includes('[DESIGN]'));
+        const isVideo =
+          r.role === 'VIDEO_EDITOR' ||
+          r.task_type === 'VIDEO' ||
+          (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO')) ||
+          (r.role && r.role.toUpperCase().includes('VIDEO')) ||
+          (r.taskDesc && r.taskDesc.toUpperCase().includes('[VIDEO]'));
+        const roleMult = (isDesign || isVideo || ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role)) ? 2 : 1;
         let qualMult = 1.0;
         if (r.isZeroRev && r.isOnTime) qualMult = 1.21;
         else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;

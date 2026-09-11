@@ -262,13 +262,21 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     const taskId = r.taskId || '';
     const rawSparks = Number(r.sparks) || 8;
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
-    const isDesign = r.role === 'DESIGNER' || r.task_type === 'DESIGN' || (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN'));
-    const isVideo = r.role === 'VIDEO_EDITOR' || r.task_type === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
+    const isDesign =
+      r.role === 'DESIGNER' ||
+      r.task_type === 'DESIGN' ||
+      (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN')) ||
+      (r.role && r.role.toUpperCase().includes('DESIGN'));
+    const isVideo =
+      r.role === 'VIDEO_EDITOR' ||
+      r.task_type === 'VIDEO' ||
+      (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO')) ||
+      (r.role && r.role.toUpperCase().includes('VIDEO'));
 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
     const effectiveTaskMult = customTaskMult !== 1.0 ? customTaskMult : catMult;
 
-    const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
+    const roleMult = (isDesign || isVideo || ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role)) ? 2 : 1;
     const calculatedSparks = Math.round(rawSparks * roleMult * 1.1 * effectiveTaskMult);
 
     if (r.status === 'ACTIVE') {

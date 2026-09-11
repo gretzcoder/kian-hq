@@ -109,8 +109,18 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
     }
 
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
-    const isDesign = r.role === 'DESIGNER' || r.task_type === 'DESIGN' || (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN'));
-    const isVideo = r.role === 'VIDEO_EDITOR' || r.task_type === 'VIDEO' || (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO'));
+    const isDesign =
+      r.role === 'DESIGNER' ||
+      r.task_type === 'DESIGN' ||
+      (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN')) ||
+      (r.role && r.role.toUpperCase().includes('DESIGN')) ||
+      (r.taskDesc && r.taskDesc.toUpperCase().includes('[DESIGN]'));
+    const isVideo =
+      r.role === 'VIDEO_EDITOR' ||
+      r.task_type === 'VIDEO' ||
+      (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO')) ||
+      (r.role && r.role.toUpperCase().includes('VIDEO')) ||
+      (r.taskDesc && r.taskDesc.toUpperCase().includes('[VIDEO]'));
 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
 
@@ -131,14 +141,14 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
 
     const effectiveTaskMult = calculateEffectiveSparksMultiplier(customTaskMult, slotMult, catMult);
 
-    const roleMult = ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role) ? 2 : 1;
+    const roleMult = (isDesign || isVideo || ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role)) ? 2 : 1;
     let qualMult = 1.0;
     if (r.isZeroRev && r.isOnTime) qualMult = 1.21;
     else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;
 
     const weighted = Math.round(raw * roleMult * qualMult * effectiveTaskMult);
     taskSparks += weighted;
-    const roleKey = r.role || 'CREATOR';
+    const roleKey = isDesign ? 'DESIGNER' : isVideo ? 'VIDEO_EDITOR' : (r.role || 'CREATOR');
     roleSparksMap[roleKey] = (roleSparksMap[roleKey] || 0) + weighted;
   }
 
