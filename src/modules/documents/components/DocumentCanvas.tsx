@@ -312,11 +312,15 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
       <div
         ref={canvasRef}
         id="document-page-1"
-        className="document-print-page relative bg-white text-zinc-900 shadow-2xl print:shadow-none box-border flex flex-col justify-between overflow-hidden"
+        className="document-print-page relative bg-white text-zinc-900 shadow-2xl print:shadow-none box-border flex flex-col overflow-hidden"
         style={{
           width: '794px', // Standard A4 width @ 96 DPI (210mm)
-          minHeight: '1123px', // Standard A4 height @ 96 DPI (297mm)
-          height: '1123px',
+          minWidth: '794px',
+          maxWidth: '794px',
+          height: '1123px', // Standard A4 height @ 96 DPI (297mm)
+          minHeight: '1123px',
+          maxHeight: '1123px',
+          flexShrink: 0,
           paddingTop: '48px',
           paddingBottom: '42px',
           paddingLeft: `${contentPaddingLeft}px`,
@@ -781,11 +785,15 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
             <div
               key={pageIdx}
               id={`document-page-${pageNumber}`}
-              className="document-print-page relative bg-white text-zinc-900 shadow-2xl print:shadow-none box-border flex flex-col justify-between overflow-hidden"
+              className="document-print-page relative bg-white text-zinc-900 shadow-2xl print:shadow-none box-border flex flex-col overflow-hidden"
               style={{
                 width: '794px',
-                minHeight: '1123px',
+                minWidth: '794px',
+                maxWidth: '794px',
                 height: '1123px',
+                minHeight: '1123px',
+                maxHeight: '1123px',
+                flexShrink: 0,
                 paddingTop: '48px',
                 paddingBottom: '42px',
                 paddingLeft: `${contentPaddingLeft}px`,

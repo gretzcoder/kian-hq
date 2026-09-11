@@ -88,6 +88,20 @@ export const DocumentPDFExporter: React.FC<DocumentPDFExporterProps> = ({
           cacheBust: true,
           width: 794,
           height: 1123,
+          canvasWidth: 794 * 2,
+          canvasHeight: 1123 * 2,
+          style: {
+            transform: 'none',
+            width: '794px',
+            minWidth: '794px',
+            maxWidth: '794px',
+            height: '1123px',
+            minHeight: '1123px',
+            maxHeight: '1123px',
+            position: 'static',
+            margin: '0',
+            boxSizing: 'border-box',
+          },
         });
 
         pdf.addImage(dataUrl, 'PNG', 0, 0, pdfWidth, pdfHeight, undefined, 'FAST');
