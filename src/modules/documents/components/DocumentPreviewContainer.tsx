@@ -6,7 +6,7 @@ interface DocumentPreviewContainerProps {
   children: React.ReactNode;
   className?: string;
   showToolbar?: boolean;
-  defaultMode?: 'fit' | '100' | 'custom';
+  defaultMode?: 'fit' | 'fit-page' | '100' | 'custom';
   initialScale?: number;
 }
 
@@ -20,7 +20,7 @@ export const DocumentPreviewContainer: React.FC<DocumentPreviewContainerProps> =
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  const [mode, setMode] = useState<'fit' | '100' | 'custom'>(defaultMode);
+  const [mode, setMode] = useState<'fit' | 'fit-page' | '100' | 'custom'>(defaultMode);
   const [scale, setScale] = useState<number>(initialScale || 1);
   const [contentHeight, setContentHeight] = useState<number>(1123);
   const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -48,7 +48,7 @@ export const DocumentPreviewContainer: React.FC<DocumentPreviewContainerProps> =
     return () => resizeObserver.disconnect();
   }, [children]);
 
-  // Calculate auto-fit scale based on container width
+  // Calculate auto-fit scale based on container width & window height
   const updateFitScale = useCallback(() => {
     if (!containerRef.current) return;
     const cw = containerRef.current.clientWidth;
@@ -59,11 +59,16 @@ export const DocumentPreviewContainer: React.FC<DocumentPreviewContainerProps> =
     // Available width with a small padding margin (16px on mobile, 32px on desktop)
     const padding = cw < 640 ? 16 : 32;
     const availableWidth = Math.max(240, cw - padding);
-    // Standard A4 width is 794px
-    const fitScale = Math.min(1.0, Number((availableWidth / 794).toFixed(3)));
+    const fitWidthScale = Math.min(1.0, Number((availableWidth / 794).toFixed(3)));
+
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
+    const availableHeight = Math.max(320, vh - 220);
+    const fitPageScale = Math.min(1.0, Number((availableHeight / 1123).toFixed(3)));
 
     if (mode === 'fit') {
-      setScale(fitScale);
+      setScale(fitWidthScale);
+    } else if (mode === 'fit-page') {
+      setScale(Math.min(fitWidthScale, fitPageScale));
     }
   }, [mode]);
 
@@ -79,7 +84,7 @@ export const DocumentPreviewContainer: React.FC<DocumentPreviewContainerProps> =
   }, [updateFitScale]);
 
   // Handle Mode & Zoom Adjustments
-  const handleSetFit = () => {
+  const handleSetFitWidth = () => {
     setMode('fit');
     if (containerRef.current) {
       const cw = containerRef.current.clientWidth;
@@ -87,6 +92,20 @@ export const DocumentPreviewContainer: React.FC<DocumentPreviewContainerProps> =
       const availableWidth = Math.max(240, cw - padding);
       const fitScale = Math.min(1.0, Number((availableWidth / 794).toFixed(3)));
       setScale(fitScale);
+    }
+  };
+
+  const handleSetFitPage = () => {
+    setMode('fit-page');
+    if (containerRef.current) {
+      const cw = containerRef.current.clientWidth;
+      const padding = cw < 640 ? 16 : 32;
+      const availableWidth = Math.max(240, cw - padding);
+      const fitWidthScale = Math.min(1.0, Number((availableWidth / 794).toFixed(3)));
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
+      const availableHeight = Math.max(320, vh - 220);
+      const fitPageScale = Math.min(1.0, Number((availableHeight / 1123).toFixed(3)));
+      setScale(Math.min(fitWidthScale, fitPageScale));
     }
   };
 
@@ -136,7 +155,20 @@ export const DocumentPreviewContainer: React.FC<DocumentPreviewContainerProps> =
 
             <button
               type="button"
-              onClick={handleSetFit}
+              onClick={handleSetFitPage}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                mode === 'fit-page'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+              }`}
+              title="Paskan seluruh 1 halaman A4 penuh dalam layar"
+            >
+              📄 1 Halaman Penuh
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSetFitWidth}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 mode === 'fit'
                   ? 'bg-purple-600 text-white shadow-xs'
@@ -144,7 +176,7 @@ export const DocumentPreviewContainer: React.FC<DocumentPreviewContainerProps> =
               }`}
               title="Paskan dengan lebar layar"
             >
-              📱 Paskan Layar
+              📱 Paskan Lebar
             </button>
 
             <button
