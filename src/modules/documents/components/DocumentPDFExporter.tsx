@@ -25,18 +25,30 @@ export const DocumentPDFExporter: React.FC<DocumentPDFExporterProps> = ({
     setIsExporting(true);
     if (onExportStart) onExportStart();
 
-    // Temporarily disable parent CSS transforms during snapshot for exact A4 bounding box
-    const scaledParents: { el: HTMLElement; origTransform: string; origTransition: string }[] = [];
-    const elementsToReset = document.querySelectorAll('.transform, [class*="scale-"]');
+    // Temporarily disable parent CSS transforms and scaling wrappers during snapshot for exact A4 bounding box
+    const elementsToReset = document.querySelectorAll(
+      '.document-preview-sizer, .document-scaler-inner, .transform, [class*="scale-"]'
+    );
+    const resetStates: { el: HTMLElement; origInlineStyle: string }[] = [];
+
     elementsToReset.forEach((el) => {
       const htmlEl = el as HTMLElement;
-      scaledParents.push({
+      resetStates.push({
         el: htmlEl,
-        origTransform: htmlEl.style.transform,
-        origTransition: htmlEl.style.transition,
+        origInlineStyle: htmlEl.getAttribute('style') || '',
       });
-      htmlEl.style.transition = 'none';
+      // Temporarily remove transform and fixed scaled bounding box for natural 794x1123 A4 snapshot
       htmlEl.style.transform = 'none';
+      htmlEl.style.transition = 'none';
+      if (htmlEl.classList.contains('document-preview-sizer')) {
+        htmlEl.style.width = '794px';
+        htmlEl.style.minWidth = '794px';
+        htmlEl.style.height = 'auto';
+      }
+      if (htmlEl.classList.contains('document-scaler-inner')) {
+        htmlEl.style.position = 'static';
+        htmlEl.style.width = '794px';
+      }
     });
 
     try {
@@ -95,10 +107,13 @@ export const DocumentPDFExporter: React.FC<DocumentPDFExporterProps> = ({
         `Gagal mengekspor PDF: ${err?.message || 'Pastikan browser mengizinkan unduhan berkas.'}`
       );
     } finally {
-      // Restore all original parent scales and transitions
-      scaledParents.forEach(({ el, origTransform, origTransition }) => {
-        el.style.transform = origTransform;
-        el.style.transition = origTransition;
+      // Restore all original parent scales, widths, and styles
+      resetStates.forEach(({ el, origInlineStyle }) => {
+        if (origInlineStyle) {
+          el.setAttribute('style', origInlineStyle);
+        } else {
+          el.removeAttribute('style');
+        }
       });
       setIsExporting(false);
       if (onExportEnd) onExportEnd();

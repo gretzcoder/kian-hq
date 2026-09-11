@@ -332,6 +332,20 @@ input[type="reset"] {
     display: none !important;
   }
 
+  .document-preview-outer, .document-preview-sizer, .document-scaler-inner {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    transform: none !important;
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
   /* Target Document Pages */
   .document-print-page {
     width: 210mm !important;

@@ -11,6 +11,7 @@ import { generateDocumentAction } from '@/modules/documents/documentActions';
 import { DynamicDocumentForm } from '@/modules/documents/components/DynamicDocumentForm';
 import { DocumentCanvas } from '@/modules/documents/components/DocumentCanvas';
 import { DocumentPDFExporter } from '@/modules/documents/components/DocumentPDFExporter';
+import { DocumentPreviewContainer } from '@/modules/documents/components/DocumentPreviewContainer';
 
 interface CreateDocumentClientProps {
   templates: DocumentTemplateItem[];
@@ -234,8 +235,8 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
         </div>
 
         {/* Right Column: Live A4 Canvas Preview */}
-        <div className="lg:col-span-7 bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-6 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col items-center overflow-x-auto shadow-inner">
-          <div className="w-full flex items-center justify-between pb-3 mb-3 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="lg:col-span-7 space-y-3">
+          <div className="w-full flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
             <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
               <span>👁️</span> Live Preview Dokumen (A4)
             </span>
@@ -244,7 +245,7 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
             </span>
           </div>
 
-          <div className="transform origin-top scale-[0.72] sm:scale-[0.82] xl:scale-[0.92] transition-transform duration-200">
+          <DocumentPreviewContainer defaultMode="fit" showToolbar>
             <DocumentCanvas
               formData={{
                 ...formData,
@@ -258,7 +259,7 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
                 stamp_url: selectedSignatory.stamp_url,
               } : undefined}
             />
-          </div>
+          </DocumentPreviewContainer>
         </div>
       </div>
     </div>
