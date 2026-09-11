@@ -236,6 +236,7 @@ export default function DashboardSidebar({
         ...(canViewOJT
           ? [{ href: '/dashboard/ojt', label: 'OJT Directory', icon: '🎓', exact: false }]
           : []),
+        { href: '/dashboard/organization', label: 'Struktur Organisasi', icon: '🏛️', exact: false },
         { href: '/dashboard/feedbacks', label: 'Kritik & Saran', icon: '💌', exact: false },
         { href: '/dashboard/changelog', label: 'Log Update', icon: '📜', exact: false },
         ...(canManageUsers

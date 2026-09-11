@@ -245,6 +245,51 @@ export async function getLocalWorkspaceRoles(
   }
 }
 
+const orgPermsMemoryCache = new Map<string, { data: string[]; ts: number }>();
+
+export async function getUserOrgPermissions(userId: string): Promise<string[]> {
+  const now = Date.now();
+  const cached = orgPermsMemoryCache.get(userId);
+  if (cached && now - cached.ts < MEMORY_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const db = await getDB();
+  try {
+    const { results } = await db
+      .prepare(`
+        SELECT onode.authorities
+        FROM organization_members om
+        JOIN organization_nodes onode ON om.node_id = onode.id
+        WHERE om.user_id = ?
+      `)
+      .bind(userId)
+      .all();
+
+    const granted = new Set<string>();
+    ((results as any[]) || []).forEach((row) => {
+      try {
+        const auth = JSON.parse(row.authorities || '{}');
+        if (auth.can_review_tasks) granted.add('TASK_REVIEW');
+        if (auth.can_manage_briefs) {
+          granted.add('CREATE_BRIEF');
+          granted.add('MANAGE_BRIEFS');
+        }
+        if (auth.can_manage_documents) granted.add('DOCUMENTS_MANAGE');
+        if (auth.can_manage_sparks) granted.add('SPARKS_MANAGE');
+        if (auth.can_view_all_workspaces) granted.add('WORKSPACE_VIEW_ALL');
+      } catch (_e) {}
+    });
+
+    const perms = Array.from(granted);
+    orgPermsMemoryCache.set(userId, { data: perms, ts: now });
+    return perms;
+  } catch (err) {
+    // If organization tables not yet queried, gracefully return empty
+    return [];
+  }
+}
+
 /**
  * Batch-fetch permissions + roles in a single call.
  * Use at page level to avoid multiple round-trips to KV/D1.
@@ -258,18 +303,20 @@ export const getSessionContext = cache(async function getSessionContext(userId: 
 }> {
   const simRole = await getActiveSimulatedRole();
 
-  const [permissions, roles, userType] = await Promise.all([
+  const [permissions, orgPermissions, roles, userType] = await Promise.all([
     getUserPermissions(userId),
+    getUserOrgPermissions(userId),
     getUserRoles(userId),
     getUserType(userId),
   ]);
 
-  const permSet = new Set(permissions);
+  const permSet = new Set([...permissions, ...orgPermissions]);
   const isSuperadmin = !simRole && (permSet.has('ADMIN_SYSTEM') || permSet.has('MANAGE'));
 
   return {
     can: (perm: string) => {
       const activeUserType = simRole ? simRole.userType : userType;
+      // Protected super-admin actions remain locked to staff
       if (activeUserType === 'OJT' && ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'EXPORT_DATA', 'MANAGE'].includes(perm)) {
         return false;
       }
@@ -290,6 +337,7 @@ export const getSessionContext = cache(async function getSessionContext(userId: 
 export async function clearPermissionsCache(userId: string): Promise<void> {
   rolesMemoryCache.delete(userId);
   userTypeMemoryCache.delete(userId);
+  orgPermsMemoryCache.delete(userId);
   const kv = await getKV();
   const cacheKey = `user:permissions:${userId}`;
   try {

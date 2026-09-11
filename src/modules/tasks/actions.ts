@@ -11,6 +11,7 @@ import { parseIndonesiaDate } from '@/lib/dateUtils';
 import { invalidateWorkspaceTaskCache } from '@/modules/workspaces/taskPollActions';
 import { invalidateLeaderboardCache } from '@/modules/leaderboard/actions';
 import { syncGroupAndTeamTaskAssignments } from '@/modules/workspaces/assessmentActions';
+import { checkOrgReviewAuthorityForTask } from '@/modules/organization/orgActions';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1354,24 +1355,33 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     .bind(workspaceId)
     .first()) !== null || Boolean(task.assigned_mentors && task.assigned_mentors.length > 2) || (task.created_by && task.created_by !== session.userId);
 
-  if (isMentorWs) {
-    if (!isCoordinator && !isTaskCreator) {
-      return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat memberikan penilaian/QC pada workspace Mentor.' };
-    }
-  } else if (isOjtRole) {
-    if (!isLeader && !isTaskMentor && !isCoordinator) {
-      throw new Error('Forbidden: You do not have permission to approve this step.');
-    }
-    if (assignment.mentor_approved === 0 && hasMentorsInWs && !isTaskMentor && isCoordinator) {
-      return {
-        success: false,
-        error: 'Tugas ini masih dalam Review Tahap 1 oleh Mentor. Koordinator belum dapat memberikan persetujuan & Sparks sebelum Mentor menyetujui hasil submit ini.',
-      };
-    }
-  } else {
-    const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'APPROVE');
-    if (!authorized) {
-      throw new Error('Forbidden: You do not have permission to approve assignments in this workspace.');
+  const orgCheck = await checkOrgReviewAuthorityForTask(
+    session.userId,
+    { id: task.id, title: task.title, task_type: task.task_type },
+    assignment.user_id
+  );
+  const isOrgDelegatedReviewer = orgCheck.allowed;
+
+  if (!isOrgDelegatedReviewer) {
+    if (isMentorWs) {
+      if (!isCoordinator && !isTaskCreator) {
+        return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat memberikan penilaian/QC pada workspace Mentor.' };
+      }
+    } else if (isOjtRole) {
+      if (!isLeader && !isTaskMentor && !isCoordinator) {
+        throw new Error('Forbidden: You do not have permission to approve this step.');
+      }
+      if (assignment.mentor_approved === 0 && hasMentorsInWs && !isTaskMentor && isCoordinator) {
+        return {
+          success: false,
+          error: 'Tugas ini masih dalam Review Tahap 1 oleh Mentor. Koordinator belum dapat memberikan persetujuan & Sparks sebelum Mentor menyetujui hasil submit ini.',
+        };
+      }
+    } else {
+      const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'APPROVE');
+      if (!authorized) {
+        throw new Error('Forbidden: You do not have permission to approve assignments in this workspace.');
+      }
     }
   }
 
@@ -1381,7 +1391,12 @@ export async function approveAssignment(assignmentId: string, appreciationBadge?
     let newMentorApproved = assignment.mentor_approved;
     let newCoordinatorApproved = assignment.coordinator_approved;
 
-    if (isMentorWs) {
+    if (isOrgDelegatedReviewer) {
+      newLeadApproved = 1;
+      newMentorApproved = 1;
+      newCoordinatorApproved = 1;
+      nextStatus = 'APPROVED';
+    } else if (isMentorWs) {
       newCoordinatorApproved = 1;
       nextStatus = 'APPROVED';
     } else if (isOjtRole) {
@@ -1582,44 +1597,53 @@ export async function requestRevision(assignmentId: string, note: string) {
   const isTaskCreator = (task.created_by != null && task.created_by === session.userId) || (assignment as any).assigned_by === session.userId;
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM'));
 
-  if (isMentorWs) {
-    if (!isCoordinator && !isTaskCreator) {
-      return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat meminta revisi pada workspace Mentor.' };
-    }
-  } else if (isOjtRole) {
-    const isLeader = (await db
-      .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
-      .bind(workspaceId, session.userId)
-      .first()) !== null;
+  const orgCheck = await checkOrgReviewAuthorityForTask(
+    session.userId,
+    { id: task.id, title: task.title, task_type: task.task_type },
+    assignment.user_id
+  );
+  const isOrgDelegatedReviewer = orgCheck.allowed;
 
-    let isAssignedTaskMentor = false;
-    if (task.assigned_mentors) {
-      try {
-        const ids = JSON.parse(task.assigned_mentors);
-        if (Array.isArray(ids) && ids.includes(session.userId)) {
-          isAssignedTaskMentor = true;
-        }
-      } catch (_e) {}
-    }
+  if (!isOrgDelegatedReviewer) {
+    if (isMentorWs) {
+      if (!isCoordinator && !isTaskCreator) {
+        return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat meminta revisi pada workspace Mentor.' };
+      }
+    } else if (isOjtRole) {
+      const isLeader = (await db
+        .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+        .bind(workspaceId, session.userId)
+        .first()) !== null;
 
-    const isMentor = (await db
-      .prepare(`
-        SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?
-        UNION ALL
-        SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?
-        UNION ALL
-        SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?
-      `)
-      .bind(workspaceId, session.userId, workspaceId, session.userId, task.project_id || '', session.userId)
-      .first()) !== null || isAssignedTaskMentor || (task.created_by != null && task.created_by === session.userId);
+      let isAssignedTaskMentor = false;
+      if (task.assigned_mentors) {
+        try {
+          const ids = JSON.parse(task.assigned_mentors);
+          if (Array.isArray(ids) && ids.includes(session.userId)) {
+            isAssignedTaskMentor = true;
+          }
+        } catch (_e) {}
+      }
 
-    if (!isLeader && !isMentor && !isCoordinator) {
-      throw new Error('Forbidden: You do not have permission to request revision for this step.');
-    }
-  } else {
-    const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'REQUEST_REVISION');
-    if (!authorized) {
-      throw new Error('Forbidden: You do not have permission to request revisions in this workspace.');
+      const isMentor = (await db
+        .prepare(`
+          SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?
+          UNION ALL
+          SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?
+          UNION ALL
+          SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?
+        `)
+        .bind(workspaceId, session.userId, workspaceId, session.userId, task.project_id || '', session.userId)
+        .first()) !== null || isAssignedTaskMentor || (task.created_by != null && task.created_by === session.userId);
+
+      if (!isLeader && !isMentor && !isCoordinator) {
+        throw new Error('Forbidden: You do not have permission to request revision for this step.');
+      }
+    } else {
+      const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'REQUEST_REVISION');
+      if (!authorized) {
+        throw new Error('Forbidden: You do not have permission to request revisions in this workspace.');
+      }
     }
   }
 
@@ -1901,16 +1925,16 @@ export async function declineAssignment(assignmentId: string, note: string) {
   const db = await getDB();
 
   const assignment = await db
-    .prepare('SELECT id, task_id, status, assignment_role FROM task_assignments WHERE id = ?')
+    .prepare('SELECT id, user_id, task_id, status, assignment_role FROM task_assignments WHERE id = ?')
     .bind(assignmentId)
-    .first() as { id: string; task_id: string; status: string; assignment_role: string } | null;
+    .first() as { id: string; user_id: string; task_id: string; status: string; assignment_role: string } | null;
 
   if (!assignment) return { success: false, error: 'Assignment not found.' };
 
   const task = await db
-    .prepare('SELECT id, project_id, workspace_id, status, task_type, created_by, assigned_mentors FROM tasks WHERE id = ?')
+    .prepare('SELECT id, title, project_id, workspace_id, status, task_type, created_by, assigned_mentors FROM tasks WHERE id = ?')
     .bind(assignment.task_id)
-    .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null; assigned_mentors?: string | null } | null;
+    .first() as { id: string; title: string; project_id: string; workspace_id: string | null; status: string; task_type: string; created_by: string | null; assigned_mentors?: string | null } | null;
 
   if (!task) return { success: false, error: 'Task not found.' };
 
@@ -1922,44 +1946,53 @@ export async function declineAssignment(assignmentId: string, note: string) {
   const isTaskCreator = (task.created_by != null && task.created_by === session.userId) || (assignment as any).assigned_by === session.userId;
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM'));
 
-  if (isMentorWs) {
-    if (!isCoordinator && !isTaskCreator) {
-      return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat menolak karya pada workspace Mentor.' };
-    }
-  } else if (isOjtRole) {
-    const isLeader = (await db
-      .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
-      .bind(workspaceId, session.userId)
-      .first()) !== null;
+  const orgCheck = await checkOrgReviewAuthorityForTask(
+    session.userId,
+    { id: task.id, title: task.title, task_type: task.task_type },
+    assignment.user_id
+  );
+  const isOrgDelegatedReviewer = orgCheck.allowed;
 
-    let isAssignedTaskMentor = false;
-    if (task.assigned_mentors) {
-      try {
-        const ids = JSON.parse(task.assigned_mentors);
-        if (Array.isArray(ids) && ids.includes(session.userId)) {
-          isAssignedTaskMentor = true;
-        }
-      } catch (_e) {}
-    }
+  if (!isOrgDelegatedReviewer) {
+    if (isMentorWs) {
+      if (!isCoordinator && !isTaskCreator) {
+        return { success: false, error: 'Forbidden: Hanya Koordinator/Admin atau Pembuat Task yang dapat menolak karya pada workspace Mentor.' };
+      }
+    } else if (isOjtRole) {
+      const isLeader = (await db
+        .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+        .bind(workspaceId, session.userId)
+        .first()) !== null;
 
-    const isMentor = (await db
-      .prepare(`
-        SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?
-        UNION ALL
-        SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?
-        UNION ALL
-        SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?
-      `)
-      .bind(workspaceId, session.userId, workspaceId, session.userId, task.project_id || '', session.userId)
-      .first()) !== null || isAssignedTaskMentor || (task.created_by != null && task.created_by === session.userId);
+      let isAssignedTaskMentor = false;
+      if (task.assigned_mentors) {
+        try {
+          const ids = JSON.parse(task.assigned_mentors);
+          if (Array.isArray(ids) && ids.includes(session.userId)) {
+            isAssignedTaskMentor = true;
+          }
+        } catch (_e) {}
+      }
 
-    if (!isLeader && !isMentor && !isCoordinator) {
-      throw new Error('Forbidden: You do not have permission to decline this step.');
-    }
-  } else {
-    const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'REQUEST_REVISION');
-    if (!authorized) {
-      throw new Error('Forbidden: You do not have permission to decline assignments in this workspace.');
+      const isMentor = (await db
+        .prepare(`
+          SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?
+          UNION ALL
+          SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ?
+          UNION ALL
+          SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ?
+        `)
+        .bind(workspaceId, session.userId, workspaceId, session.userId, task.project_id || '', session.userId)
+        .first()) !== null || isAssignedTaskMentor || (task.created_by != null && task.created_by === session.userId);
+
+      if (!isLeader && !isMentor && !isCoordinator) {
+        throw new Error('Forbidden: You do not have permission to decline this step.');
+      }
+    } else {
+      const authorized = await hasWorkspacePermission(session.userId, workspaceId, 'REQUEST_REVISION');
+      if (!authorized) {
+        throw new Error('Forbidden: You do not have permission to decline assignments in this workspace.');
+      }
     }
   }
 

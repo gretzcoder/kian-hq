@@ -81,6 +81,10 @@ export function NavLinks({ canManageUsers, canManageRoles, canReview, canCreateB
         </Link>
       )}
 
+      <Link href="/dashboard/organization" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/organization') ? activeClass : inactiveClass}`}>
+        Struktur
+      </Link>
+
       {canManageUsers && (
         <Link href="/dashboard/users" className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 ${isActive(pathname, '/dashboard/users') ? activeClass : inactiveClass}`}>
           Users

@@ -9,6 +9,8 @@ import UserTypeSelector from '@/modules/users/components/UserTypeSelector';
 import UserStatusSelector from '@/modules/users/components/UserStatusSelector';
 import PendingApprovalsList from '@/modules/users/components/PendingApprovalsList';
 import UserActionsMenu from '@/modules/users/components/UserActionsMenu';
+import { getFlatOrgNodes, ensureOrgStructureSchema } from '@/modules/organization/orgActions';
+import { UserOrgSelector } from '@/modules/organization/components/UserOrgSelector';
 
 interface UserRow {
   id: string;
@@ -35,6 +37,7 @@ export default async function UsersPage() {
     redirect('/dashboard');
   }
 
+  await ensureOrgStructureSchema();
   const db = await getDB();
 
   // 2. Fetch all active and inactive users (not pending) mapped to their role and type
@@ -46,24 +49,51 @@ export default async function UsersPage() {
     WHERE u.status != 'PENDING'
     ORDER BY u.created_at DESC
   `;
-  const { results: usersRaw } = await db.prepare(usersQuery).all();
-  const users = usersRaw as unknown as (UserRow & { avatar_url?: string | null })[];
+  const [usersRaw, rolesRaw, pendingUsersRaw, flatNodes, orgMembersRaw] = await Promise.all([
+    db.prepare(usersQuery).all(),
+    db.prepare('SELECT id, name FROM roles ORDER BY name ASC').all(),
+    db.prepare("SELECT id, name, email, avatar_url, created_at FROM users WHERE status = 'PENDING' ORDER BY created_at ASC").all(),
+    getFlatOrgNodes(),
+    db.prepare(`
+      SELECT om.user_id, om.node_id, om.role_title, om.is_lead, onode.name as node_name, onode.icon as node_icon
+      FROM organization_members om
+      JOIN organization_nodes onode ON om.node_id = onode.id
+    `).all(),
+  ]);
 
-  // 3. Fetch all system roles for the dropdown select options
-  const { results: rolesRaw } = await db.prepare('SELECT id, name FROM roles ORDER BY name ASC').all();
-  const roles = rolesRaw as unknown as RoleRow[];
-
-  // 4. Fetch users awaiting approval (status = 'PENDING')
-  const { results: pendingUsersRaw } = await db
-    .prepare("SELECT id, name, email, avatar_url, created_at FROM users WHERE status = 'PENDING' ORDER BY created_at ASC")
-    .all();
-  const pendingUsers = pendingUsersRaw as unknown as Array<{
+  const users = (usersRaw.results as any[]) as (UserRow & { avatar_url?: string | null })[];
+  const roles = (rolesRaw.results as any[]) as RoleRow[];
+  const pendingUsers = (pendingUsersRaw.results as any[]) as Array<{
     id: string;
     name: string;
     email: string;
     avatar_url?: string | null;
     created_at: number;
   }>;
+
+  const userOrgMap = new Map<string, {
+    nodeId: string;
+    nodeName: string;
+    nodeIcon: string;
+    roleTitle: string;
+    isLead: boolean;
+  }>();
+
+  ((orgMembersRaw.results as any[]) || []).forEach((row) => {
+    userOrgMap.set(row.user_id, {
+      nodeId: row.node_id,
+      nodeName: row.node_name,
+      nodeIcon: row.node_icon || '🏢',
+      roleTitle: row.role_title || 'Member',
+      isLead: Boolean(row.is_lead),
+    });
+  });
+
+  const availableOrgNodes = flatNodes.map((n) => ({
+    id: n.id,
+    name: n.name,
+    icon: n.icon || '🏢',
+  }));
 
   return (
     <div className="space-y-6">
@@ -73,7 +103,7 @@ export default async function UsersPage() {
           User Management
         </h1>
         <p className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
-          Manage system access, adjust member roles, and toggle user classifications.
+          Manage system access, adjust member roles, assign organization divisions, and toggle user classifications.
         </p>
       </div>
 
@@ -87,18 +117,19 @@ export default async function UsersPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-100/50 dark:bg-zinc-900/40 text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                <th className="px-6 py-4">Name</th>
-                <th className="px-6 py-4">Email</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Classification</th>
-                <th className="px-6 py-4">Role</th>
-                <th className="px-6 py-4">Actions</th>
+                <th className="px-5 py-4">Name</th>
+                <th className="px-5 py-4">Email</th>
+                <th className="px-5 py-4">Status</th>
+                <th className="px-5 py-4">Classification</th>
+                <th className="px-5 py-4">Role</th>
+                <th className="px-5 py-4">Divisi Organisasi</th>
+                <th className="px-5 py-4">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/50 text-sm">
               {users.map((user) => (
                 <tr key={user.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/20 transition-colors">
-                  <td className="px-6 py-4 font-bold text-zinc-800 dark:text-zinc-100">
+                  <td className="px-5 py-4 font-bold text-zinc-800 dark:text-zinc-100">
                     <Link href={`/dashboard/profile?userId=${user.id}`} className="flex items-center gap-3 group w-fit">
                       <UserAvatar src={user.avatar_url} name={user.name} size="md" square />
                       <span className="group-hover:text-purple-600 dark:group-hover:text-purple-400 group-hover:underline">
@@ -106,27 +137,35 @@ export default async function UsersPage() {
                       </span>
                     </Link>
                   </td>
-                  <td className="px-6 py-4 text-zinc-500 dark:text-zinc-400">{user.email}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-4 text-zinc-500 dark:text-zinc-400 text-xs">{user.email}</td>
+                  <td className="px-5 py-4">
                     <UserStatusSelector
                       userId={user.id}
                       currentStatus={user.status}
                     />
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-4">
                     <UserTypeSelector
                       userId={user.id}
                       currentUserType={user.user_type || 'STAFF'}
                     />
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-4">
                     <RoleSelector
                       userId={user.id}
                       currentRoleId={user.role_id || 'role_creator'}
                       roles={roles}
                     />
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-4">
+                    <UserOrgSelector
+                      userId={user.id}
+                      userName={user.name}
+                      currentOrg={userOrgMap.get(user.id) || null}
+                      availableNodes={availableOrgNodes}
+                    />
+                  </td>
+                  <td className="px-5 py-4">
                     <UserActionsMenu
                       userId={user.id}
                       userName={user.name}
@@ -181,6 +220,16 @@ export default async function UsersPage() {
                     userId={user.id}
                     currentRoleId={user.role_id || 'role_creator'}
                     roles={roles}
+                  />
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black uppercase text-zinc-400 mb-1">Divisi Organisasi</p>
+                  <UserOrgSelector
+                    userId={user.id}
+                    userName={user.name}
+                    currentOrg={userOrgMap.get(user.id) || null}
+                    availableNodes={availableOrgNodes}
                   />
                 </div>
               </div>

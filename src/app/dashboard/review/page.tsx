@@ -9,6 +9,7 @@ import { MarkdownViewer } from '@/components/MarkdownViewer';
 import { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import { SubmittedLinkPreviewer } from '@/components/editor/SubmittedLinkPreviewer';
 import { CollapsibleNoteViewer } from '@/components/CollapsibleNoteViewer';
+import { getUserOrgAuthorities } from '@/modules/organization/orgActions';
 
 interface ReviewRow {
   assignment_id:   string;
@@ -40,9 +41,10 @@ export default async function ReviewPage() {
   if (!session) redirect('/');
 
   const ctx = await getSessionContext(session.userId);
+  const orgAuth = await getUserOrgAuthorities(session.userId);
 
-  // Gate: only TASK_REVIEW permission holders
-  if (!ctx.can('TASK_REVIEW')) redirect('/dashboard');
+  // Gate: TASK_REVIEW permission or Org Division Review authority
+  if (!ctx.can('TASK_REVIEW') && !orgAuth.canReviewTasks) redirect('/dashboard');
 
   const db = await getDB();
 
@@ -256,6 +258,19 @@ export default async function ReviewPage() {
       return r.coordinator_approved === 0;
     }
 
+    // ── Organization Division Delegated Review (e.g. Creative Design reviewing design tasks) ──
+    if (orgAuth.canReviewTasks) {
+      if (orgAuth.canReviewAllTasks) return true;
+      const titleLower = (r.task_title || '').toLowerCase();
+      const typeLower = (r.task_type || '').toLowerCase();
+      const roleLower = (r.assignment_role || '').toLowerCase();
+      for (const label of Array.from(orgAuth.reviewLabels)) {
+        if (titleLower.includes(label) || typeLower.includes(label) || roleLower.includes(label)) {
+          return true;
+        }
+      }
+    }
+
     return false;
   });
 
@@ -412,6 +427,16 @@ export default async function ReviewPage() {
                         </span>
                       </div>
                     </div>
+
+                    {/* Org Division Delegation Badge */}
+                    {orgAuth.nodes.length > 0 && orgAuth.canReviewTasks && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-lg bg-gradient-to-r from-purple-500/15 to-indigo-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/20 inline-flex items-center gap-1.5 shadow-xs">
+                          <span>🏛️ Wewenang Divisi:</span>
+                          <strong>{orgAuth.nodes.map((n) => n.name).join(', ')}</strong>
+                        </span>
+                      </div>
+                    )}
 
                     {/* Creator, Task Owner Mentor, Shortcut Link & timestamp */}
                     <div className="space-y-2 bg-zinc-50 dark:bg-zinc-900/40 p-3 rounded-2xl border border-zinc-100 dark:border-zinc-800/60 text-[11px] text-zinc-500 dark:text-zinc-400">
