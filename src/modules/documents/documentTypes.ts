@@ -102,7 +102,11 @@ export interface CustomKopTextElement {
 
 export interface SignatureStampConfig {
   align: 'left' | 'center' | 'right';
-  showStamp: boolean;
+  showSignature?: boolean; // Toggle TTD manual/gambar (default: true)
+  showStamp: boolean; // Toggle Cap/Stempel resmi (default: true)
+  showQrVerification?: boolean; // Toggle TTD Digital berlogo KIAN via QR Code (default: false)
+  signatureType?: 'MANUAL' | 'DIGITAL_QR' | 'BOTH' | 'NONE'; // Mode TTD
+  qrSize?: number; // Ukuran QR Code dlm pixel (default: 84)
   stampAssetUrl?: string; // Custom stamp image
   stampScale?: number; // default 1
   stampOffsetX?: number; // px offset from signature

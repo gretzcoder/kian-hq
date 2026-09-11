@@ -576,3 +576,122 @@ export async function deleteDocumentAction(
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Public Verification Action (No login required).
+ * Allows general public (e.g. parents, partners, institutions) to verify authenticity of official task letters.
+ */
+export async function getPublicDocumentVerification(idOrNumber: string): Promise<{
+  isValid: boolean;
+  document?: {
+    id: string;
+    document_number: string;
+    title: string;
+    type_code: string;
+    status: string;
+    issued_at: number;
+    created_at: number;
+    organization: OrganizationSnapshot;
+    signatory: {
+      name: string;
+      position: string;
+    };
+    event: {
+      intro?: string;
+      days?: string;
+      time?: string;
+      location?: string;
+    };
+    intro_text?: string;
+    closing_text?: string;
+    assignees: Array<{
+      no?: number;
+      nip?: string;
+      name: string;
+      role: string;
+    }>;
+    tembusan?: string[];
+  };
+  error?: string;
+}> {
+  if (!idOrNumber || !idOrNumber.trim()) {
+    return { isValid: false, error: 'ID atau Nomor Dokumen wajib diisi.' };
+  }
+
+  const cleanQuery = decodeURIComponent(idOrNumber.trim());
+  const db = await getDB();
+
+  try {
+    const row = await db
+      .prepare(`
+        SELECT 
+          gd.id, gd.type_code, gd.document_number, gd.title, gd.form_data, gd.rendered_snapshot,
+          gd.status, gd.created_at,
+          ds.name AS signatory_name, ds.position AS signatory_position
+        FROM generated_documents gd
+        LEFT JOIN document_signatories ds ON gd.signatory_id = ds.id
+        WHERE gd.id = ? OR gd.document_number = ?
+        LIMIT 1
+      `)
+      .bind(cleanQuery, cleanQuery)
+      .first() as any;
+
+    if (!row) {
+      return { isValid: false, error: 'Dokumen tidak ditemukan dalam pangkalan data resmi KIAN HQ.' };
+    }
+
+    let formData: Record<string, any> = {};
+    let snapshot: Record<string, any> = {};
+    try { formData = JSON.parse(row.form_data || '{}'); } catch {}
+    try { snapshot = JSON.parse(row.rendered_snapshot || '{}'); } catch {}
+
+    const compiledData = snapshot.compiled_data || formData;
+    const org: OrganizationSnapshot = snapshot.organization || DEFAULT_ORGANIZATION_PROFILE;
+
+    const assignees: Array<{ no?: number; nip?: string; name: string; role: string }> = Array.isArray(compiledData.assignees)
+      ? compiledData.assignees.map((a: any, idx: number) => ({
+          no: a.no || idx + 1,
+          nip: a.nip || '-',
+          name: a.name || 'Petugas',
+          role: a.role || 'Anggota Tim',
+        }))
+      : [];
+
+    const tembusanList = Array.isArray(compiledData.tembusan)
+      ? compiledData.tembusan
+      : typeof compiledData.tembusan === 'string'
+      ? compiledData.tembusan.split('\n').map((s: string) => s.trim()).filter(Boolean)
+      : [];
+
+    return {
+      isValid: true,
+      document: {
+        id: row.id,
+        document_number: row.document_number,
+        title: row.title || compiledData.document_title || 'Surat Tugas Resmi',
+        type_code: row.type_code || 'SURAT_TUGAS',
+        status: row.status || 'GENERATED',
+        issued_at: snapshot.generated_at || row.created_at,
+        created_at: row.created_at,
+        organization: org,
+        signatory: {
+          name: snapshot.signatory?.name || row.signatory_name || compiledData.signatory_name || 'Pimpinan KIAN HQ',
+          position: snapshot.signatory?.position || row.signatory_position || compiledData.signatory_position || 'Program Director Kian Troopers',
+        },
+        event: {
+          intro: compiledData.event_intro || '',
+          days: compiledData.event_days || '',
+          time: compiledData.event_time || '',
+          location: compiledData.event_location || '',
+        },
+        intro_text: compiledData.intro_text || '',
+        closing_text: compiledData.closing_text || '',
+        assignees,
+        tembusan: tembusanList,
+      },
+    };
+  } catch (err: any) {
+    console.error('getPublicDocumentVerification error:', err);
+    return { isValid: false, error: 'Terjadi kendala saat memeriksa validasi dokumen.' };
+  }
+}

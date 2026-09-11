@@ -1055,13 +1055,225 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           {/* TAB 3: SIGNATURE & STAMP CUSTOMIZATION */}
           {activeTab === 'SIGNATURE' && (
             <div className="space-y-4">
-              {/* STAMP SETTINGS */}
+              {/* PRESET MODE SELECTOR */}
+              <div className="p-3.5 bg-purple-500/10 dark:bg-purple-950/30 rounded-xl border border-purple-500/20 space-y-2">
+                <span className="text-xs font-black text-purple-900 dark:text-purple-200 uppercase tracking-wider flex items-center gap-1.5">
+                  <span>⚡</span> Pilihan Format / Mode Pengesahan
+                </span>
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                  Pilih mode tanda tangan dan stempel resmi yang akan ditampilkan pada dokumen:
+                </p>
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSigChange({
+                        ...sigConfig,
+                        showSignature: true,
+                        showStamp: true,
+                        showQrVerification: false,
+                        signatureType: 'MANUAL',
+                      })
+                    }
+                    className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                      sigConfig.showSignature && !sigConfig.showQrVerification
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-500/20'
+                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
+                    }`}
+                  >
+                    <span>🖋️</span>
+                    <span className="block text-[10px] mt-0.5">TTD Manual + Cap</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSigChange({
+                        ...sigConfig,
+                        showSignature: false,
+                        showStamp: false,
+                        showQrVerification: true,
+                        signatureType: 'DIGITAL_QR',
+                      })
+                    }
+                    className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                      !sigConfig.showSignature && sigConfig.showQrVerification
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-500/20'
+                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
+                    }`}
+                  >
+                    <span>📱</span>
+                    <span className="block text-[10px] mt-0.5">TTD Digital (QR)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleSigChange({
+                        ...sigConfig,
+                        showSignature: true,
+                        showStamp: true,
+                        showQrVerification: true,
+                        signatureType: 'BOTH',
+                      })
+                    }
+                    className={`p-2.5 rounded-xl border text-xs font-bold text-center transition-all cursor-pointer ${
+                      sigConfig.showSignature && sigConfig.showQrVerification
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-500/20'
+                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-purple-400'
+                    }`}
+                  >
+                    <span>✨</span>
+                    <span className="block text-[10px] mt-0.5">Kombinasi (Semua)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 1. TTD DIGITAL (QR CODE VERIFIKASI DENGAN LOGO KIAN) */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                      <span>📱</span> TTD Digital Resmi (QR Code Berlogo KIAN)
+                    </label>
+                    <p className="text-[10px] text-zinc-500 mt-0.5">
+                      QR Code publik untuk verifikasi keaslian surat tugas oleh orang tua atau pihak eksternal.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(sigConfig.showQrVerification)}
+                      onChange={(e) =>
+                        handleSigChange({
+                          ...sigConfig,
+                          showQrVerification: e.target.checked,
+                          signatureType: e.target.checked
+                            ? sigConfig.showSignature
+                              ? 'BOTH'
+                              : 'DIGITAL_QR'
+                            : 'MANUAL',
+                        })
+                      }
+                      className="rounded text-purple-600"
+                    />
+                    <span>Aktifkan QR</span>
+                  </label>
+                </div>
+
+                {sigConfig.showQrVerification && (
+                  <div className="space-y-3 pt-2 border-t border-zinc-200 dark:border-zinc-700/60">
+                    <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-900 dark:text-blue-300 text-xs space-y-1">
+                      <p className="font-bold flex items-center gap-1 text-[11px]">
+                        <span>🔍</span> Fitur Verifikasi Publik Terhubung:
+                      </p>
+                      <p className="text-[10.5px] leading-relaxed">
+                        Ketika QR discan menggunakan kamera HP, siapapun dapat melihat halaman validasi resmi KIAN HQ lengkap dengan nama peserta &amp; rincian tugas tanpa perlu login.
+                      </p>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
+                        <span>Ukuran QR Code</span>
+                        <span className="font-mono font-bold text-purple-600">{sigConfig.qrSize ?? 84} px</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={64}
+                        max={120}
+                        step={2}
+                        value={sigConfig.qrSize ?? 84}
+                        onChange={(e) =>
+                          handleSigChange({
+                            ...sigConfig,
+                            qrSize: parseInt(e.target.value, 10),
+                          })
+                        }
+                        className="w-full accent-purple-600 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 2. SIGNATURE GRAPHIC SETTINGS */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                    <span>🖋️</span> Tanda Tangan Basah / Gambar (Signature)
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={sigConfig.showSignature !== false}
+                      onChange={(e) =>
+                        handleSigChange({
+                          ...sigConfig,
+                          showSignature: e.target.checked,
+                          signatureType: e.target.checked
+                            ? sigConfig.showQrVerification
+                              ? 'BOTH'
+                              : 'MANUAL'
+                            : 'DIGITAL_QR',
+                        })
+                      }
+                      className="rounded text-purple-600"
+                    />
+                    <span>Aktifkan TTD Gambar</span>
+                  </label>
+                </div>
+
+                {sigConfig.showSignature !== false && (
+                  <>
+                    <div>
+                      <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                        Upload Tanda Tangan PNG Transparan
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/png, image/webp"
+                        onChange={handleUploadSignature}
+                        className="w-full text-xs mt-1 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-white cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-zinc-500">Skala TTD ({sigConfig.signatureScale ?? 1}x)</label>
+                        <input
+                          type="range"
+                          min={0.5}
+                          max={1.8}
+                          step={0.1}
+                          value={sigConfig.signatureScale ?? 1}
+                          onChange={(e) => handleSigChange({ ...sigConfig, signatureScale: parseFloat(e.target.value) })}
+                          className="w-full accent-purple-600 cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500">Posisi Blok TTD</label>
+                        <select
+                          value={sigConfig.align || 'right'}
+                          onChange={(e) => handleSigChange({ ...sigConfig, align: e.target.value as any })}
+                          className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-xs"
+                        >
+                          <option value="right">Kanan (Standar)</option>
+                          <option value="center">Tengah</option>
+                          <option value="left">Kiri</option>
+                        </select>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* 3. STAMP SETTINGS */}
               <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
                     <span>🔵</span> Stempel / Cap Resmi
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer shrink-0">
                     <input
                       type="checkbox"
                       checked={sigConfig.showStamp}
@@ -1082,7 +1294,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                         type="file"
                         accept="image/png, image/webp"
                         onChange={handleUploadStamp}
-                        className="w-full text-xs mt-1 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white"
+                        className="w-full text-xs mt-1 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white cursor-pointer"
                       />
                     </div>
 
@@ -1135,52 +1347,6 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                     </div>
                   </>
                 )}
-              </div>
-
-              {/* SIGNATURE GRAPHIC SETTINGS */}
-              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
-                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
-                  <span>🖋️</span> Tanda Tangan (Signature)
-                </label>
-
-                <div>
-                  <label className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
-                    Upload Tanda Tangan PNG Transparan
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/png, image/webp"
-                    onChange={handleUploadSignature}
-                    className="w-full text-xs mt-1 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-zinc-800 file:text-white"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] text-zinc-500">Skala TTD ({sigConfig.signatureScale ?? 1}x)</label>
-                    <input
-                      type="range"
-                      min={0.5}
-                      max={1.8}
-                      step={0.1}
-                      value={sigConfig.signatureScale ?? 1}
-                      onChange={(e) => handleSigChange({ ...sigConfig, signatureScale: parseFloat(e.target.value) })}
-                      className="w-full accent-purple-600 cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] text-zinc-500">Posisi Blok TTD</label>
-                    <select
-                      value={sigConfig.align || 'right'}
-                      onChange={(e) => handleSigChange({ ...sigConfig, align: e.target.value as any })}
-                      className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 text-xs"
-                    >
-                      <option value="right">Kanan (Standar)</option>
-                      <option value="center">Tengah</option>
-                      <option value="left">Kiri</option>
-                    </select>
-                  </div>
-                </div>
               </div>
             </div>
           )}

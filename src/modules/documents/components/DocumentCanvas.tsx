@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import {
   AssigneeRow,
   CustomKopTextElement,
@@ -163,6 +164,9 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
   const signatoryName =
     formData.signatory_name || signatory?.name || 'Mohamad Abi';
   const showStamp = (formData.show_stamp !== false) && sigConfig.showStamp;
+  const showSignature = (formData.show_signature !== false) && (sigConfig.showSignature !== false);
+  const showQr = (formData.show_qr_verification !== false) && Boolean(sigConfig.showQrVerification);
+  const qrSizePx = sigConfig.qrSize ?? 72;
 
   const ccList: string[] = Array.isArray(formData.cc_list)
     ? formData.cc_list
@@ -176,6 +180,35 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
   const contentPaddingLeft = layoutConfig?.contentPaddingLeftPx ?? (layoutConfig?.paddingMm?.left ? Math.round(layoutConfig.paddingMm.left * 3.78) : 56);
   const contentPaddingRight = layoutConfig?.contentPaddingRightPx ?? (layoutConfig?.paddingMm?.right ? Math.round(layoutConfig.paddingMm.right * 3.78) : 56);
+
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
+
+  const docIdForVerification = formData.document_id || formData.id || formData.document_number || 'preview';
+  const verificationUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/verify/document/${encodeURIComponent(docIdForVerification)}`
+    : `https://kianhq.com/verify/document/${encodeURIComponent(docIdForVerification)}`;
+
+  useEffect(() => {
+    let isMounted = true;
+    QRCode.toDataURL(verificationUrl, {
+      margin: 1,
+      width: 200,
+      errorCorrectionLevel: 'H',
+      color: {
+        dark: '#002B7F',
+        light: '#FFFFFF',
+      },
+    })
+      .then((url) => {
+        if (isMounted) setQrCodeDataUrl(url);
+      })
+      .catch((err) => {
+        console.error('Failed to generate document QR Code:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [verificationUrl]);
 
   // Drag-and-drop state inside interactive builder
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -621,14 +654,22 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                   : 'justify-end'
               }`}
             >
-              <div className="flex flex-col items-center text-center w-64">
+              <div className="flex flex-col items-center text-center w-72">
                 <p className="text-zinc-900">{docDatePlace}</p>
                 <p className="font-normal text-zinc-900 mb-1">
                   {signatoryPos}
                 </p>
 
-                {/* Signature Graphic & Stamp Overlay */}
-                <div className="relative w-48 h-20 flex items-center justify-center my-1">
+                {/* Main Signature / QR / Stamp Space */}
+                <div
+                  className={`relative flex items-center justify-center my-1 ${
+                    showQr && showSignature
+                      ? 'h-24 w-64 gap-3'
+                      : showQr
+                      ? 'h-24 w-52'
+                      : 'h-20 w-48'
+                  }`}
+                >
                   {/* Custom Stamp / Cap overlay */}
                   {showStamp && (
                     <div
@@ -704,28 +745,68 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                   )}
 
                   {/* Hand Signature Graphic */}
-                  {sigConfig.signatureAssetUrl || signatory?.signature_url ? (
-                    <img
-                      src={sigConfig.signatureAssetUrl || signatory?.signature_url || ''}
-                      alt="Signature"
-                      className="max-h-16 object-contain z-20"
-                      style={{
-                        transform: `scale(${sigConfig.signatureScale ?? 1})`,
-                      }}
-                    />
-                  ) : (
-                    <svg
-                      viewBox="0 0 200 80"
-                      className="w-40 h-16 text-zinc-900 z-20 stroke-current fill-none"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      style={{
-                        transform: `scale(${sigConfig.signatureScale ?? 1})`,
-                      }}
-                    >
-                      <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40 M 60 45 Q 110 50 170 38" />
-                    </svg>
+                  {showSignature && (
+                    <div className="z-20 flex items-center justify-center">
+                      {sigConfig.signatureAssetUrl || signatory?.signature_url ? (
+                        <img
+                          src={sigConfig.signatureAssetUrl || signatory?.signature_url || ''}
+                          alt="Signature"
+                          className="max-h-16 object-contain"
+                          style={{
+                            transform: `scale(${sigConfig.signatureScale ?? 1})`,
+                          }}
+                        />
+                      ) : (
+                        <svg
+                          viewBox="0 0 200 80"
+                          className="w-40 h-16 text-zinc-900 stroke-current fill-none"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          style={{
+                            transform: `scale(${sigConfig.signatureScale ?? 1})`,
+                          }}
+                        >
+                          <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40 M 60 45 Q 110 50 170 38" />
+                        </svg>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Digital Signature QR Code with Centered KIAN Logo */}
+                  {showQr && (
+                    <div className="z-20 flex flex-col items-center justify-center">
+                      <a
+                        href={verificationUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Klik / Scan untuk Verifikasi Keaslian Dokumen"
+                        className="relative rounded-lg p-1 bg-white border border-blue-900/30 shadow-xs flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition-all cursor-pointer group"
+                        style={{ width: `${qrSizePx}px`, height: `${qrSizePx}px` }}
+                      >
+                        {qrCodeDataUrl ? (
+                          <img
+                            src={qrCodeDataUrl}
+                            alt="QR Verifikasi Dokumen"
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-zinc-100 flex items-center justify-center text-[8px] font-mono text-zinc-400">
+                            QR Code
+                          </div>
+                        )}
+
+                        {/* Centered KIAN Logo Badge in QR */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-md bg-white border border-blue-900/40 shadow-xs flex items-center justify-center p-0.5 pointer-events-none">
+                          <div className="w-full h-full rounded bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-[10px] font-black text-white leading-none">
+                            K
+                          </div>
+                        </div>
+                      </a>
+                      <span className="text-[7.5px] font-bold text-zinc-600 mt-1 uppercase tracking-tight block">
+                        Scan TTD Digital
+                      </span>
+                    </div>
                   )}
                 </div>
 
@@ -897,7 +978,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                         {signatoryPos}
                       </p>
 
-                      <div className="relative w-44 h-16 flex items-center justify-center">
+                      <div className="relative w-48 h-16 flex items-center justify-center gap-2">
                         {showStamp && (
                           <div
                             className="absolute pointer-events-none z-10"
@@ -906,8 +987,8 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                               top: `${sigConfig.stampOffsetY ?? 0}px`,
                               transform: `scale(${sigConfig.stampScale ?? 1}) rotate(${sigConfig.stampRotation ?? 0}deg)`,
                               opacity: sigConfig.stampOpacity ?? 0.85,
-                              width: '80px',
-                              height: '80px',
+                              width: '72px',
+                              height: '72px',
                             }}
                           >
                             {sigConfig.stampAssetUrl ? (
@@ -941,16 +1022,28 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                             )}
                           </div>
                         )}
-                        <svg
-                          viewBox="0 0 200 80"
-                          className="w-36 h-14 text-zinc-900 z-20 stroke-current fill-none"
-                          strokeWidth="2.5"
-                          style={{
-                            transform: `scale(${sigConfig.signatureScale ?? 1})`,
-                          }}
-                        >
-                          <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40" />
-                        </svg>
+                        {showSignature && (
+                          <svg
+                            viewBox="0 0 200 80"
+                            className="w-32 h-12 text-zinc-900 z-20 stroke-current fill-none"
+                            strokeWidth="2.5"
+                            style={{
+                              transform: `scale(${sigConfig.signatureScale ?? 1})`,
+                            }}
+                          >
+                            <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40" />
+                          </svg>
+                        )}
+                        {showQr && !showSignature && (
+                          <div className="z-20 w-14 h-14 bg-white p-0.5 rounded border border-blue-900/30 flex items-center justify-center relative">
+                            {qrCodeDataUrl && (
+                              <img src={qrCodeDataUrl} alt="QR" className="w-full h-full object-contain" />
+                            )}
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded bg-white border border-blue-900/40 flex items-center justify-center pointer-events-none">
+                              <span className="text-[6px] font-black text-blue-700">K</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <p className="font-bold text-zinc-950 underline">
