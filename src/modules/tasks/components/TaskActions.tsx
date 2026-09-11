@@ -1173,22 +1173,24 @@ export default function TaskActions({
     const isReviewer = isLeader || isMentor || isCoordinator;
     const canUserSubmitDirect = !isCoordinator; // Koordinator / Admin / Executive does NOT submit!
 
-    // Deduplicate assignments by user_id for DIRECT_BRIEF tasks & filter for clean display
+    // Deduplicate assignments by user_id & role for DIRECT_BRIEF tasks & filter for clean display
     let displayAssignments = assignments;
     if (isDirectBriefTask) {
-      const userMap = new Map();
+      const keyMap = new Map<string, typeof assignments[0]>();
       for (const a of assignments) {
-        const existing = userMap.get(a.user_id);
+        const cleanRole = (a.assignment_role || '').replace(/^Kategori:\s*/i, '').trim().toLowerCase();
+        const key = `${a.user_id}_${cleanRole}`;
+        const existing = keyMap.get(key);
         if (!existing) {
-          userMap.set(a.user_id, a);
+          keyMap.set(key, a);
         } else {
           // If existing is ASSIGNED but this one has a submission, pick the one with submission!
           if (existing.status === 'ASSIGNED' && a.status !== 'ASSIGNED') {
-            userMap.set(a.user_id, a);
+            keyMap.set(key, a);
           }
         }
       }
-      const deduplicated = Array.from(userMap.values());
+      const deduplicated = Array.from(keyMap.values());
       if (isReviewer) {
         // For Coordinator / Mentor view: show only actual submissions (where result_url is present or status != ASSIGNED)
         displayAssignments = deduplicated.filter(a => a.result_url || a.status !== 'ASSIGNED');
@@ -1361,22 +1363,19 @@ export default function TaskActions({
           <div className="space-y-3">
             {slotItems.map((slot, idx) => {
               const cat = slot.name;
+              const cleanCatLower = cat.replace(/^Kategori:\s*/i, '').trim().toLowerCase();
               // Find matching assignment submitted for this category
               const categoryAss = assignments.find(
                 (a) => (a.result_url || a.status !== 'ASSIGNED') && (
-                  a.assignment_role === cat ||
-                  a.assignment_role === `Kategori: ${cat}` ||
-                  a.assignment_role.includes(cat) ||
-                  cat.includes(a.assignment_role)
+                  a.assignment_role.replace(/^Kategori:\s*/i, '').trim().toLowerCase() === cleanCatLower
                 )
               );
 
               const isTaken = Boolean(categoryAss);
               const isMine = categoryAss?.user_id === currentUserId;
               const isAssignedToMe = slot.assignedUserId === currentUserId;
-              const isAssignedToOther = slot.assignedUserId && slot.assignedUserId !== currentUserId;
+              const isAssignedToOther = Boolean(slot.assignedUserId && slot.assignedUserId !== currentUserId);
               const canUserSubmit = !isCoordinator && (!isAssignedToOther || isAssignedToMe);
-              const hasUserSubmittedAny = assignments.some(a => a.user_id === currentUserId && (a.result_url || a.status !== 'ASSIGNED'));
 
               return (
                 <div
@@ -1631,7 +1630,7 @@ export default function TaskActions({
                         <p className="text-[11px] text-zinc-400 italic">
                           🔒 Slot ini dialokasikan khusus untuk <strong>{slot.assignedUserName || 'peserta tertentu'}</strong>.
                         </p>
-                      ) : canUserSubmit && !hasUserSubmittedAny ? (
+                      ) : canUserSubmit ? (
                         <div>
                           {slotSubmitMap[cat] ? (
                             <form
@@ -1710,9 +1709,7 @@ export default function TaskActions({
                         </div>
                       ) : (
                         <p className="text-xs text-zinc-400 italic">
-                          {hasUserSubmittedAny
-                            ? 'Anda telah melakukan submit pada salah satu kategori.'
-                            : 'Slot ini masih tersedia dan belum diambil oleh peserta manapun.'}
+                          Slot ini masih tersedia dan belum diambil oleh peserta manapun.
                         </p>
                       )}
                     </div>

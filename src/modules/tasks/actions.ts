@@ -1136,6 +1136,7 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   }
 
   const cleanCat = selectedCategory ? selectedCategory.trim() : null;
+  const cleanCatLower = cleanCat ? cleanCat.replace(/^kategori:\s*/i, '').trim().toLowerCase() : null;
 
   // Check all assignments for this user on this task
   const { results: userAssignments } = await db
@@ -1146,21 +1147,37 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   const allAss = (userAssignments || []) as { id: string; assignment_role: string; status: string; submitted_at: number | null; result_url: string | null }[];
 
   // 1. Prefer assignment matching the selected category slot
-  let assignment = cleanCat
-    ? allAss.find(a => a.assignment_role.toLowerCase() === cleanCat.toLowerCase() || a.assignment_role.toLowerCase() === `kategori: ${cleanCat.toLowerCase()}`)
+  let assignment = cleanCatLower
+    ? allAss.find(a => {
+        const roleLower = a.assignment_role.replace(/^kategori:\s*/i, '').trim().toLowerCase();
+        return roleLower === cleanCatLower;
+      })
     : null;
 
-  // 2. Otherwise pick the first assignment
-  if (!assignment && allAss.length > 0) {
+  // 2. If cleanCat is provided and no assignment matches cleanCat yet, check if there's an unsubmitted generic assignment
+  if (!assignment && cleanCat) {
+    const unsubmittedGeneric = allAss.find(a => 
+      a.status === 'ASSIGNED' && 
+      (!a.result_url || !a.result_url.trim()) &&
+      ['DESIGN', 'DESIGNER', 'VIDEO_EDITOR', 'CREATOR', 'PLANNER', 'RESEARCHER', 'OTHER'].includes(a.assignment_role)
+    );
+    if (unsubmittedGeneric) {
+      assignment = unsubmittedGeneric;
+    }
+  } else if (!assignment && !cleanCat && allAss.length > 0) {
     assignment = allAss[0];
   }
 
-  // 3. Clean up any redundant unsubmitted duplicate assignments for this user on this task
-  if (assignment && allAss.length > 1) {
-    for (const a of allAss) {
-      if (a.id !== assignment.id && !a.result_url && a.status === 'ASSIGNED') {
-        await db.prepare('DELETE FROM task_assignments WHERE id = ?').bind(a.id).run();
-      }
+  // 3. Clean up duplicate unsubmitted assignments for the SAME user and SAME role only
+  if (assignment) {
+    const sameRoleDuplicates = allAss.filter(a => 
+      a.id !== assignment!.id && 
+      !a.result_url && 
+      a.status === 'ASSIGNED' &&
+      a.assignment_role.replace(/^kategori:\s*/i, '').trim().toLowerCase() === assignment!.assignment_role.replace(/^kategori:\s*/i, '').trim().toLowerCase()
+    );
+    for (const a of sameRoleDuplicates) {
+      await db.prepare('DELETE FROM task_assignments WHERE id = ?').bind(a.id).run();
     }
   }
 
@@ -1168,7 +1185,7 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
 
   if (cleanCat) {
     const slots = parseSlotsFromDescription(task.description);
-    const matchedSlot = slots.find(s => s.name.trim().toLowerCase() === cleanCat.toLowerCase());
+    const matchedSlot = slots.find(s => s.name.replace(/^kategori:\s*/i, '').trim().toLowerCase() === cleanCatLower);
 
     if (matchedSlot) {
       if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId) {
@@ -1196,10 +1213,10 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
         JOIN users u ON ta.user_id = u.id
         WHERE ta.task_id = ?
           AND ta.user_id != ?
-          AND (ta.assignment_role = ? OR ta.assignment_role = ?)
+          AND (LOWER(TRIM(ta.assignment_role)) = ? OR LOWER(TRIM(ta.assignment_role)) = ?)
           AND (ta.result_url IS NOT NULL OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED', 'RESUBMITTED', 'SUBMITTED'))
       `)
-      .bind(taskId, session.userId, cleanCat, `Kategori: ${cleanCat}`)
+      .bind(taskId, session.userId, cleanCat.toLowerCase(), `kategori: ${cleanCat.toLowerCase()}`)
       .first() as { id: string; user_name: string } | null;
 
     if (existingClaim) {
@@ -1737,8 +1754,8 @@ export async function updateTask(taskId: string, formData: FormData) {
               : deadline;
 
             const existingAssign = (await db
-              .prepare('SELECT id, status, result_url FROM task_assignments WHERE task_id = ? AND user_id = ?')
-              .bind(taskId, slot.assignedUserId)
+              .prepare('SELECT id, status, result_url FROM task_assignments WHERE task_id = ? AND user_id = ? AND (LOWER(TRIM(assignment_role)) = ? OR LOWER(TRIM(assignment_role)) = ?)')
+              .bind(taskId, slot.assignedUserId, slot.name.toLowerCase(), `kategori: ${slot.name.toLowerCase()}`)
               .first()) as { id: string; status: string; result_url: string | null } | null;
 
             if (existingAssign) {
