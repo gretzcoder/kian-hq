@@ -521,96 +521,99 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
         {/* DYNAMIC FLOW CONTENT CONTAINER (STARTS BELOW KOP SURAT)  */}
         {/* ======================================================== */}
         <div
-          className="relative z-10 flex flex-col flex-1"
+          className="relative z-10 flex flex-col flex-1 justify-between"
           style={{
             marginTop: `${Math.max(120, kop.kopHeightPx - 48)}px`,
             fontSize: baseFontSize,
           }}
         >
-          {/* Opening Intro Text */}
-          <div className="leading-relaxed text-zinc-900 mb-3 text-justify">
-            <p>{introText}</p>
-          </div>
+          {/* Top / Main Body Content */}
+          <div className="flex flex-col">
+            {/* Opening Intro Text */}
+            <div className="leading-relaxed text-zinc-900 mb-3 text-justify">
+              <p>{introText}</p>
+            </div>
 
-          {/* Assignee Section: Inline Table or Multi-Page Lampiran Pointer */}
-          {!isMultiPageAnnex ? (
-            <div className="mb-4">
-              <table
-                className="w-full border-collapse border border-zinc-800 text-zinc-900 bg-white/90"
-                style={{ fontFamily: tableFontFamily, fontSize: tableFontSize }}
-              >
-                <thead>
-                  <tr className="bg-zinc-100/70">
-                    <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">
-                      No
-                    </th>
-                    <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[22%]">
-                      NIP
-                    </th>
-                    <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[42%]">
-                      NAMA
-                    </th>
-                    <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[28%]">
-                      Tugas
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assignees.map((row, idx) => (
-                    <tr key={idx}>
-                      <td className="border border-zinc-800 px-2 py-1.5 text-center">
-                        {row.no || idx + 1}
-                      </td>
-                      <td className="border border-zinc-800 px-3 py-1.5 text-center font-mono">
-                        {row.nip || '-'}
-                      </td>
-                      <td className="border border-zinc-800 px-3 py-1.5 font-medium">
-                        {row.name || '-'}
-                      </td>
-                      <td className="border border-zinc-800 px-3 py-1.5">
-                        {row.role || '-'}
-                      </td>
+            {/* Assignee Section: Inline Table or Multi-Page Lampiran Pointer */}
+            {!isMultiPageAnnex ? (
+              <div className="mb-4">
+                <table
+                  className="w-full border-collapse border border-zinc-800 text-zinc-900 bg-white/90"
+                  style={{ fontFamily: tableFontFamily, fontSize: tableFontSize }}
+                >
+                  <thead>
+                    <tr className="bg-zinc-100/70">
+                      <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">
+                        No
+                      </th>
+                      <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[22%]">
+                        NIP
+                      </th>
+                      <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[42%]">
+                        NAMA
+                      </th>
+                      <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[28%]">
+                        Tugas
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {assignees.map((row, idx) => (
+                      <tr key={idx}>
+                        <td className="border border-zinc-800 px-2 py-1.5 text-center">
+                          {row.no || idx + 1}
+                        </td>
+                        <td className="border border-zinc-800 px-3 py-1.5 text-center font-mono">
+                          {row.nip || '-'}
+                        </td>
+                        <td className="border border-zinc-800 px-3 py-1.5 font-medium">
+                          {row.name || '-'}
+                        </td>
+                        <td className="border border-zinc-800 px-3 py-1.5">
+                          {row.role || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="mb-4 p-3 bg-zinc-50/90 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
+                <span>
+                  📋 <strong>Daftar Nama Petugas ({assignees.length} Personil)</strong> terlampir lengkap pada <strong>Lampiran Surat Tugas</strong> (Halaman 2).
+                </span>
+                <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
+                  Lihat Lampiran
+                </span>
+              </div>
+            )}
+
+            {/* Event Details */}
+            <div className="leading-relaxed text-zinc-900 mb-3">
+              <p className="mb-1.5 text-justify">{eventIntro}</p>
+              <div className="grid grid-cols-[80px_12px_1fr] gap-y-1 pl-6">
+                <span className="font-normal">Hari</span>
+                <span>:</span>
+                <span className="font-medium">{eventDays}</span>
+
+                <span className="font-normal">Pukul</span>
+                <span>:</span>
+                <span className="font-medium">{eventTime}</span>
+
+                <span className="font-normal">Tempat</span>
+                <span>:</span>
+                <span className="font-medium">{eventLocation}</span>
+              </div>
             </div>
-          ) : (
-            <div className="mb-4 p-3 bg-zinc-50/90 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
-              <span>
-                📋 <strong>Daftar Nama Petugas ({assignees.length} Personil)</strong> terlampir lengkap pada <strong>Lampiran Surat Tugas</strong> (Halaman 2).
-              </span>
-              <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
-                Lihat Lampiran
-              </span>
-            </div>
-          )}
 
-          {/* Event Details */}
-          <div className="leading-relaxed text-zinc-900 mb-3">
-            <p className="mb-1.5 text-justify">{eventIntro}</p>
-            <div className="grid grid-cols-[80px_12px_1fr] gap-y-1 pl-6">
-              <span className="font-normal">Hari</span>
-              <span>:</span>
-              <span className="font-medium">{eventDays}</span>
-
-              <span className="font-normal">Pukul</span>
-              <span>:</span>
-              <span className="font-medium">{eventTime}</span>
-
-              <span className="font-normal">Tempat</span>
-              <span>:</span>
-              <span className="font-medium">{eventLocation}</span>
+            {/* Closing Text */}
+            <div className="leading-relaxed text-zinc-900 mb-3 text-justify">
+              <p>{closingText}</p>
             </div>
           </div>
 
-          {/* Closing Text */}
-          <div className="leading-relaxed text-zinc-900 mb-3 text-justify">
-            <p>{closingText}</p>
-          </div>
-
-          {/* Signature & Tembusan Section (Clean layout that never overlaps bottom corner graphics!) */}
-          <div className="mt-2 mb-2">
+          {/* Bottom Section: Signature & Tembusan (Anchored elegantly above footer) */}
+          <div className="mt-auto pt-2 pb-2">
             {/* Signature Block */}
             <div
               className={`flex pr-4 mb-2 ${
