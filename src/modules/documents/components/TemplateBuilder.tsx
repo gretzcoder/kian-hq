@@ -6,6 +6,7 @@ import {
   CustomKopTextElement,
   DocumentTemplateItem,
   DocumentTypeItem,
+  FlowSectionConfig,
   FormFieldSchema,
   KopSuratConfig,
   SignatureStampConfig,
@@ -15,12 +16,15 @@ import {
   createTemplateAction,
   updateTemplateAction,
 } from '../templateActions';
+import { getDocumentTypesAction } from '../documentTypeActions';
 import { DocumentCanvas } from './DocumentCanvas';
 import { DocumentPreviewContainer } from './DocumentPreviewContainer';
+import { DocumentTypeManagerModal } from './DocumentTypeManagerModal';
 import {
   DEFAULT_SURAT_TUGAS_LAYOUT,
   DEFAULT_SURAT_TUGAS_SCHEMA,
   DEFAULT_SURAT_TUGAS_VALUES,
+  getDefaultTemplateForType,
 } from '../defaultTemplates';
 
 interface TemplateBuilderProps {
@@ -46,6 +50,10 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
   const router = useRouter();
   const isEditing = Boolean(initialTemplate?.id);
 
+  // Document Types List state
+  const [docTypesList, setDocTypesList] = useState<DocumentTypeItem[]>(documentTypes);
+  const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
+
   // Form State
   const [name, setName] = useState(initialTemplate?.name || 'Surat Tugas KIAN Troopers');
   const [description, setDescription] = useState(initialTemplate?.description || '');
@@ -68,10 +76,126 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     initialTemplate?.sample_data || defaultValues
   );
 
-  const [activeTab, setActiveTab] = useState<'KOP_SURAT' | 'TYPOGRAPHY' | 'SIGNATURE' | 'INFO' | 'LAYOUT' | 'DEFAULTS'>('KOP_SURAT');
+  const [activeTab, setActiveTab] = useState<'KOP_SURAT' | 'SECTIONS' | 'TYPOGRAPHY' | 'SIGNATURE' | 'INFO' | 'LAYOUT' | 'DEFAULTS'>('KOP_SURAT');
   const [selectedKopElement, setSelectedKopElement] = useState<string | null>('logo');
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Reload document types when updated via modal
+  const handleTypesUpdated = async () => {
+    try {
+      const refreshed = await getDocumentTypesAction(true);
+      setDocTypesList(refreshed);
+    } catch (e) {
+      console.error('Failed to refresh document types:', e);
+    }
+  };
+
+  // Helper to apply starter preset for a document type
+  const handleApplyPreset = (targetTypeId?: string) => {
+    const selectedDt = docTypesList.find((d) => d.id === (targetTypeId || typeId));
+    if (!selectedDt) return;
+
+    const preset = getDefaultTemplateForType(selectedDt.code);
+    if (confirm(`Terapkan susunan layout & formulir default untuk "${selectedDt.name}"? Perubahan yang belum disimpan akan digantikan dengan format standar ${selectedDt.name}.`)) {
+      setLayoutConfig(preset.layout_config);
+      setFormSchema(preset.form_schema);
+      setDefaultValues(preset.default_values);
+      setPreviewData(preset.sample_data);
+      if (!isEditing) {
+        setName(preset.name);
+      }
+    }
+  };
+
+  // Flow Sections Handlers
+  const flowSections: FlowSectionConfig[] = layoutConfig.flowSections && layoutConfig.flowSections.length > 0
+    ? layoutConfig.flowSections
+    : DEFAULT_SURAT_TUGAS_LAYOUT.flowSections;
+
+  const handleUpdateFlowSections = (newSections: FlowSectionConfig[]) => {
+    setLayoutConfig((prev) => ({
+      ...prev,
+      flowSections: newSections,
+    }));
+  };
+
+  const handleMoveSection = (index: number, direction: 'up' | 'down') => {
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= flowSections.length) return;
+    const list = [...flowSections];
+    const [removed] = list.splice(index, 1);
+    list.splice(targetIdx, 0, removed);
+    handleUpdateFlowSections(list);
+  };
+
+  const handleToggleSectionVisible = (index: number) => {
+    const list = [...flowSections];
+    list[index] = { ...list[index], visible: !list[index].visible };
+    handleUpdateFlowSections(list);
+  };
+
+  const handleDeleteSection = (index: number) => {
+    const list = flowSections.filter((_, i) => i !== index);
+    handleUpdateFlowSections(list);
+  };
+
+  const handleAddSection = (type: FlowSectionConfig['type']) => {
+    const newId = `sec_${Date.now()}`;
+    let newSec: FlowSectionConfig = {
+      id: newId,
+      type,
+      visible: true,
+      spacingBottomMm: 6,
+    };
+
+    if (type === 'RECIPIENT_BLOCK') {
+      newSec.title = 'Tujuan / Penerima Surat';
+      newSec.contentKey = 'recipient_info';
+      newSec.content = 'Kepada Yth.\nBapak/Ibu Pimpinan\ndi Tempat';
+      if (!previewData.recipient_info) {
+        setPreviewData((p) => ({ ...p, recipient_info: newSec.content }));
+      }
+    } else if (type === 'PARAGRAPH') {
+      newSec.title = 'Paragraf Isi Surat';
+      newSec.contentKey = `body_text_${Date.now()}`;
+      newSec.content = 'Sehubungan dengan hal tersebut, bersama surat ini kami sampaikan bahwa...';
+      setPreviewData((p) => ({ ...p, [newSec.contentKey!]: newSec.content }));
+    } else if (type === 'KEY_VALUE_GRID') {
+      newSec.title = 'Rincian Informasi / Grid';
+      newSec.contentKey = 'details';
+    } else if (type === 'ASSIGNEE_TABLE') {
+      newSec.title = 'Tabel Personil / Kru';
+      newSec.contentKey = 'assignees';
+    } else if (type === 'REPEATABLE_LIST') {
+      newSec.title = 'Poin-Poin Pernyataan';
+      newSec.contentKey = 'statement_points';
+      if (!previewData.statement_points) {
+        setPreviewData((p) => ({
+          ...p,
+          statement_points: [
+            '1. Seluruh data yang tercantum dalam dokumen ini adalah benar dan dapat dipertanggungjawabkan.',
+            '2. Bersedia mematuhi ketentuan dan SOP KIAN Troopers yang berlaku.',
+          ],
+        }));
+      }
+    } else if (type === 'DIVIDER') {
+      newSec.title = 'Garis Pemisah';
+    } else if (type === 'SIGNATURE_BLOCK') {
+      newSec.title = 'Blok Tanda Tangan & Cap';
+    } else if (type === 'TEMBUSAN_BLOCK') {
+      newSec.title = 'Tembusan (CC)';
+      newSec.contentKey = 'cc_list';
+    }
+
+    handleUpdateFlowSections([...flowSections, newSec]);
+  };
+
+  const handleEditSection = (index: number, updates: Partial<FlowSectionConfig>) => {
+    const list = [...flowSections];
+    list[index] = { ...list[index], ...updates };
+    handleUpdateFlowSections(list);
+  };
 
   const kopConfig: KopSuratConfig = layoutConfig.kopConfig || {
     frameAssetUrl: '',
@@ -406,6 +530,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           <div className="flex items-center gap-1 p-1 bg-zinc-100 dark:bg-zinc-800/80 rounded-xl overflow-x-auto">
             {[
               { id: 'KOP_SURAT', label: '📐 Kop & Teks' },
+              { id: 'SECTIONS', label: '📑 Isi Konten' },
               { id: 'TYPOGRAPHY', label: '🔤 Font & Ukuran' },
               { id: 'SIGNATURE', label: '🖋️ TTD & Cap' },
               { id: 'INFO', label: 'ℹ️ Info' },
@@ -950,6 +1075,231 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
             </div>
           )}
 
+          {/* TAB: SECTIONS & DYNAMIC CONTENT BUILDER */}
+          {activeTab === 'SECTIONS' && (
+            <div className="space-y-4">
+              <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 rounded-xl text-[11px] text-purple-700 dark:text-purple-300">
+                ✨ <strong>Struktur &amp; Isi Konten Dinamis:</strong> Atur urutan blok konten dokumen (Paragraf, Grid Rincian, Tabel Personil, Poin-Poin, Penerima Surat).
+              </div>
+
+              {/* Add New Section Buttons */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                    <span>➕</span> Tambah Blok Konten Baru
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset()}
+                    className="text-[10px] text-purple-600 hover:text-purple-800 font-bold"
+                  >
+                    ↺ Terapkan Preset Standar
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleAddSection('RECIPIENT_BLOCK')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>👤</span> Penerima Yth
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddSection('PARAGRAPH')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>📝</span> Paragraf Bebas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddSection('KEY_VALUE_GRID')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>📋</span> Grid Rincian
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddSection('ASSIGNEE_TABLE')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>👥</span> Tabel Personil
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddSection('REPEATABLE_LIST')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>📑</span> Poin / List
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddSection('DIVIDER')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>➖</span> Garis Pemisah
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddSection('SIGNATURE_BLOCK')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>🖋️</span> Tanda Tangan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddSection('TEMBUSAN_BLOCK')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>📄</span> Tembusan (CC)
+                  </button>
+                </div>
+              </div>
+
+              {/* Sections List */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider block">
+                  Daftar Blok Konten ({flowSections.length})
+                </span>
+
+                {flowSections.map((sec, idx) => {
+                  const typeLabel =
+                    sec.type === 'RECIPIENT_BLOCK'
+                      ? '👤 Penerima Surat (Kepada Yth)'
+                      : sec.type === 'INTRO_TEXT'
+                      ? '📝 Kalimat Pembuka'
+                      : sec.type === 'PARAGRAPH' || sec.type === 'CUSTOM_PARAGRAPH'
+                      ? '📝 Paragraf Isi'
+                      : sec.type === 'CLOSING_TEXT'
+                      ? '📝 Kalimat Penutup'
+                      : sec.type === 'KEY_VALUE_GRID' || sec.type === 'EVENT_DETAILS'
+                      ? '📋 Grid Rincian / Detail'
+                      : sec.type === 'ASSIGNEE_TABLE'
+                      ? '👥 Tabel Personil / Kru'
+                      : sec.type === 'REPEATABLE_LIST'
+                      ? '📑 Poin-Poin Pernyataan'
+                      : sec.type === 'DIVIDER'
+                      ? '➖ Garis Pemisah'
+                      : sec.type === 'SIGNATURE_BLOCK'
+                      ? '🖋️ Blok Tanda Tangan & Cap'
+                      : sec.type === 'TEMBUSAN_BLOCK'
+                      ? '📄 Tembusan (CC)'
+                      : sec.type;
+
+                  return (
+                    <div
+                      key={sec.id || idx}
+                      className={`p-3.5 rounded-2xl border transition-all space-y-3 ${
+                        sec.visible !== false
+                          ? 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-xs'
+                          : 'bg-zinc-100/50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-800 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono font-bold text-purple-600 bg-purple-50 dark:bg-purple-950 px-1.5 py-0.5 rounded">
+                            #{idx + 1}
+                          </span>
+                          <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                            {typeLabel}
+                          </span>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleMoveSection(idx, 'up')}
+                            disabled={idx === 0}
+                            className="p-1 text-xs rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30"
+                            title="Pindah ke Atas"
+                          >
+                            ⬆️
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveSection(idx, 'down')}
+                            disabled={idx === flowSections.length - 1}
+                            className="p-1 text-xs rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-30"
+                            title="Pindah ke Bawah"
+                          >
+                            ⬇️
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleSectionVisible(idx)}
+                            className="p-1 text-xs rounded hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                            title={sec.visible !== false ? 'Sembunyikan' : 'Tampilkan'}
+                          >
+                            {sec.visible !== false ? '👁️' : '🙈'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSection(idx)}
+                            className="p-1 text-xs rounded hover:bg-red-500/10 text-red-500"
+                            title="Hapus Blok"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Content editor if applicable */}
+                      {(sec.type === 'RECIPIENT_BLOCK' ||
+                        sec.type === 'INTRO_TEXT' ||
+                        sec.type === 'PARAGRAPH' ||
+                        sec.type === 'CUSTOM_PARAGRAPH' ||
+                        sec.type === 'CLOSING_TEXT') && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-zinc-500">
+                            Template Teks / Isi Konten (Dapat memuat tag &#123;placeholder&#125;)
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={
+                              (sec.contentKey && previewData[sec.contentKey]) ||
+                              previewData[sec.id] ||
+                              sec.content ||
+                              (sec.type === 'INTRO_TEXT' ? previewData.intro_text || '' : '') ||
+                              (sec.type === 'CLOSING_TEXT' ? previewData.closing_text || '' : '') ||
+                              (sec.type === 'RECIPIENT_BLOCK' ? previewData.recipient_info || '' : '')
+                            }
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              handleEditSection(idx, { content: val });
+                              const targetKey = sec.contentKey || sec.id || (sec.type === 'INTRO_TEXT' ? 'intro_text' : sec.type === 'CLOSING_TEXT' ? 'closing_text' : 'recipient_info');
+                              setPreviewData((prev) => ({ ...prev, [targetKey]: val }));
+                              setDefaultValues((prev) => ({ ...prev, [targetKey]: val }));
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs resize-y font-sans"
+                            placeholder="Tuliskan teks konten di sini..."
+                          />
+                        </div>
+                      )}
+
+                      {/* Spacing control */}
+                      <div className="flex items-center justify-between text-[10px] text-zinc-500 pt-1">
+                        <span>Jarak Bawah: {sec.spacingBottomMm ?? 6} mm</span>
+                        <input
+                          type="range"
+                          min={0}
+                          max={20}
+                          step={1}
+                          value={sec.spacingBottomMm ?? 6}
+                          onChange={(e) =>
+                            handleEditSection(idx, { spacingBottomMm: parseInt(e.target.value, 10) })
+                          }
+                          className="w-32 accent-purple-600 cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* TAB 2: TYPOGRAPHY (FONT & UKURAN TEKS UNTUK SEMUA ELEMENT) */}
           {activeTab === 'TYPOGRAPHY' && (
             <div className="space-y-4">
@@ -1367,21 +1717,45 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                  Jenis Dokumen (Document Type) <span className="text-red-500">*</span>
-                </label>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                    Jenis Dokumen (Document Type) <span className="text-red-500">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsTypeManagerOpen(true)}
+                    className="text-[11px] font-bold text-purple-600 hover:text-purple-800 flex items-center gap-1"
+                  >
+                    <span>⚙️</span> Kelola / Tambah Jenis
+                  </button>
+                </div>
                 <select
                   value={typeId}
-                  onChange={(e) => setTypeId(e.target.value)}
+                  onChange={(e) => {
+                    const newTid = e.target.value;
+                    setTypeId(newTid);
+                  }}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-bold"
                 >
-                  {documentTypes.map((dt) => (
+                  {docTypesList.map((dt) => (
                     <option key={dt.id} value={dt.id}>
                       {dt.icon} {dt.name} ({dt.code})
                     </option>
                   ))}
                 </select>
+                <div className="flex items-center justify-between pt-0.5">
+                  <span className="text-[10px] text-zinc-400">
+                    Format penomoran: {docTypesList.find((d) => d.id === typeId)?.numbering_format || '{sequence}/...'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset()}
+                    className="text-[10.5px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>✨</span> Terapkan Susunan Standar {docTypesList.find((d) => d.id === typeId)?.name || ''}
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-1">
@@ -1614,6 +1988,17 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           </DocumentPreviewContainer>
         </div>
       </div>
+
+      {/* Document Type Manager Modal */}
+      <DocumentTypeManagerModal
+        isOpen={isTypeManagerOpen}
+        onClose={() => setIsTypeManagerOpen(false)}
+        onTypesUpdated={handleTypesUpdated}
+        onSelectType={(newTypeId) => {
+          setTypeId(newTypeId);
+          handleTypesUpdated();
+        }}
+      />
     </div>
   );
 };

@@ -8,8 +8,10 @@ import {
   ensureDefaultSeedTemplates,
 } from '@/modules/documents/templateActions';
 import { getGeneratedDocuments } from '@/modules/documents/documentActions';
+import { getDocumentTypesAction } from '@/modules/documents/documentTypeActions';
 import { DocumentListTable } from '@/modules/documents/components/DocumentListTable';
 import { TemplateListTable } from '@/modules/documents/components/TemplateListTable';
+import { DocumentTypesTable } from '@/modules/documents/components/DocumentTypesTable';
 
 export default async function DocumentsDashboardPage({
   searchParams,
@@ -34,11 +36,16 @@ export default async function DocumentsDashboardPage({
     canManage;
 
   const resolvedParams = await searchParams;
-  const activeTab = canManage && resolvedParams.tab === 'templates' ? 'templates' : 'documents';
+  const activeTab = canManage && resolvedParams.tab === 'templates'
+    ? 'templates'
+    : canManage && resolvedParams.tab === 'types'
+    ? 'types'
+    : 'documents';
 
-  const [documents, templates] = await Promise.all([
+  const [documents, templates, documentTypes] = await Promise.all([
     getGeneratedDocuments(),
     canManage ? getDocumentTemplates() : Promise.resolve([]),
+    canManage ? getDocumentTypesAction(true) : Promise.resolve([]),
   ]);
 
   const activeTemplatesCount = templates.filter((t) => t.status === 'ACTIVE').length;
@@ -112,13 +119,13 @@ export default async function DocumentsDashboardPage({
 
             <div className="p-4 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs">
               <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                Format Penomoran
+                Jenis Dokumen Terdaftar
               </p>
-              <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100 mt-2 font-mono truncate">
-                &#123;seq&#125;/KIAN/TROOPERS/IX/2026
+              <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1 font-mono">
+                {documentTypes.length}
               </p>
-              <span className="text-[10px] text-emerald-600 font-medium">
-                ✓ Auto sequence &amp; Concurrency Safe
+              <span className="text-[10px] text-zinc-500 font-medium">
+                Format penomoran otomatis &amp; terintegrasi
               </span>
             </div>
           </>
@@ -160,13 +167,26 @@ export default async function DocumentsDashboardPage({
           >
             <span>📋</span> Katalog Template ({templates.length})
           </Link>
+          <Link
+            href="/dashboard/documents?tab=types"
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'types'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+            }`}
+          >
+            <span>📁</span> Master Jenis Dokumen ({documentTypes.length})
+          </Link>
         </div>
       )}
+
       {/* Tab Content */}
       {activeTab === 'documents' ? (
         <DocumentListTable documents={documents} canManage={canManage} />
-      ) : (
+      ) : activeTab === 'templates' ? (
         <TemplateListTable templates={templates} canManage={canManage} />
+      ) : (
+        <DocumentTypesTable types={documentTypes} canManage={canManage} />
       )}
     </div>
   );

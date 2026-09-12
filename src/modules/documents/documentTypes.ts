@@ -69,18 +69,26 @@ export interface FlowSectionConfig {
   type:
     | 'HEADER_LOGO'
     | 'TITLE_AND_NUMBER'
+    | 'RECIPIENT_BLOCK'
     | 'INTRO_TEXT'
-    | 'ASSIGNEE_TABLE'
+    | 'PARAGRAPH'
+    | 'CUSTOM_PARAGRAPH'
+    | 'KEY_VALUE_GRID'
     | 'EVENT_DETAILS'
+    | 'ASSIGNEE_TABLE'
+    | 'CUSTOM_TABLE'
+    | 'REPEATABLE_LIST'
     | 'CLOSING_TEXT'
     | 'SIGNATURE_BLOCK'
     | 'TEMBUSAN_BLOCK'
     | 'FOOTER_CONTACT'
-    | 'CUSTOM_PARAGRAPH'
     | 'DIVIDER';
   title?: string;
+  contentKey?: string;
+  content?: string;
   visible: boolean;
   spacingBottomMm?: number;
+  options?: Record<string, any>;
   styles?: Record<string, any>;
 }
 

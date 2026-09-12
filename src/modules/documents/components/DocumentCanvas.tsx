@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import {
   AssigneeRow,
   CustomKopTextElement,
+  FlowSectionConfig,
   KopSuratConfig,
   OrganizationSnapshot,
   SignatureStampConfig,
@@ -560,274 +561,375 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
             fontSize: baseFontSize,
           }}
         >
-          {/* Opening Intro Text */}
-          <div className="leading-relaxed text-zinc-900 mb-3 text-justify">
-            <p>{introText}</p>
-          </div>
+          {(() => {
+            const interpolatePlaceholders = (text: string | undefined, data: Record<string, any>): string => {
+              if (!text) return '';
+              return text.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
+                if (data[key] !== undefined && data[key] !== null) {
+                  return String(data[key]);
+                }
+                return match;
+              });
+            };
 
-          {/* Assignee Section: Inline Table or Multi-Page Lampiran Pointer */}
-          {!isMultiPageAnnex ? (
-            <div className="mb-4">
-              <table
-                className="w-full border-collapse border border-zinc-800 text-zinc-900 bg-white/90"
-                style={{ fontFamily: tableFontFamily, fontSize: tableFontSize }}
-              >
-                <thead>
-                  <tr className="bg-zinc-100/70">
-                    <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">
-                      No
-                    </th>
-                    <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[22%]">
-                      NIP
-                    </th>
-                    <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[42%]">
-                      NAMA
-                    </th>
-                    <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[28%]">
-                      Tugas
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {assignees.map((row, idx) => (
-                    <tr key={idx}>
-                      <td className="border border-zinc-800 px-2 py-1.5 text-center">
-                        {row.no || idx + 1}
-                      </td>
-                      <td className="border border-zinc-800 px-3 py-1.5 text-center font-mono">
-                        {row.nip || '-'}
-                      </td>
-                      <td className="border border-zinc-800 px-3 py-1.5 font-medium">
-                        {row.name || '-'}
-                      </td>
-                      <td className="border border-zinc-800 px-3 py-1.5">
-                        {row.role || '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="mb-4 p-3 bg-zinc-50/90 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
-              <span>
-                📋 <strong>Daftar Nama Petugas ({assignees.length} Personil)</strong> terlampir lengkap pada <strong>Lampiran Surat Tugas</strong> (Halaman 2).
-              </span>
-              <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
-                Lihat Lampiran
-              </span>
-            </div>
-          )}
+            const defaultFlowList: FlowSectionConfig[] = [
+              { id: 'sec_intro', type: 'INTRO_TEXT', visible: true, spacingBottomMm: 4 },
+              { id: 'sec_table', type: 'ASSIGNEE_TABLE', visible: true, spacingBottomMm: 6 },
+              { id: 'sec_event', type: 'EVENT_DETAILS', visible: true, spacingBottomMm: 6 },
+              { id: 'sec_closing', type: 'CLOSING_TEXT', visible: true, spacingBottomMm: 8 },
+              { id: 'sec_sig', type: 'SIGNATURE_BLOCK', visible: true, spacingBottomMm: 6 },
+              { id: 'sec_cc', type: 'TEMBUSAN_BLOCK', visible: true, spacingBottomMm: 4 },
+            ];
 
-          {/* Event Details */}
-          <div className="leading-relaxed text-zinc-900 mb-3">
-            <p className="mb-1.5 text-justify">{eventIntro}</p>
-            <div className="grid grid-cols-[80px_12px_1fr] gap-y-1 pl-6">
-              <span className="font-normal">Hari</span>
-              <span>:</span>
-              <span className="font-medium">{eventDays}</span>
+            const flowList = layoutConfig?.flowSections && layoutConfig.flowSections.length > 0
+              ? layoutConfig.flowSections
+              : defaultFlowList;
 
-              <span className="font-normal">Pukul</span>
-              <span>:</span>
-              <span className="font-medium">{eventTime}</span>
+            return flowList.map((sec, secIdx) => {
+              if (sec.visible === false) return null;
+              const mbStyle = sec.spacingBottomMm !== undefined ? `${sec.spacingBottomMm * 3.78}px` : '10px';
 
-              <span className="font-normal">Tempat</span>
-              <span>:</span>
-              <span className="font-medium">{eventLocation}</span>
-            </div>
-          </div>
+              // 1. RECIPIENT BLOCK
+              if (sec.type === 'RECIPIENT_BLOCK') {
+                const rawRecipient = formData[sec.contentKey || 'recipient_info'] || sec.content || formData.recipient_info;
+                if (!rawRecipient) return null;
+                const interpolated = interpolatePlaceholders(rawRecipient, formData);
+                return (
+                  <div key={sec.id || secIdx} className="leading-relaxed text-zinc-900" style={{ marginBottom: mbStyle }}>
+                    <div className="whitespace-pre-line font-normal">{interpolated}</div>
+                  </div>
+                );
+              }
 
-          {/* Closing Text */}
-          <div className="leading-relaxed text-zinc-900 mb-3 text-justify">
-            <p>{closingText}</p>
-          </div>
+              // 2. PARAGRAPHS (INTRO / PARAGRAPH / BODY / CLOSING)
+              if (
+                sec.type === 'INTRO_TEXT' ||
+                sec.type === 'PARAGRAPH' ||
+                sec.type === 'CUSTOM_PARAGRAPH' ||
+                sec.type === 'CLOSING_TEXT'
+              ) {
+                let rawText = '';
+                if (sec.contentKey && formData[sec.contentKey]) {
+                  rawText = formData[sec.contentKey];
+                } else if (formData[sec.id]) {
+                  rawText = formData[sec.id];
+                } else if (sec.content) {
+                  rawText = sec.content;
+                } else if (sec.type === 'INTRO_TEXT') {
+                  rawText = introText;
+                } else if (sec.type === 'CLOSING_TEXT') {
+                  rawText = closingText;
+                } else if (formData.body_content) {
+                  rawText = formData.body_content;
+                }
 
-          {/* Signature & Tembusan Section (Clean layout that never overlaps bottom corner graphics!) */}
-          <div className="mt-2 mb-2">
-            {/* Signature Block */}
-            <div
-              className={`flex pr-4 mb-2 ${
-                sigConfig.align === 'center'
-                  ? 'justify-center'
-                  : sigConfig.align === 'left'
-                  ? 'justify-start'
-                  : 'justify-end'
-              }`}
-            >
-              <div className="flex flex-col items-center text-center w-72">
-                <p className="text-zinc-900">{docDatePlace}</p>
-                <p className="font-normal text-zinc-900 mb-1">
-                  {signatoryPos}
-                </p>
+                if (!rawText) return null;
+                const interpolated = interpolatePlaceholders(rawText, formData);
+                return (
+                  <div key={sec.id || secIdx} className="leading-relaxed text-zinc-900 text-justify" style={{ marginBottom: mbStyle }}>
+                    <p className="whitespace-pre-line">{interpolated}</p>
+                  </div>
+                );
+              }
 
-                {/* Main Signature / QR / Stamp Space */}
-                <div
-                  className={`relative flex items-center justify-center my-1 ${
-                    showQr && showSignature
-                      ? 'h-24 w-64 gap-3'
-                      : showQr
-                      ? 'h-24 w-52'
-                      : 'h-20 w-48'
-                  }`}
-                >
-                  {/* Custom Stamp / Cap overlay */}
-                  {showStamp && (
-                    <div
-                      className="absolute pointer-events-none z-10"
-                      style={{
-                        left: `${sigConfig.stampOffsetX ?? -12}px`,
-                        top: `${sigConfig.stampOffsetY ?? 0}px`,
-                        transform: `scale(${sigConfig.stampScale ?? 1}) rotate(${sigConfig.stampRotation ?? 0}deg)`,
-                        opacity: sigConfig.stampOpacity ?? 0.85,
-                        width: '96px',
-                        height: '96px',
-                      }}
-                    >
-                      {sigConfig.stampAssetUrl ? (
-                        <img
-                          src={sigConfig.stampAssetUrl}
-                          alt="Stamp"
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <svg viewBox="0 0 100 100" className="w-full h-full">
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r="45"
-                            stroke="#0066CC"
-                            strokeWidth="2.5"
-                            fill="none"
-                            strokeDasharray="4 2"
-                          />
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r="38"
-                            stroke="#0066CC"
-                            strokeWidth="1.5"
-                            fill="none"
-                          />
-                          <text
-                            x="50"
-                            y="34"
-                            textAnchor="middle"
-                            fill="#0066CC"
-                            fontSize="7"
-                            fontWeight="900"
-                            letterSpacing="1"
-                          >
-                            KIAN TROOPERS
-                          </text>
-                          <text
-                            x="50"
-                            y="52"
-                            textAnchor="middle"
-                            fill="#002B7F"
-                            fontSize="12"
-                            fontWeight="900"
-                          >
-                            ★ KIAN ★
-                          </text>
-                          <text
-                            x="50"
-                            y="68"
-                            textAnchor="middle"
-                            fill="#0066CC"
-                            fontSize="6"
-                            fontWeight="bold"
-                          >
-                            INDONESIA
-                          </text>
-                        </svg>
-                      )}
-                    </div>
-                  )}
+              // 3. KEY_VALUE_GRID / EVENT_DETAILS / PERSON DETAILS
+              if (sec.type === 'KEY_VALUE_GRID' || sec.type === 'EVENT_DETAILS') {
+                const hasPersonData = Boolean(formData.person_name);
+                const hasEventData = Boolean(formData.event_days || formData.event_name || formData.event_location);
+                const intro = formData.event_intro_text || sec.content;
+                const interpolatedIntro = intro ? interpolatePlaceholders(intro, formData) : null;
 
-                  {/* Hand Signature Graphic */}
-                  {showSignature && (
-                    <div className="z-20 flex items-center justify-center">
-                      {sigConfig.signatureAssetUrl || signatory?.signature_url ? (
-                        <img
-                          src={sigConfig.signatureAssetUrl || signatory?.signature_url || ''}
-                          alt="Signature"
-                          className="max-h-16 object-contain"
-                          style={{
-                            transform: `scale(${sigConfig.signatureScale ?? 1})`,
-                          }}
-                        />
-                      ) : (
-                        <svg
-                          viewBox="0 0 200 80"
-                          className="w-40 h-16 text-zinc-900 stroke-current fill-none"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          style={{
-                            transform: `scale(${sigConfig.signatureScale ?? 1})`,
-                          }}
-                        >
-                          <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40 M 60 45 Q 110 50 170 38" />
-                        </svg>
-                      )}
-                    </div>
-                  )}
+                return (
+                  <div key={sec.id || secIdx} className="leading-relaxed text-zinc-900" style={{ marginBottom: mbStyle }}>
+                    {interpolatedIntro && <p className="mb-1.5 text-justify">{interpolatedIntro}</p>}
 
-                  {/* Digital Signature QR Code with Centered KIAN Logo */}
-                  {showQr && (
-                    <div className="z-20 flex flex-col items-center justify-center">
-                      <a
-                        href={verificationUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Klik / Scan untuk Verifikasi Keaslian Dokumen"
-                        className="relative rounded-lg p-1 bg-white border border-blue-900/30 shadow-xs flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition-all cursor-pointer group"
-                        style={{ width: `${qrSizePx}px`, height: `${qrSizePx}px` }}
-                      >
-                        {qrCodeDataUrl ? (
-                          <img
-                            src={qrCodeDataUrl}
-                            alt="QR Verifikasi Dokumen"
-                            className="w-full h-full object-contain"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-zinc-100 flex items-center justify-center text-[8px] font-mono text-zinc-400">
-                            QR Code
-                          </div>
+                    {hasPersonData && (
+                      <div className="grid grid-cols-[140px_12px_1fr] gap-y-1 pl-4 my-1">
+                        <span className="font-normal">Nama</span>
+                        <span>:</span>
+                        <span className="font-medium">{formData.person_name}</span>
+
+                        {formData.person_nip && (
+                          <>
+                            <span className="font-normal">NIP / NIM</span>
+                            <span>:</span>
+                            <span className="font-medium font-mono">{formData.person_nip}</span>
+                          </>
                         )}
 
-                        {/* Centered KIAN Logo Badge in QR */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-md bg-white border border-blue-900/40 shadow-xs flex items-center justify-center p-0.5 pointer-events-none">
-                          <div className="w-full h-full rounded bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-[10px] font-black text-white leading-none">
-                            K
-                          </div>
+                        {formData.person_role && (
+                          <>
+                            <span className="font-normal">Jabatan / Posisi</span>
+                            <span>:</span>
+                            <span className="font-medium">{formData.person_role}</span>
+                          </>
+                        )}
+
+                        {formData.person_institution && (
+                          <>
+                            <span className="font-normal">Institusi / Asal</span>
+                            <span>:</span>
+                            <span className="font-medium">{formData.person_institution}</span>
+                          </>
+                        )}
+
+                        {formData.person_address && (
+                          <>
+                            <span className="font-normal">Alamat</span>
+                            <span>:</span>
+                            <span className="font-medium">{formData.person_address}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {hasEventData && !hasPersonData && (
+                      <div className="grid grid-cols-[80px_12px_1fr] gap-y-1 pl-6 my-1">
+                        {formData.event_days && (
+                          <>
+                            <span className="font-normal">Hari</span>
+                            <span>:</span>
+                            <span className="font-medium">{formData.event_days}</span>
+                          </>
+                        )}
+                        {formData.event_time && (
+                          <>
+                            <span className="font-normal">Pukul</span>
+                            <span>:</span>
+                            <span className="font-medium">{formData.event_time}</span>
+                          </>
+                        )}
+                        {formData.event_location && (
+                          <>
+                            <span className="font-normal">Tempat</span>
+                            <span>:</span>
+                            <span className="font-medium">{formData.event_location}</span>
+                          </>
+                        )}
+                        {formData.event_agenda && (
+                          <>
+                            <span className="font-normal">Agenda</span>
+                            <span>:</span>
+                            <span className="font-medium">{formData.event_agenda}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // 4. ASSIGNEE_TABLE
+              if (sec.type === 'ASSIGNEE_TABLE') {
+                if (assignees.length === 0) return null;
+                return !isMultiPageAnnex ? (
+                  <div key={sec.id || secIdx} style={{ marginBottom: mbStyle }}>
+                    <table
+                      className="w-full border-collapse border border-zinc-800 text-zinc-900 bg-white/90"
+                      style={{ fontFamily: tableFontFamily, fontSize: tableFontSize }}
+                    >
+                      <thead>
+                        <tr className="bg-zinc-100/70">
+                          <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">No</th>
+                          <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[22%]">NIP</th>
+                          <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[42%]">NAMA</th>
+                          <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[28%]">Tugas</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {assignees.map((row, idx) => (
+                          <tr key={idx}>
+                            <td className="border border-zinc-800 px-2 py-1.5 text-center">{row.no || idx + 1}</td>
+                            <td className="border border-zinc-800 px-3 py-1.5 text-center font-mono">{row.nip || '-'}</td>
+                            <td className="border border-zinc-800 px-3 py-1.5 font-medium">{row.name || '-'}</td>
+                            <td className="border border-zinc-800 px-3 py-1.5">{row.role || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div key={sec.id || secIdx} style={{ marginBottom: mbStyle }} className="p-3 bg-zinc-50/90 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
+                    <span>
+                      📋 <strong>Daftar Nama Petugas ({assignees.length} Personil)</strong> terlampir lengkap pada <strong>Lampiran Surat Tugas</strong> (Halaman 2).
+                    </span>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
+                      Lihat Lampiran
+                    </span>
+                  </div>
+                );
+              }
+
+              // 5. REPEATABLE LIST
+              if (sec.type === 'REPEATABLE_LIST') {
+                const listData: string[] = Array.isArray(formData[sec.contentKey || 'statement_points'])
+                  ? formData[sec.contentKey || 'statement_points']
+                  : Array.isArray(formData[sec.id])
+                  ? formData[sec.id]
+                  : Array.isArray(formData.statement_points)
+                  ? formData.statement_points
+                  : [];
+
+                if (listData.length === 0) return null;
+                return (
+                  <div key={sec.id || secIdx} className="leading-relaxed text-zinc-900 pl-4 space-y-1.5" style={{ marginBottom: mbStyle }}>
+                    {listData.map((item, idx) => (
+                      <div key={idx} className="text-justify">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+
+              // 6. DIVIDER
+              if (sec.type === 'DIVIDER') {
+                return (
+                  <hr key={sec.id || secIdx} className="border-t border-zinc-300 my-2" style={{ marginBottom: mbStyle }} />
+                );
+              }
+
+              // 7. SIGNATURE_BLOCK
+              if (sec.type === 'SIGNATURE_BLOCK') {
+                return (
+                  <div key={sec.id || secIdx} className="mt-2 mb-2" style={{ marginBottom: mbStyle }}>
+                    <div
+                      className={`flex pr-4 mb-2 ${
+                        sigConfig.align === 'center'
+                          ? 'justify-center'
+                          : sigConfig.align === 'left'
+                          ? 'justify-start'
+                          : 'justify-end'
+                      }`}
+                    >
+                      <div className="flex flex-col items-center text-center w-72">
+                        <p className="text-zinc-900">{docDatePlace}</p>
+                        <p className="font-normal text-zinc-900 mb-1">{signatoryPos}</p>
+
+                        {/* Main Signature / QR / Stamp Space */}
+                        <div
+                          className={`relative flex items-center justify-center my-1 ${
+                            showQr && showSignature
+                              ? 'h-24 w-64 gap-3'
+                              : showQr
+                              ? 'h-24 w-52'
+                              : 'h-20 w-48'
+                          }`}
+                        >
+                          {/* Custom Stamp / Cap overlay */}
+                          {showStamp && (
+                            <div
+                              className="absolute pointer-events-none z-10"
+                              style={{
+                                left: `${sigConfig.stampOffsetX ?? -12}px`,
+                                top: `${sigConfig.stampOffsetY ?? 0}px`,
+                                transform: `scale(${sigConfig.stampScale ?? 1}) rotate(${sigConfig.stampRotation ?? 0}deg)`,
+                                opacity: sigConfig.stampOpacity ?? 0.85,
+                                width: '96px',
+                                height: '96px',
+                              }}
+                            >
+                              {sigConfig.stampAssetUrl ? (
+                                <img src={sigConfig.stampAssetUrl} alt="Stamp" className="w-full h-full object-contain" />
+                              ) : (
+                                <svg viewBox="0 0 100 100" className="w-full h-full">
+                                  <circle cx="50" cy="50" r="45" stroke="#0066CC" strokeWidth="2.5" fill="none" strokeDasharray="4 2" />
+                                  <circle cx="50" cy="50" r="38" stroke="#0066CC" strokeWidth="1.5" fill="none" />
+                                  <text x="50" y="34" textAnchor="middle" fill="#0066CC" fontSize="7" fontWeight="900" letterSpacing="1">
+                                    KIAN TROOPERS
+                                  </text>
+                                  <text x="50" y="52" textAnchor="middle" fill="#002B7F" fontSize="12" fontWeight="900">
+                                    ★ KIAN ★
+                                  </text>
+                                  <text x="50" y="68" textAnchor="middle" fill="#0066CC" fontSize="6" fontWeight="bold">
+                                    INDONESIA
+                                  </text>
+                                </svg>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Hand Signature Graphic */}
+                          {showSignature && (
+                            <div className="z-20 flex items-center justify-center">
+                              {sigConfig.signatureAssetUrl || signatory?.signature_url ? (
+                                <img
+                                  src={sigConfig.signatureAssetUrl || signatory?.signature_url || ''}
+                                  alt="Signature"
+                                  className="max-h-16 object-contain"
+                                  style={{ transform: `scale(${sigConfig.signatureScale ?? 1})` }}
+                                />
+                              ) : (
+                                <svg
+                                  viewBox="0 0 200 80"
+                                  className="w-40 h-16 text-zinc-900 stroke-current fill-none"
+                                  strokeWidth="2.5"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  style={{ transform: `scale(${sigConfig.signatureScale ?? 1})` }}
+                                >
+                                  <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40 M 60 45 Q 110 50 170 38" />
+                                </svg>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Digital Signature QR Code */}
+                          {showQr && (
+                            <div className="z-20 flex flex-col items-center justify-center">
+                              <a
+                                href={verificationUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="Klik / Scan untuk Verifikasi Keaslian Dokumen"
+                                className="relative rounded-lg p-1 bg-white border border-blue-900/30 shadow-xs flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition-all cursor-pointer group"
+                                style={{ width: `${qrSizePx}px`, height: `${qrSizePx}px` }}
+                              >
+                                {qrCodeDataUrl ? (
+                                  <img src={qrCodeDataUrl} alt="QR Verifikasi Dokumen" className="w-full h-full object-contain" />
+                                ) : (
+                                  <div className="w-full h-full bg-zinc-100 flex items-center justify-center text-[8px] font-mono text-zinc-400">
+                                    QR Code
+                                  </div>
+                                )}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-md bg-white border border-blue-900/40 shadow-xs flex items-center justify-center p-0.5 pointer-events-none">
+                                  <div className="w-full h-full rounded bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-[10px] font-black text-white leading-none">
+                                    K
+                                  </div>
+                                </div>
+                              </a>
+                              <span className="text-[7.5px] font-bold text-zinc-600 mt-1 uppercase tracking-tight block">
+                                Scan TTD Digital
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      </a>
-                      <span className="text-[7.5px] font-bold text-zinc-600 mt-1 uppercase tracking-tight block">
-                        Scan TTD Digital
-                      </span>
+
+                        <p className="font-bold text-zinc-950 underline mt-1">{signatoryName}</p>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                );
+              }
 
-                <p className="font-bold text-zinc-950 underline mt-1">
-                  {signatoryName}
-                </p>
-              </div>
-            </div>
+              // 8. TEMBUSAN_BLOCK
+              if (sec.type === 'TEMBUSAN_BLOCK') {
+                if (ccList.length === 0) return null;
+                return (
+                  <div key={sec.id || secIdx} className="pt-2 pl-8 text-[10.5px] text-zinc-800 max-w-[360px]" style={{ marginBottom: mbStyle }}>
+                    <p className="font-bold mb-0.5">Tembusan :</p>
+                    <ul className="space-y-0.5 pl-1">
+                      {ccList.map((item, idx) => (
+                        <li key={idx}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              }
 
-            {/* FIXED TEMBUSAN: Placed with safe left padding (pl-8) and minimum bottom clearance so it NEVER collides with bottom-left graphics */}
-            {ccList.length > 0 && (
-              <div className="pt-2 pl-8 text-[10.5px] text-zinc-800 max-w-[360px]">
-                <p className="font-bold mb-0.5">Tembusan :</p>
-                <ul className="space-y-0.5 pl-1">
-                  {ccList.map((item, idx) => (
-                    <li key={idx}>{item}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
+              return null;
+            });
+          })()}
         </div>
 
         {/* Fixed Bottom Footer (Only rendered when not using custom background frame) */}
