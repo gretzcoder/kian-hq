@@ -750,7 +750,7 @@ export async function rejectDocumentAction(params: {
  * - Table assignees array (matching id, user_id, nip, email, name)
  * - Single person form fields (person_name, person_nip, person_email, target_user_id)
  */
-export function isUserTargetedInDocument(
+function isUserTargetedInDocument(
   doc: GeneratedDocumentItem,
   user: { id: string; name: string; email: string; student_id_number: string | null }
 ): boolean {
