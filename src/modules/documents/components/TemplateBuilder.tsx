@@ -140,6 +140,11 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     handleUpdateFlowSections(list);
   };
 
+  const updateFieldValue = (key: string, value: any) => {
+    setPreviewData((prev) => ({ ...prev, [key]: value }));
+    setDefaultValues((prev) => ({ ...prev, [key]: value }));
+  };
+
   const handleAddSection = (type: FlowSectionConfig['type']) => {
     const newId = `sec_${Date.now()}`;
     let newSec: FlowSectionConfig = {
@@ -149,18 +154,31 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
       spacingBottomMm: 6,
     };
 
-    if (type === 'RECIPIENT_BLOCK') {
+    if (type === 'TITLE_AND_NUMBER') {
+      newSec.title = 'Judul & Nomor Surat';
+      newSec.contentKey = 'document_title';
+    } else if (type === 'HEADER_LOGO') {
+      newSec.title = 'Logo Kop Surat';
+    } else if (type === 'RECIPIENT_BLOCK') {
       newSec.title = 'Tujuan / Penerima Surat';
       newSec.contentKey = 'recipient_info';
       newSec.content = 'Kepada Yth.\nBapak/Ibu Pimpinan\ndi Tempat';
       if (!previewData.recipient_info) {
-        setPreviewData((p) => ({ ...p, recipient_info: newSec.content }));
+        updateFieldValue('recipient_info', newSec.content);
       }
+    } else if (type === 'INTRO_TEXT') {
+      newSec.title = 'Kalimat Pembuka';
+      newSec.contentKey = 'intro_text';
+      newSec.content = previewData.intro_text || 'Yang bertanda tangan dibawah ini, {signer_title_intro}, menugaskan kepada :';
+    } else if (type === 'CLOSING_TEXT') {
+      newSec.title = 'Kalimat Penutup';
+      newSec.contentKey = 'closing_text';
+      newSec.content = previewData.closing_text || 'Demikianlah surat ini dibuat agar dapat dipergunakan sebagaimana mestinya.';
     } else if (type === 'PARAGRAPH') {
       newSec.title = 'Paragraf Isi Surat';
       newSec.contentKey = `body_text_${Date.now()}`;
       newSec.content = 'Sehubungan dengan hal tersebut, bersama surat ini kami sampaikan bahwa...';
-      setPreviewData((p) => ({ ...p, [newSec.contentKey!]: newSec.content }));
+      updateFieldValue(newSec.contentKey, newSec.content);
     } else if (type === 'KEY_VALUE_GRID') {
       newSec.title = 'Rincian Informasi / Grid';
       newSec.contentKey = 'details';
@@ -170,14 +188,11 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     } else if (type === 'REPEATABLE_LIST') {
       newSec.title = 'Poin-Poin Pernyataan';
       newSec.contentKey = 'statement_points';
-      if (!previewData.statement_points) {
-        setPreviewData((p) => ({
-          ...p,
-          statement_points: [
-            '1. Seluruh data yang tercantum dalam dokumen ini adalah benar dan dapat dipertanggungjawabkan.',
-            '2. Bersedia mematuhi ketentuan dan SOP KIAN Troopers yang berlaku.',
-          ],
-        }));
+      if (!previewData.statement_points || !previewData.statement_points.length) {
+        updateFieldValue('statement_points', [
+          '1. Seluruh data yang tercantum dalam dokumen ini adalah benar dan dapat dipertanggungjawabkan.',
+          '2. Bersedia mematuhi ketentuan dan SOP KIAN Troopers yang berlaku.',
+        ]);
       }
     } else if (type === 'DIVIDER') {
       newSec.title = 'Garis Pemisah';
@@ -186,6 +201,9 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     } else if (type === 'TEMBUSAN_BLOCK') {
       newSec.title = 'Tembusan (CC)';
       newSec.contentKey = 'cc_list';
+      if (!previewData.cc_list || !previewData.cc_list.length) {
+        updateFieldValue('cc_list', ['1. Direktur Utama', '2. Divisi Terkait', '3. Arsip']);
+      }
     }
 
     handleUpdateFlowSections([...flowSections, newSec]);
@@ -1100,6 +1118,13 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   <button
                     type="button"
+                    onClick={() => handleAddSection('TITLE_AND_NUMBER')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>🏷️</span> Judul Dokumen
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleAddSection('RECIPIENT_BLOCK')}
                     className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
                   >
@@ -1107,10 +1132,17 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                   </button>
                   <button
                     type="button"
+                    onClick={() => handleAddSection('INTRO_TEXT')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>📝</span> Kalimat Pembuka
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleAddSection('PARAGRAPH')}
                     className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
                   >
-                    <span>📝</span> Paragraf Bebas
+                    <span>📄</span> Paragraf Bebas
                   </button>
                   <button
                     type="button"
@@ -1131,7 +1163,14 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                     onClick={() => handleAddSection('REPEATABLE_LIST')}
                     className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
                   >
-                    <span>📑</span> Poin / List
+                    <span>📑</span> Poin / Diktum
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAddSection('CLOSING_TEXT')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
+                  >
+                    <span>📝</span> Kalimat Penutup
                   </button>
                   <button
                     type="button"
@@ -1165,12 +1204,16 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
 
                 {flowSections.map((sec, idx) => {
                   const typeLabel =
-                    sec.type === 'RECIPIENT_BLOCK'
+                    sec.type === 'HEADER_LOGO'
+                      ? '👑 Logo Kop Surat'
+                      : sec.type === 'TITLE_AND_NUMBER'
+                      ? '🏷️ Judul & Nomor Surat'
+                      : sec.type === 'RECIPIENT_BLOCK'
                       ? '👤 Penerima Surat (Kepada Yth)'
                       : sec.type === 'INTRO_TEXT'
                       ? '📝 Kalimat Pembuka'
                       : sec.type === 'PARAGRAPH' || sec.type === 'CUSTOM_PARAGRAPH'
-                      ? '📝 Paragraf Isi'
+                      ? '📝 Paragraf Bebas / Isi'
                       : sec.type === 'CLOSING_TEXT'
                       ? '📝 Kalimat Penutup'
                       : sec.type === 'KEY_VALUE_GRID' || sec.type === 'EVENT_DETAILS'
@@ -1178,7 +1221,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                       : sec.type === 'ASSIGNEE_TABLE'
                       ? '👥 Tabel Personil / Kru'
                       : sec.type === 'REPEATABLE_LIST'
-                      ? '📑 Poin-Poin Pernyataan'
+                      ? '📑 Poin-Poin Diktum / Pernyataan'
                       : sec.type === 'DIVIDER'
                       ? '➖ Garis Pemisah'
                       : sec.type === 'SIGNATURE_BLOCK'
@@ -1245,36 +1288,576 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                         </div>
                       </div>
 
-                      {/* Content editor if applicable */}
-                      {(sec.type === 'RECIPIENT_BLOCK' ||
-                        sec.type === 'INTRO_TEXT' ||
+                      {/* 1. TITLE & NUMBER EDITOR */}
+                      {sec.type === 'TITLE_AND_NUMBER' && (
+                        <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2.5">
+                          <div>
+                            <label className="text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 block mb-1">
+                              Judul Dokumen (Header Title)
+                            </label>
+                            <input
+                              type="text"
+                              value={previewData.document_title || ''}
+                              onChange={(e) => updateFieldValue('document_title', e.target.value)}
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold uppercase"
+                              placeholder="SURAT KEPUTUSAN / SURAT TUGAS"
+                            />
+                            <div className="flex flex-wrap gap-1 mt-1.5">
+                              {[
+                                'SURAT KEPUTUSAN',
+                                'SURAT TUGAS',
+                                'SURAT UNDANGAN',
+                                'SURAT KETERANGAN',
+                                'SURAT PERNYATAAN',
+                                'SURAT PERINGATAN',
+                                'MEMORANDUM',
+                              ].map((titlePreset) => (
+                                <button
+                                  key={titlePreset}
+                                  type="button"
+                                  onClick={() => updateFieldValue('document_title', titlePreset)}
+                                  className={`text-[9.5px] px-2 py-0.5 rounded-md border font-bold transition-all ${
+                                    previewData.document_title === titlePreset
+                                      ? 'bg-purple-600 text-white border-purple-600'
+                                      : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-purple-400'
+                                  }`}
+                                >
+                                  {titlePreset}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            <div>
+                              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                Nomor Surat Contoh
+                              </label>
+                              <input
+                                type="text"
+                                value={previewData.document_number || ''}
+                                onChange={(e) => updateFieldValue('document_number', e.target.value)}
+                                className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+                                placeholder="001/SK-DIR/KIAN/IX/2026"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                Jabatan Intro
+                              </label>
+                              <input
+                                type="text"
+                                value={previewData.signer_title_intro || ''}
+                                onChange={(e) => updateFieldValue('signer_title_intro', e.target.value)}
+                                className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                placeholder="Project Director Kian Troopers"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 2. HEADER LOGO */}
+                      {sec.type === 'HEADER_LOGO' && (
+                        <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="font-bold text-zinc-800 dark:text-zinc-200 block text-[11px]">
+                              Logo Kop Surat KIAN
+                            </span>
+                            <span className="text-[10px] text-zinc-500">
+                              X: {kopConfig.logo.x}px | Y: {kopConfig.logo.y}px | Lebar: {kopConfig.logo.width}px
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab('KOP_SURAT')}
+                            className="px-2 py-1 rounded-lg bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold text-[10px] hover:bg-purple-200"
+                          >
+                            📐 Atur di Tab Kop
+                          </button>
+                        </div>
+                      )}
+
+                      {/* 3. RECIPIENT BLOCK (KEPADA YTH) */}
+                      {sec.type === 'RECIPIENT_BLOCK' && (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300">
+                              Teks Penerima Surat (Kepada Yth)
+                            </label>
+                            <div className="flex items-center gap-1">
+                              {['{person_name}', '{person_institution}', '{person_role}'].map((tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => {
+                                    const current = previewData.recipient_info || '';
+                                    const next = current ? `${current}\n${tag}` : tag;
+                                    handleEditSection(idx, { content: next });
+                                    updateFieldValue('recipient_info', next);
+                                  }}
+                                  className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-mono font-bold hover:bg-purple-100"
+                                >
+                                  +{tag}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <textarea
+                            rows={3}
+                            value={previewData.recipient_info || sec.content || ''}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              handleEditSection(idx, { content: val });
+                              updateFieldValue('recipient_info', val);
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs resize-y font-sans leading-relaxed"
+                            placeholder="Kepada Yth.&#10;Bapak/Ibu Pimpinan&#10;di Tempat"
+                          />
+                        </div>
+                      )}
+
+                      {/* 4. INTRO / PARAGRAPH / CLOSING TEXT */}
+                      {(sec.type === 'INTRO_TEXT' ||
                         sec.type === 'PARAGRAPH' ||
                         sec.type === 'CUSTOM_PARAGRAPH' ||
                         sec.type === 'CLOSING_TEXT') && (
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-zinc-500">
-                            Template Teks / Isi Konten (Dapat memuat tag &#123;placeholder&#125;)
-                          </label>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300">
+                              Template Teks / Isi Konten
+                            </label>
+                            <div className="flex flex-wrap items-center gap-1">
+                              {[
+                                '{signer_title_intro}',
+                                '{event_name}',
+                                '{person_name}',
+                                '{person_role}',
+                              ].map((tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  onClick={() => {
+                                    const targetKey =
+                                      sec.contentKey ||
+                                      sec.id ||
+                                      (sec.type === 'INTRO_TEXT'
+                                        ? 'intro_text'
+                                        : sec.type === 'CLOSING_TEXT'
+                                        ? 'closing_text'
+                                        : 'body_content');
+                                    const current =
+                                      previewData[targetKey] || sec.content || '';
+                                    const next = current ? `${current} ${tag}` : tag;
+                                    handleEditSection(idx, { content: next });
+                                    updateFieldValue(targetKey, next);
+                                  }}
+                                  className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-mono font-bold hover:bg-purple-100"
+                                >
+                                  +{tag}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                           <textarea
-                            rows={2}
+                            rows={3}
                             value={
                               (sec.contentKey && previewData[sec.contentKey]) ||
                               previewData[sec.id] ||
                               sec.content ||
                               (sec.type === 'INTRO_TEXT' ? previewData.intro_text || '' : '') ||
                               (sec.type === 'CLOSING_TEXT' ? previewData.closing_text || '' : '') ||
-                              (sec.type === 'RECIPIENT_BLOCK' ? previewData.recipient_info || '' : '')
+                              previewData.body_content ||
+                              ''
                             }
                             onChange={(e) => {
                               const val = e.target.value;
                               handleEditSection(idx, { content: val });
-                              const targetKey = sec.contentKey || sec.id || (sec.type === 'INTRO_TEXT' ? 'intro_text' : sec.type === 'CLOSING_TEXT' ? 'closing_text' : 'recipient_info');
-                              setPreviewData((prev) => ({ ...prev, [targetKey]: val }));
-                              setDefaultValues((prev) => ({ ...prev, [targetKey]: val }));
+                              const targetKey =
+                                sec.contentKey ||
+                                sec.id ||
+                                (sec.type === 'INTRO_TEXT'
+                                  ? 'intro_text'
+                                  : sec.type === 'CLOSING_TEXT'
+                                  ? 'closing_text'
+                                  : 'body_content');
+                              updateFieldValue(targetKey, val);
                             }}
-                            className="w-full px-2.5 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs resize-y font-sans"
-                            placeholder="Tuliskan teks konten di sini..."
+                            className="w-full px-2.5 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs resize-y font-sans leading-relaxed"
+                            placeholder="Tuliskan isi teks di sini..."
                           />
+                        </div>
+                      )}
+
+                      {/* 5. KEY_VALUE_GRID / EVENT DETAILS / PERSON DETAILS */}
+                      {(sec.type === 'KEY_VALUE_GRID' || sec.type === 'EVENT_DETAILS') && (
+                        <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2.5">
+                          <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 block">
+                            📅 Detail Rincian Acara &amp; Data
+                          </span>
+
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                Kalimat Pengantar Rincian
+                              </label>
+                              <input
+                                type="text"
+                                value={previewData.event_intro_text || ''}
+                                onChange={(e) => updateFieldValue('event_intro_text', e.target.value)}
+                                className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                placeholder="Untuk berpartisipasi pada event {event_name}, dengan rincian sebagai berikut:"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                  Nama Acara / Event
+                                </label>
+                                <input
+                                  type="text"
+                                  value={previewData.event_name || ''}
+                                  onChange={(e) => updateFieldValue('event_name', e.target.value)}
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-semibold"
+                                  placeholder="BKOT UBSI 2026"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                  Hari / Tanggal
+                                </label>
+                                <input
+                                  type="text"
+                                  value={previewData.event_days || ''}
+                                  onChange={(e) => updateFieldValue('event_days', e.target.value)}
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                  placeholder="Jum'at - Sabtu, 11 - 12 September 2026"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                  Waktu / Pukul
+                                </label>
+                                <input
+                                  type="text"
+                                  value={previewData.event_time || ''}
+                                  onChange={(e) => updateFieldValue('event_time', e.target.value)}
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                  placeholder="07.30 WIB - Selesai"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                  Tempat / Lokasi
+                                </label>
+                                <input
+                                  type="text"
+                                  value={previewData.event_location || ''}
+                                  onChange={(e) => updateFieldValue('event_location', e.target.value)}
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                  placeholder="Hotel Santika Depok"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Secondary Person Details */}
+                          <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300">
+                                👤 Atau Rincian Personil (Surat Keterangan / Pernyataan)
+                              </span>
+                              {(previewData.person_name || previewData.person_role) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    updateFieldValue('person_name', '');
+                                    updateFieldValue('person_nip', '');
+                                    updateFieldValue('person_role', '');
+                                    updateFieldValue('person_institution', '');
+                                    updateFieldValue('person_address', '');
+                                  }}
+                                  className="text-[9.5px] text-red-500 hover:underline"
+                                >
+                                  Kosongkan Data Orang
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[10px] text-zinc-500 block mb-0.5">Nama Orang</label>
+                                <input
+                                  type="text"
+                                  value={previewData.person_name || ''}
+                                  onChange={(e) => updateFieldValue('person_name', e.target.value)}
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                  placeholder="Mohamad Abi"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] text-zinc-500 block mb-0.5">Jabatan / Posisi</label>
+                                <input
+                                  type="text"
+                                  value={previewData.person_role || ''}
+                                  onChange={(e) => updateFieldValue('person_role', e.target.value)}
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                  placeholder="Program Director Kian Troopers"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 6. ASSIGNEE TABLE */}
+                      {sec.type === 'ASSIGNEE_TABLE' && (
+                        <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
+                              Daftar Personil Default ({((previewData.assignees as any[]) || []).length} Orang)
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentList = Array.isArray(previewData.assignees) ? [...previewData.assignees] : [];
+                                const nextList = [
+                                  ...currentList,
+                                  {
+                                    no: currentList.length + 1,
+                                    nip: `1725${String(Math.floor(Math.random() * 9000) + 1000)}`,
+                                    name: 'Nama Personil Baru',
+                                    role: 'Kru / Operator',
+                                  },
+                                ];
+                                updateFieldValue('assignees', nextList);
+                              }}
+                              className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-600 text-white hover:bg-purple-700"
+                            >
+                              + Tambah Personil
+                            </button>
+                          </div>
+
+                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                            {(((previewData.assignees as any[]) || []).map((row: any, rIdx: number) => (
+                              <div key={rIdx} className="flex items-center gap-1.5 p-1 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs">
+                                <span className="w-5 text-center font-bold text-zinc-400 text-[10px]">{rIdx + 1}</span>
+                                <input
+                                  type="text"
+                                  value={row.nip || ''}
+                                  onChange={(e) => {
+                                    const list = [...previewData.assignees];
+                                    list[rIdx] = { ...list[rIdx], nip: e.target.value };
+                                    updateFieldValue('assignees', list);
+                                  }}
+                                  className="w-20 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 font-mono text-[10px]"
+                                  placeholder="NIP"
+                                />
+                                <input
+                                  type="text"
+                                  value={row.name || ''}
+                                  onChange={(e) => {
+                                    const list = [...previewData.assignees];
+                                    list[rIdx] = { ...list[rIdx], name: e.target.value };
+                                    updateFieldValue('assignees', list);
+                                  }}
+                                  className="flex-1 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 text-[10.5px] font-semibold"
+                                  placeholder="Nama Personil"
+                                />
+                                <input
+                                  type="text"
+                                  value={row.role || ''}
+                                  onChange={(e) => {
+                                    const list = [...previewData.assignees];
+                                    list[rIdx] = { ...list[rIdx], role: e.target.value };
+                                    updateFieldValue('assignees', list);
+                                  }}
+                                  className="w-24 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 text-[10px]"
+                                  placeholder="Tugas/Peran"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const list = previewData.assignees.filter((_: any, i: number) => i !== rIdx);
+                                    updateFieldValue('assignees', list);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 p-0.5 text-xs"
+                                  title="Hapus"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 7. REPEATABLE LIST (DIKTUM / POIN PERNYATAAN) */}
+                      {sec.type === 'REPEATABLE_LIST' && (
+                        <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
+                              Poin-Poin Diktum / Pernyataan ({((previewData.statement_points as string[]) || []).length} Poin)
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentList = Array.isArray(previewData.statement_points) ? [...previewData.statement_points] : [];
+                                const nextList = [
+                                  ...currentList,
+                                  `${currentList.length + 1}. Poin keputusan / pernyataan baru...`,
+                                ];
+                                updateFieldValue('statement_points', nextList);
+                              }}
+                              className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-600 text-white hover:bg-purple-700"
+                            >
+                              + Tambah Poin
+                            </button>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {(((previewData.statement_points as string[]) || []).map((pt: string, pIdx: number) => (
+                              <div key={pIdx} className="flex items-start gap-1.5">
+                                <textarea
+                                  rows={2}
+                                  value={pt}
+                                  onChange={(e) => {
+                                    const list = [...previewData.statement_points];
+                                    list[pIdx] = e.target.value;
+                                    updateFieldValue('statement_points', list);
+                                  }}
+                                  className="flex-1 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs leading-relaxed"
+                                  placeholder="Tuliskan poin diktum..."
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const list = previewData.statement_points.filter((_: any, i: number) => i !== pIdx);
+                                    updateFieldValue('statement_points', list);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 p-1 text-xs font-bold"
+                                  title="Hapus Poin"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 8. SIGNATURE BLOCK */}
+                      {sec.type === 'SIGNATURE_BLOCK' && (
+                        <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2.5">
+                          <div className="flex items-center justify-between pb-1 border-b border-zinc-200 dark:border-zinc-700">
+                            <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
+                              Identitas Penandatangan &amp; Tanggal
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('SIGNATURE')}
+                              className="text-[10px] font-bold text-purple-600 hover:underline"
+                            >
+                              🖋️ Atur Posisi Cap di Tab TTD
+                            </button>
+                          </div>
+
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                Tempat &amp; Tanggal Surat
+                              </label>
+                              <input
+                                type="text"
+                                value={previewData.document_date_place || ''}
+                                onChange={(e) => updateFieldValue('document_date_place', e.target.value)}
+                                className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                placeholder="Jakarta, 10 September 2026"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                  Jabatan Penandatangan
+                                </label>
+                                <input
+                                  type="text"
+                                  value={previewData.signatory_position || ''}
+                                  onChange={(e) => updateFieldValue('signatory_position', e.target.value)}
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-semibold"
+                                  placeholder="Program Director Kian Troopers"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                  Nama Penandatangan
+                                </label>
+                                <input
+                                  type="text"
+                                  value={previewData.signatory_name || ''}
+                                  onChange={(e) => updateFieldValue('signatory_name', e.target.value)}
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold underline"
+                                  placeholder="Mohamad Abi"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 9. TEMBUSAN BLOCK */}
+                      {sec.type === 'TEMBUSAN_BLOCK' && (
+                        <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
+                              Daftar Tembusan (CC) ({((previewData.cc_list as string[]) || []).length} Pihak)
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentList = Array.isArray(previewData.cc_list) ? [...previewData.cc_list] : [];
+                                const nextList = [
+                                  ...currentList,
+                                  `${currentList.length + 1}. Pihak Terkait / Arsip`,
+                                ];
+                                updateFieldValue('cc_list', nextList);
+                              }}
+                              className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-600 text-white hover:bg-purple-700"
+                            >
+                              + Tambah Tembusan
+                            </button>
+                          </div>
+
+                          <div className="space-y-1">
+                            {(((previewData.cc_list as string[]) || []).map((ccItem: string, ccIdx: number) => (
+                              <div key={ccIdx} className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={ccItem}
+                                  onChange={(e) => {
+                                    const list = [...previewData.cc_list];
+                                    list[ccIdx] = e.target.value;
+                                    updateFieldValue('cc_list', list);
+                                  }}
+                                  className="flex-1 px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                  placeholder="1. Direktur Utama"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const list = previewData.cc_list.filter((_: any, i: number) => i !== ccIdx);
+                                    updateFieldValue('cc_list', list);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 p-0.5 text-xs font-bold"
+                                  title="Hapus"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )))}
+                          </div>
                         </div>
                       )}
 

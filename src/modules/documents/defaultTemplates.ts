@@ -808,6 +808,170 @@ export const DEFAULT_SURAT_PERNYATAAN_VALUES = {
 };
 
 // ============================================================================
+// 5. SURAT KEPUTUSAN (SK)
+// ============================================================================
+export const DEFAULT_SURAT_KEPUTUSAN_LAYOUT: TemplateLayoutConfig = {
+  pageSize: 'A4',
+  orientation: 'portrait',
+  paddingMm: {
+    top: 14,
+    bottom: 14,
+    left: 15,
+    right: 15,
+  },
+  contentPaddingLeftPx: 56,
+  contentPaddingRightPx: 56,
+  fontFamily: 'Times New Roman',
+  fontSizeBasePt: 10.5,
+  primaryColor: '#002B7F',
+  annexThresholdRows: 4,
+  kopConfig: {
+    frameAssetUrl: '',
+    frameOpacity: 1,
+    kopHeightPx: 215,
+    logo: {
+      enabled: true,
+      x: 56,
+      y: 44,
+      width: 220,
+      height: 48,
+    },
+    titleBlock: {
+      enabled: true,
+      x: 56,
+      y: 138,
+      width: 682,
+      align: 'center',
+      titleFontSizePt: 13,
+      numberFontSizePt: 10,
+    },
+    customTexts: [],
+  },
+  signatureConfig: {
+    align: 'right',
+    showSignature: true,
+    showStamp: true,
+    showQrVerification: true,
+    signatureType: 'MANUAL',
+    qrSize: 84,
+    stampScale: 1,
+    stampOffsetX: -12,
+    stampOffsetY: 0,
+    stampOpacity: 0.85,
+    stampRotation: 0,
+    signatureScale: 1,
+    signatureOffsetX: 0,
+    signatureOffsetY: 0,
+  },
+  tableColumns: [
+    { key: 'no', label: 'No', widthPercent: 8, align: 'center' },
+    { key: 'nip', label: 'NIP', widthPercent: 22, align: 'center' },
+    { key: 'name', label: 'NAMA', widthPercent: 42, align: 'left' },
+    { key: 'role', label: 'Jabatan / Tugas', widthPercent: 28, align: 'left' },
+  ],
+  flowSections: [
+    { id: 'sec_intro', type: 'INTRO_TEXT', visible: true, spacingBottomMm: 4 },
+    { id: 'sec_points', type: 'REPEATABLE_LIST', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_closing', type: 'CLOSING_TEXT', visible: true, spacingBottomMm: 8 },
+    { id: 'sec_sig', type: 'SIGNATURE_BLOCK', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_cc', type: 'TEMBUSAN_BLOCK', visible: true, spacingBottomMm: 4 },
+  ],
+};
+
+export const DEFAULT_SURAT_KEPUTUSAN_SCHEMA: FormFieldSchema[] = [
+  {
+    key: 'document_title',
+    label: 'Judul Dokumen',
+    type: 'text',
+    required: true,
+    defaultValue: 'SURAT KEPUTUSAN',
+  },
+  {
+    key: 'document_number',
+    label: 'Nomor Surat',
+    type: 'text',
+    required: true,
+    defaultValue: '001/SK-DIR/KIAN/IX/2026',
+  },
+  {
+    key: 'intro_text',
+    label: 'Konsiderans / Menimbang & Mengingat',
+    type: 'textarea',
+    required: true,
+    defaultValue:
+      'Direktur KIAN Troopers, setelah menimbang perkembangan operasional dan kebutuhan penetapan struktur organisasi kerja, dengan ini memutuskan:',
+  },
+  {
+    key: 'statement_points',
+    label: 'Diktum Keputusan (Poin-Poin)',
+    type: 'repeatable_list',
+    required: true,
+    defaultValue: [
+      'KESATU : Menetapkan dan mengesahkan penugasan serta wewenang tim pelaksana kegiatan sesuai dengan petunjuk teknis operasional.',
+      'KEDUA : Seluruh personil yang tercantum wajib melaksanakan tugas dan tanggung jawab dengan penuh dedikasi serta profesionalisme.',
+      'KETIGA : Surat Keputusan ini berlaku sejak tanggal ditetapkan dengan ketentuan apabila di kemudian hari terdapat kekeliruan akan diperbaiki sebagaimana mestinya.',
+    ],
+  },
+  {
+    key: 'closing_text',
+    label: 'Kalimat Penutup',
+    type: 'textarea',
+    required: true,
+    defaultValue:
+      'Ditetapkan di Jakarta pada tanggal yang tertera di bawah ini untuk diketahui dan dilaksanakan oleh pihak-pihak yang bersangkutan.',
+  },
+  {
+    key: 'document_date_place',
+    label: 'Tempat & Tanggal Penetapan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Jakarta, 10 September 2026',
+  },
+  {
+    key: 'signatory_position',
+    label: 'Jabatan Penandatangan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Program Director Kian Troopers',
+  },
+  {
+    key: 'signatory_name',
+    label: 'Nama Penandatangan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Mohamad Abi',
+  },
+  {
+    key: 'cc_list',
+    label: 'Tembusan (CC)',
+    type: 'repeatable_list',
+    required: false,
+    defaultValue: ['1. Direktur Utama', '2. Divisi Operasional', '3. Arsip'],
+  },
+];
+
+export const DEFAULT_SURAT_KEPUTUSAN_VALUES = {
+  document_title: 'SURAT KEPUTUSAN',
+  document_number: '001/SK-DIR/KIAN/IX/2026',
+  intro_text:
+    'Direktur KIAN Troopers, setelah menimbang perkembangan operasional dan kebutuhan penetapan struktur organisasi kerja, dengan ini memutuskan:',
+  statement_points: [
+    'KESATU : Menetapkan dan mengesahkan penugasan serta wewenang tim pelaksana kegiatan sesuai dengan petunjuk teknis operasional.',
+    'KEDUA : Seluruh personil yang tercantum wajib melaksanakan tugas dan tanggung jawab dengan penuh dedikasi serta profesionalisme.',
+    'KETIGA : Surat Keputusan ini berlaku sejak tanggal ditetapkan dengan ketentuan apabila di kemudian hari terdapat kekeliruan akan diperbaiki sebagaimana mestinya.',
+  ],
+  closing_text:
+    'Ditetapkan di Jakarta pada tanggal yang tertera di bawah ini untuk diketahui dan dilaksanakan oleh pihak-pihak yang bersangkutan.',
+  document_date_place: 'Jakarta, 10 September 2026',
+  signatory_position: 'Program Director Kian Troopers',
+  signatory_name: 'Mohamad Abi',
+  cc_list: ['1. Direktur Utama', '2. Divisi Operasional', '3. Arsip'],
+  show_signature: true,
+  show_stamp: true,
+  show_qr_verification: true,
+};
+
+// ============================================================================
 // HELPER: GET STARTER TEMPLATE FOR ANY DOCUMENT TYPE CODE
 // ============================================================================
 export function getDefaultTemplateForType(typeCode: string): {
@@ -818,6 +982,16 @@ export function getDefaultTemplateForType(typeCode: string): {
   name: string;
 } {
   const code = (typeCode || '').toUpperCase().trim();
+
+  if (code.includes('KEPUTUSAN') || code.includes('SK')) {
+    return {
+      layout_config: DEFAULT_SURAT_KEPUTUSAN_LAYOUT,
+      form_schema: DEFAULT_SURAT_KEPUTUSAN_SCHEMA,
+      default_values: DEFAULT_SURAT_KEPUTUSAN_VALUES,
+      sample_data: DEFAULT_SURAT_KEPUTUSAN_VALUES,
+      name: 'Surat Keputusan (SK) KIAN Troopers',
+    };
+  }
 
   if (code.includes('UNDANGAN')) {
     return {
