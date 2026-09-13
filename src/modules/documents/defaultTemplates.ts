@@ -972,6 +972,228 @@ export const DEFAULT_SURAT_KEPUTUSAN_VALUES = {
 };
 
 // ============================================================================
+// 6. SURAT KEPUTUSAN PENERIMAAN MAGANG / OJT
+// ============================================================================
+export const DEFAULT_SURAT_MAGANG_LAYOUT: TemplateLayoutConfig = {
+  pageSize: 'A4',
+  orientation: 'portrait',
+  paddingMm: {
+    top: 14,
+    bottom: 14,
+    left: 15,
+    right: 15,
+  },
+  contentPaddingLeftPx: 56,
+  contentPaddingRightPx: 56,
+  fontFamily: 'Times New Roman',
+  fontSizeBasePt: 10.5,
+  primaryColor: '#002B7F',
+  annexThresholdRows: 5,
+  tableColumns: [
+    { key: 'no', label: 'No', widthPercent: 6, align: 'center' },
+    { key: 'name', label: 'Nama Lengkap', widthPercent: 32, align: 'left' },
+    { key: 'campus', label: 'Asal Kampus / Institusi', widthPercent: 26, align: 'left' },
+    { key: 'division', label: 'Divisi Penempatan', widthPercent: 20, align: 'left' },
+    { key: 'period', label: 'Periode', widthPercent: 16, align: 'center' },
+  ],
+  kopConfig: {
+    frameAssetUrl: '',
+    frameOpacity: 1,
+    kopHeightPx: 215,
+    logo: {
+      enabled: true,
+      x: 56,
+      y: 44,
+      width: 220,
+      height: 48,
+    },
+    titleBlock: {
+      enabled: true,
+      x: 56,
+      y: 138,
+      width: 682,
+      align: 'center',
+      titleFontSizePt: 13,
+      numberFontSizePt: 10,
+    },
+    customTexts: [],
+  },
+  signatureConfig: {
+    align: 'right',
+    showSignature: true,
+    showStamp: true,
+    showQrVerification: true,
+    signatureType: 'DIGITAL_QR',
+    qrSize: 84,
+    stampScale: 1,
+    stampOffsetX: -12,
+    stampOffsetY: 0,
+    stampOpacity: 0.85,
+    stampRotation: 0,
+    signatureScale: 1,
+    signatureOffsetX: 0,
+    signatureOffsetY: 0,
+  },
+  flowSections: [
+    { id: 'sec_intro', type: 'INTRO_TEXT', visible: true, spacingBottomMm: 4 },
+    { id: 'sec_table', type: 'ASSIGNEE_TABLE', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_points', type: 'REPEATABLE_LIST', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_closing', type: 'CLOSING_TEXT', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_sig', type: 'SIGNATURE_BLOCK', visible: true, spacingBottomMm: 4 },
+    { id: 'sec_cc', type: 'TEMBUSAN_BLOCK', visible: true, spacingBottomMm: 4 },
+  ],
+};
+
+export const DEFAULT_SURAT_MAGANG_SCHEMA: FormFieldSchema[] = [
+  {
+    key: 'document_title',
+    label: 'Judul Dokumen (Bisa Multi-Line)',
+    type: 'textarea',
+    required: true,
+    defaultValue: 'SURAT KEPUTUSAN\nPENERIMAAN MAGANG',
+    placeholder: 'Contoh:\nSURAT KEPUTUSAN\nPENERIMAAN MAGANG',
+    helpText: 'Tekan Enter jika ingin membagi judul menjadi 2 baris atau lebih.',
+  },
+  {
+    key: 'intro_text',
+    label: 'Konsideran / Kalimat Pembuka',
+    type: 'textarea',
+    required: true,
+    defaultValue:
+      'Direksi PT Kreasi Inovasi Anak Nusantara (KIAN Troopers), setelah meninjau berkas permohonan magang dan hasil seleksi kualifikasi peserta, dengan ini memutuskan dan menetapkan penerimaan peserta On-the-Job Training (OJT) / Magang sebagai berikut:',
+  },
+  {
+    key: 'assignees',
+    label: 'Daftar Peserta Magang Diterima',
+    type: 'assignee_table',
+    required: true,
+    defaultValue: [
+      {
+        no: 1,
+        name: 'Aditya Pratama',
+        campus: 'Universitas Indonesia',
+        division: 'Event Production',
+        period: 'Sep - Des 2026',
+      },
+      {
+        no: 2,
+        name: 'Siti Nurhaliza',
+        campus: 'Universitas BSI Jakarta',
+        division: 'Creative & Design',
+        period: 'Sep - Des 2026',
+      },
+    ],
+    helpText: 'Isi data nama, asal kampus/institusi, divisi penempatan, dan durasi magang.',
+  },
+  {
+    key: 'statement_points',
+    label: 'Diktum Keputusan (Poin Ketentuan Magang)',
+    type: 'repeatable_list',
+    required: true,
+    defaultValue: [
+      'KESATU : Memberikan hak dan kesempatan belajar praktis kepada nama-nama tersebut di atas dalam program magang terstruktur KIAN Troopers.',
+      'KEDUA : Peserta magang wajib menaati kode etik, peraturan keselamatan kerja, dan standar operasional prosedur yang berlaku di lingkungan KIAN.',
+      'KETIGA : Evaluasi kinerja dan sertifikat kompetensi magang akan diterbitkan pada akhir periode program berdasarkan penilaian mentor pembimbing.',
+      'KEEMPAT : Keputusan ini berlaku sejak tanggal ditetapkan hingga selesainya masa magang yang telah disepakati.',
+    ],
+  },
+  {
+    key: 'closing_text',
+    label: 'Kalimat Penutup',
+    type: 'textarea',
+    required: true,
+    defaultValue:
+      'Demikian Surat Keputusan ini dibuat untuk dapat dipergunakan sebagaimana mestinya oleh pihak yang berkepentingan.',
+  },
+  {
+    key: 'document_date_place',
+    label: 'Tempat & Tanggal Penetapan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Jakarta, 13 September 2026',
+  },
+  {
+    key: 'signatory_position',
+    label: 'Jabatan Penandatangan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Program Director Kian Troopers',
+  },
+  {
+    key: 'signatory_name',
+    label: 'Nama Penandatangan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Mohamad Abi',
+  },
+  {
+    key: 'show_signature',
+    label: 'Tampilkan Tanda Tangan Basah (Gambar)',
+    type: 'checkbox',
+    required: false,
+    defaultValue: true,
+  },
+  {
+    key: 'show_stamp',
+    label: 'Tampilkan Stempel / Cap Resmi KIAN',
+    type: 'checkbox',
+    required: false,
+    defaultValue: true,
+  },
+  {
+    key: 'show_qr_verification',
+    label: 'Tampilkan TTD Digital (QR Code Verifikasi Resmi)',
+    type: 'checkbox',
+    required: false,
+    defaultValue: true,
+  },
+  {
+    key: 'cc_list',
+    label: 'Tembusan (CC)',
+    type: 'repeatable_list',
+    required: false,
+    defaultValue: ['1. Direktur Utama', '2. Divisi People & Culture (HR)', '3. Institusi Asal Peserta', '4. Arsip'],
+  },
+];
+
+export const DEFAULT_SURAT_MAGANG_VALUES = {
+  document_title: 'SURAT KEPUTUSAN\nPENERIMAAN MAGANG',
+  intro_text:
+    'Direksi PT Kreasi Inovasi Anak Nusantara (KIAN Troopers), setelah meninjau berkas permohonan magang dan hasil seleksi kualifikasi peserta, dengan ini memutuskan dan menetapkan penerimaan peserta On-the-Job Training (OJT) / Magang sebagai berikut:',
+  assignees: [
+    {
+      no: 1,
+      name: 'Aditya Pratama',
+      campus: 'Universitas Indonesia',
+      division: 'Event Production',
+      period: 'Sep - Des 2026',
+    },
+    {
+      no: 2,
+      name: 'Siti Nurhaliza',
+      campus: 'Universitas BSI Jakarta',
+      division: 'Creative & Design',
+      period: 'Sep - Des 2026',
+    },
+  ],
+  statement_points: [
+    'KESATU : Memberikan hak dan kesempatan belajar praktis kepada nama-nama tersebut di atas dalam program magang terstruktur KIAN Troopers.',
+    'KEDUA : Peserta magang wajib menaati kode etik, peraturan keselamatan kerja, dan standar operasional prosedur yang berlaku di lingkungan KIAN.',
+    'KETIGA : Evaluasi kinerja dan sertifikat kompetensi magang akan diterbitkan pada akhir periode program berdasarkan penilaian mentor pembimbing.',
+    'KEEMPAT : Keputusan ini berlaku sejak tanggal ditetapkan hingga selesainya masa magang yang telah disepakati.',
+  ],
+  closing_text:
+    'Demikian Surat Keputusan ini dibuat untuk dapat dipergunakan sebagaimana mestinya oleh pihak yang berkepentingan.',
+  document_date_place: 'Jakarta, 13 September 2026',
+  signatory_position: 'Program Director Kian Troopers',
+  signatory_name: 'Mohamad Abi',
+  cc_list: ['1. Direktur Utama', '2. Divisi People & Culture (HR)', '3. Institusi Asal Peserta', '4. Arsip'],
+  show_signature: true,
+  show_stamp: true,
+  show_qr_verification: true,
+};
+
+// ============================================================================
 // HELPER: GET STARTER TEMPLATE FOR ANY DOCUMENT TYPE CODE
 // ============================================================================
 export function getDefaultTemplateForType(typeCode: string): {
@@ -982,6 +1204,16 @@ export function getDefaultTemplateForType(typeCode: string): {
   name: string;
 } {
   const code = (typeCode || '').toUpperCase().trim();
+
+  if (code.includes('MAGANG') || code.includes('OJT') || code.includes('INTERN')) {
+    return {
+      layout_config: DEFAULT_SURAT_MAGANG_LAYOUT,
+      form_schema: DEFAULT_SURAT_MAGANG_SCHEMA,
+      default_values: DEFAULT_SURAT_MAGANG_VALUES,
+      sample_data: DEFAULT_SURAT_MAGANG_VALUES,
+      name: 'Surat Keputusan Penerimaan Magang KIAN',
+    };
+  }
 
   if (code.includes('KEPUTUSAN') || code.includes('SK')) {
     return {
@@ -1032,3 +1264,4 @@ export function getDefaultTemplateForType(typeCode: string): {
     name: 'Surat Tugas KIAN Troopers',
   };
 }
+

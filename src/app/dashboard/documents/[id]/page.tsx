@@ -2,10 +2,12 @@ import React from 'react';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/modules/auth/session';
+import { getSessionContext } from '@/modules/roles/rbac';
 import { getGeneratedDocumentById } from '@/modules/documents/documentActions';
 import { DocumentCanvas } from '@/modules/documents/components/DocumentCanvas';
 import { DocumentPDFExporter } from '@/modules/documents/components/DocumentPDFExporter';
 import { DocumentPreviewContainer } from '@/modules/documents/components/DocumentPreviewContainer';
+import { DocumentDetailApprovalBar } from '@/modules/documents/components/DocumentDetailApprovalBar';
 
 export default async function DocumentDetailPage({
   params,
@@ -22,8 +24,22 @@ export default async function DocumentDetailPage({
     notFound();
   }
 
+  const ctx = await getSessionContext(session.userId);
+  const isPrivileged =
+    ctx.can('DOCUMENT_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.roles.includes('COORDINATOR');
+
+  const isCreator = doc.created_by === session.userId;
+
   const snapshot = doc.rendered_snapshot;
-  const compiledData = snapshot.compiled_data || doc.form_data;
+  const compiledData = {
+    ...(snapshot.compiled_data || doc.form_data),
+    status: doc.status,
+  };
+
   const dateStr = new Date(doc.created_at * 1000).toLocaleDateString('id-ID', {
     day: 'numeric',
     month: 'long',
@@ -31,6 +47,8 @@ export default async function DocumentDetailPage({
     hour: '2-digit',
     minute: '2-digit',
   });
+
+  const isOfficial = doc.status === 'ISSUED' || doc.status === 'GENERATED' || doc.status === 'SIGNED';
 
   return (
     <div className="space-y-5 pb-16 max-w-7xl mx-auto px-1 sm:px-0">
@@ -47,12 +65,25 @@ export default async function DocumentDetailPage({
             <h1 className="text-lg sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 font-mono break-all">
               {doc.document_number}
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold border border-emerald-500/20">
-              {doc.status}
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                isOfficial
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                  : doc.status === 'PENDING_APPROVAL'
+                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                  : doc.status === 'REJECTED'
+                  ? 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20'
+                  : 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/20'
+              }`}
+            >
+              {isOfficial ? 'RESMI / TERBIT' : doc.status === 'PENDING_APPROVAL' ? 'MENUNGGU PERSETUJUAN' : doc.status}
             </span>
           </div>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {doc.title} • Diterbitkan oleh <strong>{doc.created_by_name}</strong> pada {dateStr} WIB
+            {doc.title} • Diajukan/Dibuat oleh <strong>{doc.created_by_name}</strong> pada {dateStr} WIB
+            {doc.approved_by_name && isOfficial && (
+              <> • Disetujui &amp; diterbitkan oleh <strong>{doc.approved_by_name}</strong></>
+            )}
           </p>
         </div>
 
@@ -65,6 +96,16 @@ export default async function DocumentDetailPage({
           />
         </div>
       </div>
+
+      {/* Approval & Review Bar */}
+      <DocumentDetailApprovalBar
+        documentId={doc.id}
+        documentNumber={doc.document_number}
+        status={doc.status}
+        rejectionReason={doc.rejection_reason}
+        isPrivileged={isPrivileged}
+        isCreator={isCreator}
+      />
 
       {/* Historical Immutability Badge */}
       <div className="p-3.5 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs text-zinc-600 dark:text-zinc-400 flex items-start sm:items-center justify-between gap-2 no-print">
@@ -85,3 +126,4 @@ export default async function DocumentDetailPage({
     </div>
   );
 }
+

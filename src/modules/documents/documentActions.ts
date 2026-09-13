@@ -119,33 +119,41 @@ export async function searchProjectsAction(query: string = ''): Promise<{
 
 /**
  * Generates and saves a new document as an immutable snapshot.
+ * Mode:
+ * - 'ISSUE': Directly issues document with official sequence number (Admin/Executive only)
+ * - 'SUBMIT_APPROVAL': Saves document and submits for Admin approval (Non-Admin & Admin)
+ * - 'DRAFT': Saves document as a private draft without sequence allocation
  */
 export async function generateDocumentAction(params: {
   template_id: string;
   form_data: Record<string, any>;
   custom_number?: string;
   signatory_id?: string;
+  mode?: 'ISSUE' | 'DRAFT' | 'SUBMIT_APPROVAL';
 }): Promise<{
   success: boolean;
   documentId?: string;
   documentNumber?: string;
+  status?: string;
   error?: string;
 }> {
   const session = await getSession();
   if (!session) return { success: false, error: 'Unauthorized' };
 
   const ctx = await getSessionContext(session.userId);
-  const isAuthorized =
-    ctx.can('DOCUMENT_CREATE') ||
+  const isPrivileged =
     ctx.can('DOCUMENT_MANAGE') ||
     ctx.can('MANAGE') ||
     ctx.permissions.has('ADMIN_SYSTEM') ||
     ctx.roles.includes('EXECUTIVE') ||
     ctx.roles.includes('COORDINATOR');
 
-  if (!isAuthorized) {
-    return { success: false, error: 'Anda tidak memiliki hak akses untuk menerbitkan dokumen resmi.' };
-  }
+  const requestedMode = params.mode || (isPrivileged ? 'ISSUE' : 'SUBMIT_APPROVAL');
+
+  // Strict business rule: Only Admin/Executive can issue official numbers directly
+  const finalMode = (!isPrivileged && requestedMode === 'ISSUE')
+    ? 'SUBMIT_APPROVAL'
+    : requestedMode;
 
   const template = await getTemplateById(params.template_id);
   if (!template) {
@@ -166,16 +174,31 @@ export async function generateDocumentAction(params: {
     const typeCode = docTypeRow?.code || template.type_code || 'SURAT_TUGAS';
     const numberingFormat = docTypeRow?.numbering_format || '{sequence}/KIAN/TROOPERS/{roman_month}/{year}';
 
-    let finalDocNumber = params.custom_number?.trim();
-    if (!finalDocNumber) {
-      const now = new Date();
-      const seq = await getNextSequenceNumber(typeCode, now.getFullYear(), now.getMonth() + 1);
-      finalDocNumber = formatDocumentNumber(numberingFormat, {
-        sequenceNumber: seq,
-        date: now,
-        typeCode: typeCode,
-        orgCode: 'TROOPERS',
-      });
+    let finalDocNumber: string;
+    let initialStatus: string;
+
+    if (finalMode === 'ISSUE') {
+      initialStatus = 'ISSUED';
+      if (params.custom_number?.trim()) {
+        finalDocNumber = params.custom_number.trim();
+      } else {
+        const now = new Date();
+        const seq = await getNextSequenceNumber(typeCode, now.getFullYear(), now.getMonth() + 1);
+        finalDocNumber = formatDocumentNumber(numberingFormat, {
+          sequenceNumber: seq,
+          date: now,
+          typeCode: typeCode,
+          orgCode: 'TROOPERS',
+        });
+      }
+    } else if (finalMode === 'SUBMIT_APPROVAL') {
+      initialStatus = 'PENDING_APPROVAL';
+      const shortId = Date.now().toString(36).slice(-6).toUpperCase();
+      finalDocNumber = `PENGAJUAN/${typeCode}/${shortId}`;
+    } else {
+      initialStatus = 'DRAFT';
+      const shortId = Date.now().toString(36).slice(-6).toUpperCase();
+      finalDocNumber = `DRAF/${typeCode}/${shortId}`;
     }
 
     // 2. Resolve Signatory Snapshot
@@ -208,7 +231,7 @@ export async function generateDocumentAction(params: {
     // 3. Organization Profile Snapshot
     const orgSnapshot: OrganizationSnapshot = DEFAULT_ORGANIZATION_PROFILE;
 
-    // 4. Resolve Template Version ID correctly from document_template_versions table
+    // 4. Resolve Template Version ID
     const versionRow = await db
       .prepare('SELECT id FROM document_template_versions WHERE template_id = ? AND version = ?')
       .bind(template.id, template.current_version)
@@ -245,7 +268,7 @@ export async function generateDocumentAction(params: {
         .run();
     }
 
-    // 5. Compile Full Rendered Snapshot (Ensures 100% historical fidelity)
+    // 5. Compile Full Rendered Snapshot
     const compiledSnapshot = {
       layout_config: template.layout_config,
       organization: orgSnapshot,
@@ -258,19 +281,20 @@ export async function generateDocumentAction(params: {
       compiled_data: {
         ...params.form_data,
         document_number: finalDocNumber,
+        status: initialStatus,
       },
-      generated_at: nowSec,
+      generated_at: finalMode === 'ISSUE' ? nowSec : null,
     };
 
-    const docTitle = params.form_data.document_title || template.name || 'Surat Tugas Resmi';
+    const docTitle = params.form_data.document_title || template.name || 'Dokumen Resmi';
 
     // 6. Persist to generated_documents
     await db
       .prepare(`
         INSERT INTO generated_documents (
           id, template_id, template_version_id, type_code, document_number, title,
-          form_data, rendered_snapshot, status, signatory_id, created_by, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'GENERATED', ?, ?, ?, ?)
+          form_data, rendered_snapshot, status, signatory_id, approved_by, approved_at, rejection_reason, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
       `)
       .bind(
         docId,
@@ -281,7 +305,10 @@ export async function generateDocumentAction(params: {
         docTitle,
         JSON.stringify(params.form_data),
         JSON.stringify(compiledSnapshot),
+        initialStatus,
         cleanSignatoryId,
+        initialStatus === 'ISSUED' ? session.userId : null,
+        initialStatus === 'ISSUED' ? nowSec : null,
         session.userId,
         nowSec,
         nowSec
@@ -293,9 +320,9 @@ export async function generateDocumentAction(params: {
       entityType: 'project',
       entityId: docId,
       fromStatus: null,
-      toStatus: 'GENERATED',
+      toStatus: initialStatus,
       triggeredBy: session.userId,
-      note: `Document issued: ${finalDocNumber} ("${docTitle}")`,
+      note: `Document created [${initialStatus}]: ${finalDocNumber} ("${docTitle}")`,
     });
 
     revalidatePath('/dashboard/documents');
@@ -303,21 +330,426 @@ export async function generateDocumentAction(params: {
       success: true,
       documentId: docId,
       documentNumber: finalDocNumber,
+      status: initialStatus,
     };
   } catch (err: any) {
     console.error('generateDocumentAction failed:', err);
     if (err.message?.includes('UNIQUE constraint') || err.message?.includes('document_number')) {
       return { success: false, error: 'Nomor dokumen ini sudah terdaftar. Silakan coba kembali untuk mendapatkan nomor otomatis baru.' };
     }
-    return { success: false, error: err.message || 'Gagal menerbitkan dokumen.' };
+    return { success: false, error: err.message || 'Gagal menyimpan dokumen.' };
   }
 }
 
 /**
- * Fetches generated documents with permission filtering (Admin sees all, Users see assigned/created).
+ * Updates an existing draft or pending document before it is approved.
+ */
+export async function updateDraftDocumentAction(params: {
+  documentId: string;
+  form_data: Record<string, any>;
+  signatory_id?: string;
+  title?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+  const isPrivileged =
+    ctx.can('DOCUMENT_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.roles.includes('EXECUTIVE');
+
+  try {
+    const existing = await db
+      .prepare('SELECT id, created_by, status, rendered_snapshot, document_number FROM generated_documents WHERE id = ?')
+      .bind(params.documentId)
+      .first() as any;
+
+    if (!existing) return { success: false, error: 'Dokumen tidak ditemukan.' };
+
+    if (!isPrivileged && existing.created_by !== session.userId) {
+      return { success: false, error: 'Anda tidak memiliki hak untuk mengubah draf ini.' };
+    }
+
+    if (existing.status === 'ISSUED' || existing.status === 'GENERATED' || existing.status === 'SIGNED') {
+      return { success: false, error: 'Dokumen resmi yang sudah diterbitkan tidak dapat diubah secara langsung.' };
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    let snapshot: any = {};
+    try { snapshot = JSON.parse(existing.rendered_snapshot || '{}'); } catch {}
+
+    const cleanSignatoryId = params.signatory_id?.trim() || null;
+    let signatoryName = params.form_data.signatory_name || snapshot.signatory?.name || 'Mohamad Abi';
+    let signatoryPosition = params.form_data.signatory_position || snapshot.signatory?.position || 'Program Director Kian Troopers';
+    let signatureUrl = snapshot.signatory?.signature_url || null;
+    let stampUrl = snapshot.signatory?.stamp_url || null;
+
+    if (cleanSignatoryId) {
+      const sigRow = await db
+        .prepare(`
+          SELECT ds.name, ds.position, sa.asset_url AS signature_url, st.asset_url AS stamp_url
+          FROM document_signatories ds
+          LEFT JOIN document_assets sa ON ds.signature_asset_id = sa.id
+          LEFT JOIN document_assets st ON ds.stamp_asset_id = st.id
+          WHERE ds.id = ?
+        `)
+        .bind(cleanSignatoryId)
+        .first() as any;
+
+      if (sigRow) {
+        signatoryName = sigRow.name;
+        signatoryPosition = sigRow.position;
+        signatureUrl = sigRow.signature_url;
+        stampUrl = sigRow.stamp_url;
+      }
+    }
+
+    const updatedSnapshot = {
+      ...snapshot,
+      signatory: {
+        name: signatoryName,
+        position: signatoryPosition,
+        signature_url: signatureUrl,
+        stamp_url: stampUrl,
+      },
+      compiled_data: {
+        ...params.form_data,
+        document_number: existing.document_number,
+        status: existing.status,
+      },
+    };
+
+    const docTitle = params.title || params.form_data.document_title || 'Dokumen Draf';
+
+    await db
+      .prepare(`
+        UPDATE generated_documents
+        SET form_data = ?, rendered_snapshot = ?, title = ?, signatory_id = ?, updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(
+        JSON.stringify(params.form_data),
+        JSON.stringify(updatedSnapshot),
+        docTitle,
+        cleanSignatoryId,
+        nowSec,
+        params.documentId
+      )
+      .run();
+
+    revalidatePath(`/dashboard/documents/${params.documentId}`);
+    revalidatePath('/dashboard/documents');
+    return { success: true };
+  } catch (err: any) {
+    console.error('updateDraftDocumentAction error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Submits a draft or rejected document for Admin approval.
+ */
+export async function submitForApprovalAction(
+  documentId: string
+): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const ctx = await getSessionContext(session.userId);
+  const isPrivileged =
+    ctx.can('DOCUMENT_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.roles.includes('EXECUTIVE');
+
+  try {
+    const existing = await db
+      .prepare('SELECT id, created_by, status, document_number, rendered_snapshot FROM generated_documents WHERE id = ?')
+      .bind(documentId)
+      .first() as any;
+
+    if (!existing) return { success: false, error: 'Dokumen tidak ditemukan.' };
+
+    if (!isPrivileged && existing.created_by !== session.userId) {
+      return { success: false, error: 'Anda hanya dapat mengajukan dokumen milik Anda sendiri.' };
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    let snapshot: any = {};
+    try { snapshot = JSON.parse(existing.rendered_snapshot || '{}'); } catch {}
+    if (snapshot.compiled_data) {
+      snapshot.compiled_data.status = 'PENDING_APPROVAL';
+    }
+
+    await db
+      .prepare(`
+        UPDATE generated_documents
+        SET status = 'PENDING_APPROVAL', rejection_reason = NULL, rendered_snapshot = ?, updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(JSON.stringify(snapshot), nowSec, documentId)
+      .run();
+
+    await logWorkflowEvent({
+      entityType: 'project',
+      entityId: documentId,
+      fromStatus: existing.status,
+      toStatus: 'PENDING_APPROVAL',
+      triggeredBy: session.userId,
+      note: `Document submitted for approval: ${existing.document_number}`,
+    });
+
+    revalidatePath(`/dashboard/documents/${documentId}`);
+    revalidatePath('/dashboard/documents');
+    return { success: true };
+  } catch (err: any) {
+    console.error('submitForApprovalAction error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Approves a pending document, allocates the official sequence number, and marks it as ISSUED.
+ * Admin/Executive only.
+ */
+export async function approveAndIssueDocumentAction(params: {
+  documentId: string;
+  custom_number?: string;
+  signatory_id?: string;
+}): Promise<{ success: boolean; documentNumber?: string; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const ctx = await getSessionContext(session.userId);
+  const isAuthorized =
+    ctx.can('DOCUMENT_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.roles.includes('COORDINATOR');
+
+  if (!isAuthorized) {
+    return { success: false, error: 'Hanya Admin / Executive yang berwenang menyetujui dan menerbitkan dokumen resmi.' };
+  }
+
+  const db = await getDB();
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  try {
+    const existing = await db
+      .prepare(`
+        SELECT gd.id, gd.template_id, gd.type_code, gd.document_number, gd.title, gd.form_data, gd.rendered_snapshot, gd.status, gd.signatory_id
+        FROM generated_documents gd
+        WHERE gd.id = ?
+      `)
+      .bind(params.documentId)
+      .first() as any;
+
+    if (!existing) return { success: false, error: 'Dokumen tidak ditemukan.' };
+
+    if (existing.status === 'ISSUED' || existing.status === 'SIGNED') {
+      return { success: false, error: 'Dokumen ini sudah diterbitkan sebelumnya.' };
+    }
+
+    // 1. Resolve Document Type & Official Numbering Format
+    const docTypeRow = await db
+      .prepare('SELECT code, numbering_format FROM document_types WHERE code = ?')
+      .bind(existing.type_code)
+      .first() as { code: string; numbering_format: string } | null;
+
+    const typeCode = existing.type_code || 'SURAT_TUGAS';
+    const numberingFormat = docTypeRow?.numbering_format || '{sequence}/KIAN/TROOPERS/{roman_month}/{year}';
+
+    let finalDocNumber = params.custom_number?.trim();
+    if (!finalDocNumber) {
+      const now = new Date();
+      const seq = await getNextSequenceNumber(typeCode, now.getFullYear(), now.getMonth() + 1);
+      finalDocNumber = formatDocumentNumber(numberingFormat, {
+        sequenceNumber: seq,
+        date: now,
+        typeCode: typeCode,
+        orgCode: 'TROOPERS',
+      });
+    }
+
+    // 2. Resolve Signatory Snapshot
+    const cleanSignatoryId = params.signatory_id?.trim() || existing.signatory_id || null;
+    let formData: any = {};
+    let snapshot: any = {};
+    try { formData = JSON.parse(existing.form_data || '{}'); } catch {}
+    try { snapshot = JSON.parse(existing.rendered_snapshot || '{}'); } catch {}
+
+    let signatoryName = formData.signatory_name || snapshot.signatory?.name || 'Mohamad Abi';
+    let signatoryPosition = formData.signatory_position || snapshot.signatory?.position || 'Program Director Kian Troopers';
+    let signatureUrl = snapshot.signatory?.signature_url || null;
+    let stampUrl = snapshot.signatory?.stamp_url || null;
+
+    if (cleanSignatoryId) {
+      const sigRow = await db
+        .prepare(`
+          SELECT ds.name, ds.position, sa.asset_url AS signature_url, st.asset_url AS stamp_url
+          FROM document_signatories ds
+          LEFT JOIN document_assets sa ON ds.signature_asset_id = sa.id
+          LEFT JOIN document_assets st ON ds.stamp_asset_id = st.id
+          WHERE ds.id = ?
+        `)
+        .bind(cleanSignatoryId)
+        .first() as any;
+
+      if (sigRow) {
+        signatoryName = sigRow.name;
+        signatoryPosition = sigRow.position;
+        signatureUrl = sigRow.signature_url;
+        stampUrl = sigRow.stamp_url;
+      }
+    }
+
+    // 3. Update rendered snapshot with official metadata
+    const updatedSnapshot = {
+      ...snapshot,
+      signatory: {
+        name: signatoryName,
+        position: signatoryPosition,
+        signature_url: signatureUrl,
+        stamp_url: stampUrl,
+      },
+      compiled_data: {
+        ...(snapshot.compiled_data || formData),
+        document_number: finalDocNumber,
+        status: 'ISSUED',
+      },
+      generated_at: nowSec,
+    };
+
+    // 4. Update generated_documents record
+    await db
+      .prepare(`
+        UPDATE generated_documents
+        SET status = 'ISSUED',
+            document_number = ?,
+            signatory_id = ?,
+            approved_by = ?,
+            approved_at = ?,
+            rejection_reason = NULL,
+            rendered_snapshot = ?,
+            updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(
+        finalDocNumber,
+        cleanSignatoryId,
+        session.userId,
+        nowSec,
+        JSON.stringify(updatedSnapshot),
+        nowSec,
+        params.documentId
+      )
+      .run();
+
+    // 5. Audit Log
+    await logWorkflowEvent({
+      entityType: 'project',
+      entityId: params.documentId,
+      fromStatus: existing.status,
+      toStatus: 'ISSUED',
+      triggeredBy: session.userId,
+      note: `Document approved and issued: ${finalDocNumber} ("${existing.title}")`,
+    });
+
+    revalidatePath(`/dashboard/documents/${params.documentId}`);
+    revalidatePath('/dashboard/documents');
+    return {
+      success: true,
+      documentNumber: finalDocNumber,
+    };
+  } catch (err: any) {
+    console.error('approveAndIssueDocumentAction failed:', err);
+    return { success: false, error: err.message || 'Gagal menyetujui dokumen.' };
+  }
+}
+
+/**
+ * Rejects a pending document with a constructive reason.
+ * Admin/Executive only.
+ */
+export async function rejectDocumentAction(params: {
+  documentId: string;
+  reason: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const ctx = await getSessionContext(session.userId);
+  const isAuthorized =
+    ctx.can('DOCUMENT_MANAGE') ||
+    ctx.can('MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.roles.includes('EXECUTIVE');
+
+  if (!isAuthorized) {
+    return { success: false, error: 'Hanya Admin / Executive yang berwenang menolak pengajuan dokumen.' };
+  }
+
+  const reason = params.reason?.trim();
+  if (!reason) {
+    return { success: false, error: 'Alasan penolakan / revisi wajib diisi.' };
+  }
+
+  const db = await getDB();
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  try {
+    const existing = await db
+      .prepare('SELECT id, status, document_number, rendered_snapshot FROM generated_documents WHERE id = ?')
+      .bind(params.documentId)
+      .first() as any;
+
+    if (!existing) return { success: false, error: 'Dokumen tidak ditemukan.' };
+
+    let snapshot: any = {};
+    try { snapshot = JSON.parse(existing.rendered_snapshot || '{}'); } catch {}
+    if (snapshot.compiled_data) {
+      snapshot.compiled_data.status = 'REJECTED';
+      snapshot.compiled_data.rejection_reason = reason;
+    }
+
+    await db
+      .prepare(`
+        UPDATE generated_documents
+        SET status = 'REJECTED', rejection_reason = ?, rendered_snapshot = ?, updated_at = ?
+        WHERE id = ?
+      `)
+      .bind(reason, JSON.stringify(snapshot), nowSec, params.documentId)
+      .run();
+
+    await logWorkflowEvent({
+      entityType: 'project',
+      entityId: params.documentId,
+      fromStatus: existing.status,
+      toStatus: 'REJECTED',
+      triggeredBy: session.userId,
+      note: `Document rejected: ${existing.document_number}. Reason: ${reason}`,
+    });
+
+    revalidatePath(`/dashboard/documents/${params.documentId}`);
+    revalidatePath('/dashboard/documents');
+    return { success: true };
+  } catch (err: any) {
+    console.error('rejectDocumentAction failed:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Fetches generated documents with permission & status filtering.
  */
 export async function getGeneratedDocuments(filter?: {
   type_code?: string;
+  status?: string;
   limit?: number;
 }): Promise<GeneratedDocumentItem[]> {
   const session = await getSession();
@@ -332,9 +764,23 @@ export async function getGeneratedDocuments(filter?: {
     ctx.roles.includes('COORDINATOR');
 
   const db = await getDB();
-  const limit = filter?.limit || 100;
-  const typeFilter = filter?.type_code ? 'WHERE gd.type_code = ?' : '';
-  const params = filter?.type_code ? [filter.type_code, limit] : [limit];
+  const limit = filter?.limit || 150;
+
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (filter?.type_code) {
+    conditions.push('gd.type_code = ?');
+    params.push(filter.type_code);
+  }
+
+  if (filter?.status) {
+    conditions.push('gd.status = ?');
+    params.push(filter.status);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  params.push(limit);
 
   try {
     const { results } = await db
@@ -342,22 +788,24 @@ export async function getGeneratedDocuments(filter?: {
         SELECT 
           gd.id, gd.template_id, gd.template_version_id, gd.type_code,
           gd.document_number, gd.title, gd.form_data, gd.rendered_snapshot,
-          gd.status, gd.signatory_id, gd.created_by, gd.created_at, gd.updated_at,
+          gd.status, gd.signatory_id, gd.approved_by, gd.approved_at, gd.rejection_reason,
+          gd.created_by, gd.created_at, gd.updated_at,
           dt.name AS template_name, dt.current_version AS template_version,
           u.name AS created_by_name,
+          u_app.name AS approved_by_name,
           ds.name AS signatory_name
         FROM generated_documents gd
         LEFT JOIN document_templates dt ON gd.template_id = dt.id
         LEFT JOIN users u ON gd.created_by = u.id
+        LEFT JOIN users u_app ON gd.approved_by = u_app.id
         LEFT JOIN document_signatories ds ON gd.signatory_id = ds.id
-        ${typeFilter}
+        ${whereClause}
         ORDER BY gd.created_at DESC
         LIMIT ?
       `)
       .bind(...params)
       .all();
 
-    // Fetch current user info for assignee matching
     const currentUserRow = await db
       .prepare('SELECT id, name, email, student_id_number FROM users WHERE id = ?')
       .bind(session.userId)
@@ -387,6 +835,10 @@ export async function getGeneratedDocuments(filter?: {
         status: r.status,
         signatory_id: r.signatory_id,
         signatory_name: r.signatory_name,
+        approved_by: r.approved_by,
+        approved_by_name: r.approved_by_name,
+        approved_at: r.approved_at,
+        rejection_reason: r.rejection_reason,
         created_by: r.created_by,
         created_by_name: r.created_by_name || 'Admin',
         created_at: r.created_at,
@@ -398,9 +850,13 @@ export async function getGeneratedDocuments(filter?: {
       return allDocs;
     }
 
-    // For regular users / troopers, filter documents where they are either creator OR listed in assignees
+    // Regular users see: documents they created OR documents where they are listed as assignees (only if ISSUED/GENERATED)
     return allDocs.filter((doc) => {
       if (doc.created_by === session.userId) return true;
+
+      if (doc.status !== 'ISSUED' && doc.status !== 'GENERATED' && doc.status !== 'SIGNED') {
+        return false;
+      }
 
       const assignees: any[] = Array.isArray(doc.form_data?.assignees)
         ? doc.form_data.assignees
@@ -455,13 +911,16 @@ export async function getGeneratedDocumentById(
         SELECT 
           gd.id, gd.template_id, gd.template_version_id, gd.type_code,
           gd.document_number, gd.title, gd.form_data, gd.rendered_snapshot,
-          gd.status, gd.signatory_id, gd.created_by, gd.created_at, gd.updated_at,
+          gd.status, gd.signatory_id, gd.approved_by, gd.approved_at, gd.rejection_reason,
+          gd.created_by, gd.created_at, gd.updated_at,
           dt.name AS template_name, dt.current_version AS template_version,
           u.name AS created_by_name,
+          u_app.name AS approved_by_name,
           ds.name AS signatory_name
         FROM generated_documents gd
         LEFT JOIN document_templates dt ON gd.template_id = dt.id
         LEFT JOIN users u ON gd.created_by = u.id
+        LEFT JOIN users u_app ON gd.approved_by = u_app.id
         LEFT JOIN document_signatories ds ON gd.signatory_id = ds.id
         WHERE gd.id = ?
       `)
@@ -489,6 +948,10 @@ export async function getGeneratedDocumentById(
       status: r.status,
       signatory_id: r.signatory_id,
       signatory_name: r.signatory_name,
+      approved_by: r.approved_by,
+      approved_by_name: r.approved_by_name,
+      approved_at: r.approved_at,
+      rejection_reason: r.rejection_reason,
       created_by: r.created_by,
       created_by_name: r.created_by_name || 'Admin',
       created_at: r.created_at,
@@ -579,7 +1042,7 @@ export async function deleteDocumentAction(
 
 /**
  * Public Verification Action (No login required).
- * Allows general public (e.g. parents, partners, institutions) to verify authenticity of official task letters.
+ * Allows general public (e.g. parents, partners, institutions) to verify authenticity of official documents.
  */
 export async function getPublicDocumentVerification(idOrNumber: string): Promise<{
   isValid: boolean;
@@ -609,6 +1072,9 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
       nip?: string;
       name: string;
       role: string;
+      campus?: string;
+      division?: string;
+      period?: string;
     }>;
     tembusan?: string[];
   };
@@ -626,7 +1092,7 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
       .prepare(`
         SELECT 
           gd.id, gd.type_code, gd.document_number, gd.title, gd.form_data, gd.rendered_snapshot,
-          gd.status, gd.created_at,
+          gd.status, gd.created_at, gd.approved_at,
           ds.name AS signatory_name, ds.position AS signatory_position
         FROM generated_documents gd
         LEFT JOIN document_signatories ds ON gd.signatory_id = ds.id
@@ -640,6 +1106,13 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
       return { isValid: false, error: 'Dokumen tidak ditemukan dalam pangkalan data resmi KIAN HQ.' };
     }
 
+    if (row.status !== 'ISSUED' && row.status !== 'GENERATED' && row.status !== 'SIGNED') {
+      return {
+        isValid: false,
+        error: `Dokumen ini berstatus "${row.status}" (Draf / Menunggu Persetujuan) dan belum diterbitkan secara resmi oleh Manajemen KIAN.`,
+      };
+    }
+
     let formData: Record<string, any> = {};
     let snapshot: Record<string, any> = {};
     try { formData = JSON.parse(row.form_data || '{}'); } catch {}
@@ -648,17 +1121,22 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
     const compiledData = snapshot.compiled_data || formData;
     const org: OrganizationSnapshot = snapshot.organization || DEFAULT_ORGANIZATION_PROFILE;
 
-    const assignees: Array<{ no?: number; nip?: string; name: string; role: string }> = Array.isArray(compiledData.assignees)
+    const assignees: Array<{ no?: number; nip?: string; name: string; role: string; campus?: string; division?: string; period?: string }> = Array.isArray(compiledData.assignees)
       ? compiledData.assignees.map((a: any, idx: number) => ({
           no: a.no || idx + 1,
           nip: a.nip || '-',
-          name: a.name || 'Petugas',
-          role: a.role || 'Anggota Tim',
+          name: a.name || 'Personil',
+          role: a.role || a.division || 'Anggota Tim',
+          campus: a.campus || undefined,
+          division: a.division || undefined,
+          period: a.period || undefined,
         }))
       : [];
 
     const tembusanList = Array.isArray(compiledData.tembusan)
       ? compiledData.tembusan
+      : Array.isArray(compiledData.cc_list)
+      ? compiledData.cc_list
       : typeof compiledData.tembusan === 'string'
       ? compiledData.tembusan.split('\n').map((s: string) => s.trim()).filter(Boolean)
       : [];
@@ -668,10 +1146,10 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
       document: {
         id: row.id,
         document_number: row.document_number,
-        title: row.title || compiledData.document_title || 'Surat Tugas Resmi',
+        title: row.title || compiledData.document_title || 'Dokumen Resmi KIAN',
         type_code: row.type_code || 'SURAT_TUGAS',
-        status: row.status || 'GENERATED',
-        issued_at: snapshot.generated_at || row.created_at,
+        status: row.status || 'ISSUED',
+        issued_at: row.approved_at || snapshot.generated_at || row.created_at,
         created_at: row.created_at,
         organization: org,
         signatory: {
@@ -695,3 +1173,4 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
     return { isValid: false, error: 'Terjadi kendala saat memeriksa validasi dokumen.' };
   }
 }
+

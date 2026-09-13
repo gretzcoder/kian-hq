@@ -10,6 +10,7 @@ interface DynamicDocumentFormProps {
   formData: Record<string, any>;
   onChange: (key: string, value: any) => void;
   annexThreshold?: number;
+  tableColumns?: Array<{ key: string; label: string; widthPercent?: number; align?: string }>;
 }
 
 export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
@@ -17,6 +18,7 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
   formData,
   onChange,
   annexThreshold = 4,
+  tableColumns,
 }) => {
   const [projectSearchResults, setProjectSearchResults] = useState<any[]>([]);
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -84,6 +86,7 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                 value={Array.isArray(value) ? value : []}
                 onChange={(newVal) => onChange(field.key, newVal)}
                 annexThreshold={annexThreshold}
+                columns={tableColumns}
               />
             </div>
           );

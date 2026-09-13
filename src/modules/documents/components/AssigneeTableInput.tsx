@@ -8,18 +8,29 @@ interface AssigneeTableInputProps {
   value: AssigneeRow[];
   onChange: (newValue: AssigneeRow[]) => void;
   annexThreshold?: number;
+  columns?: Array<{ key: string; label: string; widthPercent?: number; align?: string }>;
 }
 
 export const AssigneeTableInput: React.FC<AssigneeTableInputProps> = ({
   value = [],
   onChange,
   annexThreshold = 4,
+  columns,
 }) => {
   const [rows, setRows] = useState<AssigneeRow[]>(value);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+
+  // Dynamic editable columns (exclude 'no')
+  const inputColumns = (columns && columns.length > 0)
+    ? columns.filter((c) => c.key !== 'no')
+    : [
+        { key: 'nip', label: 'NIP / NIM' },
+        { key: 'name', label: 'Nama Lengkap' },
+        { key: 'role', label: 'Tugas / Posisi' },
+      ];
 
   useEffect(() => {
     setRows(value);
@@ -37,8 +48,14 @@ export const AssigneeTableInput: React.FC<AssigneeTableInputProps> = ({
       no: rows.length + 1,
       nip: '',
       name: '',
-      role: 'Crew / Operator',
+      role: '',
     };
+    // Initialize any other keys from columns
+    inputColumns.forEach((c) => {
+      if (!(c.key in newRow)) {
+        (newRow as any)[c.key] = '';
+      }
+    });
     updateParent([...rows, newRow]);
   };
 
@@ -49,7 +66,7 @@ export const AssigneeTableInput: React.FC<AssigneeTableInputProps> = ({
 
   const handleFieldChange = (
     index: number,
-    field: keyof AssigneeRow,
+    field: string,
     val: string
   ) => {
     const updated = [...rows];
@@ -104,7 +121,7 @@ export const AssigneeTableInput: React.FC<AssigneeTableInputProps> = ({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
-            Daftar Petugas ({rows.length} Personil)
+            Daftar Personil ({rows.length} Orang)
           </span>
           <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
             {isLampiranMode ? (
@@ -147,17 +164,19 @@ export const AssigneeTableInput: React.FC<AssigneeTableInputProps> = ({
             <thead className="bg-zinc-100 dark:bg-zinc-800/80 text-zinc-600 dark:text-zinc-400 font-bold border-b border-zinc-200 dark:border-zinc-800">
               <tr>
                 <th className="px-3 py-2 w-12 text-center">No</th>
-                <th className="px-3 py-2 w-32">NIP / NIM</th>
-                <th className="px-3 py-2 min-w-[180px]">Nama Lengkap</th>
-                <th className="px-3 py-2 min-w-[160px]">Tugas / Posisi</th>
+                {inputColumns.map((col) => (
+                  <th key={col.key} className="px-3 py-2 min-w-[140px]">
+                    {col.label}
+                  </th>
+                ))}
                 <th className="px-3 py-2 w-28 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="text-center py-6 text-zinc-400 italic">
-                    Belum ada petugas ditambahkan. Klik &quot;Cari dari DB Troopers&quot; atau &quot;Tambah Baris Manual&quot;.
+                  <td colSpan={inputColumns.length + 2} className="text-center py-6 text-zinc-400 italic">
+                    Belum ada data ditambahkan. Klik &quot;Cari dari DB Troopers&quot; atau &quot;Tambah Baris Manual&quot;.
                   </td>
                 </tr>
               ) : (
@@ -166,39 +185,25 @@ export const AssigneeTableInput: React.FC<AssigneeTableInputProps> = ({
                     <td className="px-3 py-2 text-center font-bold text-zinc-500">
                       {row.no || idx + 1}
                     </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={row.nip || ''}
-                        onChange={(e) =>
-                          handleFieldChange(idx, 'nip', e.target.value)
-                        }
-                        placeholder="17250703"
-                        className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-xs font-mono"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={row.name || ''}
-                        onChange={(e) =>
-                          handleFieldChange(idx, 'name', e.target.value)
-                        }
-                        placeholder="Nama Personil"
-                        className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-xs font-semibold"
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        value={row.role || ''}
-                        onChange={(e) =>
-                          handleFieldChange(idx, 'role', e.target.value)
-                        }
-                        placeholder="Camera Operator"
-                        className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-xs"
-                      />
-                    </td>
+                    {inputColumns.map((col) => (
+                      <td key={col.key} className="px-3 py-2">
+                        <input
+                          type="text"
+                          value={(row as any)[col.key] || ''}
+                          onChange={(e) =>
+                            handleFieldChange(idx, col.key, e.target.value)
+                          }
+                          placeholder={col.label}
+                          className={`w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-xs ${
+                            col.key === 'name'
+                              ? 'font-semibold'
+                              : col.key === 'nip'
+                              ? 'font-mono'
+                              : ''
+                          }`}
+                        />
+                      </td>
+                    ))}
                     <td className="px-3 py-2 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <button

@@ -1,4 +1,11 @@
-export type DocumentStatusCode = 'DRAFT' | 'GENERATED' | 'SIGNED' | 'ARCHIVED';
+export type DocumentStatusCode =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'ISSUED'
+  | 'REJECTED'
+  | 'GENERATED'
+  | 'SIGNED'
+  | 'ARCHIVED';
 export type TemplateStatusCode = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 export type AssetCategory = 'FRAME' | 'LOGO' | 'SIGNATURE' | 'STAMP' | 'DECORATION';
 
@@ -277,6 +284,10 @@ export interface GeneratedDocumentItem {
   signatory_name?: string;
   created_by: string;
   created_by_name?: string;
+  approved_by?: string | null;
+  approved_by_name?: string | null;
+  approved_at?: number | null;
+  rejection_reason?: string | null;
   created_at: number;
   updated_at: number;
 }

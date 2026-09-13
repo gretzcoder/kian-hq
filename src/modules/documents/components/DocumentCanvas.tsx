@@ -182,6 +182,23 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
   const contentPaddingLeft = layoutConfig?.contentPaddingLeftPx ?? (layoutConfig?.paddingMm?.left ? Math.round(layoutConfig.paddingMm.left * 3.78) : 56);
   const contentPaddingRight = layoutConfig?.contentPaddingRightPx ?? (layoutConfig?.paddingMm?.right ? Math.round(layoutConfig.paddingMm.right * 3.78) : 56);
 
+  const isDraftOrPending = Boolean(
+    formData.status &&
+      formData.status !== 'ISSUED' &&
+      formData.status !== 'GENERATED' &&
+      formData.status !== 'SIGNED'
+  );
+
+  const activeTableColumns =
+    layoutConfig?.tableColumns && layoutConfig.tableColumns.length > 0
+      ? layoutConfig.tableColumns
+      : [
+          { key: 'no', label: 'No', widthPercent: 8, align: 'center' as const },
+          { key: 'nip', label: 'NIP', widthPercent: 22, align: 'center' as const },
+          { key: 'name', label: 'NAMA', widthPercent: 42, align: 'left' as const },
+          { key: 'role', label: 'Tugas', widthPercent: 28, align: 'left' as const },
+        ];
+
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('');
 
   const docIdForVerification = formData.document_id || formData.id || formData.document_number || 'preview';
@@ -400,6 +417,24 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               </span>
             </div>
           </>
+        )}
+
+        {/* Draft / Unofficial Watermark Overlay */}
+        {isDraftOrPending && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-25 select-none overflow-hidden">
+            <div className="transform -rotate-45 border-4 border-dashed border-red-500/25 px-12 py-5 rounded-3xl bg-white/40 backdrop-blur-[1px] shadow-sm">
+              <span className="text-3xl sm:text-4xl font-black text-red-500/30 tracking-widest uppercase font-mono block text-center">
+                {formData.status === 'PENDING_APPROVAL'
+                  ? 'MENUNGGU PERSETUJUAN'
+                  : formData.status === 'REJECTED'
+                  ? 'DRAF DITOLAK'
+                  : 'DRAF RESMI (BELUM DITERBITKAN)'}
+              </span>
+              <span className="text-[11px] font-bold text-red-500/40 tracking-wider uppercase block text-center mt-1">
+                TIDAK BERLAKU SEBAGAI DOKUMEN HUKUM / TUGAS RESMI
+              </span>
+            </div>
+          </div>
         )}
 
         {/* ======================================================== */}
@@ -730,19 +765,44 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                     >
                       <thead>
                         <tr className="bg-zinc-100/70">
-                          <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">No</th>
-                          <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[22%]">NIP</th>
-                          <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[42%]">NAMA</th>
-                          <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[28%]">Tugas</th>
+                          {activeTableColumns.map((col, cIdx) => (
+                            <th
+                              key={col.key || cIdx}
+                              className={`border border-zinc-800 px-2 py-1.5 font-bold ${
+                                col.align === 'center'
+                                  ? 'text-center'
+                                  : col.align === 'right'
+                                  ? 'text-right'
+                                  : 'text-left'
+                              }`}
+                              style={{ width: col.widthPercent ? `${col.widthPercent}%` : undefined }}
+                            >
+                              {col.label}
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
                         {assignees.map((row, idx) => (
                           <tr key={idx}>
-                            <td className="border border-zinc-800 px-2 py-1.5 text-center">{row.no || idx + 1}</td>
-                            <td className="border border-zinc-800 px-3 py-1.5 text-center font-mono">{row.nip || '-'}</td>
-                            <td className="border border-zinc-800 px-3 py-1.5 font-medium">{row.name || '-'}</td>
-                            <td className="border border-zinc-800 px-3 py-1.5">{row.role || '-'}</td>
+                            {activeTableColumns.map((col, cIdx) => {
+                              let cellVal = (row as any)[col.key];
+                              if (col.key === 'no') cellVal = row.no || idx + 1;
+                              return (
+                                <td
+                                  key={col.key || cIdx}
+                                  className={`border border-zinc-800 px-2 py-1.5 ${
+                                    col.align === 'center'
+                                      ? 'text-center'
+                                      : col.align === 'right'
+                                      ? 'text-right'
+                                      : 'text-left'
+                                  } ${col.key === 'name' ? 'font-medium' : col.key === 'nip' ? 'font-mono' : ''}`}
+                                >
+                                  {cellVal !== undefined && cellVal !== null && cellVal !== '' ? cellVal : '-'}
+                                </td>
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>
@@ -751,7 +811,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 ) : (
                   <div key={sec.id || secIdx} style={{ marginBottom: mbStyle }} className="p-3 bg-zinc-50/90 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
                     <span>
-                      📋 <strong>Daftar Nama Petugas ({assignees.length} Personil)</strong> terlampir lengkap pada <strong>Lampiran Surat Tugas</strong> (Halaman 2).
+                      📋 <strong>Daftar Nama Personil ({assignees.length} Orang)</strong> terlampir lengkap pada <strong>Lampiran Dokumen</strong> (Halaman 2).
                     </span>
                     <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
                       Lihat Lampiran
@@ -1032,18 +1092,21 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                   >
                     <thead>
                       <tr className="bg-zinc-100">
-                        <th className="border border-zinc-800 px-2 py-1.5 text-center font-bold w-[8%]">
-                          No
-                        </th>
-                        <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[22%]">
-                          NIP / NIM
-                        </th>
-                        <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[42%]">
-                          NAMA LENGKAP
-                        </th>
-                        <th className="border border-zinc-800 px-3 py-1.5 text-center font-bold w-[28%]">
-                          PENUGASAN
-                        </th>
+                        {activeTableColumns.map((col, cIdx) => (
+                          <th
+                            key={col.key || cIdx}
+                            className={`border border-zinc-800 px-2 py-1.5 font-bold ${
+                              col.align === 'center'
+                                ? 'text-center'
+                                : col.align === 'right'
+                                ? 'text-right'
+                                : 'text-left'
+                            }`}
+                            style={{ width: col.widthPercent ? `${col.widthPercent}%` : undefined }}
+                          >
+                            {col.label}
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -1052,18 +1115,24 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                           pageIdx * ROWS_PER_ANNEX_PAGE + rIdx + 1;
                         return (
                           <tr key={rIdx} className="hover:bg-zinc-50">
-                            <td className="border border-zinc-800 px-2 py-1.5 text-center">
-                              {row.no || globalIndex}
-                            </td>
-                            <td className="border border-zinc-800 px-3 py-1.5 text-center font-mono">
-                              {row.nip || '-'}
-                            </td>
-                            <td className="border border-zinc-800 px-3 py-1.5 font-medium">
-                              {row.name || '-'}
-                            </td>
-                            <td className="border border-zinc-800 px-3 py-1.5">
-                              {row.role || '-'}
-                            </td>
+                            {activeTableColumns.map((col, cIdx) => {
+                              let cellVal = (row as any)[col.key];
+                              if (col.key === 'no') cellVal = row.no || globalIndex;
+                              return (
+                                <td
+                                  key={col.key || cIdx}
+                                  className={`border border-zinc-800 px-2 py-1.5 ${
+                                    col.align === 'center'
+                                      ? 'text-center'
+                                      : col.align === 'right'
+                                      ? 'text-right'
+                                      : 'text-left'
+                                  } ${col.key === 'name' ? 'font-medium' : col.key === 'nip' ? 'font-mono' : ''}`}
+                                >
+                                  {cellVal !== undefined && cellVal !== null && cellVal !== '' ? cellVal : '-'}
+                                </td>
+                              );
+                            })}
                           </tr>
                         );
                       })}

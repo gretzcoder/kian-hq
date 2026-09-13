@@ -20,17 +20,12 @@ export default async function CreateDocumentPage({
   await ensureDefaultSeedTemplates();
   const ctx = await getSessionContext(session.userId);
 
-  const canCreate =
-    ctx.can('DOCUMENT_CREATE') ||
+  const isPrivileged =
     ctx.can('DOCUMENT_MANAGE') ||
     ctx.can('MANAGE') ||
     ctx.permissions.has('ADMIN_SYSTEM') ||
     ctx.roles.includes('EXECUTIVE') ||
     ctx.roles.includes('COORDINATOR');
-
-  if (!canCreate) {
-    redirect('/dashboard/documents');
-  }
 
   const resolvedParams = await searchParams;
   const [templates, signatories] = await Promise.all([
@@ -46,7 +41,9 @@ export default async function CreateDocumentPage({
         templates={activeTemplates.length > 0 ? activeTemplates : templates}
         signatories={signatories}
         initialTemplateId={resolvedParams.templateId}
+        isPrivileged={isPrivileged}
       />
     </div>
   );
 }
+

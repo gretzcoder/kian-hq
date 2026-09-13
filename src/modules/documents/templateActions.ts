@@ -14,24 +14,28 @@ import {
   DEFAULT_SURAT_TUGAS_LAYOUT,
   DEFAULT_SURAT_TUGAS_SCHEMA,
   DEFAULT_SURAT_TUGAS_VALUES,
+  DEFAULT_SURAT_MAGANG_LAYOUT,
+  DEFAULT_SURAT_MAGANG_SCHEMA,
+  DEFAULT_SURAT_MAGANG_VALUES,
 } from './defaultTemplates';
 
 /**
- * Ensures default Master Template ("Surat Tugas KIAN Troopers") exists on D1.
+ * Ensures default Master Templates ("Surat Tugas" and "SK Penerimaan Magang") exist on D1.
  */
 export async function ensureDefaultSeedTemplates(): Promise<void> {
   const db = await getDB();
   try {
-    const existing = await db
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    // 1. Ensure Surat Tugas Template
+    const existingTugas = await db
       .prepare("SELECT id FROM document_templates WHERE id = 'tpl_surat_tugas_troopers'")
       .first();
 
-    if (!existing) {
-      const nowSec = Math.floor(Date.now() / 1000);
+    if (!existingTugas) {
       const templateId = 'tpl_surat_tugas_troopers';
       const versionId = 'tplv_surat_tugas_v1';
 
-      // Insert template container
       await db
         .prepare(`
           INSERT INTO document_templates (
@@ -47,7 +51,6 @@ export async function ensureDefaultSeedTemplates(): Promise<void> {
         )
         .run();
 
-      // Insert version 1
       await db
         .prepare(`
           INSERT INTO document_template_versions (
@@ -61,6 +64,63 @@ export async function ensureDefaultSeedTemplates(): Promise<void> {
           JSON.stringify(DEFAULT_SURAT_TUGAS_SCHEMA),
           JSON.stringify(DEFAULT_SURAT_TUGAS_VALUES),
           JSON.stringify(DEFAULT_SURAT_TUGAS_VALUES),
+          nowSec
+        )
+        .run();
+    }
+
+    // 2. Ensure SK Magang Document Type & Template
+    const existingMagangType = await db
+      .prepare("SELECT id FROM document_types WHERE code = 'SK_MAGANG'")
+      .first();
+
+    if (!existingMagangType) {
+      await db
+        .prepare(`
+          INSERT INTO document_types (
+            id, code, name, description, numbering_format, icon, is_active, created_at, updated_at
+          ) VALUES ('doctype_sk_magang', 'SK_MAGANG', 'Surat Keputusan Penerimaan Magang', 'SK resmi penerimaan peserta magang & On-the-Job Training KIAN', '{sequence}/SK-MAGANG/KIAN/{roman_month}/{year}', '🎓', 1, ?, ?)
+        `)
+        .bind(nowSec, nowSec)
+        .run();
+    }
+
+    const existingMagang = await db
+      .prepare("SELECT id FROM document_templates WHERE id = 'tpl_sk_magang_troopers'")
+      .first();
+
+    if (!existingMagang) {
+      const templateId = 'tpl_sk_magang_troopers';
+      const versionId = 'tplv_sk_magang_v1';
+
+      await db
+        .prepare(`
+          INSERT INTO document_templates (
+            id, type_id, name, description, status, current_version, created_by, updated_by, created_at, updated_at
+          ) VALUES (?, 'doctype_sk_magang', ?, ?, 'ACTIVE', 1, 'system', 'system', ?, ?)
+        `)
+        .bind(
+          templateId,
+          'Surat Keputusan Penerimaan Magang',
+          'Template resmi SK Penerimaan Magang / OJT KIAN Troopers dengan tabel kampus, divisi, periode dan diktum ketentuan.',
+          nowSec,
+          nowSec
+        )
+        .run();
+
+      await db
+        .prepare(`
+          INSERT INTO document_template_versions (
+            id, template_id, version, layout_config, form_schema, default_values, sample_data, created_by, created_at
+          ) VALUES (?, ?, 1, ?, ?, ?, ?, 'system', ?)
+        `)
+        .bind(
+          versionId,
+          templateId,
+          JSON.stringify(DEFAULT_SURAT_MAGANG_LAYOUT),
+          JSON.stringify(DEFAULT_SURAT_MAGANG_SCHEMA),
+          JSON.stringify(DEFAULT_SURAT_MAGANG_VALUES),
+          JSON.stringify(DEFAULT_SURAT_MAGANG_VALUES),
           nowSec
         )
         .run();

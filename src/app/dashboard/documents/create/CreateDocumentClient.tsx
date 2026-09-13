@@ -17,12 +17,14 @@ interface CreateDocumentClientProps {
   templates: DocumentTemplateItem[];
   signatories: DocumentSignatoryItem[];
   initialTemplateId?: string;
+  isPrivileged?: boolean;
 }
 
 export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
   templates = [],
   signatories = [],
   initialTemplateId,
+  isPrivileged = false,
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -41,8 +43,9 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
 
   const [customNumber, setCustomNumber] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generatingMode, setGeneratingMode] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [createdDocInfo, setCreatedDocInfo] = useState<{ id: string; number: string } | null>(null);
+  const [createdDocInfo, setCreatedDocInfo] = useState<{ id: string; number: string; status: string } | null>(null);
 
   // When selected template changes, reset form data to its defaults
   useEffect(() => {
@@ -58,10 +61,11 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
     }));
   };
 
-  const handleGenerate = async () => {
+  const handleExecute = async (mode: 'ISSUE' | 'DRAFT' | 'SUBMIT_APPROVAL') => {
     if (!currentTemplate) return;
 
     setIsGenerating(true);
+    setGeneratingMode(mode);
     setErrorMsg(null);
 
     try {
@@ -70,17 +74,23 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
         form_data: formData,
         custom_number: customNumber.trim() || undefined,
         signatory_id: selectedSignatoryId || undefined,
+        mode,
       });
 
       if (res.success && res.documentId && res.documentNumber) {
-        setCreatedDocInfo({ id: res.documentId, number: res.documentNumber });
+        setCreatedDocInfo({
+          id: res.documentId,
+          number: res.documentNumber,
+          status: res.status || (mode === 'ISSUE' ? 'ISSUED' : mode === 'DRAFT' ? 'DRAFT' : 'PENDING_APPROVAL'),
+        });
       } else {
-        setErrorMsg(res.error || 'Gagal menerbitkan surat.');
+        setErrorMsg(res.error || 'Gagal memproses dokumen.');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
     } finally {
       setIsGenerating(false);
+      setGeneratingMode(null);
     }
   };
 
@@ -100,20 +110,22 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
             </Link>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 mt-1 flex items-center gap-2">
-            <span>✍️</span> Penerbitan Dokumen Resmi
+            <span>✍️</span> {isPrivileged ? 'Penerbitan Dokumen Resmi' : 'Pengajuan & Pembuatan Dokumen'}
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Isi data formulir berikut. Layout A4 dan nomor surat akan otomatis digenerate dengan presisi tinggi.
+            {isPrivileged
+              ? 'Isi formulir untuk langsung menerbitkan dokumen resmi dengan nomor urut otomatis dan QR verifikasi aktif.'
+              : 'Isi formulir dan ajukan dokumen untuk ditinjau dan diterbitkan oleh Manajemen / Admin.'}
           </p>
         </div>
 
-        {/* Action Button: Generate / Download */}
-        <div className="flex items-center gap-3">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2.5">
           {createdDocInfo ? (
             <div className="flex items-center gap-2">
               <DocumentPDFExporter
                 documentNumber={createdDocInfo.number}
-                documentTitle={formData.document_title || 'Surat_Tugas'}
+                documentTitle={formData.document_title || 'Dokumen_KIAN'}
               />
               <Link
                 href={`/dashboard/documents/${createdDocInfo.id}`}
@@ -123,24 +135,61 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
               </Link>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={handleGenerate}
-              disabled={isGenerating}
-              className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-500/20 active:scale-95 transition-all flex items-center gap-2"
-            >
-              {isGenerating ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Menerbitkan Surat...</span>
-                </>
+            <>
+              <button
+                type="button"
+                onClick={() => handleExecute('DRAFT')}
+                disabled={isGenerating}
+                className="px-4 py-2.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-bold transition-all flex items-center gap-1.5"
+              >
+                {isGenerating && generatingMode === 'DRAFT' ? (
+                  <span className="w-3.5 h-3.5 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <span>💾</span>
+                )}
+                <span>Simpan Draf</span>
+              </button>
+
+              {isPrivileged ? (
+                <button
+                  type="button"
+                  onClick={() => handleExecute('ISSUE')}
+                  disabled={isGenerating}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-2"
+                >
+                  {isGenerating && generatingMode === 'ISSUE' ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Menerbitkan Surat...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>📜</span>
+                      <span>Terbitkan Dokumen Resmi</span>
+                    </>
+                  )}
+                </button>
               ) : (
-                <>
-                  <span>📜</span>
-                  <span>Terbitkan &amp; Simpan Dokumen</span>
-                </>
+                <button
+                  type="button"
+                  onClick={() => handleExecute('SUBMIT_APPROVAL')}
+                  disabled={isGenerating}
+                  className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-md shadow-purple-500/20 active:scale-95 transition-all flex items-center gap-2"
+                >
+                  {isGenerating && generatingMode === 'SUBMIT_APPROVAL' ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Mengajukan Dokumen...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>📨</span>
+                      <span>Ajukan untuk Persetujuan</span>
+                    </>
+                  )}
+                </button>
               )}
-            </button>
+            </>
           )}
         </div>
       </div>
@@ -152,9 +201,25 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
       )}
 
       {createdDocInfo && (
-        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex flex-wrap items-center justify-between gap-2">
+        <div
+          className={`p-4 rounded-2xl text-xs font-bold flex flex-wrap items-center justify-between gap-2 border ${
+            createdDocInfo.status === 'ISSUED'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+              : createdDocInfo.status === 'PENDING_APPROVAL'
+              ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400'
+              : 'bg-zinc-500/10 border-zinc-500/30 text-zinc-600 dark:text-zinc-400'
+          }`}
+        >
           <span>
-            🎉 Surat berhasil diterbitkan dengan nomor resmi: <strong>{createdDocInfo.number}</strong>!
+            {createdDocInfo.status === 'ISSUED' && (
+              <>🎉 Dokumen berhasil diterbitkan secara resmi dengan nomor: <strong>{createdDocInfo.number}</strong>!</>
+            )}
+            {createdDocInfo.status === 'PENDING_APPROVAL' && (
+              <>📨 Dokumen berhasil diajukan untuk ditinjau oleh Manajemen (Kode Pengajuan: <strong>{createdDocInfo.number}</strong>)!</>
+            )}
+            {createdDocInfo.status === 'DRAFT' && (
+              <>💾 Draf dokumen berhasil disimpan (Kode Draf: <strong>{createdDocInfo.number}</strong>)!</>
+            )}
           </span>
           <span className="text-[11px] font-medium">
             Arsip permanen tersimpan di database.
@@ -204,22 +269,28 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
             </div>
           )}
 
-          {/* 3. Numbering Preview / Custom Override */}
-          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-1.5">
-            <label className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
-              <span>Nomor Surat</span>
-              <span className="text-purple-600 dark:text-purple-400 font-mono text-[10px]">
-                Otomatis via Sequential Counter
-              </span>
-            </label>
-            <input
-              type="text"
-              value={customNumber}
-              onChange={(e) => setCustomNumber(e.target.value)}
-              placeholder="Kosongkan untuk nomor otomatis (e.g. 1/KIAN/TROOPERS/IX/2026)"
-              className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
-            />
-          </div>
+          {/* 3. Numbering Preview / Custom Override (Only for Privileged Issuer) */}
+          {isPrivileged ? (
+            <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-1.5">
+              <label className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
+                <span>Nomor Surat Resmi</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">
+                  Otomatis via Sequential Counter
+                </span>
+              </label>
+              <input
+                type="text"
+                value={customNumber}
+                onChange={(e) => setCustomNumber(e.target.value)}
+                placeholder="Kosongkan untuk nomor otomatis (e.g. 1/KIAN/TROOPERS/IX/2026)"
+                className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
+              />
+            </div>
+          ) : (
+            <div className="p-3 bg-purple-50 dark:bg-purple-950/20 rounded-xl border border-purple-200 dark:border-purple-800/40 text-xs text-purple-700 dark:text-purple-300">
+              ℹ️ <strong>Alur Persetujuan:</strong> Dokumen ini akan tersimpan sebagai pengajuan dan nomor surat resmi akan otomatis dialokasikan saat disetujui oleh Manajemen / Admin.
+            </div>
+          )}
 
           <div className="border-t border-zinc-200 dark:border-zinc-800 pt-3">
             <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider mb-3">
@@ -230,6 +301,7 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
               formData={formData}
               onChange={handleFieldChange}
               annexThreshold={currentTemplate?.layout_config?.annexThresholdRows ?? 4}
+              tableColumns={currentTemplate?.layout_config?.tableColumns}
             />
           </div>
         </div>
@@ -249,7 +321,8 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
             <DocumentCanvas
               formData={{
                 ...formData,
-                document_number: customNumber || formData.document_number || '1/KIAN/TROOPERS/IX/2026',
+                document_number: customNumber || formData.document_number || (isPrivileged ? 'PREVIEW/KIAN/TROOPERS/IX/2026' : 'DRAF/PENGAJUAN'),
+                status: isPrivileged ? 'ISSUED' : 'PENDING_APPROVAL',
               }}
               layoutConfig={currentTemplate?.layout_config}
               signatory={selectedSignatory ? {
@@ -265,3 +338,4 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
     </div>
   );
 };
+
