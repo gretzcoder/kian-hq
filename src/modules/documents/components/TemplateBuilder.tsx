@@ -1292,37 +1292,43 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                       {sec.type === 'TITLE_AND_NUMBER' && (
                         <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2.5">
                           <div>
-                            <label className="text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 block mb-1">
-                              Judul Dokumen (Header Title)
-                            </label>
-                            <input
-                              type="text"
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300">
+                                Judul Dokumen (Bisa Multi-baris / Tekan Enter)
+                              </label>
+                              <span className="text-[9.5px] text-purple-600 dark:text-purple-400 font-medium">
+                                ↵ Enter untuk baris baru
+                              </span>
+                            </div>
+                            <textarea
+                              rows={2}
                               value={previewData.document_title || ''}
                               onChange={(e) => updateFieldValue('document_title', e.target.value)}
-                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold uppercase"
-                              placeholder="SURAT KEPUTUSAN / SURAT TUGAS"
+                              className="w-full px-2.5 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-bold uppercase resize-y leading-tight font-sans"
+                              placeholder="Contoh:&#10;SURAT KEPUTUSAN&#10;PENERIMAAN PESERTA MAGANG"
                             />
                             <div className="flex flex-wrap gap-1 mt-1.5">
                               {[
-                                'SURAT KEPUTUSAN',
-                                'SURAT TUGAS',
-                                'SURAT UNDANGAN',
-                                'SURAT KETERANGAN',
-                                'SURAT PERNYATAAN',
-                                'SURAT PERINGATAN',
-                                'MEMORANDUM',
-                              ].map((titlePreset) => (
+                                { label: 'SK 1 Baris', value: 'SURAT KEPUTUSAN' },
+                                { label: 'SK 2 Baris (Magang)', value: 'SURAT KEPUTUSAN\nPENERIMAAN MAGANG' },
+                                { label: 'SK 3 Baris (Tentang)', value: 'SURAT KEPUTUSAN\nTENTANG\nPENETAPAN TIM PRODUKSI' },
+                                { label: 'SURAT TUGAS', value: 'SURAT TUGAS' },
+                                { label: 'SURAT UNDANGAN', value: 'SURAT UNDANGAN' },
+                                { label: 'SURAT KETERANGAN', value: 'SURAT KETERANGAN' },
+                                { label: 'SURAT PERNYATAAN', value: 'SURAT PERNYATAAN' },
+                                { label: 'SURAT PERINGATAN', value: 'SURAT PERINGATAN' },
+                              ].map((presetItem) => (
                                 <button
-                                  key={titlePreset}
+                                  key={presetItem.label}
                                   type="button"
-                                  onClick={() => updateFieldValue('document_title', titlePreset)}
+                                  onClick={() => updateFieldValue('document_title', presetItem.value)}
                                   className={`text-[9.5px] px-2 py-0.5 rounded-md border font-bold transition-all ${
-                                    previewData.document_title === titlePreset
+                                    previewData.document_title === presetItem.value
                                       ? 'bg-purple-600 text-white border-purple-600'
                                       : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-purple-400'
                                   }`}
                                 >
-                                  {titlePreset}
+                                  {presetItem.label}
                                 </button>
                               ))}
                             </div>
@@ -2480,18 +2486,22 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           {activeTab === 'DEFAULTS' && (
             <div className="space-y-3">
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400">
-                  Default Judul Dokumen
-                </label>
-                <input
-                  type="text"
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400">
+                    Default Judul Dokumen (Multi-baris)
+                  </label>
+                  <span className="text-[9.5px] text-purple-600">↵ Enter untuk baris baru</span>
+                </div>
+                <textarea
+                  rows={2}
                   value={defaultValues.document_title || ''}
                   onChange={(e) => {
                     const next = { ...defaultValues, document_title: e.target.value };
                     setDefaultValues(next);
                     setPreviewData(next);
                   }}
-                  className="w-full px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs"
+                  className="w-full px-3 py-1.5 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs uppercase font-bold resize-y"
+                  placeholder="Contoh:&#10;SURAT KEPUTUSAN&#10;PENERIMAAN MAGANG"
                 />
               </div>
 

@@ -227,6 +227,33 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
           );
         }
 
+        // Document Title field (supports multi-line with Enter)
+        if (field.key === 'document_title') {
+          return (
+            <div key={field.key} className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                  {field.label}{' '}
+                  {field.required && <span className="text-red-500">*</span>}
+                </label>
+                <span className="text-[9.5px] text-purple-600 dark:text-purple-400 font-medium">
+                  ↵ Enter untuk baris baru
+                </span>
+              </div>
+              <textarea
+                value={value}
+                onChange={(e) => onChange(field.key, e.target.value)}
+                placeholder={field.placeholder || 'SURAT KEPUTUSAN\nPENERIMAAN MAGANG'}
+                rows={2}
+                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 font-bold uppercase resize-y leading-tight font-sans focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+              />
+              {field.helpText && (
+                <p className="text-[10px] text-zinc-400">{field.helpText}</p>
+              )}
+            </div>
+          );
+        }
+
         // Standard Text Input Type
         return (
           <div key={field.key} className="space-y-1">

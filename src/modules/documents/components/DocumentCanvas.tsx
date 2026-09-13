@@ -472,7 +472,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               }}
             >
               <h1
-                className="font-bold tracking-wider underline uppercase text-black select-none"
+                className="font-bold tracking-wider underline uppercase text-black select-none whitespace-pre-line leading-tight block break-words"
                 style={{ fontSize: `${kop.titleBlock.titleFontSizePt}pt` }}
               >
                 {documentTitle}
