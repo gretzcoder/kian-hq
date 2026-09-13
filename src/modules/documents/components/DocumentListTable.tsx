@@ -184,70 +184,72 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Status Filter Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveStatusTab('ALL')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            activeStatusTab === 'ALL'
-              ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-              : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
-          }`}
-        >
-          <span>Semua</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white/20 dark:bg-black/20 font-mono">
-            {documents.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveStatusTab('ISSUED')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            activeStatusTab === 'ISSUED'
-              ? 'bg-emerald-600 text-white'
-              : 'text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400'
-          }`}
-        >
-          <span>📜 Dokumen Resmi</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono">
-            {issuedCount}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveStatusTab('PENDING')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            activeStatusTab === 'PENDING'
-              ? 'bg-amber-600 text-white'
-              : 'text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400'
-          }`}
-        >
-          <span>⏳ Menunggu Persetujuan</span>
-          {pendingCount > 0 && (
-            <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-500 text-white font-bold font-mono animate-pulse">
-              {pendingCount}
+      {/* Status Filter Tabs (Only for managers who handle drafts and approvals) */}
+      {canManage && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+          <button
+            type="button"
+            onClick={() => setActiveStatusTab('ALL')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeStatusTab === 'ALL'
+                ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+            }`}
+          >
+            <span>Semua</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-white/20 dark:bg-black/20 font-mono">
+              {documents.length}
             </span>
-          )}
-        </button>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveStatusTab('DRAFT')}
-          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-            activeStatusTab === 'DRAFT'
-              ? 'bg-zinc-700 text-white dark:bg-zinc-300 dark:text-zinc-900'
-              : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-          }`}
-        >
-          <span>💾 Draf &amp; Ditolak</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono">
-            {draftCount}
-          </span>
-        </button>
-      </div>
+          <button
+            type="button"
+            onClick={() => setActiveStatusTab('ISSUED')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeStatusTab === 'ISSUED'
+                ? 'bg-emerald-600 text-white'
+                : 'text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400'
+            }`}
+          >
+            <span>📜 Dokumen Resmi</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-mono">
+              {issuedCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveStatusTab('PENDING')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeStatusTab === 'PENDING'
+                ? 'bg-amber-600 text-white'
+                : 'text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400'
+            }`}
+          >
+            <span>⏳ Menunggu Persetujuan</span>
+            {pendingCount > 0 && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-amber-500 text-white font-bold font-mono animate-pulse">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveStatusTab('DRAFT')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeStatusTab === 'DRAFT'
+                ? 'bg-zinc-700 text-white dark:bg-zinc-300 dark:text-zinc-900'
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            <span>💾 Draf &amp; Ditolak</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 font-mono">
+              {draftCount}
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Search Bar & Counter */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3">

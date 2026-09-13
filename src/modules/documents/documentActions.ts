@@ -745,6 +745,63 @@ export async function rejectDocumentAction(params: {
 }
 
 /**
+ * Checks whether a document is targeted / assigned to a specific user.
+ * Supports:
+ * - Table assignees array (matching id, user_id, nip, email, name)
+ * - Single person form fields (person_name, person_nip, person_email, target_user_id)
+ */
+export function isUserTargetedInDocument(
+  doc: GeneratedDocumentItem,
+  user: { id: string; name: string; email: string; student_id_number: string | null }
+): boolean {
+  const currentUserId = (user.id || '').toLowerCase().trim();
+  const currentUserName = (user.name || '').toLowerCase().trim();
+  const currentUserNip = (user.student_id_number || '').toLowerCase().trim();
+  const currentUserEmail = (user.email || '').toLowerCase().trim();
+
+  const compiled = (doc.rendered_snapshot as any)?.compiled_data || doc.form_data || {};
+
+  // 1. Check array of assignees / personil
+  const assignees: any[] = Array.isArray(compiled.assignees)
+    ? compiled.assignees
+    : Array.isArray(doc.form_data?.assignees)
+    ? doc.form_data.assignees
+    : [];
+
+  const matchedInAssignees = assignees.some((a) => {
+    const aId = (a.id || a.user_id || '').toString().toLowerCase().trim();
+    const aName = (a.name || '').toLowerCase().trim();
+    const aNip = (a.nip || '').toLowerCase().trim();
+    const aEmail = (a.email || '').toLowerCase().trim();
+
+    if (currentUserId && aId && aId === currentUserId) return true;
+    if (currentUserEmail && aEmail && aEmail === currentUserEmail) return true;
+    if (currentUserNip && aNip && (aNip === currentUserNip || aNip.includes(currentUserNip))) return true;
+    if (currentUserName && aName && (aName === currentUserName || aName.includes(currentUserName) || currentUserName.includes(aName))) {
+      return true;
+    }
+    return false;
+  });
+
+  if (matchedInAssignees) return true;
+
+  // 2. Check single person recipient fields (e.g. Surat Keterangan / Pernyataan)
+  const pName = (compiled.person_name || doc.form_data?.person_name || '').toLowerCase().trim();
+  const pNip = (compiled.person_nip || doc.form_data?.person_nip || '').toLowerCase().trim();
+  const pEmail = (compiled.person_email || doc.form_data?.person_email || '').toLowerCase().trim();
+  const pId = (compiled.person_user_id || compiled.target_user_id || '').toString().toLowerCase().trim();
+
+  if (currentUserId && pId && pId === currentUserId) return true;
+  if (currentUserEmail && pEmail && pEmail === currentUserEmail) return true;
+  if (currentUserNip && pNip && (pNip === currentUserNip || pNip.includes(currentUserNip))) return true;
+  if (currentUserName && pName && (pName === currentUserName || pName.includes(currentUserName) || currentUserName.includes(pName))) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Fetches generated documents with permission & status filtering.
  */
 export async function getGeneratedDocuments(filter?: {
@@ -811,10 +868,6 @@ export async function getGeneratedDocuments(filter?: {
       .bind(session.userId)
       .first() as { id: string; name: string; email: string; student_id_number: string | null } | null;
 
-    const currentUserName = currentUserRow?.name?.toLowerCase().trim() || '';
-    const currentUserNip = currentUserRow?.student_id_number?.toLowerCase().trim() || '';
-    const currentUserEmail = currentUserRow?.email?.toLowerCase().trim() || '';
-
     const allDocs: GeneratedDocumentItem[] = (results || []).map((r: any) => {
       let formData: Record<string, any> = {};
       let renderedSnapshot: Record<string, any> = {};
@@ -850,35 +903,19 @@ export async function getGeneratedDocuments(filter?: {
       return allDocs;
     }
 
-    // Regular users see: documents they created OR documents where they are listed as assignees (only if ISSUED/GENERATED)
+    // Regular users (without document manage permission):
+    // CAN ONLY see published/issued documents targeted to their account
     return allDocs.filter((doc) => {
-      if (doc.created_by === session.userId) return true;
-
-      if (doc.status !== 'ISSUED' && doc.status !== 'GENERATED' && doc.status !== 'SIGNED') {
+      const isOfficial = doc.status === 'ISSUED' || doc.status === 'GENERATED' || doc.status === 'SIGNED';
+      if (!isOfficial) {
         return false;
       }
 
-      const assignees: any[] = Array.isArray(doc.form_data?.assignees)
-        ? doc.form_data.assignees
-        : Array.isArray((doc.rendered_snapshot as any)?.compiled_data?.assignees)
-        ? (doc.rendered_snapshot as any).compiled_data.assignees
-        : [];
-
-      return assignees.some((a) => {
-        const aName = (a.name || '').toLowerCase().trim();
-        const aNip = (a.nip || '').toLowerCase().trim();
-        const aEmail = (a.email || '').toLowerCase().trim();
-
-        if (currentUserName && (aName === currentUserName || aName.includes(currentUserName) || currentUserName.includes(aName))) {
-          return true;
-        }
-        if (currentUserNip && aNip && (aNip === currentUserNip || aNip.includes(currentUserNip))) {
-          return true;
-        }
-        if (currentUserEmail && aEmail && aEmail === currentUserEmail) {
-          return true;
-        }
-        return false;
+      return isUserTargetedInDocument(doc, {
+        id: session.userId,
+        name: currentUserRow?.name || '',
+        email: currentUserRow?.email || '',
+        student_id_number: currentUserRow?.student_id_number || '',
       });
     });
   } catch (err) {
@@ -958,41 +995,27 @@ export async function getGeneratedDocumentById(
       updated_at: r.updated_at,
     };
 
-    if (isPrivileged || doc.created_by === session.userId) {
+    if (isPrivileged) {
       return doc;
     }
 
-    // Verify if regular user is listed in assignees
+    // Regular users (without document manage permission):
+    // CAN ONLY view published/issued documents targeted to their account
+    const isOfficial = doc.status === 'ISSUED' || doc.status === 'GENERATED' || doc.status === 'SIGNED';
+    if (!isOfficial) {
+      return null;
+    }
+
     const currentUserRow = await db
       .prepare('SELECT id, name, email, student_id_number FROM users WHERE id = ?')
       .bind(session.userId)
       .first() as { id: string; name: string; email: string; student_id_number: string | null } | null;
 
-    const currentUserName = currentUserRow?.name?.toLowerCase().trim() || '';
-    const currentUserNip = currentUserRow?.student_id_number?.toLowerCase().trim() || '';
-    const currentUserEmail = currentUserRow?.email?.toLowerCase().trim() || '';
-
-    const assignees: any[] = Array.isArray(doc.form_data?.assignees)
-      ? doc.form_data.assignees
-      : Array.isArray((doc.rendered_snapshot as any)?.compiled_data?.assignees)
-      ? (doc.rendered_snapshot as any).compiled_data.assignees
-      : [];
-
-    const isAssigned = assignees.some((a) => {
-      const aName = (a.name || '').toLowerCase().trim();
-      const aNip = (a.nip || '').toLowerCase().trim();
-      const aEmail = (a.email || '').toLowerCase().trim();
-
-      if (currentUserName && (aName === currentUserName || aName.includes(currentUserName) || currentUserName.includes(aName))) {
-        return true;
-      }
-      if (currentUserNip && aNip && (aNip === currentUserNip || aNip.includes(currentUserNip))) {
-        return true;
-      }
-      if (currentUserEmail && aEmail && aEmail === currentUserEmail) {
-        return true;
-      }
-      return false;
+    const isAssigned = isUserTargetedInDocument(doc, {
+      id: session.userId,
+      name: currentUserRow?.name || '',
+      email: currentUserRow?.email || '',
+      student_id_number: currentUserRow?.student_id_number || '',
     });
 
     if (!isAssigned) {
