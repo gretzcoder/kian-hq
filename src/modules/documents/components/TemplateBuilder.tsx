@@ -1,15 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   CustomKopTextElement,
+  DocumentAssetItem,
   DocumentTemplateItem,
   DocumentTypeItem,
   FlowSectionConfig,
   FormFieldSchema,
   KopSuratConfig,
   SignatureStampConfig,
+  TableColumnConfig,
   TemplateLayoutConfig,
 } from '../documentTypes';
 import {
@@ -17,6 +19,7 @@ import {
   updateTemplateAction,
 } from '../templateActions';
 import { getDocumentTypesAction } from '../documentTypeActions';
+import { getDocumentAssets, uploadDocumentAssetAction } from '../assetActions';
 import { DocumentCanvas } from './DocumentCanvas';
 import { DocumentPreviewContainer } from './DocumentPreviewContainer';
 import { DocumentTypeManagerModal } from './DocumentTypeManagerModal';
@@ -80,6 +83,36 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
   const [selectedKopElement, setSelectedKopElement] = useState<string | null>('logo');
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Existing Reusable Assets State (Frame & Logo)
+  const [existingFrames, setExistingFrames] = useState<DocumentAssetItem[]>([]);
+  const [existingLogos, setExistingLogos] = useState<DocumentAssetItem[]>([]);
+  const [isLoadingAssets, setIsLoadingAssets] = useState(false);
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+  const [assetModalCategory, setAssetModalCategory] = useState<'FRAME' | 'LOGO'>('FRAME');
+
+  // Table Builder SubTab state
+  const [tableEditorSubTab, setTableEditorSubTab] = useState<'COLUMNS' | 'ROWS'>('COLUMNS');
+
+  // Load existing assets from library on mount
+  useEffect(() => {
+    const loadAssets = async () => {
+      try {
+        setIsLoadingAssets(true);
+        const [frames, logos] = await Promise.all([
+          getDocumentAssets('FRAME'),
+          getDocumentAssets('LOGO'),
+        ]);
+        setExistingFrames(frames);
+        setExistingLogos(logos);
+      } catch (e) {
+        console.error('Failed to load document assets:', e);
+      } finally {
+        setIsLoadingAssets(false);
+      }
+    };
+    loadAssets();
+  }, []);
 
   // Reload document types when updated via modal
   const handleTypesUpdated = async () => {
@@ -265,8 +298,28 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     }));
   };
 
+  // Select existing asset from library
+  const handleSelectExistingAsset = (category: 'FRAME' | 'LOGO', assetUrl: string) => {
+    if (category === 'FRAME') {
+      handleKopChange({
+        ...kopConfig,
+        frameAssetUrl: assetUrl,
+      });
+    } else if (category === 'LOGO') {
+      handleKopChange({
+        ...kopConfig,
+        logo: {
+          ...kopConfig.logo,
+          enabled: true,
+          assetUrl,
+        },
+      });
+    }
+    setIsAssetModalOpen(false);
+  };
+
   // Upload custom frame PNG/JPG
-  const handleUploadFrame = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadFrame = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -276,18 +329,33 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const base64 = event.target?.result as string;
       handleKopChange({
         ...kopConfig,
         frameAssetUrl: base64,
       });
+
+      // Auto-save to reusable library
+      try {
+        const formData = new FormData();
+        const baseName = file.name.replace(/\.[^/.]+$/, '') || 'Frame Background';
+        formData.append('name', baseName);
+        formData.append('category', 'FRAME');
+        formData.append('file', file);
+        const res = await uploadDocumentAssetAction(formData);
+        if (res.success && res.asset) {
+          setExistingFrames((prev) => [res.asset!, ...prev.filter((a) => a.id !== res.asset!.id)]);
+        }
+      } catch (err) {
+        console.error('Failed to auto-save frame asset:', err);
+      }
     };
     reader.readAsDataURL(file);
   };
 
   // Upload custom logo PNG/JPG
-  const handleUploadLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadLogo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -297,15 +365,31 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     }
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const base64 = event.target?.result as string;
       handleKopChange({
         ...kopConfig,
         logo: {
           ...kopConfig.logo,
+          enabled: true,
           assetUrl: base64,
         },
       });
+
+      // Auto-save to reusable library
+      try {
+        const formData = new FormData();
+        const baseName = file.name.replace(/\.[^/.]+$/, '') || 'Logo Kop Surat';
+        formData.append('name', baseName);
+        formData.append('category', 'LOGO');
+        formData.append('file', file);
+        const res = await uploadDocumentAssetAction(formData);
+        if (res.success && res.asset) {
+          setExistingLogos((prev) => [res.asset!, ...prev.filter((a) => a.id !== res.asset!.id)]);
+        }
+      } catch (err) {
+        console.error('Failed to auto-save logo asset:', err);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -340,6 +424,195 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
       });
     };
     reader.readAsDataURL(file);
+  };
+
+  // ==========================================
+  // FLEXIBLE TABLE BUILDER HELPERS & PRESETS
+  // ==========================================
+  const activeTableColumns: TableColumnConfig[] =
+    layoutConfig.tableColumns && layoutConfig.tableColumns.length > 0
+      ? layoutConfig.tableColumns
+      : [
+          { key: 'no', label: 'No', widthPercent: 8, align: 'center' },
+          { key: 'nip', label: 'NIP', widthPercent: 22, align: 'center', dynamicToken: '{person_nip}' },
+          { key: 'name', label: 'Nama Lengkap', widthPercent: 42, align: 'left', dynamicToken: '{person_name}' },
+          { key: 'role', label: 'Tugas / Posisi', widthPercent: 28, align: 'left', dynamicToken: '{person_role}' },
+        ];
+
+  const handleUpdateTableColumns = (newCols: TableColumnConfig[]) => {
+    setLayoutConfig((prev) => ({
+      ...prev,
+      tableColumns: newCols,
+    }));
+  };
+
+  const handleAddTableColumn = () => {
+    const newKey = `col_${Date.now().toString().slice(-4)}`;
+    const newCol: TableColumnConfig = {
+      key: newKey,
+      label: 'Kolom Baru',
+      widthPercent: 20,
+      align: 'left',
+      isManual: true,
+    };
+    const updated = [...activeTableColumns, newCol];
+    handleUpdateTableColumns(updated);
+  };
+
+  const handleDeleteTableColumn = (index: number) => {
+    if (activeTableColumns.length <= 1) {
+      alert('Tabel minimal harus memiliki 1 kolom.');
+      return;
+    }
+    const updated = activeTableColumns.filter((_, i) => i !== index);
+    handleUpdateTableColumns(updated);
+  };
+
+  const handleEditTableColumn = (index: number, updates: Partial<TableColumnConfig>) => {
+    const updated = [...activeTableColumns];
+    updated[index] = { ...updated[index], ...updates };
+    handleUpdateTableColumns(updated);
+  };
+
+  const handleMoveTableColumn = (index: number, direction: 'UP' | 'DOWN') => {
+    if (
+      (direction === 'UP' && index === 0) ||
+      (direction === 'DOWN' && index === activeTableColumns.length - 1)
+    )
+      return;
+
+    const targetIdx = direction === 'UP' ? index - 1 : index + 1;
+    const updated = [...activeTableColumns];
+    const temp = updated[index];
+    updated[index] = updated[targetIdx];
+    updated[targetIdx] = temp;
+    handleUpdateTableColumns(updated);
+  };
+
+  const handleBalanceColumnWidths = () => {
+    const count = activeTableColumns.length;
+    if (count === 0) return;
+    const hasNo = activeTableColumns.some((c) => c.key === 'no');
+    if (hasNo && count > 1) {
+      const remainingWidth = 92;
+      const equalShare = Math.floor(remainingWidth / (count - 1));
+      const remainder = remainingWidth - equalShare * (count - 1);
+      const updated = activeTableColumns.map((c, i) => {
+        if (c.key === 'no') return { ...c, widthPercent: 8 };
+        if (i === activeTableColumns.length - 1) {
+          return { ...c, widthPercent: equalShare + remainder };
+        }
+        return { ...c, widthPercent: equalShare };
+      });
+      handleUpdateTableColumns(updated);
+    } else {
+      const equalShare = Math.floor(100 / count);
+      const remainder = 100 - equalShare * count;
+      const updated = activeTableColumns.map((c, i) => {
+        if (i === activeTableColumns.length - 1) {
+          return { ...c, widthPercent: equalShare + remainder };
+        }
+        return { ...c, widthPercent: equalShare };
+      });
+      handleUpdateTableColumns(updated);
+    }
+  };
+
+  const handleApplyTablePreset = (presetType: 'OJT' | 'KRU' | 'INVENTARIS' | 'PENILAIAN') => {
+    if (presetType === 'OJT') {
+      const cols: TableColumnConfig[] = [
+        { key: 'no', label: 'No', widthPercent: 6, align: 'center' },
+        { key: 'name', label: 'Nama Lengkap', widthPercent: 28, align: 'left', dynamicToken: '{person_name}' },
+        { key: 'campus', label: 'Asal Kampus / Institusi', widthPercent: 28, align: 'left', dynamicToken: '{person_campus}' },
+        { key: 'division', label: 'Divisi Penempatan', widthPercent: 22, align: 'left', dynamicToken: '{person_division}' },
+        { key: 'period', label: 'Periode', widthPercent: 16, align: 'center', dynamicToken: '{period}' },
+      ];
+      handleUpdateTableColumns(cols);
+      updateFieldValue('assignees', [
+        { no: 1, name: 'Aditya Pratama', campus: 'Universitas Indonesia', division: 'Event Production', period: 'Sep - Des 2026' },
+        { no: 2, name: 'Siti Nurhaliza', campus: 'Universitas BSI Jakarta', division: 'Creative & Design', period: 'Sep - Des 2026' },
+      ]);
+    } else if (presetType === 'KRU') {
+      const cols: TableColumnConfig[] = [
+        { key: 'no', label: 'No', widthPercent: 8, align: 'center' },
+        { key: 'nip', label: 'NIP / NIM', widthPercent: 22, align: 'center', dynamicToken: '{person_nip}' },
+        { key: 'name', label: 'Nama Lengkap', widthPercent: 40, align: 'left', dynamicToken: '{person_name}' },
+        { key: 'role', label: 'Tugas / Posisi', widthPercent: 30, align: 'left', dynamicToken: '{person_role}' },
+      ];
+      handleUpdateTableColumns(cols);
+      updateFieldValue('assignees', [
+        { no: 1, nip: '17250012', name: 'Rian Firmansyah', role: 'Stage Manager & Sound Lead' },
+        { no: 2, nip: '17250045', name: 'Dewi Anggraini', role: 'Show Director & Operator' },
+      ]);
+    } else if (presetType === 'INVENTARIS') {
+      const cols: TableColumnConfig[] = [
+        { key: 'no', label: 'No', widthPercent: 8, align: 'center' },
+        { key: 'item_name', label: 'Nama Barang / Peralatan', widthPercent: 36, align: 'left' },
+        { key: 'spec', label: 'Spesifikasi / Serial', widthPercent: 26, align: 'left' },
+        { key: 'qty', label: 'Jumlah', widthPercent: 12, align: 'center' },
+        { key: 'notes', label: 'Keterangan', widthPercent: 18, align: 'left' },
+      ];
+      handleUpdateTableColumns(cols);
+      updateFieldValue('assignees', [
+        { no: 1, item_name: 'Wireless Microphone Shure', spec: 'SLXD24 / SM58', qty: '4 Unit', notes: 'Kondisi Baik' },
+        { no: 2, item_name: 'Digital Mixer Yamaha', spec: 'TF5 32-Channel', qty: '1 Unit', notes: 'Main Console' },
+      ]);
+    } else if (presetType === 'PENILAIAN') {
+      const cols: TableColumnConfig[] = [
+        { key: 'no', label: 'No', widthPercent: 8, align: 'center' },
+        { key: 'name', label: 'Nama Peserta', widthPercent: 32, align: 'left', dynamicToken: '{person_name}' },
+        { key: 'division', label: 'Divisi / Unit', widthPercent: 26, align: 'left', dynamicToken: '{person_division}' },
+        { key: 'score', label: 'Nilai Akhir', widthPercent: 16, align: 'center' },
+        { key: 'status', label: 'Predikat / Status', widthPercent: 18, align: 'center' },
+      ];
+      handleUpdateTableColumns(cols);
+      updateFieldValue('assignees', [
+        { no: 1, name: 'Aditya Pratama', division: 'Event Production', score: '92.5', status: 'Sangat Memuaskan (A)' },
+        { no: 2, name: 'Siti Nurhaliza', division: 'Creative & Design', score: '88.0', status: 'Memuaskan (B+)' },
+      ]);
+    }
+  };
+
+  const handleAddBlankRow = () => {
+    const currentList = Array.isArray(previewData.assignees) ? [...previewData.assignees] : [];
+    const newRow: Record<string, any> = {
+      no: currentList.length + 1,
+    };
+    activeTableColumns.forEach((c) => {
+      if (c.key !== 'no') {
+        newRow[c.key] = '';
+      }
+    });
+    updateFieldValue('assignees', [...currentList, newRow]);
+  };
+
+  const handleGenerateSampleRows = () => {
+    const currentList = Array.isArray(previewData.assignees) ? [...previewData.assignees] : [];
+    const sampleNames = ['Rian Pratama', 'Siti Rahmawati', 'Budi Santoso', 'Anisa Rahayu', 'Fajar Ramadhan'];
+    const sampleCampuses = ['Universitas Indonesia', 'Institut Teknologi Bandung', 'Universitas Gadjah Mada', 'Universitas BSI Jakarta', 'Universitas Bina Nusantara'];
+    const sampleDivs = ['Event Production', 'Creative & Design', 'Marketing & Social Media', 'Audio Visual & Broadcast', 'Logistics & Operational'];
+    const idx = currentList.length % sampleNames.length;
+
+    const newRow: Record<string, any> = {
+      no: currentList.length + 1,
+    };
+
+    activeTableColumns.forEach((col) => {
+      const k = col.key.toLowerCase();
+      if (k === 'name' || k === 'nama') newRow[col.key] = sampleNames[idx];
+      else if (k === 'campus' || k === 'kampus' || k === 'institusi') newRow[col.key] = sampleCampuses[idx];
+      else if (k === 'division' || k === 'divisi' || k === 'unit') newRow[col.key] = sampleDivs[idx];
+      else if (k === 'period' || k === 'periode') newRow[col.key] = 'Sep - Des 2026';
+      else if (k === 'nip' || k === 'nim') newRow[col.key] = `1725${Math.floor(1000 + Math.random() * 9000)}`;
+      else if (k === 'role' || k === 'tugas' || k === 'jabatan') newRow[col.key] = 'Koordinator / Officer';
+      else if (k === 'score' || k === 'nilai') newRow[col.key] = '90.0';
+      else if (k === 'status' || k === 'predikat') newRow[col.key] = 'Lulus / Sangat Baik';
+      else if (k === 'qty' || k === 'jumlah') newRow[col.key] = '1 Unit';
+      else if (col.dynamicToken) newRow[col.key] = col.dynamicToken;
+      else newRow[col.key] = '';
+    });
+
+    updateFieldValue('assignees', [...currentList, newRow]);
   };
 
   // Custom Text element handlers for Kop Surat (Website, Alamat, No SK, etc.)
@@ -577,8 +850,8 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                 ✨ <strong>Drag &amp; Drop Interaktif:</strong> Klik &amp; geser <strong>Logo</strong>, <strong>Judul Surat</strong>, atau <strong>Teks Tambahan</strong> langsung pada Canvas A4 di sebelah kanan!
               </div>
 
-              {/* 1. Upload Custom Frame Background */}
-              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2">
+              {/* 1. Upload / Select Frame Background */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                     <span>🖼️</span> Frame Background Dokumen (PNG/JPG)
@@ -589,26 +862,67 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                       onClick={() => handleKopChange({ ...kopConfig, frameAssetUrl: '' })}
                       className="text-[10px] text-red-500 hover:underline font-bold"
                     >
-                      Hapus Frame Custom
+                      Hapus Frame
                     </button>
                   )}
                 </div>
 
-                <input
-                  type="file"
-                  accept="image/png, image/jpeg, image/webp"
-                  onChange={handleUploadFrame}
-                  className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer"
-                />
+                {/* Active Frame Preview if any */}
+                {kopConfig.frameAssetUrl ? (
+                  <div className="flex items-center gap-3 p-2 bg-white dark:bg-zinc-900 rounded-lg border border-purple-200 dark:border-purple-800/60">
+                    <img
+                      src={kopConfig.frameAssetUrl}
+                      alt="Active Frame"
+                      className="w-12 h-16 object-contain border border-zinc-200 dark:border-zinc-700 rounded bg-zinc-50 dark:bg-zinc-800"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[10px] bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-bold px-1.5 py-0.5 rounded">
+                        Frame Aktif
+                      </span>
+                      <p className="text-[11px] text-zinc-500 truncate mt-1">
+                        Frame terpasang pada latar dokumen A4.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-zinc-500">
+                    Belum ada background frame custom (menggunakan layout putih polos).
+                  </p>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssetModalCategory('FRAME');
+                      setIsAssetModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-100 text-xs font-bold transition-all flex items-center gap-1.5"
+                  >
+                    <span>📚</span>
+                    <span>Pilih dari Library ({existingFrames.length})</span>
+                  </button>
+
+                  <label className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5">
+                    <span>📤</span>
+                    <span>Upload Baru</span>
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/webp"
+                      onChange={handleUploadFrame}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
 
-              {/* 2. Upload Custom Logo */}
-              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2">
+              {/* 2. Upload / Select Custom Logo */}
+              <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
                     <span>👑</span> Logo Kop Surat
                   </label>
-                  {kopConfig.logo.assetUrl && (
+                  {kopConfig.logo.assetUrl ? (
                     <button
                       type="button"
                       onClick={() =>
@@ -621,15 +935,56 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                     >
                       Reset Logo Vektor
                     </button>
-                  )}
+                  ) : null}
                 </div>
 
-                <input
-                  type="file"
-                  accept="image/png, image/jpeg, image/svg+xml, image/webp"
-                  onChange={handleUploadLogo}
-                  className="w-full text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-purple-600 file:text-white hover:file:bg-purple-700 cursor-pointer"
-                />
+                {/* Active Logo Preview */}
+                <div className="flex items-center gap-3 p-2 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700">
+                  {kopConfig.logo.assetUrl ? (
+                    <img
+                      src={kopConfig.logo.assetUrl}
+                      alt="Logo Kop"
+                      className="w-16 h-10 object-contain border border-zinc-200 dark:border-zinc-700 rounded bg-white"
+                    />
+                  ) : (
+                    <div className="w-16 h-10 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded flex items-center justify-center text-[10px] font-bold text-purple-700">
+                      KIAN
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 font-bold px-1.5 py-0.5 rounded">
+                      {kopConfig.logo.assetUrl ? 'Logo Custom Aktif' : 'Logo Vektor Bawaan'}
+                    </span>
+                    <p className="text-[11px] text-zinc-500 truncate mt-1">
+                      {kopConfig.logo.assetUrl ? 'Menggunakan gambar logo yang diupload' : 'Format vektor default KIAN Troopers'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssetModalCategory('LOGO');
+                      setIsAssetModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-100 text-xs font-bold transition-all flex items-center gap-1.5"
+                  >
+                    <span>📚</span>
+                    <span>Pilih dari Library ({existingLogos.length})</span>
+                  </button>
+
+                  <label className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5">
+                    <span>📤</span>
+                    <span>Upload Baru</span>
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                      onChange={handleUploadLogo}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
 
               {/* 3. ADD CUSTOM TEXT BLOCKS (ALAMAT, WEBSITE, NO TELP, DLL) */}
@@ -1617,85 +1972,347 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                         </div>
                       )}
 
-                      {/* 6. ASSIGNEE TABLE */}
-                      {sec.type === 'ASSIGNEE_TABLE' && (
-                        <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <label className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200">
-                              Daftar Personil Default ({((previewData.assignees as any[]) || []).length} Orang)
-                            </label>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const currentList = Array.isArray(previewData.assignees) ? [...previewData.assignees] : [];
-                                const nextList = [
-                                  ...currentList,
-                                  {
-                                    no: currentList.length + 1,
-                                    nip: `1725${String(Math.floor(Math.random() * 9000) + 1000)}`,
-                                    name: 'Nama Personil Baru',
-                                    role: 'Kru / Operator',
-                                  },
-                                ];
-                                updateFieldValue('assignees', nextList);
-                              }}
-                              className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-600 text-white hover:bg-purple-700"
-                            >
-                              + Tambah Personil
-                            </button>
+                      {/* 6. ASSIGNEE & CUSTOM TABLE BUILDER */}
+                      {(sec.type === 'ASSIGNEE_TABLE' || sec.type === 'CUSTOM_TABLE') && (
+                        <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
+                          {/* Header & Sub-Tab Switcher */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-700/60 pb-2.5">
+                            <div>
+                              <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                                <span>📊</span> Builder Tabel Fleksibel
+                              </span>
+                              <p className="text-[10.5px] text-zinc-500">
+                                Kustom nama kategori/kolom, atur auto-generate dinamis, atau input manual (bisa dikosongkan).
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-1 bg-zinc-200/70 dark:bg-zinc-900/80 p-0.5 rounded-lg text-[10.5px] font-bold">
+                              <button
+                                type="button"
+                                onClick={() => setTableEditorSubTab('COLUMNS')}
+                                className={`px-2.5 py-1 rounded-md transition-all ${
+                                  tableEditorSubTab === 'COLUMNS'
+                                    ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-xs'
+                                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                                }`}
+                              >
+                                📐 Struktur Kolom ({activeTableColumns.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setTableEditorSubTab('ROWS')}
+                                className={`px-2.5 py-1 rounded-md transition-all ${
+                                  tableEditorSubTab === 'ROWS'
+                                    ? 'bg-white dark:bg-zinc-800 text-purple-600 dark:text-purple-400 shadow-xs'
+                                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                                }`}
+                              >
+                                📝 Data Baris ({((previewData.assignees as any[]) || []).length})
+                              </button>
+                            </div>
                           </div>
 
-                          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                            {(((previewData.assignees as any[]) || []).map((row: any, rIdx: number) => (
-                              <div key={rIdx} className="flex items-center gap-1.5 p-1 bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs">
-                                <span className="w-5 text-center font-bold text-zinc-400 text-[10px]">{rIdx + 1}</span>
-                                <input
-                                  type="text"
-                                  value={row.nip || ''}
-                                  onChange={(e) => {
-                                    const list = [...previewData.assignees];
-                                    list[rIdx] = { ...list[rIdx], nip: e.target.value };
-                                    updateFieldValue('assignees', list);
-                                  }}
-                                  className="w-20 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 font-mono text-[10px]"
-                                  placeholder="NIP"
-                                />
-                                <input
-                                  type="text"
-                                  value={row.name || ''}
-                                  onChange={(e) => {
-                                    const list = [...previewData.assignees];
-                                    list[rIdx] = { ...list[rIdx], name: e.target.value };
-                                    updateFieldValue('assignees', list);
-                                  }}
-                                  className="flex-1 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 text-[10.5px] font-semibold"
-                                  placeholder="Nama Personil"
-                                />
-                                <input
-                                  type="text"
-                                  value={row.role || ''}
-                                  onChange={(e) => {
-                                    const list = [...previewData.assignees];
-                                    list[rIdx] = { ...list[rIdx], role: e.target.value };
-                                    updateFieldValue('assignees', list);
-                                  }}
-                                  className="w-24 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 text-[10px]"
-                                  placeholder="Tugas/Peran"
-                                />
+                          {/* SUBTAB 1: STRUKTUR KOLOM & KATEGORI */}
+                          {tableEditorSubTab === 'COLUMNS' && (
+                            <div className="space-y-3">
+                              {/* Quick Presets */}
+                              <div className="p-2.5 bg-purple-50/50 dark:bg-purple-950/30 rounded-xl border border-purple-200/70 dark:border-purple-800/40 space-y-1.5">
+                                <span className="text-[10px] font-bold text-purple-700 dark:text-purple-300 block">
+                                  ⚡ Preset Format Kolom Cepat:
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {[
+                                    { key: 'OJT', label: '🎓 Magang / OJT (5 Kolom)' },
+                                    { key: 'KRU', label: '👥 Kru / Surat Tugas (4 Kolom)' },
+                                    { key: 'INVENTARIS', label: '📦 Inventaris / Barang (5 Kolom)' },
+                                    { key: 'PENILAIAN', label: '📊 Penilaian & Evaluasi (5 Kolom)' },
+                                  ].map((p) => (
+                                    <button
+                                      key={p.key}
+                                      type="button"
+                                      onClick={() => handleApplyTablePreset(p.key as any)}
+                                      className="text-[10px] font-bold px-2 py-1 rounded-lg bg-white dark:bg-zinc-900 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-100 transition-all shadow-2xs"
+                                    >
+                                      {p.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Columns List */}
+                              <div className="space-y-2">
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
+                                  Daftar Kolom &amp; Konfigurasi ({activeTableColumns.length} Kolom)
+                                </span>
+
+                                {activeTableColumns.map((col, colIdx) => (
+                                  <div
+                                    key={col.key || colIdx}
+                                    className="p-2.5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-2 text-xs shadow-2xs"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                        <span className="w-5 text-center font-mono font-bold text-purple-600 bg-purple-50 dark:bg-purple-950 px-1 py-0.5 rounded text-[10px]">
+                                          #{colIdx + 1}
+                                        </span>
+                                        <input
+                                          type="text"
+                                          value={col.label}
+                                          onChange={(e) =>
+                                            handleEditTableColumn(colIdx, { label: e.target.value })
+                                          }
+                                          className="font-bold text-zinc-900 dark:text-zinc-100 bg-transparent border-b border-dashed border-zinc-300 dark:border-zinc-700 focus:border-purple-500 px-1 py-0.5 text-xs flex-1"
+                                          placeholder="Nama Kategori / Header Kolom"
+                                        />
+                                      </div>
+
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleMoveTableColumn(colIdx, 'UP')}
+                                          disabled={colIdx === 0}
+                                          className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-30 text-[10px]"
+                                          title="Geser Kiri / Atas"
+                                        >
+                                          ▲
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleMoveTableColumn(colIdx, 'DOWN')}
+                                          disabled={colIdx === activeTableColumns.length - 1}
+                                          className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 disabled:opacity-30 text-[10px]"
+                                          title="Geser Kanan / Bawah"
+                                        >
+                                          ▼
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteTableColumn(colIdx)}
+                                          className="p-1 text-red-500 hover:text-red-700 text-xs ml-1"
+                                          title="Hapus Kolom"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Column Settings Grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                                      <div>
+                                        <label className="text-[9.5px] font-bold text-zinc-500 block mb-0.5">
+                                          Field Key (Data):
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={col.key}
+                                          onChange={(e) =>
+                                            handleEditTableColumn(colIdx, {
+                                              key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''),
+                                            })
+                                          }
+                                          disabled={col.key === 'no'}
+                                          className="w-full px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 font-mono text-[10.5px] disabled:opacity-60"
+                                          placeholder="key_name"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="text-[9.5px] font-bold text-zinc-500 block mb-0.5">
+                                          Lebar Kolom ({col.widthPercent}%):
+                                        </label>
+                                        <input
+                                          type="number"
+                                          min={3}
+                                          max={90}
+                                          value={col.widthPercent}
+                                          onChange={(e) =>
+                                            handleEditTableColumn(colIdx, {
+                                              widthPercent: Number(e.target.value) || 10,
+                                            })
+                                          }
+                                          className="w-full px-2 py-0.5 rounded border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[10.5px]"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="text-[9.5px] font-bold text-zinc-500 block mb-0.5">
+                                          Perataan Teks:
+                                        </label>
+                                        <div className="flex items-center gap-1">
+                                          {(['left', 'center', 'right'] as const).map((aln) => (
+                                            <button
+                                              key={aln}
+                                              type="button"
+                                              onClick={() => handleEditTableColumn(colIdx, { align: aln })}
+                                              className={`flex-1 py-0.5 rounded text-[10px] font-bold capitalize ${
+                                                col.align === aln
+                                                  ? 'bg-purple-600 text-white'
+                                                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+                                              }`}
+                                            >
+                                              {aln === 'left' ? 'Kiri' : aln === 'center' ? 'Tengah' : 'Kanan'}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Dynamic content generation token selector / manual badge */}
+                                    {col.key !== 'no' && (
+                                      <div className="pt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+                                        <span className="text-zinc-500">Auto-isi / Tag:</span>
+                                        {[
+                                          { token: '{person_name}', label: 'Nama' },
+                                          { token: '{person_campus}', label: 'Kampus' },
+                                          { token: '{person_division}', label: 'Divisi' },
+                                          { token: '{period}', label: 'Periode' },
+                                          { token: '{person_nip}', label: 'NIP' },
+                                          { token: '{person_role}', label: 'Jabatan' },
+                                        ].map((t) => (
+                                          <button
+                                            key={t.token}
+                                            type="button"
+                                            onClick={() =>
+                                              handleEditTableColumn(colIdx, {
+                                                dynamicToken: col.dynamicToken === t.token ? undefined : t.token,
+                                              })
+                                            }
+                                            className={`px-1.5 py-0.5 rounded font-mono font-bold transition-all ${
+                                              col.dynamicToken === t.token
+                                                ? 'bg-purple-600 text-white'
+                                                : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-purple-50'
+                                            }`}
+                                          >
+                                            {t.token}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const list = previewData.assignees.filter((_: any, i: number) => i !== rIdx);
-                                    updateFieldValue('assignees', list);
-                                  }}
-                                  className="text-red-500 hover:text-red-700 p-0.5 text-xs"
-                                  title="Hapus"
+                                  onClick={handleAddTableColumn}
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-bold hover:opacity-90 transition-all flex items-center gap-1"
                                 >
-                                  ✕
+                                  <span>+</span> Tambah Kolom Baru
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={handleBalanceColumnWidths}
+                                  className="px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-xs font-bold hover:bg-zinc-200 transition-all flex items-center gap-1"
+                                >
+                                  <span>⚖️</span> Seimbangkan Lebar (100%)
                                 </button>
                               </div>
-                            )))}
-                          </div>
+                            </div>
+                          )}
+
+                          {/* SUBTAB 2: DATA BARIS & PREVIEW */}
+                          {tableEditorSubTab === 'ROWS' && (
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                                  Daftar Baris Contoh ({((previewData.assignees as any[]) || []).length} Baris)
+                                </span>
+
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={handleGenerateSampleRows}
+                                    className="px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 font-bold text-[10.5px] hover:bg-purple-100 transition-all flex items-center gap-1"
+                                  >
+                                    <span>⚡</span> Auto-Generate Contoh
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleAddBlankRow}
+                                    className="px-2.5 py-1 rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-[10.5px] hover:opacity-90 transition-all"
+                                  >
+                                    + Tambah Baris Manual
+                                  </button>
+                                </div>
+                              </div>
+
+                              <p className="text-[10.5px] text-zinc-500">
+                                ℹ️ Isian kolom manual dapat dikosongkan jika baris belum memiliki data tetap.
+                              </p>
+
+                              {/* Interactive Rows Editor with Dynamic Columns */}
+                              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                {(((previewData.assignees as any[]) || []).length === 0 ? (
+                                  <div className="p-4 text-center text-zinc-400 italic text-xs border border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl">
+                                    Tabel masih kosong. Klik &quot;+ Tambah Baris Manual&quot; atau &quot;⚡ Auto-Generate Contoh&quot;.
+                                  </div>
+                                ) : (
+                                  ((previewData.assignees as any[]) || []).map((row: any, rIdx: number) => (
+                                    <div
+                                      key={rIdx}
+                                      className="p-2.5 bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700/80 space-y-2 shadow-2xs"
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-mono font-bold text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                                          Baris #{rIdx + 1}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const list = previewData.assignees.filter((_: any, i: number) => i !== rIdx);
+                                            updateFieldValue('assignees', list);
+                                          }}
+                                          className="text-red-500 hover:text-red-700 text-xs font-bold"
+                                          title="Hapus Baris Ini"
+                                        >
+                                          ✕ Hapus Baris
+                                        </button>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {activeTableColumns
+                                          .filter((c) => c.key !== 'no')
+                                          .map((col) => (
+                                            <div key={col.key}>
+                                              <label className="text-[9.5px] font-bold text-zinc-500 block mb-0.5 truncate">
+                                                {col.label} ({col.key}):
+                                              </label>
+                                              <input
+                                                type="text"
+                                                value={row[col.key] || ''}
+                                                onChange={(e) => {
+                                                  const list = [...previewData.assignees];
+                                                  list[rIdx] = { ...list[rIdx], [col.key]: e.target.value };
+                                                  updateFieldValue('assignees', list);
+                                                }}
+                                                className={`w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs ${
+                                                  col.key === 'name' ? 'font-semibold' : col.key === 'nip' ? 'font-mono' : ''
+                                                }`}
+                                                placeholder={`Bisa dikosongkan atau ketik ${col.label}...`}
+                                              />
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </div>
+                                  ))
+                                ))}
+                              </div>
+
+                              {(((previewData.assignees as any[]) || []).length > 0 && (
+                                <div className="pt-1 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateFieldValue('assignees', [])}
+                                    className="text-[10px] text-red-500 hover:underline font-bold"
+                                  >
+                                    🗑️ Kosongkan Seluruh Baris
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -2592,6 +3209,163 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           handleTypesUpdated();
         }}
       />
+
+      {/* Asset Library Picker Modal (Frame & Logo) */}
+      {isAssetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 w-full max-w-2xl shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                  <span>{assetModalCategory === 'FRAME' ? '🖼️' : '👑'}</span>
+                  <span>
+                    {assetModalCategory === 'FRAME'
+                      ? 'Pilih Background Frame dari Library'
+                      : 'Pilih Logo Kop Surat dari Library'}
+                  </span>
+                </h3>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Gunakan aset yang sudah pernah diupload sebelumnya untuk template ini.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAssetModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-sm font-bold p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Asset Grid */}
+            <div className="flex-1 overflow-y-auto min-h-[220px] max-h-[400px] pr-1">
+              {isLoadingAssets ? (
+                <div className="py-12 text-center space-y-2">
+                  <div className="w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs text-zinc-500">Memuat library aset...</p>
+                </div>
+              ) : (
+                (() => {
+                  const assets = assetModalCategory === 'FRAME' ? existingFrames : existingLogos;
+                  const currentSelectedUrl =
+                    assetModalCategory === 'FRAME'
+                      ? kopConfig.frameAssetUrl
+                      : kopConfig.logo.assetUrl;
+
+                  if (assets.length === 0) {
+                    return (
+                      <div className="py-12 text-center space-y-3">
+                        <div className="text-3xl">📂</div>
+                        <p className="text-xs text-zinc-500 font-medium">
+                          Belum ada aset {assetModalCategory === 'FRAME' ? 'Frame Background' : 'Logo Kop'} yang tersimpan di library.
+                        </p>
+                        <label className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 cursor-pointer shadow-xs">
+                          <span>📤</span>
+                          <span>Upload {assetModalCategory === 'FRAME' ? 'Frame' : 'Logo'} Sekarang</span>
+                          <input
+                            type="file"
+                            accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                            onChange={(e) => {
+                              if (assetModalCategory === 'FRAME') handleUploadFrame(e);
+                              else handleUploadLogo(e);
+                              setIsAssetModalOpen(false);
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {assets.map((ast) => {
+                        const isSelected = currentSelectedUrl === ast.asset_url;
+                        return (
+                          <div
+                            key={ast.id}
+                            onClick={() => handleSelectExistingAsset(assetModalCategory, ast.asset_url)}
+                            className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between space-y-2 group ${
+                              isSelected
+                                ? 'bg-purple-50/80 dark:bg-purple-950/40 border-purple-500 dark:border-purple-600 ring-2 ring-purple-500/30 shadow-xs'
+                                : 'bg-zinc-50 dark:bg-zinc-800/60 border-zinc-200 dark:border-zinc-700 hover:border-purple-400 dark:hover:border-purple-600 hover:bg-white dark:hover:bg-zinc-800'
+                            }`}
+                          >
+                            <div className="w-full h-28 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700/60 flex items-center justify-center p-2 overflow-hidden">
+                              <img
+                                src={ast.asset_url}
+                                alt={ast.name}
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between gap-1">
+                                <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate flex-1">
+                                  {ast.name}
+                                </p>
+                                {isSelected && (
+                                  <span className="text-[10px] bg-purple-600 text-white font-bold px-1.5 py-0.2 rounded-full">
+                                    ✓ Aktif
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                                {new Date(ast.created_at * 1000).toLocaleDateString('id-ID', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric',
+                                })}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              className={`w-full py-1 rounded-lg text-xs font-bold transition-all ${
+                                isSelected
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-zinc-200 dark:bg-zinc-700 group-hover:bg-purple-600 group-hover:text-white text-zinc-700 dark:text-zinc-300'
+                              }`}
+                            >
+                              {isSelected ? 'Sedang Digunakan' : 'Gunakan Aset Ini'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="pt-2 border-t border-zinc-200 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2">
+              <label className="px-3 py-1.5 rounded-xl border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-300 transition-all cursor-pointer flex items-center gap-1.5">
+                <span>📤</span>
+                <span>Upload File Baru ke Library</span>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                  onChange={(e) => {
+                    if (assetModalCategory === 'FRAME') handleUploadFrame(e);
+                    else handleUploadLogo(e);
+                    setIsAssetModalOpen(false);
+                  }}
+                  className="hidden"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setIsAssetModalOpen(false)}
+                className="px-4 py-1.5 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-bold hover:opacity-90"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

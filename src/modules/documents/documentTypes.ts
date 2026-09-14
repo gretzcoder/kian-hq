@@ -69,6 +69,9 @@ export interface TableColumnConfig {
   label: string;
   widthPercent: number;
   align: 'left' | 'center' | 'right';
+  dynamicToken?: string;
+  placeholder?: string;
+  isManual?: boolean;
 }
 
 export interface FlowSectionConfig {

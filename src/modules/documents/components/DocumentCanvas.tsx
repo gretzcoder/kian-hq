@@ -799,7 +799,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                                       : 'text-left'
                                   } ${col.key === 'name' ? 'font-medium' : col.key === 'nip' ? 'font-mono' : ''}`}
                                 >
-                                  {cellVal !== undefined && cellVal !== null && cellVal !== '' ? cellVal : '-'}
+                                  {cellVal !== undefined && cellVal !== null ? cellVal : ''}
                                 </td>
                               );
                             })}
@@ -1129,7 +1129,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                                       : 'text-left'
                                   } ${col.key === 'name' ? 'font-medium' : col.key === 'nip' ? 'font-mono' : ''}`}
                                 >
-                                  {cellVal !== undefined && cellVal !== null && cellVal !== '' ? cellVal : '-'}
+                                  {cellVal !== undefined && cellVal !== null ? cellVal : ''}
                                 </td>
                               );
                             })}

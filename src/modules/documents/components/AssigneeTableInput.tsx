@@ -104,12 +104,19 @@ export const AssigneeTableInput: React.FC<AssigneeTableInputProps> = ({
   };
 
   const handleSelectTrooper = (trooper: any) => {
-    const newRow: AssigneeRow = {
+    const newRow: any = {
       no: rows.length + 1,
-      nip: trooper.nip || '',
-      name: trooper.name,
-      role: trooper.department || trooper.roleTitle || 'Trooper',
     };
+    inputColumns.forEach((col) => {
+      const k = col.key.toLowerCase();
+      if (k === 'name' || k === 'nama') newRow[col.key] = trooper.name || '';
+      else if (k === 'nip' || k === 'nim' || k === 'nomor_induk') newRow[col.key] = trooper.nip || '';
+      else if (k === 'role' || k === 'tugas' || k === 'posisi' || k === 'jabatan') newRow[col.key] = trooper.roleTitle || trooper.department || 'Trooper';
+      else if (k === 'campus' || k === 'kampus' || k === 'institusi' || k === 'universitas') newRow[col.key] = trooper.campus || trooper.university || 'Universitas Indonesia';
+      else if (k === 'division' || k === 'divisi' || k === 'department' || k === 'unit') newRow[col.key] = trooper.department || 'Event Production';
+      else if (k === 'period' || k === 'periode') newRow[col.key] = 'Sep - Des 2026';
+      else newRow[col.key] = '';
+    });
     updateParent([...rows, newRow]);
   };
 
