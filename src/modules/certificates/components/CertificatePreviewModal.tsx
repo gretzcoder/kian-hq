@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import { CertificateItem, CertificateTemplate } from '../certificateTypes';
 import { CertificateCardView } from './CertificateCardView';
 
@@ -23,7 +21,7 @@ export const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = (
   onPublishToggle,
   isAdmin = false,
 }) => {
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(certificate.template_id);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(certificate.template_id || '');
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
   if (!isOpen) return null;
@@ -36,6 +34,11 @@ export const CertificatePreviewModal: React.FC<CertificatePreviewModalProps> = (
 
     try {
       setIsExporting(true);
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
       const canvas = await html2canvas(printElement, {
         scale: 2,
         useCORS: true,

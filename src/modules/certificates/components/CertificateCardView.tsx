@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import QRCode from 'qrcode';
 import { CertificateItem, CertificateTemplate } from '../certificateTypes';
 
 interface CertificateCardViewProps {
@@ -43,16 +42,19 @@ export const CertificateCardView: React.FC<CertificateCardViewProps> = ({
 
   useEffect(() => {
     let isMounted = true;
-    QRCode.toDataURL(verificationUrl, {
-      margin: 1,
-      width: 160,
-      color: {
-        dark: tpl.accent_color || '#eab308',
-        light: '#00000000', // transparent
-      },
-    })
+    import('qrcode')
+      .then(({ default: QRCode }) => {
+        return QRCode.toDataURL(verificationUrl, {
+          margin: 1,
+          width: 160,
+          color: {
+            dark: tpl.accent_color || '#eab308',
+            light: '#00000000', // transparent
+          },
+        });
+      })
       .then((url) => {
-        if (isMounted) setQrCodeUrl(url);
+        if (isMounted && url) setQrCodeUrl(url);
       })
       .catch((err) => {
         console.error('Failed to generate QR Code:', err);

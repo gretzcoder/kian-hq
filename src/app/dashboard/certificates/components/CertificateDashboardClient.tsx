@@ -16,8 +16,6 @@ import {
   publishCertificates,
   saveCertificateTemplate,
 } from '@/modules/certificates/certificateActions';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 
 interface CertificateDashboardClientProps {
   initialCertificates: CertificateItem[];
@@ -140,6 +138,11 @@ export default function CertificateDashboardClient({
 
     try {
       setIsDownloadingMyCert(true);
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
+
       const canvas = await html2canvas(printElement, {
         scale: 2,
         useCORS: true,

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useRef, useState, useEffect } from 'react';
-import QRCode from 'qrcode';
 import {
   AssigneeRow,
   CustomKopTextElement,
@@ -208,17 +207,20 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
   useEffect(() => {
     let isMounted = true;
-    QRCode.toDataURL(verificationUrl, {
-      margin: 1,
-      width: 200,
-      errorCorrectionLevel: 'H',
-      color: {
-        dark: '#002B7F',
-        light: '#FFFFFF',
-      },
-    })
+    import('qrcode')
+      .then(({ default: QRCode }) => {
+        return QRCode.toDataURL(verificationUrl, {
+          margin: 1,
+          width: 200,
+          errorCorrectionLevel: 'H',
+          color: {
+            dark: '#002B7F',
+            light: '#FFFFFF',
+          },
+        });
+      })
       .then((url) => {
-        if (isMounted) setQrCodeDataUrl(url);
+        if (isMounted && url) setQrCodeDataUrl(url);
       })
       .catch((err) => {
         console.error('Failed to generate document QR Code:', err);

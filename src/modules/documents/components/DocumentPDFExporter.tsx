@@ -1,8 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { toPng } from 'html-to-image';
-import { jsPDF } from 'jspdf';
 
 interface DocumentPDFExporterProps {
   documentNumber: string;
@@ -24,6 +22,12 @@ export const DocumentPDFExporter: React.FC<DocumentPDFExporterProps> = ({
   const handleExportPDF = async () => {
     setIsExporting(true);
     if (onExportStart) onExportStart();
+
+    // Dynamically load heavy export libraries only in the browser when user clicks
+    const [{ toPng }, { jsPDF }] = await Promise.all([
+      import('html-to-image'),
+      import('jspdf'),
+    ]);
 
     // Temporarily disable parent CSS transforms and scaling wrappers during snapshot for exact A4 bounding box
     const elementsToReset = document.querySelectorAll(
