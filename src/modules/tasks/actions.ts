@@ -915,15 +915,50 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
   const isOwner = assignment.user_id === session.userId;
   const canUpload = await hasPermission(session.userId, 'UPLOAD');
 
-  if (!isOwner && !canUpload) {
-    return { success: false, error: 'You can only submit results for your own assignments.' };
-  }
-
   try {
     const task = await db
-      .prepare('SELECT id, project_id, workspace_id, status, task_type, description, parent_task_id, start_at, deadline, extended_deadline FROM tasks WHERE id = ?')
+      .prepare('SELECT id, project_id, workspace_id, status, task_type, description, parent_task_id, start_at, deadline, extended_deadline, created_by FROM tasks WHERE id = ?')
       .bind(assignment.task_id)
-      .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; description: string | null; parent_task_id: string | null; start_at: number | null; deadline: number | null; extended_deadline: number | null } | null;
+      .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; description: string | null; parent_task_id: string | null; start_at: number | null; deadline: number | null; extended_deadline: number | null; created_by?: string | null } | null;
+
+    const workspaceId = task?.workspace_id || '';
+    const isLeader = workspaceId
+      ? (await db
+          .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+          .bind(workspaceId, session.userId)
+          .first()) !== null
+      : false;
+
+    const isMentor = workspaceId
+      ? (await db
+          .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
+          .bind(workspaceId, session.userId)
+          .first()) !== null
+      : false;
+
+    const ctx = await getSessionContext(session.userId);
+    const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+    const isTaskCreator = Boolean(task?.created_by && task.created_by === session.userId);
+
+    // Direct Brief Category Claim & Slot Validation
+    const effectiveCategory = (selectedCategory && selectedCategory.trim())
+      ? selectedCategory.trim()
+      : (assignment.assignment_role.startsWith('Kategori: ') ? assignment.assignment_role.replace('Kategori: ', '') : assignment.assignment_role);
+
+    let isAssignedToSlot = false;
+    let matchedSlot: any = null;
+    if (task?.description && (task.description.includes('[DIRECT_BRIEF]') || task.task_type === 'DIRECT_BRIEF')) {
+      const slots = parseSlotsFromDescription(task.description);
+      matchedSlot = slots.find(s => s.name.trim().toLowerCase() === effectiveCategory.toLowerCase());
+      if (matchedSlot?.assignedUserId === session.userId) {
+        isAssignedToSlot = true;
+      }
+    }
+
+    const canTakeOver = isOwner || isAssignedToSlot || isMentor || isCoordinator || isLeader || isTaskCreator || canUpload;
+    if (!canTakeOver) {
+      return { success: false, error: 'You can only submit results for your own assignments or tasks assigned to you.' };
+    }
 
     const nowMs = Date.now();
     if (task?.start_at && task.start_at > nowMs) {
@@ -948,31 +983,21 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
       }
     }
 
-    // Direct Brief Category Claim & Slot Validation
-    const effectiveCategory = (selectedCategory && selectedCategory.trim())
-      ? selectedCategory.trim()
-      : (assignment.assignment_role.startsWith('Kategori: ') ? assignment.assignment_role.replace('Kategori: ', '') : assignment.assignment_role);
+    if (matchedSlot) {
+      if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
+        return {
+          success: false,
+          error: `Slot output "${matchedSlot.name}" dialokasikan khusus untuk ${matchedSlot.assignedUserName || 'peserta lain'}.`,
+        };
+      }
 
-    if (task?.description && (task.description.includes('[DIRECT_BRIEF]') || task.task_type === 'DIRECT_BRIEF')) {
-      const slots = parseSlotsFromDescription(task.description);
-      const matchedSlot = slots.find(s => s.name.trim().toLowerCase() === effectiveCategory.toLowerCase());
-
-      if (matchedSlot) {
-        if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId) {
+      if (isFirstSubmission && matchedSlot.deadline) {
+        const slotDeadline = parseIndonesiaDate(matchedSlot.deadline) ?? new Date(matchedSlot.deadline).getTime();
+        if (slotDeadline && slotDeadline < nowMs) {
           return {
             success: false,
-            error: `Slot output "${matchedSlot.name}" dialokasikan khusus untuk ${matchedSlot.assignedUserName || 'peserta lain'}.`,
+            error: `Tenggat waktu (deadline) khusus slot "${matchedSlot.name}" telah berakhir.`,
           };
-        }
-
-        if (isFirstSubmission && matchedSlot.deadline) {
-          const slotDeadline = parseIndonesiaDate(matchedSlot.deadline) ?? new Date(matchedSlot.deadline).getTime();
-          if (slotDeadline && slotDeadline < nowMs) {
-            return {
-              success: false,
-              error: `Tenggat waktu (deadline) khusus slot "${matchedSlot.name}" telah berakhir.`,
-            };
-          }
         }
       }
     }
@@ -986,13 +1011,14 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
           JOIN users u ON ta.user_id = u.id
           WHERE ta.task_id = ?
             AND ta.id != ?
+            AND ta.user_id != ?
             AND (ta.assignment_role = ? OR ta.assignment_role = ?)
             AND (ta.result_url IS NOT NULL OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED', 'RESUBMITTED', 'SUBMITTED'))
         `)
-        .bind(assignment.task_id, assignmentId, cleanCat, `Kategori: ${cleanCat}`)
+        .bind(assignment.task_id, assignmentId, session.userId, cleanCat, `Kategori: ${cleanCat}`)
         .first() as { id: string; user_name: string } | null;
 
-      if (existingClaim) {
+      if (existingClaim && !isAssignedToSlot && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
         return {
           success: false,
           error: `Kategori output "${cleanCat}" sudah diambil oleh ${existingClaim.user_name || 'peserta lain'}. Silakan pilih kategori output lain yang masih tersedia.`,
@@ -1001,8 +1027,8 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
     }
 
     // Check OJT step prerequisites
-    const ojtCheck = await checkOJTPrerequisites(db, assignment.task_id, assignment.assignment_role, assignment.user_id);
-    if (!ojtCheck.allowed) {
+    const ojtCheck = await checkOJTPrerequisites(db, assignment.task_id, assignment.assignment_role, session.userId);
+    if (!ojtCheck.allowed && !isMentor && !isCoordinator) {
       return { success: false, error: ojtCheck.error };
     }
 
@@ -1013,25 +1039,6 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
 
     const now = Math.floor(Date.now() / 1000);
     const nextStatus = 'WAITING_REVIEW';
-
-    // Option A: If the submitter is Leader, Mentor, or Coordinator, auto-approve their own QC slot
-    const workspaceId = task?.workspace_id || '';
-    const isLeader = workspaceId
-      ? (await db
-          .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
-          .bind(workspaceId, session.userId)
-          .first()) !== null
-      : false;
-
-    const isMentor = workspaceId
-      ? (await db
-          .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
-          .bind(workspaceId, session.userId)
-          .first()) !== null
-      : false;
-
-    const ctx = await getSessionContext(session.userId);
-    const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
 
     const updatedRole = selectedCategory && selectedCategory.trim() ? selectedCategory.trim() : assignment.assignment_role;
 
@@ -1047,14 +1054,14 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
     await db
       .prepare(`
         UPDATE task_assignments
-        SET status = ?, result_url = ?, submitted_at = ?, revision_note = NULL,
+        SET user_id = ?, status = ?, result_url = ?, submitted_at = ?, revision_note = NULL,
             assignment_role = ?,
             lead_approved = CASE WHEN ? THEN 1 ELSE 0 END,
             mentor_approved = CASE WHEN ? THEN 1 ELSE 0 END,
             coordinator_approved = CASE WHEN ? THEN 1 ELSE 0 END
         WHERE id = ?
       `)
-      .bind(nextStatus, resultUrl.trim(), now, updatedRole, isLeader ? 1 : 0, isMentor ? 1 : 0, isCoordinator ? 1 : 0, assignmentId)
+      .bind(session.userId, nextStatus, resultUrl.trim(), now, updatedRole, isLeader ? 1 : 0, isMentor ? 1 : 0, isCoordinator ? 1 : 0, assignmentId)
       .run();
 
     // Auto-sync group members if task has group assignments
@@ -1125,9 +1132,9 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   const db = await getDB();
 
   const task = await db
-    .prepare('SELECT id, workspace_id, task_type, description, deadline, extended_deadline, start_at FROM tasks WHERE id = ?')
+    .prepare('SELECT id, workspace_id, task_type, description, deadline, extended_deadline, start_at, created_by FROM tasks WHERE id = ?')
     .bind(taskId)
-    .first() as { id: string; workspace_id: string | null; task_type: string; description: string | null; deadline: number | null; extended_deadline: number | null; start_at: number | null } | null;
+    .first() as { id: string; workspace_id: string | null; task_type: string; description: string | null; deadline: number | null; extended_deadline: number | null; start_at: number | null; created_by?: string | null } | null;
 
   if (!task) return { success: false, error: 'Tugas tidak ditemukan.' };
 
@@ -1184,12 +1191,31 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
 
   const isFirstSubmission = !assignment || (!assignment.submitted_at && (!assignment.result_url || assignment.result_url.trim() === ''));
 
+  const workspaceId = task.workspace_id || '';
+  const isLeader = workspaceId
+    ? (await db
+        .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
+        .bind(workspaceId, session.userId)
+        .first()) !== null
+    : false;
+
+  const isMentor = workspaceId
+    ? (await db
+        .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
+        .bind(workspaceId, session.userId)
+        .first()) !== null
+    : false;
+
+  const ctx = await getSessionContext(session.userId);
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+  const isTaskCreator = Boolean(task?.created_by && task.created_by === session.userId);
+
   if (cleanCat) {
     const slots = parseSlotsFromDescription(task.description);
     const matchedSlot = slots.find(s => s.name.replace(/^kategori:\s*/i, '').trim().toLowerCase() === cleanCatLower);
 
     if (matchedSlot) {
-      if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId) {
+      if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
         return {
           success: false,
           error: `Slot output "${matchedSlot.name}" dialokasikan khusus untuk ${matchedSlot.assignedUserName || 'peserta lain'}.`,
@@ -1209,18 +1235,25 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
 
     const existingClaim = await db
       .prepare(`
-        SELECT ta.id, u.name as user_name
+        SELECT ta.id, ta.status, u.name as user_name
         FROM task_assignments ta
         JOIN users u ON ta.user_id = u.id
         WHERE ta.task_id = ?
           AND ta.user_id != ?
           AND (LOWER(TRIM(ta.assignment_role)) = ? OR LOWER(TRIM(ta.assignment_role)) = ?)
-          AND (ta.result_url IS NOT NULL OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED', 'RESUBMITTED', 'SUBMITTED'))
+          AND (ta.result_url IS NOT NULL OR ta.status IN ('WAITING_REVIEW', 'APPROVED', 'DONE', 'PUBLISHED', 'RESUBMITTED', 'SUBMITTED', 'REVISION_REQUESTED', 'DECLINED'))
       `)
       .bind(taskId, session.userId, cleanCat.toLowerCase(), `kategori: ${cleanCat.toLowerCase()}`)
-      .first() as { id: string; user_name: string } | null;
+      .first() as { id: string; status: string; user_name: string } | null;
 
     if (existingClaim) {
+      const isAssignedToMe = matchedSlot?.assignedUserId === session.userId;
+      const canTakeOverExisting = (isAssignedToMe || isMentor || isCoordinator || isLeader || isTaskCreator) && !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(existingClaim.status);
+
+      if (canTakeOverExisting) {
+        return submitResult(existingClaim.id, resultUrl, selectedCategory);
+      }
+
       return {
         success: false,
         error: `Kategori output "${cleanCat}" telah diambil oleh ${existingClaim.user_name || 'peserta lain'}. Silakan pilih kategori output lain yang masih tersedia.`,

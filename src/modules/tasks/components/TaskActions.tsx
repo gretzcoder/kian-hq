@@ -314,7 +314,13 @@ export default function TaskActions({
     if (!url?.trim()) return;
 
     const categories = getDirectBriefCategories(taskDescription);
-    const selectedCat = categoryInputs[assignmentId];
+    let selectedCat = categoryInputs[assignmentId];
+    if (!selectedCat && isDirectBriefTask) {
+      const existingAss = assignments.find((a) => a.id === assignmentId);
+      if (existingAss && existingAss.assignment_role) {
+        selectedCat = existingAss.assignment_role.replace(/^Kategori:\s*/i, '').trim();
+      }
+    }
     if (isDirectBriefTask && categories.length > 0 && (!selectedCat || !selectedCat.trim())) {
       setErrorMap((prev) => ({ ...prev, [assignmentId]: 'Silakan pilih salah satu kategori output yang tersedia terlebih dahulu.' }));
       toast('Pilih salah satu kategori output yang tersedia terlebih dahulu.', 'warning');
@@ -1171,7 +1177,9 @@ export default function TaskActions({
   const renderNormalAssignments = () => {
     const isMentorWs = workspaceType === 'MENTOR';
     const isReviewer = isLeader || isMentor || isCoordinator;
-    const canUserSubmitDirect = !isCoordinator; // Koordinator / Admin / Executive does NOT submit!
+    const directSlots = parseDirectBriefSlots(taskDescription);
+    const isAssignedToAnySlot = directSlots.some(s => s.assignedUserId === currentUserId);
+    const canUserSubmitDirect = !isCoordinator || isMentor || isLeader || isAssignedToAnySlot;
 
     // Deduplicate assignments by user_id & role for DIRECT_BRIEF tasks & filter for clean display
     let displayAssignments = assignments;
@@ -1335,7 +1343,6 @@ export default function TaskActions({
       );
     };
 
-    const directSlots = parseDirectBriefSlots(taskDescription);
     const hasDirectSlots = directSlots.length > 0;
     const categories = hasDirectSlots ? directSlots.map(s => s.name) : getDirectBriefCategories(taskDescription);
 
@@ -1375,7 +1382,7 @@ export default function TaskActions({
               const isMine = categoryAss?.user_id === currentUserId;
               const isAssignedToMe = slot.assignedUserId === currentUserId;
               const isAssignedToOther = Boolean(slot.assignedUserId && slot.assignedUserId !== currentUserId);
-              const canUserSubmit = !isCoordinator && (!isAssignedToOther || isAssignedToMe);
+              const canUserSubmit = (!isCoordinator || isAssignedToMe || isMentor || isLeader) && (!isAssignedToOther || isAssignedToMe || isMentor || isCoordinator || isLeader || isTaskCreator);
 
               return (
                 <div
@@ -1560,10 +1567,16 @@ export default function TaskActions({
                         </div>
                       )}
 
-                      {/* Resubmit / Edit Link button if it's my submission and not yet approved by mentor */}
+                      {/* Resubmit / Edit Link button / Takeover button */}
                       {(() => {
-                        const canEditSlotSubmission = isMine && (categoryAss.mentor_approved !== 1) && (categoryAss.coordinator_approved !== 1) && !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(categoryAss.status);
+                        const canEditSlotSubmission =
+                          (isMine || isAssignedToMe || isMentor || isCoordinator || isLeader || isTaskCreator) &&
+                          !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(categoryAss.status) &&
+                          (isMine || isAssignedToMe || (categoryAss.mentor_approved !== 1 && categoryAss.coordinator_approved !== 1));
+
                         if (!canEditSlotSubmission) return null;
+
+                        const isTakeover = !isMine && (isAssignedToMe || isMentor || isCoordinator || isLeader || isTaskCreator);
 
                         return (
                           <div className="pt-2">
@@ -1571,7 +1584,7 @@ export default function TaskActions({
                               <form onSubmit={(e) => handleSubmitResult(e, categoryAss.id)} className="space-y-2 bg-purple-500/5 dark:bg-purple-500/10 p-3 rounded-2xl border border-purple-500/20">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-1">
-                                    <span>✏️</span> Edit Link Hasil Karya
+                                    <span>✏️</span> {isTakeover ? 'Submit Karya (Ambil Alih)' : 'Edit Link Hasil Karya'}
                                   </span>
                                   <button
                                     type="button"
@@ -1595,7 +1608,7 @@ export default function TaskActions({
                                     disabled={loading === categoryAss.id}
                                     className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 cursor-pointer active:scale-95 shrink-0"
                                   >
-                                    {loading === categoryAss.id ? 'Menyimpan...' : '💾 Simpan Perubahan'}
+                                    {loading === categoryAss.id ? 'Menyimpan...' : (isTakeover ? '🚀 Kirim & Ambil Alih' : '💾 Simpan Perubahan')}
                                   </button>
                                 </div>
                               </form>
@@ -1610,9 +1623,15 @@ export default function TaskActions({
                                   }}
                                   className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
                                 >
-                                  <span>✏️</span> {categoryAss.status === 'REVISION_REQUESTED' ? 'Kirim Ulang Hasil Revisi' : categoryAss.result_url ? 'Edit / Ganti Link Karya' : '📤 Submit Hasil Karya'}
+                                  <span>✏️</span> {
+                                    categoryAss.status === 'REVISION_REQUESTED'
+                                      ? (isTakeover ? 'Kirim Hasil Revisi (Ambil Alih)' : 'Kirim Ulang Hasil Revisi')
+                                      : categoryAss.result_url
+                                      ? (isTakeover ? 'Ganti Link Karya (Ambil Alih)' : 'Edit / Ganti Link Karya')
+                                      : (isTakeover ? '📤 Submit Hasil Karya (Ambil Alih)' : '📤 Submit Hasil Karya')
+                                  }
                                 </button>
-                                {categoryAss.result_url && (
+                                {categoryAss.result_url && !isTakeover && (
                                   <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">
                                     Link dapat diedit selama belum ada tindakan QC Mentor
                                   </span>
@@ -1805,8 +1824,10 @@ export default function TaskActions({
               )}
               {/* Resubmit / Edit Link for Generic Assignment */}
               {(() => {
-                const canEditGeneric = isMe && (['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(a.status) || (['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status) && a.mentor_approved !== 1 && a.coordinator_approved !== 1));
+                const canEditGeneric = (isMe || isMentor || isCoordinator || isLeader || isTaskCreator) && (['ASSIGNED', 'IN_PROGRESS', 'DRAFT', 'REVISION_REQUESTED', 'DECLINED'].includes(a.status) || (['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status) && (isMe || (a.mentor_approved !== 1 && a.coordinator_approved !== 1))));
                 if (!canEditGeneric) return null;
+
+                const isTakeover = !isMe;
 
                 return (
                   <div className="pt-2">
@@ -1814,7 +1835,7 @@ export default function TaskActions({
                       <form onSubmit={(e) => handleSubmitResult(e, a.id)} className="space-y-2 bg-purple-500/5 dark:bg-purple-500/10 p-3 rounded-2xl border border-purple-500/20">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-1">
-                            <span>✏️</span> Edit Link Hasil Karya
+                            <span>✏️</span> {isTakeover ? 'Submit Karya (Ambil Alih)' : 'Edit Link Hasil Karya'}
                           </span>
                           <button
                             type="button"
@@ -1838,7 +1859,7 @@ export default function TaskActions({
                             disabled={loading === a.id}
                             className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 cursor-pointer active:scale-95 shrink-0"
                           >
-                            {loading === a.id ? 'Menyimpan...' : '💾 Simpan Perubahan'}
+                            {loading === a.id ? 'Menyimpan...' : (isTakeover ? '🚀 Kirim & Ambil Alih' : '💾 Simpan Perubahan')}
                           </button>
                         </div>
                       </form>
@@ -1852,9 +1873,15 @@ export default function TaskActions({
                           }}
                           className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
                         >
-                          <span>✏️</span> {a.status === 'REVISION_REQUESTED' ? 'Kirim Ulang Hasil Revisi' : a.result_url ? 'Edit / Ganti Link Karya' : '📤 Submit Hasil Karya'}
+                          <span>✏️</span> {
+                            a.status === 'REVISION_REQUESTED'
+                              ? (isTakeover ? 'Kirim Hasil Revisi (Ambil Alih)' : 'Kirim Ulang Hasil Revisi')
+                              : a.result_url
+                              ? (isTakeover ? 'Ganti Link Karya (Ambil Alih)' : 'Edit / Ganti Link Karya')
+                              : (isTakeover ? '📤 Submit Hasil Karya (Ambil Alih)' : '📤 Submit Hasil Karya')
+                          }
                         </button>
-                        {a.result_url && (
+                        {a.result_url && !isTakeover && (
                           <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">
                             Link dapat diedit selama belum ada tindakan QC Mentor
                           </span>
