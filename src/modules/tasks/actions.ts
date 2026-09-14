@@ -363,18 +363,20 @@ export async function createTask(workspaceId: string, formData: FormData) {
   const initialStatus = 'DRAFT';
 
   try {
-    await db
-      .prepare(`
-        INSERT INTO tasks
-          (id, project_id, workspace_id, title, description, status, priority, created_by, deadline, start_at, task_type, parent_task_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `)
-      .bind(
+    const batchStatements: any[] = [];
+
+    batchStatements.push(
+      db.prepare(`
+        INSERT INTO tasks 
+          (id, project_id, workspace_id, title, description, required_outputs, status, priority, created_by, deadline, start_at, task_type, parent_task_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s', 'now'))
+      `).bind(
         taskId, 
-        ws.project_id, 
+        ws.project_id,
         workspaceId, 
         title.trim(), 
         finalDescription || null, 
+        outputType, 
         initialStatus, 
         priority, 
         session.userId, 
@@ -383,7 +385,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
         taskTypeValue,
         parentTaskId
       )
-      .run();
+    );
 
     const defaultRole = outputType === 'VIDEO' ? 'VIDEO_EDITOR' : outputType === 'OTHER' ? 'CREATOR' : 'DESIGNER';
     const stepRoles = outputType === 'VIDEO'
@@ -396,14 +398,13 @@ export async function createTask(workspaceId: string, formData: FormData) {
       // Direct assignment: assign ONLY the selected Trooper to the task step roles
       for (const role of stepRoles) {
         const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-        await db
-          .prepare(`
+        batchStatements.push(
+          db.prepare(`
             INSERT OR IGNORE INTO task_assignments
               (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
             VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-          `)
-          .bind(assignId, taskId, assigneeUserId.trim(), role, session.userId, deadline, startAt)
-          .run();
+          `).bind(assignId, taskId, assigneeUserId.trim(), role, session.userId, deadline, startAt)
+        );
       }
     } else if (isDirectBrief) {
       const assignedSlotUserIds = new Set<string>();
@@ -413,14 +414,13 @@ export async function createTask(workspaceId: string, formData: FormData) {
           assignedSlotUserIds.add(slot.assignedUserId);
           const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
           const slotDeadline = slot.deadline ? (parseIndonesiaDate(slot.deadline) ?? new Date(slot.deadline).getTime()) : deadline;
-          await db
-            .prepare(`
+          batchStatements.push(
+            db.prepare(`
               INSERT OR IGNORE INTO task_assignments
                 (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
               VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-            `)
-            .bind(assignId, taskId, slot.assignedUserId, slot.name, session.userId, slotDeadline, startAt)
-            .run();
+            `).bind(assignId, taskId, slot.assignedUserId, slot.name, session.userId, slotDeadline, startAt)
+          );
         }
       }
 
@@ -443,14 +443,13 @@ export async function createTask(workspaceId: string, formData: FormData) {
 
         for (const m of (ojtMembers as { user_id: string }[])) {
           const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-          await db
-            .prepare(`
+          batchStatements.push(
+            db.prepare(`
               INSERT OR IGNORE INTO task_assignments
                 (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
               VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-            `)
-            .bind(assignId, taskId, m.user_id, defaultRole, session.userId, deadline, startAt)
-            .run();
+            `).bind(assignId, taskId, m.user_id, defaultRole, session.userId, deadline, startAt)
+          );
         }
       }
     } else if (ws.workspace_type === 'MENTOR') {
@@ -469,14 +468,13 @@ export async function createTask(workspaceId: string, formData: FormData) {
       for (const m of (mentorMembers as { user_id: string }[])) {
         for (const role of stepRoles) {
           const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-          await db
-            .prepare(`
+          batchStatements.push(
+            db.prepare(`
               INSERT OR IGNORE INTO task_assignments
                 (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
               VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-            `)
-            .bind(assignId, taskId, m.user_id, role, session.userId, deadline, startAt)
-            .run();
+            `).bind(assignId, taskId, m.user_id, role, session.userId, deadline, startAt)
+          );
         }
       }
     } else {
@@ -500,14 +498,13 @@ export async function createTask(workspaceId: string, formData: FormData) {
         for (const m of (trooperMembers as { user_id: string }[])) {
           for (const role of stepRoles) {
             const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-            await db
-              .prepare(`
+            batchStatements.push(
+              db.prepare(`
                 INSERT OR IGNORE INTO task_assignments
                   (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
                 VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-              `)
-              .bind(assignId, taskId, m.user_id, role, session.userId, deadline, startAt)
-              .run();
+              `).bind(assignId, taskId, m.user_id, role, session.userId, deadline, startAt)
+            );
           }
         }
       } else {
@@ -515,16 +512,19 @@ export async function createTask(workspaceId: string, formData: FormData) {
         const rolling = await calculateNextRollingAssignments(db, workspaceId, outputType as any);
         for (const item of rolling.assignments) {
           const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-          await db
-            .prepare(`
+          batchStatements.push(
+            db.prepare(`
               INSERT OR IGNORE INTO task_assignments
                 (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
               VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-            `)
-            .bind(assignId, taskId, item.userId, item.role, session.userId, deadline, startAt)
-            .run();
+            `).bind(assignId, taskId, item.userId, item.role, session.userId, deadline, startAt)
+          );
         }
       }
+    }
+
+    if (batchStatements.length > 0) {
+      await db.batch(batchStatements);
     }
 
     await logWorkflowEvent({
@@ -1803,6 +1803,14 @@ export async function updateTask(taskId: string, formData: FormData) {
       const assignedSlotUserIds = new Set<string>();
 
       if (slots.length > 0) {
+        const { results: existingAssignmentsRaw } = await db
+          .prepare('SELECT id, user_id, assignment_role, status, result_url FROM task_assignments WHERE task_id = ?')
+          .bind(taskId)
+          .all();
+
+        const existingAssignments = (existingAssignmentsRaw as any[]) || [];
+        const slotBatch: any[] = [];
+
         for (const slot of slots) {
           if (slot.assignedUserId) {
             assignedSlotUserIds.add(slot.assignedUserId);
@@ -1810,67 +1818,78 @@ export async function updateTask(taskId: string, formData: FormData) {
               ? (parseIndonesiaDate(slot.deadline) ?? new Date(slot.deadline).getTime())
               : deadline;
 
-            const existingAssign = (await db
-              .prepare('SELECT id, status, result_url FROM task_assignments WHERE task_id = ? AND user_id = ? AND (LOWER(TRIM(assignment_role)) = ? OR LOWER(TRIM(assignment_role)) = ?)')
-              .bind(taskId, slot.assignedUserId, slot.name.toLowerCase(), `kategori: ${slot.name.toLowerCase()}`)
-              .first()) as { id: string; status: string; result_url: string | null } | null;
+            const existingAssign = existingAssignments.find(
+              (a) =>
+                a.user_id === slot.assignedUserId &&
+                (a.assignment_role?.toLowerCase() === slot.name.toLowerCase() ||
+                  a.assignment_role?.toLowerCase() === `kategori: ${slot.name.toLowerCase()}`)
+            );
 
             if (existingAssign) {
               if (
                 existingAssign.status === 'ASSIGNED' &&
                 (!existingAssign.result_url || existingAssign.result_url.trim() === '')
               ) {
-                await db
-                  .prepare(
+                slotBatch.push(
+                  db.prepare(
                     'UPDATE task_assignments SET assignment_role = ?, deadline = ?, start_at = ? WHERE id = ?'
-                  )
-                  .bind(slot.name, slotDeadline, startAt, existingAssign.id)
-                  .run();
+                  ).bind(slot.name, slotDeadline, startAt, existingAssign.id)
+                );
               }
             } else {
               const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-              await db
-                .prepare(`
+              slotBatch.push(
+                db.prepare(`
                   INSERT OR IGNORE INTO task_assignments
                     (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
                   VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-                `)
-                .bind(assignId, taskId, slot.assignedUserId, slot.name, session.userId, slotDeadline, startAt)
-                .run();
+                `).bind(assignId, taskId, slot.assignedUserId, slot.name, session.userId, slotDeadline, startAt)
+              );
             }
           }
         }
 
         // Cleanup: remove unsubmitted generic role assignments when custom slots exist
-        await db
-          .prepare(`
+        slotBatch.push(
+          db.prepare(`
             DELETE FROM task_assignments
             WHERE task_id = ?
               AND status = 'ASSIGNED'
               AND (result_url IS NULL OR TRIM(result_url) = '')
               AND assignment_role IN ('DESIGN', 'DESIGNER', 'VIDEO_EDITOR', 'CREATOR', 'PLANNER', 'RESEARCHER')
-          `)
-          .bind(taskId)
-          .run();
+          `).bind(taskId)
+        );
 
         // If specific slots were assigned, remove unsubmitted assignments for users not in slots
         if (assignedSlotUserIds.size > 0) {
           const placeholders = Array.from(assignedSlotUserIds).map(() => '?').join(',');
-          await db
-            .prepare(`
+          slotBatch.push(
+            db.prepare(`
               DELETE FROM task_assignments
               WHERE task_id = ?
                 AND status = 'ASSIGNED'
                 AND (result_url IS NULL OR TRIM(result_url) = '')
                 AND user_id NOT IN (${placeholders})
-            `)
-            .bind(taskId, ...Array.from(assignedSlotUserIds))
-            .run();
+            `).bind(taskId, ...Array.from(assignedSlotUserIds))
+          );
         }
-      }
 
-      // Always remove unsubmitted assignments of workspace mentors on Troopers direct brief tasks
-      if (task.workspace_id) {
+        if (task.workspace_id) {
+          slotBatch.push(
+            db.prepare(`
+              DELETE FROM task_assignments
+              WHERE task_id = ?
+                AND status = 'ASSIGNED'
+                AND (result_url IS NULL OR TRIM(result_url) = '')
+                AND user_id IN (SELECT user_id FROM workspace_mentors WHERE workspace_id = ?)
+            `).bind(taskId, task.workspace_id)
+          );
+        }
+
+        if (slotBatch.length > 0) {
+          await db.batch(slotBatch);
+        }
+      } else if (task.workspace_id) {
         await db
           .prepare(`
             DELETE FROM task_assignments
@@ -2825,29 +2844,37 @@ export async function decideTaskRoleProposalAction(taskId: string, approved: boo
       { role: creatorRole, userId: proposalData.creatorId },
     ];
 
+    const { results: existingAssignmentsRaw } = await db
+      .prepare('SELECT id, assignment_role FROM task_assignments WHERE task_id = ?')
+      .bind(taskId)
+      .all();
+
+    const existingAssignments = (existingAssignmentsRaw as any[]) || [];
+    const roleBatch: any[] = [];
+
     for (const mapping of roleMappings) {
       if (mapping.userId) {
-        const existing = await db
-          .prepare('SELECT id FROM task_assignments WHERE task_id = ? AND assignment_role = ?')
-          .bind(taskId, mapping.role)
-          .first() as { id: string } | null;
+        const existing = existingAssignments.find((a) => a.assignment_role === mapping.role);
 
         if (existing) {
-          await db
-            .prepare('UPDATE task_assignments SET user_id = ? WHERE id = ?')
-            .bind(mapping.userId, existing.id)
-            .run();
+          roleBatch.push(
+            db.prepare('UPDATE task_assignments SET user_id = ? WHERE id = ?')
+              .bind(mapping.userId, existing.id)
+          );
         } else {
           const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-          await db
-            .prepare(`
+          roleBatch.push(
+            db.prepare(`
               INSERT INTO task_assignments (id, task_id, user_id, assignment_role, assigned_by, status, deadline, created_at)
               VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, strftime('%s', 'now'))
-            `)
-            .bind(assignId, taskId, mapping.userId, mapping.role, session.userId, task.deadline)
-            .run();
+            `).bind(assignId, taskId, mapping.userId, mapping.role, session.userId, task.deadline)
+          );
         }
       }
+    }
+
+    if (roleBatch.length > 0) {
+      await db.batch(roleBatch);
     }
   }
 
