@@ -199,6 +199,12 @@ export interface TemplateLayoutConfig {
   annexThresholdRows?: number; // Rows >= threshold will be paginated as Lampiran on Page 2+
 }
 
+export interface CustomDetailItem {
+  id: string;
+  label: string;
+  value: string;
+}
+
 export interface FormFieldOption {
   label: string;
   value: string;
@@ -218,6 +224,8 @@ export interface FormFieldSchema {
     | 'signatory_picker'
     | 'assignee_table'
     | 'repeatable_list'
+    | 'key_value_list'
+    | 'custom_details'
     | 'checkbox';
   required: boolean;
   placeholder?: string;

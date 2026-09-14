@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  CustomDetailItem,
   CustomKopTextElement,
   DocumentAssetItem,
   DocumentTemplateItem,
@@ -1851,126 +1852,270 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                       )}
 
                       {/* 5. KEY_VALUE_GRID / EVENT DETAILS / PERSON DETAILS */}
-                      {(sec.type === 'KEY_VALUE_GRID' || sec.type === 'EVENT_DETAILS') && (
-                        <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-2.5">
-                          <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 block">
-                            📅 Detail Rincian Acara &amp; Data
-                          </span>
+                      {(sec.type === 'KEY_VALUE_GRID' || sec.type === 'EVENT_DETAILS') && (() => {
+                        const customList: CustomDetailItem[] = Array.isArray(previewData.event_custom_details)
+                          ? previewData.event_custom_details
+                          : [];
 
-                          <div className="space-y-2">
-                            <div>
-                              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
-                                Kalimat Pengantar Rincian
-                              </label>
-                              <input
-                                type="text"
-                                value={previewData.event_intro_text || ''}
-                                onChange={(e) => updateFieldValue('event_intro_text', e.target.value)}
-                                className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
-                                placeholder="Untuk berpartisipasi pada event {event_name}, dengan rincian sebagai berikut:"
-                              />
-                            </div>
+                        const handleAddCustomDetail = (label: string, value: string = '') => {
+                          const newItem: CustomDetailItem = {
+                            id: `cd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                            label,
+                            value,
+                          };
+                          updateFieldValue('event_custom_details', [...customList, newItem]);
+                        };
 
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
-                                  Nama Acara / Event
-                                </label>
-                                <input
-                                  type="text"
-                                  value={previewData.event_name || ''}
-                                  onChange={(e) => updateFieldValue('event_name', e.target.value)}
-                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-semibold"
-                                  placeholder="BKOT UBSI 2026"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
-                                  Hari / Tanggal
-                                </label>
-                                <input
-                                  type="text"
-                                  value={previewData.event_days || ''}
-                                  onChange={(e) => updateFieldValue('event_days', e.target.value)}
-                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
-                                  placeholder="Jum'at - Sabtu, 11 - 12 September 2026"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
-                                  Waktu / Pukul
-                                </label>
-                                <input
-                                  type="text"
-                                  value={previewData.event_time || ''}
-                                  onChange={(e) => updateFieldValue('event_time', e.target.value)}
-                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
-                                  placeholder="07.30 WIB - Selesai"
-                                />
-                              </div>
-                              <div>
-                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
-                                  Tempat / Lokasi
-                                </label>
-                                <input
-                                  type="text"
-                                  value={previewData.event_location || ''}
-                                  onChange={(e) => updateFieldValue('event_location', e.target.value)}
-                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
-                                  placeholder="Hotel Santika Depok"
-                                />
-                              </div>
-                            </div>
-                          </div>
+                        const handleUpdateCustomDetail = (id: string, field: 'label' | 'value', val: string) => {
+                          const nextList = customList.map((it) => (it.id === id ? { ...it, [field]: val } : it));
+                          updateFieldValue('event_custom_details', nextList);
+                        };
 
-                          {/* Secondary Person Details */}
-                          <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700 space-y-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300">
-                                👤 Atau Rincian Personil (Surat Keterangan / Pernyataan)
+                        const handleRemoveCustomDetail = (id: string) => {
+                          updateFieldValue('event_custom_details', customList.filter((it) => it.id !== id));
+                        };
+
+                        const handleMoveCustomDetail = (index: number, direction: 'up' | 'down') => {
+                          const newIdx = direction === 'up' ? index - 1 : index + 1;
+                          if (newIdx < 0 || newIdx >= customList.length) return;
+                          const nextList = [...customList];
+                          const [moved] = nextList.splice(index, 1);
+                          nextList.splice(newIdx, 0, moved);
+                          updateFieldValue('event_custom_details', nextList);
+                        };
+
+                        return (
+                          <div className="p-3 bg-zinc-50 dark:bg-zinc-800/70 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold text-zinc-800 dark:text-zinc-200 block">
+                                📅 Detail Rincian Acara &amp; Data
                               </span>
-                              {(previewData.person_name || previewData.person_role) && (
+                              <span className="text-[9.5px] text-purple-600 dark:text-purple-400 font-medium">
+                                Fleksibel &amp; Dapat Dikustom
+                              </span>
+                            </div>
+
+                            <div className="space-y-2">
+                              <div>
+                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                  Kalimat Pengantar Rincian
+                                </label>
+                                <input
+                                  type="text"
+                                  value={previewData.event_intro_text || ''}
+                                  onChange={(e) => updateFieldValue('event_intro_text', e.target.value)}
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                  placeholder="Untuk berpartisipasi pada event {event_name}, dengan rincian sebagai berikut:"
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                    Nama Acara / Event
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={previewData.event_name || ''}
+                                    onChange={(e) => updateFieldValue('event_name', e.target.value)}
+                                    className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-semibold"
+                                    placeholder="BKOT UBSI 2026"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                    Hari / Tanggal
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={previewData.event_days || ''}
+                                    onChange={(e) => updateFieldValue('event_days', e.target.value)}
+                                    className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                    placeholder="Jum'at - Sabtu, 11 - 12 September 2026"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                    Waktu / Pukul
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={previewData.event_time || ''}
+                                    onChange={(e) => updateFieldValue('event_time', e.target.value)}
+                                    className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                    placeholder="07.30 WIB - Selesai"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
+                                    Tempat / Lokasi
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={previewData.event_location || ''}
+                                    onChange={(e) => updateFieldValue('event_location', e.target.value)}
+                                    className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                    placeholder="Hotel Santika Depok"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Dynamic Custom Details Section (Dresscode, Perlengkapan, Catatan, dll) */}
+                            <div className="pt-2 border-t border-zinc-200 dark:border-zinc-700/80 space-y-2">
+                              <div className="flex items-center justify-between gap-1 flex-wrap">
+                                <span className="text-[10.5px] font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                                  <span>👔</span> Rincian Tambahan / Kustom (Dresscode, Perlengkapan, dll.)
+                                </span>
+                                <span className="text-[9.5px] text-zinc-500 font-mono">
+                                  {customList.length} Item
+                                </span>
+                              </div>
+
+                              {/* Quick Preset Buttons */}
+                              <div className="flex flex-wrap gap-1 items-center">
+                                <span className="text-[9px] font-semibold text-zinc-400 mr-0.5">Tambah Cepat:</span>
+                                {[
+                                  { label: 'Dresscode', icon: '👔', defVal: 'Batik / Formal Bebas Rapi' },
+                                  { label: 'Pakaian', icon: '👕', defVal: 'Kemeja Putih & Celana Hitam' },
+                                  { label: 'Agenda', icon: '📋', defVal: 'Pembukaan, Workshop & Foto Bersama' },
+                                  { label: 'Perlengkapan', icon: '🎒', defVal: 'Laptop, ID Card & Alat Tulis' },
+                                  { label: 'Catatan', icon: '📌', defVal: 'Hadir 15 menit sebelum acara dimulai' },
+                                  { label: 'Biaya / HTM', icon: '💰', defVal: 'Gratis / Ditanggung Perusahaan' },
+                                  { label: 'Kontak PIC', icon: '📞', defVal: '0812-xxxx-xxxx (Admin)' },
+                                ].map((preset) => (
+                                  <button
+                                    key={preset.label}
+                                    type="button"
+                                    onClick={() => handleAddCustomDetail(preset.label, preset.defVal)}
+                                    className="text-[9.5px] font-bold px-2 py-0.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/20 transition-all flex items-center gap-1 active:scale-95"
+                                  >
+                                    <span>{preset.icon}</span> + {preset.label}
+                                  </button>
+                                ))}
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    updateFieldValue('person_name', '');
-                                    updateFieldValue('person_nip', '');
-                                    updateFieldValue('person_role', '');
-                                    updateFieldValue('person_institution', '');
-                                    updateFieldValue('person_address', '');
-                                  }}
-                                  className="text-[9.5px] text-red-500 hover:underline"
+                                  onClick={() => handleAddCustomDetail('', '')}
+                                  className="text-[9.5px] font-bold px-2 py-0.5 rounded-lg bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-700 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-600 transition-all flex items-center gap-1 active:scale-95"
                                 >
-                                  Kosongkan Data Orang
+                                  <span>➕</span> + Kustom Bebas
                                 </button>
+                              </div>
+
+                              {/* Custom Details List */}
+                              {customList.length > 0 && (
+                                <div className="space-y-1.5 pt-1">
+                                  {customList.map((item, idx) => (
+                                    <div
+                                      key={item.id || idx}
+                                      className="flex items-center gap-1.5 bg-white dark:bg-zinc-900/80 p-1.5 rounded-xl border border-zinc-200 dark:border-zinc-700/70 shadow-2xs"
+                                    >
+                                      {/* Reorder Buttons */}
+                                      <div className="flex flex-col gap-0.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          disabled={idx === 0}
+                                          onClick={() => handleMoveCustomDetail(idx, 'up')}
+                                          className="text-[8px] leading-none px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                          title="Geser ke Atas"
+                                        >
+                                          ▲
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={idx === customList.length - 1}
+                                          onClick={() => handleMoveCustomDetail(idx, 'down')}
+                                          className="text-[8px] leading-none px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                                          title="Geser ke Bawah"
+                                        >
+                                          ▼
+                                        </button>
+                                      </div>
+
+                                      {/* Label Input */}
+                                      <input
+                                        type="text"
+                                        value={item.label}
+                                        onChange={(e) => handleUpdateCustomDetail(item.id, 'label', e.target.value)}
+                                        placeholder="Label (e.g. Dresscode)"
+                                        className="w-[120px] shrink-0 px-2 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:ring-1 focus:ring-purple-500"
+                                      />
+
+                                      <span className="text-zinc-400 font-bold">:</span>
+
+                                      {/* Value Input */}
+                                      <input
+                                        type="text"
+                                        value={item.value}
+                                        onChange={(e) => handleUpdateCustomDetail(item.id, 'value', e.target.value)}
+                                        placeholder="Isi rincian / detail keterangan..."
+                                        className="flex-1 px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-1 focus:ring-purple-500"
+                                      />
+
+                                      {/* Delete Button */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveCustomDetail(item.id)}
+                                        className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 p-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors"
+                                        title="Hapus baris rincian ini"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="text-[10px] text-zinc-500 block mb-0.5">Nama Orang</label>
-                                <input
-                                  type="text"
-                                  value={previewData.person_name || ''}
-                                  onChange={(e) => updateFieldValue('person_name', e.target.value)}
-                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
-                                  placeholder="Mohamad Abi"
-                                />
+                            {/* Secondary Person Details */}
+                            <div className="pt-2 border-t border-dashed border-zinc-200 dark:border-zinc-700 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300">
+                                  👤 Atau Rincian Personil (Surat Keterangan / Pernyataan)
+                                </span>
+                                {(previewData.person_name || previewData.person_role) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      updateFieldValue('person_name', '');
+                                      updateFieldValue('person_nip', '');
+                                      updateFieldValue('person_role', '');
+                                      updateFieldValue('person_institution', '');
+                                      updateFieldValue('person_address', '');
+                                    }}
+                                    className="text-[9.5px] text-red-500 hover:underline"
+                                  >
+                                    Kosongkan Data Orang
+                                  </button>
+                                )}
                               </div>
-                              <div>
-                                <label className="text-[10px] text-zinc-500 block mb-0.5">Jabatan / Posisi</label>
-                                <input
-                                  type="text"
-                                  value={previewData.person_role || ''}
-                                  onChange={(e) => updateFieldValue('person_role', e.target.value)}
-                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
-                                  placeholder="Program Director Kian Troopers"
-                                />
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[10px] text-zinc-500 block mb-0.5">Nama Orang</label>
+                                  <input
+                                    type="text"
+                                    value={previewData.person_name || ''}
+                                    onChange={(e) => updateFieldValue('person_name', e.target.value)}
+                                    className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                    placeholder="Mohamad Abi"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] text-zinc-500 block mb-0.5">Jabatan / Posisi</label>
+                                  <input
+                                    type="text"
+                                    value={previewData.person_role || ''}
+                                    onChange={(e) => updateFieldValue('person_role', e.target.value)}
+                                    className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                    placeholder="Program Director Kian Troopers"
+                                  />
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
 
                       {/* 6. ASSIGNEE & CUSTOM TABLE BUILDER */}
                       {(sec.type === 'ASSIGNEE_TABLE' || sec.type === 'CUSTOM_TABLE') && (

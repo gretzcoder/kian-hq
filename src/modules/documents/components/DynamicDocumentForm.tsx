@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { FormFieldSchema } from '../documentTypes';
+import { CustomDetailItem, FormFieldSchema } from '../documentTypes';
 import { AssigneeTableInput } from './AssigneeTableInput';
 import { searchProjectsAction } from '../documentActions';
 
@@ -147,6 +147,153 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                   </div>
                 ))}
               </div>
+            </div>
+          );
+        }
+
+        // Key Value List / Custom Details (e.g. Dresscode, Perlengkapan, Catatan, dll)
+        if (field.type === 'key_value_list' || field.type === 'custom_details' || field.key === 'event_custom_details') {
+          const list: CustomDetailItem[] = Array.isArray(value) ? value : [];
+
+          const handleAdd = (label: string, val: string = '') => {
+            const newItem: CustomDetailItem = {
+              id: `cd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+              label,
+              value: val,
+            };
+            onChange(field.key, [...list, newItem]);
+          };
+
+          const handleUpdate = (id: string, subField: 'label' | 'value', subVal: string) => {
+            const nextList = list.map((it) => (it.id === id ? { ...it, [subField]: subVal } : it));
+            onChange(field.key, nextList);
+          };
+
+          const handleRemove = (id: string) => {
+            onChange(field.key, list.filter((it) => it.id !== id));
+          };
+
+          const handleMove = (index: number, direction: 'up' | 'down') => {
+            const newIdx = direction === 'up' ? index - 1 : index + 1;
+            if (newIdx < 0 || newIdx >= list.length) return;
+            const nextList = [...list];
+            const [moved] = nextList.splice(index, 1);
+            nextList.splice(newIdx, 0, moved);
+            onChange(field.key, nextList);
+          };
+
+          return (
+            <div
+              key={field.key}
+              className="p-4 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-2xl space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div>
+                  <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                    <span>👔</span> {field.label}
+                  </label>
+                  {field.helpText && (
+                    <p className="text-[11px] text-zinc-500">{field.helpText}</p>
+                  )}
+                </div>
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold bg-purple-500/10 px-2 py-0.5 rounded-full">
+                  {list.length} Item Rincian
+                </span>
+              </div>
+
+              {/* Quick preset buttons */}
+              <div className="flex flex-wrap gap-1 items-center pt-1">
+                <span className="text-[9px] font-semibold text-zinc-400 mr-0.5">Tambah Cepat:</span>
+                {[
+                  { label: 'Dresscode', icon: '👔', defVal: 'Batik / Formal Bebas Rapi' },
+                  { label: 'Pakaian', icon: '👕', defVal: 'Kemeja Putih & Celana Hitam' },
+                  { label: 'Agenda', icon: '📋', defVal: 'Pembukaan & Workshop' },
+                  { label: 'Perlengkapan', icon: '🎒', defVal: 'Laptop & Alat Tulis' },
+                  { label: 'Catatan', icon: '📌', defVal: 'Hadir 15 menit sebelum acara' },
+                  { label: 'Biaya', icon: '💰', defVal: 'Gratis' },
+                  { label: 'Kontak PIC', icon: '📞', defVal: '0812-xxxx-xxxx' },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => handleAdd(preset.label, preset.defVal)}
+                    className="text-[9.5px] font-bold px-2 py-0.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/20 transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+                  >
+                    <span>{preset.icon}</span> + {preset.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => handleAdd('', '')}
+                  className="text-[9.5px] font-bold px-2 py-0.5 rounded-lg bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 text-zinc-700 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-600 transition-all flex items-center gap-1 active:scale-95 cursor-pointer"
+                >
+                  <span>➕</span> + Kustom
+                </button>
+              </div>
+
+              {/* Items List */}
+              {list.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  {list.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="flex items-center gap-1.5 bg-white dark:bg-zinc-900 p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-2xs"
+                    >
+                      {/* Reorder Buttons */}
+                      <div className="flex flex-col gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          disabled={idx === 0}
+                          onClick={() => handleMove(idx, 'up')}
+                          className="text-[8px] leading-none px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Geser ke Atas"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          disabled={idx === list.length - 1}
+                          onClick={() => handleMove(idx, 'down')}
+                          className="text-[8px] leading-none px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Geser ke Bawah"
+                        >
+                          ▼
+                        </button>
+                      </div>
+
+                      {/* Label Input */}
+                      <input
+                        type="text"
+                        value={item.label}
+                        onChange={(e) => handleUpdate(item.id, 'label', e.target.value)}
+                        placeholder="Nama (e.g. Dresscode)"
+                        className="w-[120px] shrink-0 px-2 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:ring-1 focus:ring-purple-500"
+                      />
+
+                      <span className="text-zinc-400 font-bold">:</span>
+
+                      {/* Value Input */}
+                      <input
+                        type="text"
+                        value={item.value}
+                        onChange={(e) => handleUpdate(item.id, 'value', e.target.value)}
+                        placeholder="Isi rincian keterangan..."
+                        className="flex-1 px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-1 focus:ring-purple-500"
+                      />
+
+                      {/* Delete Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemove(item.id)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 p-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors"
+                        title="Hapus baris ini"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         }

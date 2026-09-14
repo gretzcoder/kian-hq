@@ -669,8 +669,22 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
               // 3. KEY_VALUE_GRID / EVENT_DETAILS / PERSON DETAILS
               if (sec.type === 'KEY_VALUE_GRID' || sec.type === 'EVENT_DETAILS') {
-                const hasPersonData = Boolean(formData.person_name);
-                const hasEventData = Boolean(formData.event_days || formData.event_name || formData.event_location);
+                const customDetails: any[] = Array.isArray(formData.event_custom_details)
+                  ? formData.event_custom_details
+                  : [];
+                const personCustomDetails: any[] = Array.isArray(formData.person_custom_details)
+                  ? formData.person_custom_details
+                  : [];
+
+                const hasPersonData = Boolean(formData.person_name || personCustomDetails.length > 0);
+                const hasEventData = Boolean(
+                  formData.event_days ||
+                  formData.event_name ||
+                  formData.event_location ||
+                  formData.event_time ||
+                  formData.event_agenda ||
+                  customDetails.length > 0
+                );
                 const intro = formData.event_intro_text || sec.content;
                 const interpolatedIntro = intro ? interpolatePlaceholders(intro, formData) : null;
 
@@ -679,14 +693,18 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                     {interpolatedIntro && <p className="mb-1.5 text-justify">{interpolatedIntro}</p>}
 
                     {hasPersonData && (
-                      <div className="grid grid-cols-[140px_12px_1fr] gap-y-1 pl-4 my-1">
-                        <span className="font-normal">Nama</span>
-                        <span>:</span>
-                        <span className="font-medium">{formData.person_name}</span>
+                      <div className="grid grid-cols-[130px_12px_1fr] gap-y-1 pl-4 my-1">
+                        {formData.person_name && (
+                          <>
+                            <span className="font-normal">{formData.person_name_label || 'Nama'}</span>
+                            <span>:</span>
+                            <span className="font-medium">{formData.person_name}</span>
+                          </>
+                        )}
 
                         {formData.person_nip && (
                           <>
-                            <span className="font-normal">NIP / NIM</span>
+                            <span className="font-normal">{formData.person_nip_label || 'NIP / NIM'}</span>
                             <span>:</span>
                             <span className="font-medium font-mono">{formData.person_nip}</span>
                           </>
@@ -694,7 +712,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
                         {formData.person_role && (
                           <>
-                            <span className="font-normal">Jabatan / Posisi</span>
+                            <span className="font-normal">{formData.person_role_label || 'Jabatan / Posisi'}</span>
                             <span>:</span>
                             <span className="font-medium">{formData.person_role}</span>
                           </>
@@ -702,7 +720,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
                         {formData.person_institution && (
                           <>
-                            <span className="font-normal">Institusi / Asal</span>
+                            <span className="font-normal">{formData.person_institution_label || 'Institusi / Asal'}</span>
                             <span>:</span>
                             <span className="font-medium">{formData.person_institution}</span>
                           </>
@@ -710,44 +728,66 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
 
                         {formData.person_address && (
                           <>
-                            <span className="font-normal">Alamat</span>
+                            <span className="font-normal">{formData.person_address_label || 'Alamat'}</span>
                             <span>:</span>
                             <span className="font-medium">{formData.person_address}</span>
                           </>
                         )}
+
+                        {personCustomDetails.map((item: any, idx: number) => {
+                          if (!item || (!item.label && !item.value)) return null;
+                          return (
+                            <React.Fragment key={item.id || idx}>
+                              <span className="font-normal">{item.label || 'Keterangan'}</span>
+                              <span>:</span>
+                              <span className="font-medium whitespace-pre-line">{item.value}</span>
+                            </React.Fragment>
+                          );
+                        })}
                       </div>
                     )}
 
                     {hasEventData && !hasPersonData && (
-                      <div className="grid grid-cols-[80px_12px_1fr] gap-y-1 pl-6 my-1">
+                      <div className="grid grid-cols-[115px_12px_1fr] gap-y-1 pl-6 my-1">
                         {formData.event_days && (
                           <>
-                            <span className="font-normal">Hari</span>
+                            <span className="font-normal">{formData.event_days_label || 'Hari'}</span>
                             <span>:</span>
                             <span className="font-medium">{formData.event_days}</span>
                           </>
                         )}
                         {formData.event_time && (
                           <>
-                            <span className="font-normal">Pukul</span>
+                            <span className="font-normal">{formData.event_time_label || 'Pukul'}</span>
                             <span>:</span>
                             <span className="font-medium">{formData.event_time}</span>
                           </>
                         )}
                         {formData.event_location && (
                           <>
-                            <span className="font-normal">Tempat</span>
+                            <span className="font-normal">{formData.event_location_label || 'Tempat'}</span>
                             <span>:</span>
                             <span className="font-medium">{formData.event_location}</span>
                           </>
                         )}
                         {formData.event_agenda && (
                           <>
-                            <span className="font-normal">Agenda</span>
+                            <span className="font-normal">{formData.event_agenda_label || 'Agenda'}</span>
                             <span>:</span>
                             <span className="font-medium">{formData.event_agenda}</span>
                           </>
                         )}
+                        {/* Dynamic Custom Details (e.g. Dresscode, Perlengkapan, Biaya, PIC, dll) */}
+                        {customDetails.map((item: any, idx: number) => {
+                          if (!item || (!item.label && !item.value)) return null;
+                          return (
+                            <React.Fragment key={item.id || idx}>
+                              <span className="font-normal">{item.label || 'Keterangan'}</span>
+                              <span>:</span>
+                              <span className="font-medium whitespace-pre-line">{item.value}</span>
+                            </React.Fragment>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

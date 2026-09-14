@@ -171,6 +171,16 @@ export const DEFAULT_SURAT_TUGAS_SCHEMA: FormFieldSchema[] = [
     placeholder: 'Contoh: Hotel Santika Depok / Gedung Graha Kian',
   },
   {
+    key: 'event_custom_details',
+    label: 'Rincian Tambahan / Kustom (Dresscode, Perlengkapan, dll)',
+    type: 'key_value_list',
+    required: false,
+    defaultValue: [
+      { id: '1', label: 'Dresscode', value: 'Batik / Formal Bebas Rapi' },
+    ],
+    helpText: 'Tambahkan rincian tambahan seperti dresscode, pakaian, perlengkapan, catatan, atau kontak PIC.',
+  },
+  {
     key: 'closing_text',
     label: 'Kalimat Penutup',
     type: 'textarea',
