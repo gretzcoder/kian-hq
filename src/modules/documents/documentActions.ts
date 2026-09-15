@@ -19,6 +19,9 @@ import {
 import {
   formatDocumentNumber,
   getNextSequenceNumber,
+  peekNextSequenceNumber,
+  analyzeDocumentSequences,
+  NUMBERING_CATEGORIES,
 } from './numberingEngine';
 
 /**
@@ -130,6 +133,10 @@ export async function generateDocumentAction(params: {
   custom_number?: string;
   signatory_id?: string;
   mode?: 'ISSUE' | 'DRAFT' | 'SUBMIT_APPROVAL';
+  category_code?: string;
+  company_code?: string;
+  org_code?: string;
+  numbering_format?: string;
 }): Promise<{
   success: boolean;
   documentId?: string;
@@ -172,7 +179,13 @@ export async function generateDocumentAction(params: {
       .first() as { code: string; numbering_format: string } | null;
 
     const typeCode = docTypeRow?.code || template.type_code || 'SURAT_TUGAS';
-    const numberingFormat = docTypeRow?.numbering_format || '{sequence}/KIAN/TROOPERS/{roman_month}/{year}';
+    const rawNumberingFormat =
+      params.numbering_format ||
+      docTypeRow?.numbering_format ||
+      '{sequence:3}/{company_code}/{org_code}/{roman_month}/{year}';
+
+    const selectedOrg = (params.category_code || params.org_code || 'TROOPERS').trim().toUpperCase();
+    const selectedCompany = (params.company_code || 'KIAN').trim().toUpperCase();
 
     let finalDocNumber: string;
     let initialStatus: string;
@@ -182,23 +195,27 @@ export async function generateDocumentAction(params: {
       if (params.custom_number?.trim()) {
         finalDocNumber = params.custom_number.trim();
       } else {
-        const now = new Date();
-        const seq = await getNextSequenceNumber(typeCode, now.getFullYear(), now.getMonth() + 1);
-        finalDocNumber = formatDocumentNumber(numberingFormat, {
+        const targetDate = params.form_data?.issue_date ? new Date(params.form_data.issue_date) : new Date();
+        const validDate = isNaN(targetDate.getTime()) ? new Date() : targetDate;
+        const sequenceScopeKey = selectedOrg || typeCode;
+        const seq = await getNextSequenceNumber(sequenceScopeKey, validDate.getFullYear(), validDate.getMonth() + 1);
+        finalDocNumber = formatDocumentNumber(rawNumberingFormat, {
           sequenceNumber: seq,
-          date: now,
+          date: validDate,
           typeCode: typeCode,
-          orgCode: 'TROOPERS',
+          orgCode: selectedOrg,
+          companyCode: selectedCompany,
+          categoryCode: selectedOrg,
         });
       }
     } else if (finalMode === 'SUBMIT_APPROVAL') {
       initialStatus = 'PENDING_APPROVAL';
       const shortId = Date.now().toString(36).slice(-6).toUpperCase();
-      finalDocNumber = `PENGAJUAN/${typeCode}/${shortId}`;
+      finalDocNumber = `PENGAJUAN/${selectedOrg || typeCode}/${shortId}`;
     } else {
       initialStatus = 'DRAFT';
       const shortId = Date.now().toString(36).slice(-6).toUpperCase();
-      finalDocNumber = `DRAF/${typeCode}/${shortId}`;
+      finalDocNumber = `DRAF/${selectedOrg || typeCode}/${shortId}`;
     }
 
     // 2. Resolve Signatory Snapshot
@@ -1194,6 +1211,144 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
   } catch (err: any) {
     console.error('getPublicDocumentVerification error:', err);
     return { isValid: false, error: 'Terjadi kendala saat memeriksa validasi dokumen.' };
+  }
+}
+
+/**
+ * Previews the next sequence number & formatted document number string without altering database counter.
+ */
+export async function previewNextDocumentNumberAction(params: {
+  categoryCode?: string;
+  typeCode?: string;
+  companyCode?: string;
+  orgCode?: string;
+  formatPattern?: string;
+  date?: string | number | Date;
+  selectedSequence?: number;
+}): Promise<{
+  success: boolean;
+  formattedNumber: string;
+  sequence: number;
+  nextSequential: number;
+  maxUsed: number;
+  missingGaps: number[];
+  usedNumbers: number[];
+}> {
+  try {
+    const orgCode = (params.categoryCode || params.orgCode || 'TROOPERS').trim().toUpperCase();
+    const companyCode = (params.companyCode || 'KIAN').trim().toUpperCase();
+    const typeCode = (params.typeCode || 'SURAT_TUGAS').trim().toUpperCase();
+    const targetDate = params.date ? new Date(params.date) : new Date();
+    const validDate = isNaN(targetDate.getTime()) ? new Date() : targetDate;
+    const year = validDate.getFullYear();
+
+    const sequenceScopeKey = orgCode || typeCode;
+    const analysis = await analyzeDocumentSequences(sequenceScopeKey, year, companyCode);
+
+    // If user explicitly picked a sequence (like a gap number e.g. 2)
+    const effectiveSeq =
+      params.selectedSequence && params.selectedSequence > 0
+        ? params.selectedSequence
+        : analysis.nextSequential;
+
+    const pattern =
+      params.formatPattern || '{sequence:3}/{company_code}/{org_code}/{roman_month}/{year}';
+
+    const formatted = formatDocumentNumber(pattern, {
+      sequenceNumber: effectiveSeq,
+      date: validDate,
+      typeCode,
+      orgCode,
+      companyCode,
+      categoryCode: orgCode,
+    });
+
+    return {
+      success: true,
+      formattedNumber: formatted,
+      sequence: effectiveSeq,
+      nextSequential: analysis.nextSequential,
+      maxUsed: analysis.maxUsed,
+      missingGaps: analysis.missingGaps,
+      usedNumbers: analysis.usedNumbers,
+    };
+  } catch (err: any) {
+    console.error('previewNextDocumentNumberAction error:', err);
+    return {
+      success: false,
+      formattedNumber: '001/KIAN/TROOPERS/IX/2026',
+      sequence: 1,
+      nextSequential: 1,
+      maxUsed: 0,
+      missingGaps: [],
+      usedNumbers: [],
+    };
+  }
+}
+
+/**
+ * Duplicates an existing document as a new editable draft.
+ */
+export async function duplicateDocumentAction(documentId: string): Promise<{
+  success: boolean;
+  newDocumentId?: string;
+  error?: string;
+}> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  try {
+    const existing = await db
+      .prepare('SELECT * FROM generated_documents WHERE id = ?')
+      .bind(documentId)
+      .first() as any;
+
+    if (!existing) return { success: false, error: 'Dokumen tidak ditemukan.' };
+
+    const newDocId = `doc_${crypto.randomUUID().replace(/-/g, '')}`;
+    const shortId = Date.now().toString(36).slice(-6).toUpperCase();
+    const newDocNumber = `DRAF/${existing.type_code || 'DOC'}/${shortId}`;
+
+    let parsedFormData: any = {};
+    try {
+      parsedFormData = JSON.parse(existing.form_data || '{}');
+      if (typeof parsedFormData === 'object' && parsedFormData !== null) {
+        parsedFormData.document_number = newDocNumber;
+        parsedFormData.document_title = `${parsedFormData.document_title || existing.title} (Salinan)`;
+      }
+    } catch {}
+
+    await db
+      .prepare(`
+        INSERT INTO generated_documents (
+          id, template_id, template_version_id, type_code, document_number, title,
+          form_data, rendered_snapshot, status, signatory_id, approved_by, approved_at, rejection_reason, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'DRAFT', ?, NULL, NULL, NULL, ?, ?, ?)
+      `)
+      .bind(
+        newDocId,
+        existing.template_id,
+        existing.template_version_id,
+        existing.type_code,
+        newDocNumber,
+        `${existing.title} (Salinan)`,
+        JSON.stringify(parsedFormData),
+        existing.rendered_snapshot,
+        existing.signatory_id,
+        session.userId,
+        nowSec,
+        nowSec
+      )
+      .run();
+
+    revalidatePath('/dashboard/documents');
+    return { success: true, newDocumentId: newDocId };
+  } catch (err: any) {
+    console.error('duplicateDocumentAction error:', err);
+    return { success: false, error: err.message || 'Gagal menduplikasi dokumen.' };
   }
 }
 

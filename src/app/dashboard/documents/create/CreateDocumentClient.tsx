@@ -12,6 +12,7 @@ import { DynamicDocumentForm } from '@/modules/documents/components/DynamicDocum
 import { DocumentCanvas } from '@/modules/documents/components/DocumentCanvas';
 import { DocumentPDFExporter } from '@/modules/documents/components/DocumentPDFExporter';
 import { DocumentPreviewContainer } from '@/modules/documents/components/DocumentPreviewContainer';
+import { SmartNumberingWidget } from '@/modules/documents/components/SmartNumberingWidget';
 
 interface CreateDocumentClientProps {
   templates: DocumentTemplateItem[];
@@ -41,7 +42,13 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
     currentTemplate?.default_values || {}
   );
 
+  // Smart Numbering States
+  const [selectedCategory, setSelectedCategory] = useState<string>('TROOPERS');
+  const [companyCode, setCompanyCode] = useState<string>('KIAN');
+  const [orgCode, setOrgCode] = useState<string>('TROOPERS');
   const [customNumber, setCustomNumber] = useState<string>('');
+  const [resolvedLiveNumber, setResolvedLiveNumber] = useState<string>('');
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingMode, setGeneratingMode] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -72,7 +79,10 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
       const res = await generateDocumentAction({
         template_id: currentTemplate.id,
         form_data: formData,
-        custom_number: customNumber.trim() || undefined,
+        custom_number: customNumber.trim() || resolvedLiveNumber.trim() || undefined,
+        category_code: orgCode,
+        company_code: companyCode,
+        org_code: orgCode,
         signatory_id: selectedSignatoryId || undefined,
         mode,
       });
@@ -97,7 +107,7 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
   const selectedSignatory = signatories.find((s) => s.id === selectedSignatoryId);
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 max-w-7xl mx-auto">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <div>
@@ -106,7 +116,7 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
               href="/dashboard/documents"
               className="text-xs font-bold text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
             >
-              ← Kembali ke Dokumen
+              ← Kembali ke Arsip Dokumen
             </Link>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-zinc-100 mt-1 flex items-center gap-2">
@@ -114,8 +124,8 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             {isPrivileged
-              ? 'Isi formulir untuk langsung menerbitkan dokumen resmi dengan nomor urut otomatis dan QR verifikasi aktif.'
-              : 'Isi formulir dan ajukan dokumen untuk ditinjau dan diterbitkan oleh Manajemen / Admin.'}
+              ? 'Penerbitan surat tugas & dinas resmi KIAN dengan penomoran otomatis, QR verification, dan layout A4 presisi.'
+              : 'Isi formulir dan ajukan dokumen untuk ditinjau dan diterbitkan secara resmi oleh Manajemen.'}
           </p>
         </div>
 
@@ -129,9 +139,9 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
               />
               <Link
                 href={`/dashboard/documents/${createdDocInfo.id}`}
-                className="px-4 py-2.5 rounded-xl bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-bold text-xs"
+                className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-500/20"
               >
-                Lihat Detail Dokumen
+                Lihat Detail Dokumen →
               </Link>
             </div>
           ) : (
@@ -195,107 +205,130 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
       </div>
 
       {errorMsg && (
-        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-bold">
-          ⚠️ {errorMsg}
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-bold flex items-center gap-2">
+          <span>⚠️</span>
+          <span>{errorMsg}</span>
         </div>
       )}
 
       {createdDocInfo && (
         <div
-          className={`p-4 rounded-2xl text-xs font-bold flex flex-wrap items-center justify-between gap-2 border ${
+          className={`p-4 sm:p-5 rounded-2xl text-xs font-bold flex flex-wrap items-center justify-between gap-3 border shadow-sm ${
             createdDocInfo.status === 'ISSUED'
-              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
               : createdDocInfo.status === 'PENDING_APPROVAL'
-              ? 'bg-purple-500/10 border-purple-500/30 text-purple-600 dark:text-purple-400'
-              : 'bg-zinc-500/10 border-zinc-500/30 text-zinc-600 dark:text-zinc-400'
+              ? 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300'
+              : 'bg-zinc-500/10 border-zinc-500/30 text-zinc-700 dark:text-zinc-300'
           }`}
         >
-          <span>
-            {createdDocInfo.status === 'ISSUED' && (
-              <>🎉 Dokumen berhasil diterbitkan secara resmi dengan nomor: <strong>{createdDocInfo.number}</strong>!</>
-            )}
-            {createdDocInfo.status === 'PENDING_APPROVAL' && (
-              <>📨 Dokumen berhasil diajukan untuk ditinjau oleh Manajemen (Kode Pengajuan: <strong>{createdDocInfo.number}</strong>)!</>
-            )}
-            {createdDocInfo.status === 'DRAFT' && (
-              <>💾 Draf dokumen berhasil disimpan (Kode Draf: <strong>{createdDocInfo.number}</strong>)!</>
-            )}
-          </span>
-          <span className="text-[11px] font-medium">
-            Arsip permanen tersimpan di database.
-          </span>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm">
+              {createdDocInfo.status === 'ISSUED' && <span>🎉 <strong>Dokumen Berhasil Diterbitkan Secara Resmi!</strong></span>}
+              {createdDocInfo.status === 'PENDING_APPROVAL' && <span>📨 <strong>Dokumen Berhasil Diajukan untuk Persetujuan!</strong></span>}
+              {createdDocInfo.status === 'DRAFT' && <span>💾 <strong>Draf Dokumen Berhasil Disimpan!</strong></span>}
+            </div>
+            <p className="text-xs font-mono font-medium">
+              Nomor Surat: <span className="font-bold underline">{createdDocInfo.number}</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCreatedDocInfo(null);
+                setFormData(currentTemplate?.default_values || {});
+              }}
+              className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-bold hover:bg-zinc-50"
+            >
+              + Buat Surat Baru
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Main Grid: Form Inputs vs Live A4 Canvas */}
+      {/* Main Grid: Form Setup vs Live A4 Canvas Preview */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Form Setup */}
-        <div className="lg:col-span-5 space-y-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 shadow-xs">
-          {/* 1. Template Selector */}
-          <div className="space-y-1">
-            <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-              Pilih Template Surat <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={selectedTemplateId}
-              onChange={(e) => setSelectedTemplateId(e.target.value)}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-bold"
-            >
-              {templates.map((tpl) => (
-                <option key={tpl.id} value={tpl.id}>
-                  {tpl.name} ({tpl.type_name} - v{tpl.current_version})
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Left Column: Form & Smart Configuration */}
+        <div className="lg:col-span-5 space-y-5">
+          {/* Section 1: Template & Signatory Quick Picker */}
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wider flex items-center gap-1.5">
+                <span>📄</span> Template &amp; Pengesahan
+              </label>
+              <span className="text-[10px] text-zinc-400">Langkah 1</span>
+            </div>
 
-          {/* 2. Signatory Selector */}
-          {signatories.length > 0 && (
             <div className="space-y-1">
-              <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                Pejabat Penandatangan Resmi
+              <label className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                Pilih Template Dokumen <span className="text-red-500">*</span>
               </label>
               <select
-                value={selectedSignatoryId}
-                onChange={(e) => setSelectedSignatoryId(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-medium"
+                value={selectedTemplateId}
+                onChange={(e) => setSelectedTemplateId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100"
               >
-                {signatories.map((sig) => (
-                  <option key={sig.id} value={sig.id}>
-                    {sig.name} - {sig.position}
+                {templates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name} ({tpl.type_name} - v{tpl.current_version})
                   </option>
                 ))}
               </select>
             </div>
-          )}
 
-          {/* 3. Numbering Preview / Custom Override (Only for Privileged Issuer) */}
+            {signatories.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
+                  Pejabat Penandatangan Resmi
+                </label>
+                <select
+                  value={selectedSignatoryId}
+                  onChange={(e) => setSelectedSignatoryId(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100"
+                >
+                  {signatories.map((sig) => (
+                    <option key={sig.id} value={sig.id}>
+                      {sig.name} - {sig.position}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Section 2: Smart Numbering Engine */}
           {isPrivileged ? (
-            <div className="p-3 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-1.5">
-              <label className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
-                <span>Nomor Surat Resmi</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">
-                  Otomatis via Sequential Counter
-                </span>
-              </label>
-              <input
-                type="text"
-                value={customNumber}
-                onChange={(e) => setCustomNumber(e.target.value)}
-                placeholder="Kosongkan untuk nomor otomatis (e.g. 1/KIAN/TROOPERS/IX/2026)"
-                className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
-              />
-            </div>
+            <SmartNumberingWidget
+              selectedCategory={selectedCategory}
+              onCategoryChange={setSelectedCategory}
+              customNumber={customNumber}
+              onCustomNumberChange={setCustomNumber}
+              companyCode={companyCode}
+              onCompanyCodeChange={setCompanyCode}
+              orgCode={orgCode}
+              onOrgCodeChange={setOrgCode}
+              onNumberResolved={setResolvedLiveNumber}
+            />
           ) : (
-            <div className="p-3 bg-purple-50 dark:bg-purple-950/20 rounded-xl border border-purple-200 dark:border-purple-800/40 text-xs text-purple-700 dark:text-purple-300">
-              ℹ️ <strong>Alur Persetujuan:</strong> Dokumen ini akan tersimpan sebagai pengajuan dan nomor surat resmi akan otomatis dialokasikan saat disetujui oleh Manajemen / Admin.
+            <div className="p-4 bg-purple-50 dark:bg-purple-950/20 rounded-2xl border border-purple-200 dark:border-purple-800/40 text-xs text-purple-700 dark:text-purple-300 space-y-1">
+              <div className="font-bold flex items-center gap-1.5">
+                <span>ℹ️</span> Alur Pengajuan Surat Resmi
+              </div>
+              <p className="text-[11px]">
+                Dokumen yang diajukan akan ditinjau oleh Manajemen. Nomor resmi dengan format standar <code className="font-bold">001/KIAN/TROOPERS/IX/2026</code> akan dialokasikan secara otomatis saat surat disetujui.
+              </p>
             </div>
           )}
 
-          <div className="border-t border-zinc-200 dark:border-zinc-800 pt-3">
-            <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider mb-3">
-              Formulir Data Dokumen
-            </h3>
+          {/* Section 3: Dynamic Form Inputs */}
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
+              <h3 className="text-xs font-black text-zinc-900 dark:text-zinc-100 uppercase tracking-wider flex items-center gap-1.5">
+                <span>📝</span> Formulir Isi Dokumen
+              </h3>
+              <span className="text-[10px] text-zinc-400">Langkah 2</span>
+            </div>
+
             <DynamicDocumentForm
               schema={currentTemplate?.form_schema || []}
               formData={formData}
@@ -307,13 +340,13 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
         </div>
 
         {/* Right Column: Live A4 Canvas Preview */}
-        <div className="lg:col-span-7 space-y-3">
+        <div className="lg:col-span-7 space-y-3 sticky top-4">
           <div className="w-full flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
             <span className="text-xs font-bold text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
               <span>👁️</span> Live Preview Dokumen (A4)
             </span>
-            <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-full">
-              Sesuai Format Cetak PDF
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+              Presisi Format Cetak PDF
             </span>
           </div>
 
@@ -321,16 +354,24 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
             <DocumentCanvas
               formData={{
                 ...formData,
-                document_number: customNumber || formData.document_number || (isPrivileged ? 'PREVIEW/KIAN/TROOPERS/IX/2026' : 'DRAF/PENGAJUAN'),
+                document_number:
+                  customNumber ||
+                  resolvedLiveNumber ||
+                  formData.document_number ||
+                  (isPrivileged ? '001/KIAN/TROOPERS/IX/2026' : 'DRAF/PENGAJUAN'),
                 status: isPrivileged ? 'ISSUED' : 'PENDING_APPROVAL',
               }}
               layoutConfig={currentTemplate?.layout_config}
-              signatory={selectedSignatory ? {
-                name: selectedSignatory.name,
-                position: selectedSignatory.position,
-                signature_url: selectedSignatory.signature_url,
-                stamp_url: selectedSignatory.stamp_url,
-              } : undefined}
+              signatory={
+                selectedSignatory
+                  ? {
+                      name: selectedSignatory.name,
+                      position: selectedSignatory.position,
+                      signature_url: selectedSignatory.signature_url,
+                      stamp_url: selectedSignatory.stamp_url,
+                    }
+                  : undefined
+              }
             />
           </DocumentPreviewContainer>
         </div>

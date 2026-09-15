@@ -9,6 +9,7 @@ import {
   approveAndIssueDocumentAction,
   rejectDocumentAction,
   submitForApprovalAction,
+  duplicateDocumentAction,
 } from '../documentActions';
 
 interface DocumentListTableProps {
@@ -24,6 +25,7 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [activeStatusTab, setActiveStatusTab] = useState<'ALL' | 'ISSUED' | 'PENDING' | 'DRAFT'>('ALL');
   const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+  const [isDuplicatingId, setIsDuplicatingId] = useState<string | null>(null);
 
   // Approval modal state
   const [selectedDocForApproval, setSelectedDocForApproval] = useState<GeneratedDocumentItem | null>(null);
@@ -36,6 +38,22 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
   const pendingCount = documents.filter((d) => d.status === 'PENDING_APPROVAL').length;
   const issuedCount = documents.filter((d) => d.status === 'ISSUED' || d.status === 'GENERATED' || d.status === 'SIGNED').length;
   const draftCount = documents.filter((d) => d.status === 'DRAFT' || d.status === 'REJECTED').length;
+
+  const handleDuplicate = async (docId: string) => {
+    setIsDuplicatingId(docId);
+    try {
+      const res = await duplicateDocumentAction(docId);
+      if (res.success && res.newDocumentId) {
+        router.push(`/dashboard/documents/${res.newDocumentId}`);
+      } else {
+        alert(res.error || 'Gagal menduplikasi dokumen.');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setIsDuplicatingId(null);
+    }
+  };
 
   const filtered = documents.filter((doc) => {
     // Status Tab Filter
@@ -349,6 +367,20 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                     </button>
                   )}
 
+                  <button
+                    type="button"
+                    onClick={() => handleDuplicate(doc.id)}
+                    disabled={isDuplicatingId === doc.id}
+                    className="p-2 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+                    title="Duplikasi Dokumen"
+                  >
+                    {isDuplicatingId === doc.id ? (
+                      <span className="w-3.5 h-3.5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin inline-block" />
+                    ) : (
+                      <span>📑</span>
+                    )}
+                  </button>
+
                   {canManage && (
                     <button
                       type="button"
@@ -456,6 +488,20 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                               Ajukan
                             </button>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleDuplicate(doc.id)}
+                            disabled={isDuplicatingId === doc.id}
+                            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+                            title="Duplikasi Dokumen Ini"
+                          >
+                            {isDuplicatingId === doc.id ? (
+                              <span className="w-3.5 h-3.5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin inline-block" />
+                            ) : (
+                              <span>📑</span>
+                            )}
+                          </button>
 
                           <Link
                             href={`/dashboard/documents/${doc.id}`}
