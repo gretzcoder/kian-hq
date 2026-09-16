@@ -13,6 +13,7 @@ import { DocumentCanvas } from '@/modules/documents/components/DocumentCanvas';
 import { DocumentPDFExporter } from '@/modules/documents/components/DocumentPDFExporter';
 import { DocumentPreviewContainer } from '@/modules/documents/components/DocumentPreviewContainer';
 import { SmartNumberingWidget } from '@/modules/documents/components/SmartNumberingWidget';
+import { getRealtimeDocumentDate } from '@/lib/dateUtils';
 
 interface CreateDocumentClientProps {
   templates: DocumentTemplateItem[];
@@ -38,8 +39,15 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
     signatories[0]?.id || ''
   );
 
-  const [formData, setFormData] = useState<Record<string, any>>(
-    currentTemplate?.default_values || {}
+  const getPreparedFormData = (tpl: DocumentTemplateItem | undefined) => {
+    const raw = { ...(tpl?.default_values || {}) };
+    // Automatically set document date to realtime current date
+    raw.document_date_place = getRealtimeDocumentDate('Jakarta');
+    return raw;
+  };
+
+  const [formData, setFormData] = useState<Record<string, any>>(() =>
+    getPreparedFormData(currentTemplate)
   );
 
   // Smart Numbering States
@@ -54,10 +62,10 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [createdDocInfo, setCreatedDocInfo] = useState<{ id: string; number: string; status: string } | null>(null);
 
-  // When selected template changes, reset form data to its defaults
+  // When selected template changes, reset form data to its defaults with realtime date
   useEffect(() => {
     if (currentTemplate) {
-      setFormData(currentTemplate.default_values || {});
+      setFormData(getPreparedFormData(currentTemplate));
     }
   }, [currentTemplate]);
 
@@ -236,7 +244,7 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
               type="button"
               onClick={() => {
                 setCreatedDocInfo(null);
-                setFormData(currentTemplate?.default_values || {});
+                setFormData(getPreparedFormData(currentTemplate));
               }}
               className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 text-xs font-bold hover:bg-zinc-50"
             >

@@ -11,6 +11,7 @@ import {
   TemplateLayoutConfig,
 } from '../documentTypes';
 import { DEFAULT_ORGANIZATION_PROFILE } from '../defaultTemplates';
+import { getRealtimeDocumentDate } from '@/lib/dateUtils';
 
 interface DocumentCanvasProps {
   formData: Record<string, any>;
@@ -156,7 +157,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
     'Demikianlah penugasan ini agar dapat dilaksanakan sebagaimana mestinya. Atas perhatian dan kerja samanya, kami mengucapkan terima kasih.';
 
   const docDatePlace =
-    formData.document_date_place || 'Jakarta, 10 September 2026';
+    formData.document_date_place || getRealtimeDocumentDate('Jakarta');
   const signatoryPos =
     formData.signatory_position ||
     signatory?.position ||

@@ -30,6 +30,7 @@ import {
   DEFAULT_SURAT_TUGAS_VALUES,
   getDefaultTemplateForType,
 } from '../defaultTemplates';
+import { getRealtimeDocumentDate } from '@/lib/dateUtils';
 
 interface TemplateBuilderProps {
   initialTemplate?: DocumentTemplateItem | null;
@@ -71,14 +72,22 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
   const [formSchema, setFormSchema] = useState<FormFieldSchema[]>(
     initialTemplate?.form_schema || DEFAULT_SURAT_TUGAS_SCHEMA
   );
-  const [defaultValues, setDefaultValues] = useState<Record<string, any>>(
-    initialTemplate?.default_values || DEFAULT_SURAT_TUGAS_VALUES
-  );
+  const [defaultValues, setDefaultValues] = useState<Record<string, any>>(() => {
+    const raw = initialTemplate?.default_values || DEFAULT_SURAT_TUGAS_VALUES;
+    return {
+      ...raw,
+      document_date_place: raw.document_date_place || getRealtimeDocumentDate('Jakarta'),
+    };
+  });
 
   // Sample data for previewing live canvas in builder
-  const [previewData, setPreviewData] = useState<Record<string, any>>(
-    initialTemplate?.sample_data || defaultValues
-  );
+  const [previewData, setPreviewData] = useState<Record<string, any>>(() => {
+    const raw = initialTemplate?.sample_data || defaultValues;
+    return {
+      ...raw,
+      document_date_place: raw.document_date_place || getRealtimeDocumentDate('Jakarta'),
+    };
+  });
 
   const [activeTab, setActiveTab] = useState<'KOP_SURAT' | 'SECTIONS' | 'TYPOGRAPHY' | 'SIGNATURE' | 'INFO' | 'LAYOUT' | 'DEFAULTS'>('KOP_SURAT');
   const [selectedKopElement, setSelectedKopElement] = useState<string | null>('logo');
@@ -703,6 +712,29 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     setIsSaving(true);
     setMessage(null);
 
+    // Ensure effectiveFormSchema retains event_custom_details if custom details or grid are present
+    let effectiveFormSchema = [...formSchema];
+    const hasEventGrid = layoutConfig.flowSections?.some(
+      (s) => s.type === 'KEY_VALUE_GRID' || s.type === 'EVENT_DETAILS'
+    );
+    const hasCustomDetails = previewData.event_custom_details || defaultValues.event_custom_details;
+    if ((hasEventGrid || hasCustomDetails) && !effectiveFormSchema.some((f) => f.key === 'event_custom_details')) {
+      const insertIdx = effectiveFormSchema.findIndex((f) => f.key === 'event_location' || f.key === 'event_days');
+      const customField: FormFieldSchema = {
+        key: 'event_custom_details',
+        label: 'Rincian Tambahan / Kustom (Dresscode, Perlengkapan, dll)',
+        type: 'key_value_list',
+        required: false,
+        defaultValue: defaultValues.event_custom_details || [{ id: '1', label: 'Dresscode', value: 'Batik / Formal Bebas Rapi' }],
+        helpText: 'Tambahkan rincian tambahan seperti dresscode, pakaian, perlengkapan, catatan, atau kontak PIC.',
+      };
+      if (insertIdx !== -1) {
+        effectiveFormSchema.splice(insertIdx + 1, 0, customField);
+      } else {
+        effectiveFormSchema.push(customField);
+      }
+    }
+
     try {
       if (isEditing && initialTemplate) {
         const res = await updateTemplateAction(initialTemplate.id, {
@@ -710,7 +742,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           description,
           status,
           layout_config: layoutConfig,
-          form_schema: formSchema,
+          form_schema: effectiveFormSchema,
           default_values: defaultValues,
           sample_data: previewData,
           forceNewVersion: true,
@@ -735,7 +767,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
           type_id: typeId,
           status,
           layout_config: layoutConfig,
-          form_schema: formSchema,
+          form_schema: effectiveFormSchema,
           default_values: defaultValues,
           sample_data: previewData,
         });
@@ -2533,15 +2565,24 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
 
                           <div className="space-y-2">
                             <div>
-                              <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
-                                Tempat &amp; Tanggal Surat
-                              </label>
+                              <div className="flex items-center justify-between mb-0.5">
+                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                                  Tempat &amp; Tanggal Surat
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => updateFieldValue('document_date_place', getRealtimeDocumentDate('Jakarta'))}
+                                  className="text-[9.5px] font-bold text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-0.5"
+                                >
+                                  ⚡ Tanggal Hari Ini (Realtime)
+                                </button>
+                              </div>
                               <input
                                 type="text"
                                 value={previewData.document_date_place || ''}
                                 onChange={(e) => updateFieldValue('document_date_place', e.target.value)}
                                 className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
-                                placeholder="Jakarta, 10 September 2026"
+                                placeholder={getRealtimeDocumentDate('Jakarta')}
                               />
                             </div>
 

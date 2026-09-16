@@ -65,3 +65,16 @@ export function formatIndonesiaDate(tsOrStr: number | string | null | undefined)
   }).format(date) + ' WIB';
 }
 
+/**
+ * Returns formatted Indonesian place and current date for official documents (e.g. "Jakarta, 16 September 2026").
+ */
+export function getRealtimeDocumentDate(city: string = 'Jakarta', d: Date = new Date()): string {
+  const formatted = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(d);
+  return `${city}, ${formatted}`;
+}
+

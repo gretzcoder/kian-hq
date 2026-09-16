@@ -3,6 +3,7 @@ import {
   OrganizationSnapshot,
   TemplateLayoutConfig,
 } from './documentTypes';
+import { getRealtimeDocumentDate } from '@/lib/dateUtils';
 
 export const DEFAULT_ORGANIZATION_PROFILE: OrganizationSnapshot = {
   name: 'KIAN TROOPERS (Kreasi Inovasi Anak Nusantara)',
@@ -193,8 +194,8 @@ export const DEFAULT_SURAT_TUGAS_SCHEMA: FormFieldSchema[] = [
     label: 'Tempat & Tanggal Surat',
     type: 'text',
     required: true,
-    defaultValue: 'Jakarta, 10 September 2026',
-    placeholder: 'Contoh: Jakarta, 10 September 2026',
+    defaultValue: getRealtimeDocumentDate('Jakarta'),
+    placeholder: 'Contoh: Jakarta, 16 September 2026',
   },
   {
     key: 'signatory_position',
@@ -264,7 +265,7 @@ export const DEFAULT_SURAT_TUGAS_VALUES = {
   event_location: 'Hotel Santika Depok',
   closing_text:
     'Demikianlah penugasan ini agar dapat dilaksanakan sebagaimana mestinya. Atas perhatian dan kerja samanya, kami mengucapkan terima kasih.',
-  document_date_place: 'Jakarta, 10 September 2026',
+  document_date_place: getRealtimeDocumentDate('Jakarta'),
   signatory_position: 'Program Director Kian Troopers',
   signatory_name: 'Mohamad Abi',
   show_signature: true,
@@ -389,6 +390,16 @@ export const DEFAULT_SURAT_UNDANGAN_SCHEMA: FormFieldSchema[] = [
       'Mengingat pentingnya agenda tersebut, kami sangat mengharapkan kehadiran Bapak/Ibu tepat pada waktunya. Konfirmasi kehadiran dapat disampaikan selambat-lambatnya H-1 kegiatan.',
   },
   {
+    key: 'event_custom_details',
+    label: 'Rincian Tambahan / Kustom (Dresscode, Perlengkapan, dll)',
+    type: 'key_value_list',
+    required: false,
+    defaultValue: [
+      { id: '1', label: 'Dresscode', value: 'Batik / Formal Bebas Rapi' },
+    ],
+    helpText: 'Tambahkan rincian tambahan seperti dresscode, pakaian, perlengkapan, catatan, atau kontak PIC.',
+  },
+  {
     key: 'closing_text',
     label: 'Kalimat Penutup',
     type: 'textarea',
@@ -401,7 +412,7 @@ export const DEFAULT_SURAT_UNDANGAN_SCHEMA: FormFieldSchema[] = [
     label: 'Tempat & Tanggal Surat',
     type: 'text',
     required: true,
-    defaultValue: 'Jakarta, 10 September 2026',
+    defaultValue: getRealtimeDocumentDate('Jakarta'),
   },
   {
     key: 'signatory_position',
@@ -461,7 +472,7 @@ export const DEFAULT_SURAT_UNDANGAN_VALUES = {
     'Mengingat pentingnya agenda tersebut, kami sangat mengharapkan kehadiran Bapak/Ibu tepat pada waktunya. Konfirmasi kehadiran dapat disampaikan selambat-lambatnya H-1 kegiatan.',
   closing_text:
     'Demikian surat undangan ini kami sampaikan. Atas perhatian, kehadiran, dan kerja sama yang baik, kami ucapkan terima kasih.',
-  document_date_place: 'Jakarta, 10 September 2026',
+  document_date_place: getRealtimeDocumentDate('Jakarta'),
   signatory_position: 'Chief Executive Officer (CEO)',
   signatory_name: 'Mohamad Abi',
   show_signature: true,
@@ -581,7 +592,7 @@ export const DEFAULT_SURAT_KETERANGAN_SCHEMA: FormFieldSchema[] = [
     label: 'Tempat & Tanggal Surat',
     type: 'text',
     required: true,
-    defaultValue: 'Jakarta, 10 September 2026',
+    defaultValue: getRealtimeDocumentDate('Jakarta'),
   },
   {
     key: 'signatory_position',
@@ -632,7 +643,7 @@ export const DEFAULT_SURAT_KETERANGAN_VALUES = {
     'Adalah benar yang bersangkutan telah aktif melaksanakan penugasan dan praktik kerja industri (OJT/Magang) di KIAN Troopers selama periode Januari 2026 sampai dengan September 2026 dengan dedikasi, kedisiplinan, dan kinerja yang sangat memuaskan.',
   closing_text:
     'Demikian surat keterangan ini dibuat dengan sebenar-benarnya untuk dapat dipergunakan sebagaimana mestinya.',
-  document_date_place: 'Jakarta, 10 September 2026',
+  document_date_place: getRealtimeDocumentDate('Jakarta'),
   signatory_position: 'Program Director Kian Troopers',
   signatory_name: 'Mohamad Abi',
   show_signature: true,
@@ -755,7 +766,7 @@ export const DEFAULT_SURAT_PERNYATAAN_SCHEMA: FormFieldSchema[] = [
     label: 'Tempat & Tanggal Surat',
     type: 'text',
     required: true,
-    defaultValue: 'Jakarta, 10 September 2026',
+    defaultValue: getRealtimeDocumentDate('Jakarta'),
   },
   {
     key: 'signatory_position',
@@ -809,7 +820,7 @@ export const DEFAULT_SURAT_PERNYATAAN_VALUES = {
   ],
   closing_text:
     'Demikian surat pernyataan ini saya buat dengan sadar tanpa paksaan dari pihak manapun untuk dipergunakan sebagaimana mestinya.',
-  document_date_place: 'Jakarta, 10 September 2026',
+  document_date_place: getRealtimeDocumentDate('Jakarta'),
   signatory_position: 'Program Director Kian Troopers',
   signatory_name: 'Mohamad Abi',
   show_signature: true,
@@ -935,7 +946,7 @@ export const DEFAULT_SURAT_KEPUTUSAN_SCHEMA: FormFieldSchema[] = [
     label: 'Tempat & Tanggal Penetapan',
     type: 'text',
     required: true,
-    defaultValue: 'Jakarta, 10 September 2026',
+    defaultValue: getRealtimeDocumentDate('Jakarta'),
   },
   {
     key: 'signatory_position',
@@ -972,7 +983,7 @@ export const DEFAULT_SURAT_KEPUTUSAN_VALUES = {
   ],
   closing_text:
     'Ditetapkan di Jakarta pada tanggal yang tertera di bawah ini untuk diketahui dan dilaksanakan oleh pihak-pihak yang bersangkutan.',
-  document_date_place: 'Jakarta, 10 September 2026',
+  document_date_place: getRealtimeDocumentDate('Jakarta'),
   signatory_position: 'Program Director Kian Troopers',
   signatory_name: 'Mohamad Abi',
   cc_list: ['1. Direktur Utama', '2. Divisi Operasional', '3. Arsip'],
@@ -1120,7 +1131,7 @@ export const DEFAULT_SURAT_MAGANG_SCHEMA: FormFieldSchema[] = [
     label: 'Tempat & Tanggal Penetapan',
     type: 'text',
     required: true,
-    defaultValue: 'Jakarta, 13 September 2026',
+    defaultValue: getRealtimeDocumentDate('Jakarta'),
   },
   {
     key: 'signatory_position',
@@ -1194,7 +1205,7 @@ export const DEFAULT_SURAT_MAGANG_VALUES = {
   ],
   closing_text:
     'Demikian Surat Keputusan ini dibuat untuk dapat dipergunakan sebagaimana mestinya oleh pihak yang berkepentingan.',
-  document_date_place: 'Jakarta, 13 September 2026',
+  document_date_place: getRealtimeDocumentDate('Jakarta'),
   signatory_position: 'Program Director Kian Troopers',
   signatory_name: 'Mohamad Abi',
   cc_list: ['1. Direktur Utama', '2. Divisi People & Culture (HR)', '3. Institusi Asal Peserta', '4. Arsip'],

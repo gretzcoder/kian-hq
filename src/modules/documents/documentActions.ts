@@ -23,6 +23,7 @@ import {
   analyzeDocumentSequences,
   NUMBERING_CATEGORIES,
 } from './numberingEngine';
+import { getRealtimeDocumentDate } from '@/lib/dateUtils';
 
 /**
  * Searches users from KIAN HQ database for quick assignee selection.
@@ -286,6 +287,11 @@ export async function generateDocumentAction(params: {
     }
 
     // 5. Compile Full Rendered Snapshot
+    const finalFormData = { ...params.form_data };
+    if (!finalFormData.document_date_place || !finalFormData.document_date_place.trim()) {
+      finalFormData.document_date_place = getRealtimeDocumentDate('Jakarta');
+    }
+
     const compiledSnapshot = {
       layout_config: template.layout_config,
       organization: orgSnapshot,
@@ -296,14 +302,14 @@ export async function generateDocumentAction(params: {
         stamp_url: stampUrl,
       },
       compiled_data: {
-        ...params.form_data,
+        ...finalFormData,
         document_number: finalDocNumber,
         status: initialStatus,
       },
       generated_at: finalMode === 'ISSUE' ? nowSec : null,
     };
 
-    const docTitle = params.form_data.document_title || template.name || 'Dokumen Resmi';
+    const docTitle = finalFormData.document_title || template.name || 'Dokumen Resmi';
 
     // 6. Persist to generated_documents
     await db

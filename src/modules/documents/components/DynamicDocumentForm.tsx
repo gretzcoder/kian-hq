@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { CustomDetailItem, FormFieldSchema } from '../documentTypes';
 import { AssigneeTableInput } from './AssigneeTableInput';
 import { searchProjectsAction } from '../documentActions';
+import { getRealtimeDocumentDate } from '@/lib/dateUtils';
 
 interface DynamicDocumentFormProps {
   schema: FormFieldSchema[];
@@ -67,13 +68,54 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
     onChange(key, updated);
   };
 
+  // Dynamic schema expansion to guarantee dresscode/custom details & person custom details are editable
+  const hasEventFields = (schema || []).some(
+    (f) => f.key === 'event_name' || f.key === 'event_days' || f.key === 'event_location' || f.key === 'event_intro_text'
+  );
+  const hasCustomDetailsInSchema = (schema || []).some(
+    (f) => f.key === 'event_custom_details' || f.type === 'key_value_list' || f.type === 'custom_details'
+  );
+
+  let effectiveSchema = [...(schema || [])];
+
+  if (!hasCustomDetailsInSchema && (hasEventFields || formData.event_custom_details)) {
+    const insertIdx = effectiveSchema.findIndex(
+      (f) => f.key === 'event_location' || f.key === 'event_time' || f.key === 'event_days'
+    );
+    const customField: FormFieldSchema = {
+      key: 'event_custom_details',
+      label: 'Rincian Tambahan / Kustom (Dresscode, Perlengkapan, dll.)',
+      type: 'key_value_list',
+      required: false,
+      defaultValue:
+        Array.isArray(formData.event_custom_details) && formData.event_custom_details.length > 0
+          ? formData.event_custom_details
+          : [{ id: '1', label: 'Dresscode', value: 'Batik / Formal Bebas Rapi' }],
+      helpText: 'Tambahkan rincian tambahan seperti dresscode, pakaian, perlengkapan, catatan, atau kontak PIC.',
+    };
+
+    if (insertIdx !== -1) {
+      effectiveSchema.splice(insertIdx + 1, 0, customField);
+    } else {
+      effectiveSchema.push(customField);
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {schema.map((field) => {
-        const value =
+      {effectiveSchema.map((field) => {
+        let value =
           formData[field.key] !== undefined
             ? formData[field.key]
             : field.defaultValue ?? '';
+
+        // Auto realtime date default for date_place field if empty or default
+        if (
+          (field.key === 'document_date_place' || field.key === 'date_place') &&
+          (!value || typeof value !== 'string' || !value.trim())
+        ) {
+          value = getRealtimeDocumentDate('Jakarta');
+        }
 
         // Assignee Table Type
         if (field.type === 'assignee_table') {
@@ -152,8 +194,19 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
         }
 
         // Key Value List / Custom Details (e.g. Dresscode, Perlengkapan, Catatan, dll)
-        if (field.type === 'key_value_list' || field.type === 'custom_details' || field.key === 'event_custom_details') {
-          const list: CustomDetailItem[] = Array.isArray(value) ? value : [];
+        if (
+          field.type === 'key_value_list' ||
+          field.type === 'custom_details' ||
+          field.key === 'event_custom_details' ||
+          field.key === 'person_custom_details'
+        ) {
+          const rawList = Array.isArray(value) ? value : [];
+          // Ensure all items have unique IDs for accurate updates
+          const list: CustomDetailItem[] = rawList.map((it: any, i: number) => ({
+            id: it?.id || `cd_item_${i}_${Date.now()}`,
+            label: it?.label ?? '',
+            value: it?.value ?? '',
+          }));
 
           const handleAdd = (label: string, val: string = '') => {
             const newItem: CustomDetailItem = {
@@ -164,13 +217,19 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
             onChange(field.key, [...list, newItem]);
           };
 
-          const handleUpdate = (id: string, subField: 'label' | 'value', subVal: string) => {
-            const nextList = list.map((it) => (it.id === id ? { ...it, [subField]: subVal } : it));
+          const handleUpdate = (idOrIdx: string | number, subField: 'label' | 'value', subVal: string) => {
+            const nextList = list.map((it, idx) => {
+              const isMatch = (it.id && it.id === idOrIdx) || idx === idOrIdx;
+              return isMatch ? { ...it, [subField]: subVal } : it;
+            });
             onChange(field.key, nextList);
           };
 
-          const handleRemove = (id: string) => {
-            onChange(field.key, list.filter((it) => it.id !== id));
+          const handleRemove = (idOrIdx: string | number) => {
+            const nextList = list.filter((it, idx) => {
+              return it.id ? it.id !== idOrIdx : idx !== idOrIdx;
+            });
+            onChange(field.key, nextList);
           };
 
           const handleMove = (index: number, direction: 'up' | 'down') => {
@@ -265,7 +324,7 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                       <input
                         type="text"
                         value={item.label}
-                        onChange={(e) => handleUpdate(item.id, 'label', e.target.value)}
+                        onChange={(e) => handleUpdate(item.id || idx, 'label', e.target.value)}
                         placeholder="Nama (e.g. Dresscode)"
                         className="w-[120px] shrink-0 px-2 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:ring-1 focus:ring-purple-500"
                       />
@@ -276,7 +335,7 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                       <input
                         type="text"
                         value={item.value}
-                        onChange={(e) => handleUpdate(item.id, 'value', e.target.value)}
+                        onChange={(e) => handleUpdate(item.id || idx, 'value', e.target.value)}
                         placeholder="Isi rincian keterangan..."
                         className="flex-1 px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-1 focus:ring-purple-500"
                       />
@@ -284,7 +343,7 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                       {/* Delete Button */}
                       <button
                         type="button"
-                        onClick={() => handleRemove(item.id)}
+                        onClick={() => handleRemove(item.id || idx)}
                         className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 p-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors"
                         title="Hapus baris ini"
                       >
@@ -346,6 +405,47 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
           );
         }
 
+        // Tempat & Tanggal Surat (with automatic realtime date & sync button)
+        if (field.key === 'document_date_place' || field.key === 'date_place') {
+          const liveDate = getRealtimeDocumentDate('Jakarta');
+          const currentValue = value || liveDate;
+
+          return (
+            <div key={field.key} className="space-y-1">
+              <div className="flex items-center justify-between gap-1 flex-wrap">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+                  <span>📅</span> {field.label}{' '}
+                  {field.required && <span className="text-red-500">*</span>}
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold px-2 py-0.5 rounded-md border border-emerald-500/20 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Realtime Otomatis
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onChange(field.key, liveDate)}
+                    className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:text-purple-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                    title="Setel ulang ke tanggal saat ini"
+                  >
+                    ⚡ Hari Ini
+                  </button>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={currentValue}
+                onChange={(e) => onChange(field.key, e.target.value)}
+                placeholder={field.placeholder || liveDate}
+                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+              />
+              {field.helpText && (
+                <p className="text-[10px] text-zinc-400">{field.helpText}</p>
+              )}
+            </div>
+          );
+        }
+
         // Event Name field with quick KIAN project picker button
         if (field.key === 'event_name') {
           return (
@@ -361,7 +461,7 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                     setShowProjectModal(true);
                     handleSearchProjects('');
                   }}
-                  className="text-[11px] text-purple-600 dark:text-purple-400 font-bold hover:underline"
+                  className="text-[11px] text-purple-600 dark:text-purple-400 font-bold hover:underline cursor-pointer"
                 >
                   📁 Ambil dari Project KIAN HQ
                 </button>
