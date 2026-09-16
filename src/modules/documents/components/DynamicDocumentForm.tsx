@@ -39,6 +39,19 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
 
   const handleSelectProject = (proj: any) => {
     onChange('event_name', proj.name);
+    // Normalize legacy hardcoded event title if present in event_intro_text
+    if (
+      typeof formData.event_intro_text === 'string' &&
+      formData.event_intro_text.includes('BKOT (Bincang Kampus Bersama Orang Tua) UBSI')
+    ) {
+      onChange(
+        'event_intro_text',
+        formData.event_intro_text.replace(
+          /BKOT \(Bincang Kampus Bersama Orang Tua\) UBSI/g,
+          '{event_name}'
+        )
+      );
+    }
     setShowProjectModal(false);
   };
 
@@ -383,23 +396,50 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
 
         // Textarea Type
         if (field.type === 'textarea') {
+          const availableTags = [
+            '{event_name}',
+            '{signer_title_intro}',
+            '{person_name}',
+            '{person_role}',
+          ];
           return (
-            <div key={field.key} className="space-y-1">
-              <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
-                <span>
+            <div key={field.key} className="space-y-1.5">
+              <div className="flex items-center justify-between flex-wrap gap-1">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
                   {field.label}{' '}
                   {field.required && <span className="text-red-500">*</span>}
-                </span>
-              </label>
+                </label>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {availableTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        const current = value || '';
+                        const next = current ? `${current} ${tag}` : tag;
+                        onChange(field.key, next);
+                      }}
+                      className="text-[9.5px] px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-mono font-bold hover:bg-purple-100 dark:hover:bg-purple-900/60 cursor-pointer transition-colors"
+                      title={`Sisipkan variabel ${tag}`}
+                    >
+                      +{tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <textarea
                 value={value}
                 onChange={(e) => onChange(field.key, e.target.value)}
                 placeholder={field.placeholder}
                 rows={2}
-                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-purple-500 focus:outline-hidden resize-y"
+                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-purple-500 focus:outline-hidden resize-y font-mono"
               />
-              {field.helpText && (
+              {field.helpText ? (
                 <p className="text-[10px] text-zinc-400">{field.helpText}</p>
+              ) : (
+                <p className="text-[9.5px] text-zinc-400 dark:text-zinc-500">
+                  💡 Gunakan variabel <code className="font-mono text-purple-600 dark:text-purple-400 font-bold">{'{event_name}'}</code> agar nama event terisi otomatis tanpa perlu mengetik ulang.
+                </p>
               )}
             </div>
           );
@@ -471,8 +511,11 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                 value={value}
                 onChange={(e) => onChange(field.key, e.target.value)}
                 placeholder={field.placeholder}
-                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
               />
+              <p className="text-[9.5px] text-zinc-400 dark:text-zinc-500">
+                ✨ Nama event ini otomatis diterapkan ke Kalimat Pengantar, Rincian, dan Lampiran dokumen.
+              </p>
             </div>
           );
         }

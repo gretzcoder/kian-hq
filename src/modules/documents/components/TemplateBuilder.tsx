@@ -72,8 +72,41 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
   const [formSchema, setFormSchema] = useState<FormFieldSchema[]>(
     initialTemplate?.form_schema || DEFAULT_SURAT_TUGAS_SCHEMA
   );
+  const normalizeData = (data: Record<string, any>) => {
+    const res = { ...data };
+    if (
+      typeof res.event_intro_text === 'string' &&
+      res.event_intro_text.includes('BKOT (Bincang Kampus Bersama Orang Tua) UBSI')
+    ) {
+      res.event_intro_text = res.event_intro_text.replace(
+        /BKOT \(Bincang Kampus Bersama Orang Tua\) UBSI/g,
+        '{event_name}'
+      );
+    }
+    if (
+      typeof res.intro_text === 'string' &&
+      res.intro_text.includes('Project Director Kian Troopers') &&
+      !res.intro_text.includes('{signer_title_intro}')
+    ) {
+      res.intro_text = res.intro_text.replace(
+        /Project Director Kian Troopers/g,
+        '{signer_title_intro}'
+      );
+    }
+    if (
+      typeof res.intro_text === 'string' &&
+      res.intro_text.includes('Rapat Koordinasi & Sinergi Program KIAN Troopers 2026')
+    ) {
+      res.intro_text = res.intro_text.replace(
+        /Rapat Koordinasi & Sinergi Program KIAN Troopers 2026/g,
+        '{event_name}'
+      );
+    }
+    return res;
+  };
+
   const [defaultValues, setDefaultValues] = useState<Record<string, any>>(() => {
-    const raw = initialTemplate?.default_values || DEFAULT_SURAT_TUGAS_VALUES;
+    const raw = normalizeData(initialTemplate?.default_values || DEFAULT_SURAT_TUGAS_VALUES);
     return {
       ...raw,
       document_date_place: raw.document_date_place || getRealtimeDocumentDate('Jakarta'),
@@ -82,7 +115,7 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
 
   // Sample data for previewing live canvas in builder
   const [previewData, setPreviewData] = useState<Record<string, any>>(() => {
-    const raw = initialTemplate?.sample_data || defaultValues;
+    const raw = normalizeData(initialTemplate?.sample_data || defaultValues);
     return {
       ...raw,
       document_date_place: raw.document_date_place || getRealtimeDocumentDate('Jakarta'),
@@ -1929,14 +1962,33 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
 
                             <div className="space-y-2">
                               <div>
-                                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block mb-0.5">
-                                  Kalimat Pengantar Rincian
-                                </label>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 block">
+                                    Kalimat Pengantar Rincian
+                                  </label>
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {['{event_name}', '{signer_title_intro}', '{person_name}', '{person_role}'].map((tag) => (
+                                      <button
+                                        key={tag}
+                                        type="button"
+                                        onClick={() => {
+                                          const current = previewData.event_intro_text || '';
+                                          const next = current ? `${current} ${tag}` : tag;
+                                          updateFieldValue('event_intro_text', next);
+                                        }}
+                                        className="text-[9px] px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-mono font-bold hover:bg-purple-100 dark:hover:bg-purple-900/60 cursor-pointer"
+                                        title={`Sisipkan tag ${tag}`}
+                                      >
+                                        +{tag}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
                                 <input
                                   type="text"
                                   value={previewData.event_intro_text || ''}
                                   onChange={(e) => updateFieldValue('event_intro_text', e.target.value)}
-                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs"
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs font-mono"
                                   placeholder="Untuk berpartisipasi pada event {event_name}, dengan rincian sebagai berikut:"
                                 />
                               </div>

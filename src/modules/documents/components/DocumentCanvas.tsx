@@ -135,26 +135,45 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
     }
   }
 
+  const interpolatePlaceholders = (text: string | undefined, data: Record<string, any>): string => {
+    if (!text) return '';
+    return text.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
+      if (data[key] !== undefined && data[key] !== null) {
+        return String(data[key]);
+      }
+      return match;
+    });
+  };
+
   const documentTitle = formData.document_title || 'SURAT TUGAS';
   const docNumber = formData.document_number || '1/KIAN/TROOPERS/IX/2026';
   const signerIntro = formData.signer_title_intro || 'Project Director Kian Troopers';
-  const introText =
+  const rawIntroText =
     formData.intro_text ||
-    `Yang bertanda tangan dibawah ini, ${signerIntro}, menugaskan kepada :`;
+    'Yang bertanda tangan dibawah ini, {signer_title_intro}, menugaskan kepada :';
+  const introText = interpolatePlaceholders(rawIntroText, {
+    ...formData,
+    signer_title_intro: signerIntro,
+  });
 
   const eventName =
     formData.event_name || 'BKOT (Bincang Kampus Bersama Orang Tua) UBSI';
-  const eventIntro =
+  const rawEventIntro =
     formData.event_intro_text ||
-    `Untuk berpartisipasi pada event ${eventName}, dengan rincian sebagai berikut:`;
+    'Untuk berpartisipasi pada event {event_name}, dengan rincian sebagai berikut:';
+  const eventIntro = interpolatePlaceholders(rawEventIntro, {
+    ...formData,
+    event_name: eventName,
+  });
   const eventDays =
     formData.event_days || "Jum'at - Sabtu, 11 - 12 September 2026";
   const eventTime = formData.event_time || '07.30 WIB - Selesai';
   const eventLocation = formData.event_location || 'Hotel Santika Depok';
 
-  const closingText =
+  const rawClosingText =
     formData.closing_text ||
     'Demikianlah penugasan ini agar dapat dilaksanakan sebagaimana mestinya. Atas perhatian dan kerja samanya, kami mengucapkan terima kasih.';
+  const closingText = interpolatePlaceholders(rawClosingText, formData);
 
   const docDatePlace =
     formData.document_date_place || getRealtimeDocumentDate('Jakarta');

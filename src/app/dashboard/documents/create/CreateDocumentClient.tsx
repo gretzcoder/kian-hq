@@ -43,6 +43,37 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
     const raw = { ...(tpl?.default_values || {}) };
     // Automatically set document date to realtime current date
     raw.document_date_place = getRealtimeDocumentDate('Jakarta');
+
+    // Normalize legacy hardcoded default event strings if present
+    if (
+      typeof raw.event_intro_text === 'string' &&
+      raw.event_intro_text.includes('BKOT (Bincang Kampus Bersama Orang Tua) UBSI')
+    ) {
+      raw.event_intro_text = raw.event_intro_text.replace(
+        /BKOT \(Bincang Kampus Bersama Orang Tua\) UBSI/g,
+        '{event_name}'
+      );
+    }
+    if (
+      typeof raw.intro_text === 'string' &&
+      raw.intro_text.includes('Project Director Kian Troopers') &&
+      !raw.intro_text.includes('{signer_title_intro}')
+    ) {
+      raw.intro_text = raw.intro_text.replace(
+        /Project Director Kian Troopers/g,
+        '{signer_title_intro}'
+      );
+    }
+    if (
+      typeof raw.intro_text === 'string' &&
+      raw.intro_text.includes('Rapat Koordinasi & Sinergi Program KIAN Troopers 2026')
+    ) {
+      raw.intro_text = raw.intro_text.replace(
+        /Rapat Koordinasi & Sinergi Program KIAN Troopers 2026/g,
+        '{event_name}'
+      );
+    }
+
     return raw;
   };
 

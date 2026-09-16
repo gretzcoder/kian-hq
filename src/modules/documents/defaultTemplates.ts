@@ -248,7 +248,7 @@ export const DEFAULT_SURAT_TUGAS_VALUES = {
   document_title: 'SURAT TUGAS',
   signer_title_intro: 'Project Director Kian Troopers',
   intro_text:
-    'Yang bertanda tangan dibawah ini, Project Director Kian Troopers, menugaskan kepada :',
+    'Yang bertanda tangan dibawah ini, {signer_title_intro}, menugaskan kepada :',
   assignees: [
     {
       no: 1,
@@ -258,7 +258,7 @@ export const DEFAULT_SURAT_TUGAS_VALUES = {
     },
   ],
   event_intro_text:
-    'Untuk berpartisipasi pada event BKOT (Bincang Kampus Bersama Orang Tua) UBSI, dengan rincian sebagai berikut:',
+    'Untuk berpartisipasi pada event {event_name}, dengan rincian sebagai berikut:',
   event_name: 'BKOT (Bincang Kampus Bersama Orang Tua) UBSI',
   event_days: "Jum'at - Sabtu, 11 - 12 September 2026",
   event_time: '07.30 WIB - Selesai',
@@ -462,7 +462,7 @@ export const DEFAULT_SURAT_UNDANGAN_VALUES = {
   document_title: 'SURAT UNDANGAN',
   recipient_info: 'Kepada Yth.\nBapak/Ibu Pimpinan Mitra / Civitas Akademika\ndi Tempat',
   intro_text:
-    'Dengan hormat,\nSehubungan dengan akan diadakannya agenda kegiatan Rapat Koordinasi & Sinergi Program KIAN Troopers 2026, bersama ini kami bermaksud mengundang Bapak/Ibu untuk dapat hadir dan berpartisipasi pada kegiatan yang akan dilaksanakan pada:',
+    'Dengan hormat,\nSehubungan dengan akan diadakannya agenda kegiatan {event_name}, bersama ini kami bermaksud mengundang Bapak/Ibu untuk dapat hadir dan berpartisipasi pada kegiatan yang akan dilaksanakan pada:',
   event_name: 'Rapat Koordinasi & Sinergi Program KIAN Troopers 2026',
   event_days: 'Senin, 15 September 2026',
   event_time: '09.00 WIB - Selesai',
