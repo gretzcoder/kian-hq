@@ -51,6 +51,48 @@ export interface BankContentFilters {
   search?: string;
 }
 
+/**
+ * Ensures schema tables and columns exist in D1 (Self-healing migration for Cloudflare D1)
+ */
+async function ensureBankContentSchema(db: any) {
+  try {
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS bank_content_likes (
+        id TEXT PRIMARY KEY,
+        assignment_id TEXT NOT NULL REFERENCES task_assignments(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        UNIQUE(assignment_id, user_id)
+      )
+    `).run();
+
+    await db.prepare(`
+      CREATE TABLE IF NOT EXISTS bank_content_comments (
+        id TEXT PRIMARY KEY,
+        assignment_id TEXT NOT NULL REFERENCES task_assignments(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        parent_id TEXT REFERENCES bank_content_comments(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+      )
+    `).run();
+
+    try {
+      await db.prepare("ALTER TABLE task_assignments ADD COLUMN publish_status TEXT NOT NULL DEFAULT 'NON_PUBLISHED'").run();
+    } catch (_e) {
+      // Column already exists
+    }
+
+    try {
+      await db.prepare("ALTER TABLE task_assignments ADD COLUMN publish_bonus_awarded INTEGER NOT NULL DEFAULT 0").run();
+    } catch (_e) {
+      // Column already exists
+    }
+  } catch (err) {
+    console.error('ensureBankContentSchema non-fatal notice:', err);
+  }
+}
+
 /** Check if current user has Coordinator, Admin, or Mentor authority to publish/unpublish content */
 export async function canManageBankContent(sessionUserId: string): Promise<boolean> {
   const ctx = await getSessionContext(sessionUserId);
@@ -93,6 +135,9 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
 
   const db = await getDB();
   const currentUserId = session.userId;
+
+  // Auto-heal D1 schema if migration has not run yet in remote env
+  await ensureBankContentSchema(db);
 
   const {
     generalCategory = 'ALL',
@@ -170,9 +215,23 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
   // Order by submission date
   query += ` ORDER BY COALESCE(ta.submitted_at, ta.created_at) ${sortByDate === 'asc' ? 'ASC' : 'DESC'}`;
 
-  const { results: rawRows } = await db.prepare(query).bind(...params).all();
+  let rawRows: any[] = [];
+  try {
+    const res = await db.prepare(query).bind(...params).all();
+    rawRows = (res.results as any[]) || [];
+  } catch (err: any) {
+    console.error('getBankContentFeed query error, attempting schema fallback:', err);
+    await ensureBankContentSchema(db);
+    try {
+      const res = await db.prepare(query).bind(...params).all();
+      rawRows = (res.results as any[]) || [];
+    } catch (retryErr) {
+      console.error('getBankContentFeed fallback failed:', retryErr);
+      return { items: [], workspaces: [], tasks: [], submitters: [] };
+    }
+  }
 
-  const allItems = (rawRows as any[]) || [];
+  const allItems = rawRows;
 
   if (allItems.length === 0) {
     return {
@@ -187,17 +246,21 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
   const placeholders = assignmentIds.map(() => '?').join(',');
 
   // Fetch Likes for these assignments
-  const { results: likesRaw } = await db
-    .prepare(`
-      SELECT assignment_id, user_id
-      FROM bank_content_likes
-      WHERE assignment_id IN (${placeholders})
-    `)
-    .bind(...assignmentIds)
-    .all();
+  let likesRaw: any[] = [];
+  try {
+    const likesRes = await db
+      .prepare(`
+        SELECT assignment_id, user_id
+        FROM bank_content_likes
+        WHERE assignment_id IN (${placeholders})
+      `)
+      .bind(...assignmentIds)
+      .all();
+    likesRaw = (likesRes.results as any[]) || [];
+  } catch (_e) {}
 
   const likesMap: Record<string, { count: number; userLiked: boolean }> = {};
-  for (const l of (likesRaw as any[]) || []) {
+  for (const l of likesRaw) {
     if (!likesMap[l.assignment_id]) {
       likesMap[l.assignment_id] = { count: 0, userLiked: false };
     }
@@ -208,27 +271,31 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
   }
 
   // Fetch Comments for these assignments
-  const { results: commentsRaw } = await db
-    .prepare(`
-      SELECT
-        bc.id,
-        bc.assignment_id AS assignmentId,
-        bc.user_id AS userId,
-        u.name AS userName,
-        u.avatar_url AS userAvatar,
-        bc.parent_id AS parentId,
-        bc.content,
-        bc.created_at AS createdAt
-      FROM bank_content_comments bc
-      JOIN users u ON bc.user_id = u.id
-      WHERE bc.assignment_id IN (${placeholders})
-      ORDER BY bc.created_at ASC
-    `)
-    .bind(...assignmentIds)
-    .all();
+  let commentsRaw: any[] = [];
+  try {
+    const commentsRes = await db
+      .prepare(`
+        SELECT
+          bc.id,
+          bc.assignment_id AS assignmentId,
+          bc.user_id AS userId,
+          u.name AS userName,
+          u.avatar_url AS userAvatar,
+          bc.parent_id AS parentId,
+          bc.content,
+          bc.created_at AS createdAt
+        FROM bank_content_comments bc
+        JOIN users u ON bc.user_id = u.id
+        WHERE bc.assignment_id IN (${placeholders})
+        ORDER BY bc.created_at ASC
+      `)
+      .bind(...assignmentIds)
+      .all();
+    commentsRaw = (commentsRes.results as any[]) || [];
+  } catch (_e) {}
 
   const commentsMap: Record<string, BankContentCommentItem[]> = {};
-  for (const c of (commentsRaw as any[]) || []) {
+  for (const c of commentsRaw) {
     if (!commentsMap[c.assignmentId]) {
       commentsMap[c.assignmentId] = [];
     }
@@ -308,6 +375,7 @@ export async function toggleBankContentPublishStatus(
   }
 
   const db = await getDB();
+  await ensureBankContentSchema(db);
 
   // Fetch assignment & task details
   const assignment = await db
@@ -404,6 +472,7 @@ export async function toggleBankContentLike(assignmentId: string) {
   if (!session) throw new Error('Unauthorized');
 
   const db = await getDB();
+  await ensureBankContentSchema(db);
 
   try {
     const existing = await db
@@ -443,6 +512,7 @@ export async function addBankContentComment(assignmentId: string, content: strin
   if (!trimmed) return { success: false, error: 'Komentar tidak boleh kosong.' };
 
   const db = await getDB();
+  await ensureBankContentSchema(db);
   const commentId = `bcc_${crypto.randomUUID().replace(/-/g, '')}`;
 
   try {
@@ -470,6 +540,7 @@ export async function deleteBankContentComment(commentId: string) {
   if (!session) throw new Error('Unauthorized');
 
   const db = await getDB();
+  await ensureBankContentSchema(db);
 
   try {
     const existing = await db
