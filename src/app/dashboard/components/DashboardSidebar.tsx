@@ -198,6 +198,7 @@ export default function DashboardSidebar({
     {
       title: 'KOLABORASI',
       items: [
+        { href: '/dashboard/bank-content', label: 'Bank Content', icon: '🎨', exact: false },
         { href: '/dashboard/community', label: 'Community Chat', icon: '💬', exact: false },
         { href: '/dashboard/messenger', label: 'Messenger & Kontak', icon: '💬', exact: false },
         ...(canReview
