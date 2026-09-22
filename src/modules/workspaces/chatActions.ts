@@ -609,7 +609,7 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
          LEFT JOIN users p_u ON p_wc.user_id = p_u.id
          WHERE wc.workspace_id = ?
          ORDER BY wc.created_at DESC
-         LIMIT 50`
+         LIMIT 30`
       )
       .bind(workspaceId)
       .all();
@@ -654,8 +654,8 @@ export async function getWorkspaceChats(workspaceId: string): Promise<WorkspaceC
       }
     } catch {}
 
-    // Focus read receipts query on the active/recent message window (last 25 messages)
-    const readMsgIds = msgIds.slice(-25);
+    // Focus read receipts query on the active/recent message window (last 15 messages)
+    const readMsgIds = msgIds.slice(-15);
     if (readMsgIds.length > 0) {
       const readPlaceholders = readMsgIds.map(() => '?').join(',');
       try {

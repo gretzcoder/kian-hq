@@ -176,6 +176,10 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
       AND TRIM(ta.result_url) != ''
       AND t.status != 'DELETED'
       AND (ws.id IS NULL OR ws.deleted_at IS NULL)
+      AND UPPER(TRIM(COALESCE(ta.assignment_role, ''))) NOT IN ('RESEARCHER', 'PLANNER')
+      AND UPPER(COALESCE(ta.assignment_role, '')) NOT LIKE '%RESEARCH%'
+      AND UPPER(COALESCE(ta.assignment_role, '')) NOT LIKE '%PLANNER%'
+      AND UPPER(COALESCE(ta.assignment_role, '')) NOT LIKE '%BRIEF%'
   `;
 
   const params: any[] = [];
@@ -309,6 +313,17 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
   const submittersSet = new Map<string, string>();
 
   for (const r of allItems) {
+    const roleUpper = (r.assignmentRole || '').toUpperCase();
+    if (
+      roleUpper === 'RESEARCHER' ||
+      roleUpper === 'PLANNER' ||
+      roleUpper.includes('RESEARCH') ||
+      roleUpper.includes('PLANNER') ||
+      roleUpper.includes('BRIEF')
+    ) {
+      continue;
+    }
+
     if (r.workspaceId && r.workspaceName) workspacesSet.set(r.workspaceId, r.workspaceName);
     if (r.taskId && r.taskTitle) tasksSet.set(r.taskId, r.taskTitle);
     if (r.submitterId && r.submitterName) submittersSet.set(r.submitterId, r.submitterName);

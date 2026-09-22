@@ -13,7 +13,7 @@ export interface DirectBriefOutputSlot {
 }
 
 export function parseDirectBriefSlots(description: string | null | undefined): DirectBriefOutputSlot[] {
-  if (!description) return [];
+  if (!description || !description.includes('[DIRECT_BRIEF_CATEGORIES:')) return [];
   const match = description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]/);
   if (match && match[1]) {
     try {

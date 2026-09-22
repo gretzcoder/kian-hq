@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskActions, { getDirectBriefCategories, parseDirectBriefSlots, DirectBriefOutputSlot } from '@/modules/tasks/components/TaskActions';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
@@ -213,74 +213,93 @@ export default function TaskAccordion({
 
   const nowMs = Date.now();
 
-  const getTaskEffectiveStatus = (t: TaskRow) => {
-    const taskAss = assignmentsByTask[t.id] ?? [];
-    if (taskAss.length > 0) {
-      const isAllApproved = taskAss.every((a) =>
-        ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status)
-      );
-      if (isAllApproved) return 'APPROVED';
+  const {
+    myTasksCount,
+    overdueCount,
+    onProgressCount,
+    completedCount,
+    effectiveStatusMap,
+    isTaskMineMap,
+    isTaskOverdueMap,
+    isTaskFinishedMap,
+    sortedTasks,
+  } = useMemo(() => {
+    let myCount = 0;
+    let odCount = 0;
+    let progCount = 0;
+    let compCount = 0;
+    const effStatusMap = new Map<string, string>();
+    const mineMap = new Map<string, boolean>();
+    const odMap = new Map<string, boolean>();
+    const finMap = new Map<string, boolean>();
 
-      const isAllWaiting = taskAss.every((a) =>
-        ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status)
-      ) && taskAss.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status));
-      if (isAllWaiting) return 'WAITING_REVIEW';
+    for (const t of tasks) {
+      const taskAss = assignmentsByTask[t.id] ?? [];
+      let effStatus = t.status;
+      if (taskAss.length > 0) {
+        if (taskAss.every((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status))) {
+          effStatus = 'APPROVED';
+        } else if (
+          taskAss.every((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status)) &&
+          taskAss.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status))
+        ) {
+          effStatus = 'WAITING_REVIEW';
+        } else if (taskAss.some((a) => ['IN_PROGRESS', 'WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'REVISION_REQUESTED', 'APPROVED'].includes(a.status))) {
+          effStatus = 'IN_PROGRESS';
+        } else {
+          effStatus = 'DRAFT';
+        }
+      }
+      effStatusMap.set(t.id, effStatus);
 
-      const hasStarted = taskAss.some((a) =>
-        ['IN_PROGRESS', 'WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'REVISION_REQUESTED', 'APPROVED'].includes(a.status)
-      );
-      return hasStarted ? 'IN_PROGRESS' : 'DRAFT';
+      const isFinished = ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(effStatus);
+      finMap.set(t.id, isFinished);
+      if (isFinished) compCount++;
+
+      const activeDl = Math.max(t.extended_deadline || 0, t.deadline || 0) || null;
+      const isOd = !isFinished && activeDl !== null && activeDl < nowMs;
+      odMap.set(t.id, isOd);
+      if (isOd) odCount++;
+      if (!isFinished && !isOd) progCount++;
+
+      let isMine = t.created_by === currentUserId || taskAss.some((a) => a.user_id === currentUserId);
+      if (!isMine && t.description && t.description.includes('[DIRECT_BRIEF_CATEGORIES:')) {
+        const slots = parseDirectBriefSlots(t.description);
+        isMine = slots.some((s) => s.assignedUserId === currentUserId);
+      }
+      mineMap.set(t.id, isMine);
+      if (isMine) myCount++;
     }
-    return t.status;
-  };
 
-  const isTaskFinished = (t: TaskRow) => {
-    const eff = getTaskEffectiveStatus(t);
-    return ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(eff);
-  };
+    const sorted = [...tasks].sort((a, b) => {
+      if (!a.deadline && !b.deadline) return a.created_at - b.created_at;
+      if (!a.deadline) return 1;
+      if (!b.deadline) return -1;
+      return a.deadline - b.deadline;
+    });
 
-  const getTaskActiveDeadline = (t: TaskRow) =>
-    Math.max(t.extended_deadline || 0, t.deadline || 0) || null;
+    return {
+      myTasksCount: myCount,
+      overdueCount: odCount,
+      onProgressCount: progCount,
+      completedCount: compCount,
+      effectiveStatusMap: effStatusMap,
+      isTaskMineMap: mineMap,
+      isTaskOverdueMap: odMap,
+      isTaskFinishedMap: finMap,
+      sortedTasks: sorted,
+    };
+  }, [tasks, assignmentsByTask, currentUserId, nowMs]);
 
-  const isTaskOverdue = (t: TaskRow) => {
-    if (isTaskFinished(t)) return false;
-    const dl = getTaskActiveDeadline(t);
-    return dl !== null && dl < nowMs;
-  };
-
-  const isTaskOnProgress = (t: TaskRow) => {
-    if (isTaskFinished(t)) return false;
-    return !isTaskOverdue(t);
-  };
-
-  const isTaskMine = (t: TaskRow) => {
-    if (t.created_by === currentUserId) return true;
-    const taskAss = assignmentsByTask[t.id] ?? [];
-    if (taskAss.some((a) => a.user_id === currentUserId)) return true;
-    const directSlots = parseDirectBriefSlots(t.description);
-    if (directSlots.some((s) => s.assignedUserId === currentUserId)) return true;
-    return false;
-  };
-
-  const myTasksCount = tasks.filter(isTaskMine).length;
-  const overdueCount = tasks.filter(isTaskOverdue).length;
-  const onProgressCount = tasks.filter(isTaskOnProgress).length;
-  const completedCount = tasks.filter(isTaskFinished).length;
-
-  const sortedTasks = [...tasks].sort((a, b) => {
-    if (!a.deadline && !b.deadline) return a.created_at - b.created_at;
-    if (!a.deadline) return 1;
-    if (!b.deadline) return -1;
-    return a.deadline - b.deadline;
-  });
-
-  const filteredTasks = sortedTasks.filter((task) => {
-    if (filterCategory === 'MY_TASKS') return isTaskMine(task);
-    if (filterCategory === 'OVERDUE') return isTaskOverdue(task);
-    if (filterCategory === 'ON_PROGRESS') return isTaskOnProgress(task);
-    if (filterCategory === 'COMPLETED') return isTaskFinished(task);
-    return true;
-  });
+  const filteredTasks = useMemo(() => {
+    return sortedTasks.filter((task: TaskRow) => {
+      if (filterCategory === 'MY_TASKS') return isTaskMineMap.get(task.id);
+      if (filterCategory === 'OVERDUE') return isTaskOverdueMap.get(task.id);
+      if (filterCategory === 'ON_PROGRESS') return !isTaskFinishedMap.get(task.id) && !isTaskOverdueMap.get(task.id);
+      if (filterCategory === 'COMPLETED') return isTaskFinishedMap.get(task.id);
+      return true;
+    });
+  }, [sortedTasks, filterCategory, isTaskMineMap, isTaskOverdueMap, isTaskFinishedMap]);
 
   return (
     <div className="space-y-4">
@@ -425,11 +444,11 @@ export default function TaskAccordion({
           </p>
         </div>
       ) : (
-        filteredTasks.map((task) => {
+        filteredTasks.map((task: TaskRow) => {
         const isOpen = openTaskId === task.id;
         const isTarget = targetTaskId === task.id;
         const taskAssignments = assignmentsByTask[task.id] ?? [];
-        const effectiveStatus = getTaskEffectiveStatus(task);
+        const effectiveStatus = effectiveStatusMap.get(task.id) || task.status;
         const cfg = statusConfig[effectiveStatus] ?? statusConfig.DRAFT;
         const pCfg = priorityConfig[task.priority] ?? priorityConfig.NORMAL;
         const borderColor = isTarget
@@ -587,16 +606,12 @@ export default function TaskAccordion({
               </div>
             </div>
 
-            {/* Accordion Body — collapsible */}
-            <div
-              className={`transition-all duration-300 ease-in-out overflow-hidden ${
-                isOpen ? 'max-h-[9999px] opacity-100' : 'max-h-0 opacity-0'
-              }`}
-            >
-              {(() => {
-                const isDirectBriefTask = task.task_type === 'DIRECT_BRIEF' || Boolean(task.description && task.description.includes('[DIRECT_BRIEF]'));
-                return (
-                  <>
+            {/* Accordion Body — only render heavy DOM/Markdown/Editor when opened */}
+            {isOpen && (
+              <div className="animate-in fade-in duration-200">
+                {(() => {
+                  const isDirectBriefTask = task.task_type === 'DIRECT_BRIEF' || Boolean(task.description && task.description.includes('[DIRECT_BRIEF]'));
+                  return (
                     <div className="px-5 pb-5">
                       {/* Description & Brief Viewer Container when expanded */}
                       {task.description && (
@@ -632,10 +647,10 @@ export default function TaskAccordion({
                         users={users}
                       />
                     </div>
-                  </>
-                );
-              })()}
-            </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         );
       })

@@ -138,17 +138,12 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       WHERE wm.workspace_id = ?
       ORDER BY wm.created_at ASC
     `).bind(wsId).all(),
-    getOrSetCache('global:users:active-directory', async () => {
+    getOrSetCache('global:users:active-directory-lite', async () => {
       const db = await getDB();
       return db.prepare(`
-        SELECT u.id, u.name, u.email, u.user_type as userType,
-               GROUP_CONCAT(DISTINCT r.name) AS roleNames,
-               GROUP_CONCAT(DISTINCT r.id) AS roleIds
+        SELECT u.id, u.name, u.email, u.user_type as userType
         FROM users u
-        LEFT JOIN user_roles ur ON u.id = ur.user_id
-        LEFT JOIN roles r ON ur.role_id = r.id
         WHERE u.status = 'ACTIVE'
-        GROUP BY u.id, u.name
         ORDER BY u.name ASC
       `).all();
     }, 120),
@@ -187,8 +182,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
   const isAssignedMentor = assignedWorkspaceMentors.some((m) => m.userId === session.userId);
 
   const isOjtWorkspace = ojtCheck !== null || workspace.ojt_coordinator_id !== null || assignedWorkspaceMentors.length > 0;
-  const users = usersRaw as unknown as UserRow[];
-  const activeUsers = usersRaw as unknown as { id: string; name: string; email: string }[];
+  const activeUsers = (usersRaw as any[]) || [];
   const members = (membersRaw as any[]);
   const mentors = mentorsRaw as unknown as { id: string; name: string; email: string }[];
 
@@ -233,7 +227,9 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
       return true;
     });
 
-  // Fetch assignments & reactions when there are tasks
+  const isAssessmentWs = workspace.workspace_type === 'ASSESSMENT';
+
+  // Fetch assignments & reactions when there are tasks (skip assessment reactions for normal workspaces)
   const [{ results: assignmentsRaw }, { results: reactionsRaw }] = tasks.length > 0
     ? await Promise.all([
       db
@@ -251,17 +247,19 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
         .bind(...tasks.map((t) => t.id))
         .all(),
 
-      db
-        .prepare(`
-            SELECT r.assignment_id, r.emoji, COUNT(*) as count,
-                   MAX(CASE WHEN r.user_id = ? THEN 1 ELSE 0 END) as user_reacted
-            FROM assessment_submission_reactions r
-            JOIN task_assignments ta ON r.assignment_id = ta.id
-            WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
-            GROUP BY r.assignment_id, r.emoji
-          `)
-        .bind(session.userId, ...tasks.map((t) => t.id))
-        .all(),
+      isAssessmentWs
+        ? db
+          .prepare(`
+              SELECT r.assignment_id, r.emoji, COUNT(*) as count,
+                     MAX(CASE WHEN r.user_id = ? THEN 1 ELSE 0 END) as user_reacted
+              FROM assessment_submission_reactions r
+              JOIN task_assignments ta ON r.assignment_id = ta.id
+              WHERE ta.task_id IN (${tasks.map(() => '?').join(',')})
+              GROUP BY r.assignment_id, r.emoji
+            `)
+          .bind(session.userId, ...tasks.map((t) => t.id))
+          .all()
+        : Promise.resolve({ results: [] }),
     ])
     : [{ results: [] }, { results: [] }];
 
@@ -459,7 +457,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
               isMentor={isMentor}
               isCoordinator={isCoordinator}
               isOjtWorkspace={isOjtWorkspace}
-              users={users}
+              users={members.map((m: any) => ({ id: m.userId, name: m.userName || m.userEmail }))}
               members={members}
             />
           )
@@ -486,7 +484,7 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
             members={membersList}
             canManageMembers={canManageMembers}
             isMentor={isMentor}
-            ojtUsers={activeUsers}
+            ojtUsers={canManageMembers ? activeUsers : []}
             isAssessment={workspace.workspace_type === 'ASSESSMENT'}
             workspaceType={workspace.workspace_type}
             mentorId={workspace.ojt_coordinator_id}
