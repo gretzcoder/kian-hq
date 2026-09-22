@@ -16,6 +16,12 @@ export default function WeeklyTimetableMatrix() {
   const [selectedUserId, setSelectedUserId] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Selected schedule item for clean pop-up inspector
+  const [selectedSchedule, setSelectedSchedule] = useState<{
+    item: UserAvailabilityItem;
+    user?: UserProfileSnapshot;
+  } | null>(null);
+
   const loadMatrix = async () => {
     setLoading(true);
     try {
@@ -97,7 +103,7 @@ export default function WeeklyTimetableMatrix() {
             Jadwal Kuliah Mingguan Tim (Senin - Minggu)
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-            Peta jadwal kuliah seluruh personil untuk mempermudah alokasi waktu luang dan penugasan event.
+            Klik jadwal matakuliah manapun untuk melihat rincian lengkap dosen, kelas, kampus, dan ruangan.
           </p>
         </div>
 
@@ -147,14 +153,14 @@ export default function WeeklyTimetableMatrix() {
             return (
               <div
                 key={dayNum}
-                className={`rounded-3xl border flex flex-col min-h-[380px] p-3.5 transition-all ${
+                className={`rounded-3xl border flex flex-col min-h-[380px] p-3 transition-all ${
                   isWeekend
                     ? 'bg-zinc-50/40 dark:bg-zinc-900/30 border-zinc-200/50 dark:border-zinc-800/50'
                     : 'bg-white dark:bg-[#101014] border-zinc-200/80 dark:border-zinc-800/80'
                 }`}
               >
                 {/* Day Column Header */}
-                <div className="pb-3 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between">
+                <div className="pb-2.5 border-b border-zinc-100 dark:border-zinc-800/80 flex items-center justify-between">
                   <div>
                     <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-white">
                       {dayMeta.name}
@@ -170,11 +176,11 @@ export default function WeeklyTimetableMatrix() {
                   )}
                 </div>
 
-                {/* Day Schedule Cards */}
-                <div className="pt-3 space-y-2.5 flex-1 overflow-y-auto">
+                {/* Day Schedule Cards (Clean, Compact, Non-Spammy) */}
+                <div className="pt-2.5 space-y-2 flex-1 overflow-y-auto">
                   {list.length === 0 ? (
                     <div className="h-32 flex flex-col items-center justify-center text-center p-3">
-                      <span className="text-xl opacity-40">✨</span>
+                      <span className="text-xl opacity-30">✨</span>
                       <p className="text-[11px] text-zinc-400 mt-1 font-medium">
                         Tidak ada perkuliahan
                       </p>
@@ -186,55 +192,34 @@ export default function WeeklyTimetableMatrix() {
                       return (
                         <div
                           key={item.id}
-                          className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/90 border border-purple-500/20 hover:border-purple-500/50 transition-all space-y-1.5 shadow-xs"
+                          onClick={() => setSelectedSchedule({ item, user })}
+                          className="p-2.5 rounded-2xl bg-zinc-50 dark:bg-[#15151c] border border-purple-500/20 hover:border-purple-500/60 hover:bg-purple-50/30 dark:hover:bg-purple-950/20 transition-all cursor-pointer space-y-1.5 shadow-2xs group"
+                          title="Klik untuk melihat rincian jadwal lengkap"
                         >
-                          {/* Time & User */}
+                          {/* Time badge */}
                           <div className="flex items-center justify-between gap-1">
                             <span className="text-[10px] font-black font-mono text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded-md">
                               ⏰ {item.startTime} - {item.endTime}
                             </span>
-                            {item.semesterLabel && (
-                              <span className="text-[8px] font-mono text-zinc-400 truncate max-w-[70px]">
-                                {item.semesterLabel}
-                              </span>
-                            )}
+                            <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                              Lihat ➔
+                            </span>
                           </div>
 
-                          {/* Course title */}
-                          <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 leading-snug">
+                          {/* Course title (clean line clamped) */}
+                          <p className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                             {item.courseCode ? `[${item.courseCode}] ` : ''}{item.courseName || item.title}
                           </p>
 
-                          {/* Student Info */}
+                          {/* Student Info chip */}
                           {user && (
-                            <div className="flex items-center gap-1.5 pt-1">
+                            <div className="flex items-center gap-1.5 pt-1 border-t border-zinc-200/50 dark:border-zinc-800/50">
                               <UserAvatar src={user.avatarUrl} name={user.name} size="xs" square />
-                              <div className="min-w-0">
-                                <p className="text-[10px] font-bold text-zinc-700 dark:text-zinc-300 truncate">
-                                  {user.name}
-                                </p>
-                              </div>
+                              <p className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 truncate flex-1">
+                                {user.name}
+                              </p>
                             </div>
                           )}
-
-                          {/* Class, Campus, Lecturer details */}
-                          <div className="text-[10px] text-zinc-500 dark:text-zinc-400 space-y-0.5 pt-0.5 border-t border-zinc-200/50 dark:border-zinc-800/50">
-                            {(item.classCode || item.campusName) && (
-                              <p className="truncate">
-                                🏛️ {item.classCode ? `${item.classCode} • ` : ''}{item.campusName || user?.university || '-'}
-                              </p>
-                            )}
-                            {(item.lecturerName || item.lecturerCode) && (
-                              <p className="truncate">
-                                👨‍🏫 {item.lecturerName || item.lecturerCode}
-                              </p>
-                            )}
-                            {item.room && (
-                              <p className="truncate text-zinc-400">
-                                📍 {item.room}
-                              </p>
-                            )}
-                          </div>
                         </div>
                       );
                     })
@@ -243,6 +228,139 @@ export default function WeeklyTimetableMatrix() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DETAILED SCHEDULE INSPECTOR POPUP (Non-spammy Modal) */}
+      {/* ========================================================================= */}
+      {selectedSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/40">
+              <div className="flex items-center gap-3">
+                {selectedSchedule.user && (
+                  <UserAvatar
+                    src={selectedSchedule.user.avatarUrl}
+                    name={selectedSchedule.user.name}
+                    size="md"
+                    square
+                  />
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-black text-zinc-900 dark:text-white">
+                      {selectedSchedule.user?.name || 'Jadwal Kuliah'}
+                    </h3>
+                    {selectedSchedule.user?.roleName && (
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-600 border border-purple-500/20">
+                        {selectedSchedule.user.roleName}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    {selectedSchedule.user?.university || 'Kian HQ'}
+                    {selectedSchedule.user?.studyProgram ? ` • ${selectedSchedule.user.studyProgram}` : ''}
+                    {selectedSchedule.user?.semester ? ` (${selectedSchedule.user.semester})` : ''}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedSchedule(null)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4">
+              <div className="p-4 rounded-2xl bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/20 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-md">
+                    {selectedSchedule.item.dayOfWeek ? DAY_OF_WEEK_NAMES[selectedSchedule.item.dayOfWeek]?.name : 'Jadwal'}
+                  </span>
+                  <span className="text-xs font-mono font-bold text-purple-700 dark:text-purple-300">
+                    ⏰ {selectedSchedule.item.startTime} - {selectedSchedule.item.endTime} WIB
+                  </span>
+                </div>
+
+                {/* 1. Kode & Nama Matakuliah */}
+                <h4 className="text-base font-black text-zinc-900 dark:text-zinc-100">
+                  {selectedSchedule.item.courseCode ? `[${selectedSchedule.item.courseCode}] ` : ''}
+                  {selectedSchedule.item.courseName || selectedSchedule.item.title}
+                </h4>
+
+                {/* 3. Kelas & Kampus, 4. Dosen, Ruangan */}
+                <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1.5 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50">
+                  {(selectedSchedule.item.classCode || selectedSchedule.item.campusName) && (
+                    <p className="flex items-center gap-1.5">
+                      <span>🏛️</span>
+                      <span>
+                        Kelas: <strong className="text-zinc-800 dark:text-zinc-200">{selectedSchedule.item.classCode || '-'}</strong> ({selectedSchedule.item.campusName || selectedSchedule.user?.university || '-'})
+                      </span>
+                    </p>
+                  )}
+                  {(selectedSchedule.item.lecturerName || selectedSchedule.item.lecturerCode) && (
+                    <p className="flex items-center gap-1.5">
+                      <span>👨‍🏫</span>
+                      <span>
+                        Dosen: <strong className="text-zinc-800 dark:text-zinc-200">{selectedSchedule.item.lecturerCode ? `[${selectedSchedule.item.lecturerCode}] ` : ''}{selectedSchedule.item.lecturerName}</strong>
+                      </span>
+                    </p>
+                  )}
+                  {selectedSchedule.item.room && (
+                    <p className="flex items-center gap-1.5">
+                      <span>📍</span>
+                      <span>Ruangan: <strong className="text-zinc-800 dark:text-zinc-200">{selectedSchedule.item.room}</strong></span>
+                    </p>
+                  )}
+                  {selectedSchedule.item.semesterLabel && (
+                    <p className="flex items-center gap-1.5 text-zinc-500">
+                      <span>🎓</span>
+                      <span>Periode: {selectedSchedule.item.semesterLabel}</span>
+                    </p>
+                  )}
+                  {selectedSchedule.item.notes && (
+                    <p className="flex items-center gap-1.5 text-zinc-400 italic pt-1">
+                      <span>📝</span>
+                      <span>{selectedSchedule.item.notes}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/40">
+              {selectedSchedule.user?.whatsappNumber ? (
+                <a
+                  href={`https://wa.me/${selectedSchedule.user.whatsappNumber.replace(/[^0-9]/g, '')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 rounded-2xl text-xs font-bold bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 transition-all"
+                >
+                  <span>💬 Hubungi via WhatsApp</span>
+                </a>
+              ) : (
+                <div />
+              )}
+
+              <button
+                type="button"
+                onClick={() => setSelectedSchedule(null)}
+                className="px-5 py-2 rounded-2xl text-xs font-bold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
