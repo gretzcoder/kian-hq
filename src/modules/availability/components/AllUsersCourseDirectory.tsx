@@ -8,6 +8,8 @@ import {
   UserProfileSnapshot,
 } from '../availabilityTypes';
 import { getAllUsersCourseSchedulesAction } from '../availabilityActions';
+import { useAvailabilityExclusions } from '../useAvailabilityExclusions';
+import ExclusionSettingsModal from './ExclusionSettingsModal';
 
 interface UserCourseGroup {
   user: UserProfileSnapshot;
@@ -18,14 +20,31 @@ interface UserCourseGroup {
   courses: UserAvailabilityItem[];
 }
 
-export default function AllUsersCourseDirectory() {
+interface AllUsersCourseDirectoryProps {
+  isStaffOrManager?: boolean;
+}
+
+export default function AllUsersCourseDirectory({
+  isStaffOrManager = false,
+}: AllUsersCourseDirectoryProps) {
   const [userGroups, setUserGroups] = useState<UserCourseGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDayFilter, setSelectedDayFilter] = useState<number | 'ALL'>('ALL');
-  
-  // Selected user for modal schedule detail (non-spammy popup)
+  const [selectedRoleCategory, setSelectedRoleCategory] = useState<string>('ALL');
+
+  // Selected user for modal schedule detail
   const [selectedUserGroup, setSelectedUserGroup] = useState<UserCourseGroup | null>(null);
+
+  // Exclusion hook
+  const {
+    exclusionSettings,
+    saveExclusions,
+    resetExclusions,
+    filterUsers,
+    hasActiveExclusions,
+  } = useAvailabilityExclusions();
+  const [showExclusionModal, setShowExclusionModal] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -43,14 +62,54 @@ export default function AllUsersCourseDirectory() {
     loadData();
   }, []);
 
+  // All distinct roles in system
+  const allDistinctRoles = useMemo(() => {
+    const roleMap = new Map<string, number>();
+    userGroups.forEach((g) => {
+      const rName = (g.user.roleName || 'Trooper').trim();
+      roleMap.set(rName, (roleMap.get(rName) || 0) + 1);
+    });
+    return Array.from(roleMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [userGroups]);
+
+  // Non-excluded user groups
+  const nonExcludedGroups = useMemo(() => {
+    return filterUsers(userGroups);
+  }, [userGroups, filterUsers]);
+
+  const excludedCount = userGroups.length - nonExcludedGroups.length;
+
+  // Active role categories in non-excluded groups
+  const activeRoleCategories = useMemo(() => {
+    const roleMap = new Map<string, number>();
+    nonExcludedGroups.forEach((g) => {
+      const rName = (g.user.roleName || 'Trooper').trim();
+      roleMap.set(rName, (roleMap.get(rName) || 0) + 1);
+    });
+    return Array.from(roleMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [nonExcludedGroups]);
+
   // Filter user groups
   const filteredGroups = useMemo(() => {
-    let result = userGroups;
+    let result = nonExcludedGroups;
 
+    // Filter by Role Category
+    if (selectedRoleCategory !== 'ALL') {
+      result = result.filter(
+        (g) => (g.user.roleName || 'Trooper').toLowerCase() === selectedRoleCategory.toLowerCase()
+      );
+    }
+
+    // Filter by Day of Week
     if (selectedDayFilter !== 'ALL') {
       result = result.filter((g) => g.daysActive.includes(selectedDayFilter));
     }
 
+    // Filter by Search Query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter((g) => {
@@ -70,16 +129,16 @@ export default function AllUsersCourseDirectory() {
     }
 
     return result;
-  }, [userGroups, selectedDayFilter, searchQuery]);
+  }, [nonExcludedGroups, selectedRoleCategory, selectedDayFilter, searchQuery]);
 
-  // Total stats
+  // Total stats based on non-excluded users
   const totalCoursesInSystem = useMemo(() => {
-    return userGroups.reduce((acc, g) => acc + g.totalCourses, 0);
-  }, [userGroups]);
+    return nonExcludedGroups.reduce((acc, g) => acc + g.totalCourses, 0);
+  }, [nonExcludedGroups]);
 
   const activeStudentsCount = useMemo(() => {
-    return userGroups.filter((g) => g.totalCourses > 0).length;
-  }, [userGroups]);
+    return nonExcludedGroups.filter((g) => g.totalCourses > 0).length;
+  }, [nonExcludedGroups]);
 
   return (
     <div className="space-y-6">
@@ -100,8 +159,29 @@ export default function AllUsersCourseDirectory() {
             </p>
           </div>
 
-          {/* Quick Counter Badges */}
-          <div className="flex items-center gap-2.5">
+          {/* Quick Counter Badges & Exclusion Settings */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            {isStaffOrManager && (
+              <button
+                type="button"
+                onClick={() => setShowExclusionModal(true)}
+                className={`px-3.5 py-2 rounded-2xl text-xs font-bold border flex items-center gap-1.5 transition-all active:scale-95 ${
+                  hasActiveExclusions
+                    ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30 ring-1 ring-amber-500/20'
+                    : 'bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700'
+                }`}
+                title="Atur role atau personil yang dikecualikan dari direktori"
+              >
+                <span>⚙️</span>
+                <span>Setting Pengecualian</span>
+                {excludedCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-black">
+                    {excludedCount} Dikecualikan
+                  </span>
+                )}
+              </button>
+            )}
+
             <div className="px-3.5 py-2 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-700 dark:text-purple-300 font-bold">
               <span>🎓 <strong>{activeStudentsCount}</strong> Mahasiswa Aktif</span>
             </div>
@@ -111,59 +191,131 @@ export default function AllUsersCourseDirectory() {
           </div>
         </div>
 
-        {/* Filters and Search Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          {/* Day Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+        {/* Exclusion Banner Warning */}
+        {hasActiveExclusions && excludedCount > 0 && (
+          <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-amber-900 dark:text-amber-300">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <div>
+                <span className="font-bold">Pengaturan Pengecualian Aktif:</span>{' '}
+                <span>
+                  <strong>{excludedCount} personil</strong> disembunyikan dari direktori perkuliahan
+                  {exclusionSettings.excludedRoles.length > 0 && (
+                    <> (Role: <em>{exclusionSettings.excludedRoles.join(', ')}</em>)</>
+                  )}
+                  .
+                </span>
+              </div>
+            </div>
+            {isStaffOrManager && (
+              <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowExclusionModal(true)}
+                  className="text-[11px] font-bold text-amber-800 dark:text-amber-200 underline hover:no-underline"
+                >
+                  Ubah Setting
+                </button>
+                <span className="text-amber-400">•</span>
+                <button
+                  type="button"
+                  onClick={resetExclusions}
+                  className="text-[11px] font-bold text-amber-800 dark:text-amber-200 hover:text-amber-950 dark:hover:text-white"
+                >
+                  Tampilkan Semua
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Role Category Tabs Filter */}
+        <div className="space-y-3 pt-1">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <span className="text-[11px] font-black uppercase tracking-wider text-zinc-400 shrink-0">
+              Kategori Role:
+            </span>
             <button
               type="button"
-              onClick={() => setSelectedDayFilter('ALL')}
+              onClick={() => setSelectedRoleCategory('ALL')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                selectedDayFilter === 'ALL'
-                  ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs'
-                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                selectedRoleCategory === 'ALL'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
               }`}
             >
-              Semua Hari
+              Semua Role ({nonExcludedGroups.length})
             </button>
-            {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+            {activeRoleCategories.map((r) => (
               <button
-                key={d}
+                key={r.name}
                 type="button"
-                onClick={() => setSelectedDayFilter(d)}
-                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                  selectedDayFilter === d
+                onClick={() => setSelectedRoleCategory(r.name)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  selectedRoleCategory.toLowerCase() === r.name.toLowerCase()
                     ? 'bg-purple-600 text-white shadow-xs'
-                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                    : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
                 }`}
               >
-                {DAY_OF_WEEK_NAMES[d].name}
+                {r.name} ({r.count})
               </button>
             ))}
           </div>
 
-          {/* Search Box */}
-          <div className="relative w-full sm:w-72">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari user, matakuliah, dosen, kampus..."
-              className="w-full pl-9 pr-4 py-2 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-            />
-            <span className="absolute left-3 top-2.5 text-xs text-zinc-400">🔍</span>
-            {searchQuery && (
+          {/* Filters and Search Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+            {/* Day Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto p-1 rounded-2xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
               <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-2.5 text-xs text-zinc-400 hover:text-zinc-600"
+                type="button"
+                onClick={() => setSelectedDayFilter('ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  selectedDayFilter === 'ALL'
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                }`}
               >
-                ✕
+                Semua Hari
               </button>
-            )}
+              {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setSelectedDayFilter(d)}
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                    selectedDayFilter === d
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  }`}
+                >
+                  {DAY_OF_WEEK_NAMES[d].name}
+                </button>
+              ))}
+            </div>
+
+            {/* Search Box */}
+            <div className="relative w-full sm:w-72">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Cari user, matakuliah, dosen, kampus..."
+                className="w-full pl-9 pr-4 py-2 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+              />
+              <span className="absolute left-3 top-2.5 text-xs text-zinc-400">🔍</span>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-xs text-zinc-400 hover:text-zinc-600"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* User Cards Compact Directory (Non-Spammy) */}
+        {/* User Cards Directory */}
         {loading ? (
           <div className="py-16 flex flex-col items-center justify-center space-y-3">
             <div className="w-8 h-8 border-3 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -176,14 +328,20 @@ export default function AllUsersCourseDirectory() {
               Tidak ada data jadwal perkuliahan yang cocok
             </p>
             <p className="text-xs text-zinc-400 mt-1">
-              {searchQuery ? `Tidak ada hasil untuk pencarian "${searchQuery}"` : 'Belum ada anggota yang menginput jadwal kuliah.'}
+              {searchQuery
+                ? `Tidak ada hasil untuk pencarian "${searchQuery}"`
+                : selectedRoleCategory !== 'ALL'
+                ? `Tidak ada personil dengan role "${selectedRoleCategory}" pada filter ini.`
+                : 'Belum ada anggota yang menginput jadwal kuliah.'}
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
             {filteredGroups.map((group) => {
               const hasCourses = group.totalCourses > 0;
-              const activeDaysFormatted = group.daysActive.map((d) => DAY_OF_WEEK_NAMES[d]?.short).join(', ');
+              const activeDaysFormatted = group.daysActive
+                .map((d) => DAY_OF_WEEK_NAMES[d]?.short)
+                .join(', ');
 
               return (
                 <div
@@ -291,9 +449,7 @@ export default function AllUsersCourseDirectory() {
         )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* USER FULL SCHEDULE DETAIL MODAL (Clean, Non-spammy Inspector) */}
-      {/* ========================================================================= */}
+      {/* Detail Modal */}
       {selectedUserGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
           <div
@@ -335,9 +491,8 @@ export default function AllUsersCourseDirectory() {
               </button>
             </div>
 
-            {/* Modal Body: Full Schedule List */}
+            {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              {/* Semester Info Banner */}
               <div className="p-3.5 rounded-2xl bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/20 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <span>🎓</span>
@@ -350,7 +505,6 @@ export default function AllUsersCourseDirectory() {
                 </span>
               </div>
 
-              {/* Day by day breakdown */}
               {selectedUserGroup.totalCourses === 0 ? (
                 <div className="py-12 text-center text-zinc-400">
                   <span className="text-3xl">✨</span>
@@ -362,7 +516,9 @@ export default function AllUsersCourseDirectory() {
                 <div className="space-y-4">
                   {[1, 2, 3, 4, 5, 6, 7].map((dayNum) => {
                     const dayMeta = DAY_OF_WEEK_NAMES[dayNum];
-                    const classesForDay = selectedUserGroup.courses.filter((c) => c.dayOfWeek === dayNum);
+                    const classesForDay = selectedUserGroup.courses.filter(
+                      (c) => c.dayOfWeek === dayNum
+                    );
                     if (classesForDay.length === 0) return null;
 
                     return (
@@ -389,32 +545,35 @@ export default function AllUsersCourseDirectory() {
                                 </span>
                               </div>
 
-                              {/* 1. Kode & Nama Matakuliah */}
                               <h5 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                                {kuliah.courseCode ? `[${kuliah.courseCode}] ` : ''}{kuliah.courseName || kuliah.title}
+                                {kuliah.courseCode ? `[${kuliah.courseCode}] ` : ''}
+                                {kuliah.courseName || kuliah.title}
                               </h5>
 
-                              {/* 3. Kelas & Kampus, 4. Dosen */}
                               <div className="text-[11px] text-zinc-600 dark:text-zinc-400 space-y-1 pt-1 border-t border-zinc-200/50 dark:border-zinc-800/50">
                                 {(kuliah.classCode || kuliah.campusName) && (
                                   <p>
-                                    🏛️ Kelas: <strong className="text-zinc-800 dark:text-zinc-200">{kuliah.classCode || '-'}</strong> ({kuliah.campusName || selectedUserGroup.user.university || '-'})
+                                    🏛️ Kelas:{' '}
+                                    <strong className="text-zinc-800 dark:text-zinc-200">
+                                      {kuliah.classCode || '-'}
+                                    </strong>{' '}
+                                    ({kuliah.campusName || selectedUserGroup.user.university || '-'})
                                   </p>
                                 )}
                                 {(kuliah.lecturerName || kuliah.lecturerCode) && (
                                   <p>
-                                    👨‍🏫 Dosen: <strong className="text-zinc-800 dark:text-zinc-200">{kuliah.lecturerCode ? `[${kuliah.lecturerCode}] ` : ''}{kuliah.lecturerName}</strong>
+                                    👨‍🏫 Dosen:{' '}
+                                    <strong className="text-zinc-800 dark:text-zinc-200">
+                                      {kuliah.lecturerCode ? `[${kuliah.lecturerCode}] ` : ''}
+                                      {kuliah.lecturerName}
+                                    </strong>
                                   </p>
                                 )}
                                 {kuliah.room && (
-                                  <p className="text-zinc-500">
-                                    📍 Ruangan: {kuliah.room}
-                                  </p>
+                                  <p className="text-zinc-500">📍 Ruangan: {kuliah.room}</p>
                                 )}
                                 {kuliah.notes && (
-                                  <p className="text-zinc-400 italic">
-                                    📝 {kuliah.notes}
-                                  </p>
+                                  <p className="text-zinc-400 italic">📝 {kuliah.notes}</p>
                                 )}
                               </div>
                             </div>
@@ -454,6 +613,22 @@ export default function AllUsersCourseDirectory() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Exclusion Settings Modal */}
+      {isStaffOrManager && (
+        <ExclusionSettingsModal
+          isOpen={showExclusionModal}
+          onClose={() => setShowExclusionModal(false)}
+          initialSettings={exclusionSettings}
+          onSave={(newSettings) => {
+            saveExclusions(newSettings);
+            setShowExclusionModal(false);
+          }}
+          onReset={resetExclusions}
+          allUsers={userGroups.map((g) => g.user)}
+          distinctRoles={allDistinctRoles}
+        />
       )}
     </div>
   );

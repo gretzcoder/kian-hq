@@ -8,19 +8,38 @@ import {
   UserProfileSnapshot,
 } from '../availabilityTypes';
 import { getWeeklyTimetableMatrixAction } from '../availabilityActions';
+import { useAvailabilityExclusions } from '../useAvailabilityExclusions';
+import ExclusionSettingsModal from './ExclusionSettingsModal';
 
-export default function WeeklyTimetableMatrix() {
+interface WeeklyTimetableMatrixProps {
+  isStaffOrManager?: boolean;
+}
+
+export default function WeeklyTimetableMatrix({
+  isStaffOrManager = false,
+}: WeeklyTimetableMatrixProps) {
   const [users, setUsers] = useState<UserProfileSnapshot[]>([]);
   const [schedules, setSchedules] = useState<UserAvailabilityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string>('ALL');
+  const [selectedRoleCategory, setSelectedRoleCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Selected schedule item for clean pop-up inspector
+  // Selected schedule item for popup inspector
   const [selectedSchedule, setSelectedSchedule] = useState<{
     item: UserAvailabilityItem;
     user?: UserProfileSnapshot;
   } | null>(null);
+
+  // Centralized Exclusion hook
+  const {
+    exclusionSettings,
+    saveExclusions,
+    resetExclusions,
+    filterUsers,
+    hasActiveExclusions,
+  } = useAvailabilityExclusions();
+  const [showExclusionModal, setShowExclusionModal] = useState(false);
 
   const loadMatrix = async () => {
     setLoading(true);
@@ -39,14 +58,68 @@ export default function WeeklyTimetableMatrix() {
     loadMatrix();
   }, []);
 
+  // All distinct roles in system
+  const allDistinctRoles = useMemo(() => {
+    const roleMap = new Map<string, number>();
+    users.forEach((u) => {
+      const rName = (u.roleName || 'Trooper').trim();
+      roleMap.set(rName, (roleMap.get(rName) || 0) + 1);
+    });
+    return Array.from(roleMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [users]);
+
+  // Non-excluded users
+  const nonExcludedUsers = useMemo(() => {
+    return filterUsers(users);
+  }, [users, filterUsers]);
+
+  const excludedCount = users.length - nonExcludedUsers.length;
+
+  // Set of valid non-excluded user IDs
+  const validUserIds = useMemo(() => {
+    return new Set(nonExcludedUsers.map((u) => u.id));
+  }, [nonExcludedUsers]);
+
+  // Active role categories in non-excluded users
+  const activeRoleCategories = useMemo(() => {
+    const roleMap = new Map<string, number>();
+    nonExcludedUsers.forEach((u) => {
+      const rName = (u.roleName || 'Trooper').trim();
+      roleMap.set(rName, (roleMap.get(rName) || 0) + 1);
+    });
+    return Array.from(roleMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [nonExcludedUsers]);
+
+  // User map lookup
+  const userMap = useMemo(() => {
+    const map = new Map<string, UserProfileSnapshot>();
+    nonExcludedUsers.forEach((u) => map.set(u.id, u));
+    return map;
+  }, [nonExcludedUsers]);
+
   // Filtered schedules
   const filteredSchedules = useMemo(() => {
-    let result = schedules;
+    // 1. Filter out schedules of excluded users
+    let result = schedules.filter((s) => validUserIds.has(s.userId));
 
+    // 2. Filter by Role Category
+    if (selectedRoleCategory !== 'ALL') {
+      result = result.filter((s) => {
+        const u = userMap.get(s.userId);
+        return u && (u.roleName || 'Trooper').toLowerCase() === selectedRoleCategory.toLowerCase();
+      });
+    }
+
+    // 3. Filter by Selected User
     if (selectedUserId !== 'ALL') {
       result = result.filter((s) => s.userId === selectedUserId);
     }
 
+    // 4. Filter by Search Query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter((s) => {
@@ -55,14 +128,28 @@ export default function WeeklyTimetableMatrix() {
         const classMatch = (s.classCode || '').toLowerCase().includes(q);
         const lecturerMatch = (s.lecturerName || '').toLowerCase().includes(q);
         const campusMatch = (s.campusName || '').toLowerCase().includes(q);
-        const user = users.find((u) => u.id === s.userId);
+        const user = userMap.get(s.userId);
         const userNameMatch = user ? user.name.toLowerCase().includes(q) : false;
-        return titleMatch || codeMatch || classMatch || lecturerMatch || campusMatch || userNameMatch;
+        return (
+          titleMatch ||
+          codeMatch ||
+          classMatch ||
+          lecturerMatch ||
+          campusMatch ||
+          userNameMatch
+        );
       });
     }
 
     return result;
-  }, [schedules, selectedUserId, searchQuery, users]);
+  }, [
+    schedules,
+    validUserIds,
+    selectedRoleCategory,
+    selectedUserId,
+    searchQuery,
+    userMap,
+  ]);
 
   // Group schedules by day of week (1..7)
   const schedulesByDay = useMemo(() => {
@@ -82,12 +169,13 @@ export default function WeeklyTimetableMatrix() {
     return map;
   }, [filteredSchedules]);
 
-  // User map lookup
-  const userMap = useMemo(() => {
-    const map = new Map<string, UserProfileSnapshot>();
-    users.forEach((u) => map.set(u.id, u));
-    return map;
-  }, [users]);
+  // Users available in dropdown (matching role filter)
+  const dropdownUsers = useMemo(() => {
+    if (selectedRoleCategory === 'ALL') return nonExcludedUsers;
+    return nonExcludedUsers.filter(
+      (u) => (u.roleName || 'Trooper').toLowerCase() === selectedRoleCategory.toLowerCase()
+    );
+  }, [nonExcludedUsers, selectedRoleCategory]);
 
   return (
     <div className="bg-white dark:bg-[#09090b] border border-zinc-200/80 dark:border-zinc-800/80 rounded-3xl p-5 sm:p-7 shadow-sm space-y-6">
@@ -107,16 +195,120 @@ export default function WeeklyTimetableMatrix() {
           </p>
         </div>
 
-        {/* Filter Controls */}
-        <div className="flex flex-col sm:flex-row items-center gap-2.5">
+        {/* Exclusion Settings Button (Admin/Koordinator) */}
+        {isStaffOrManager && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowExclusionModal(true)}
+              className={`px-3.5 py-2 rounded-2xl text-xs font-bold border flex items-center gap-1.5 transition-all active:scale-95 ${
+                hasActiveExclusions
+                  ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30 ring-1 ring-amber-500/20'
+                  : 'bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700'
+              }`}
+              title="Atur role atau personil yang dikecualikan dari matriks"
+            >
+              <span>⚙️</span>
+              <span>Setting Pengecualian</span>
+              {excludedCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-black">
+                  {excludedCount} Dikecualikan
+                </span>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Exclusion Banner Warning */}
+      {hasActiveExclusions && excludedCount > 0 && (
+        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs text-amber-900 dark:text-amber-300">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚠️</span>
+            <div>
+              <span className="font-bold">Pengaturan Pengecualian Aktif:</span>{' '}
+              <span>
+                <strong>{excludedCount} personil</strong> disembunyikan dari matriks perkuliahan
+                {exclusionSettings.excludedRoles.length > 0 && (
+                  <> (Role: <em>{exclusionSettings.excludedRoles.join(', ')}</em>)</>
+                )}
+                .
+              </span>
+            </div>
+          </div>
+          {isStaffOrManager && (
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowExclusionModal(true)}
+                className="text-[11px] font-bold text-amber-800 dark:text-amber-200 underline hover:no-underline"
+              >
+                Ubah Setting
+              </button>
+              <span className="text-amber-400">•</span>
+              <button
+                type="button"
+                onClick={resetExclusions}
+                className="text-[11px] font-bold text-amber-800 dark:text-amber-200 hover:text-amber-950 dark:hover:text-white"
+              >
+                Tampilkan Semua
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Role Category Tabs Filter & Search/Dropdown Bar */}
+      <div className="space-y-3 pt-1">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <span className="text-[11px] font-black uppercase tracking-wider text-zinc-400 shrink-0">
+            Kategori Role:
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedRoleCategory('ALL');
+              setSelectedUserId('ALL');
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+              selectedRoleCategory === 'ALL'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+            }`}
+          >
+            Semua Role ({nonExcludedUsers.length})
+          </button>
+          {activeRoleCategories.map((r) => (
+            <button
+              key={r.name}
+              type="button"
+              onClick={() => {
+                setSelectedRoleCategory(r.name);
+                setSelectedUserId('ALL');
+              }}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                selectedRoleCategory.toLowerCase() === r.name.toLowerCase()
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+              }`}
+            >
+              {r.name} ({r.count})
+            </button>
+          ))}
+        </div>
+
+        {/* Filter Controls (User dropdown & search) */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-1">
           {/* User Filter Dropdown */}
           <select
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value)}
             className="w-full sm:w-auto px-3.5 py-2 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
           >
-            <option value="ALL">👥 Semua Personil ({users.length})</option>
-            {users.map((u) => (
+            <option value="ALL">
+              👥 Semua Personil ({dropdownUsers.length})
+            </option>
+            {dropdownUsers.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name} ({u.roleName || 'Trooper'})
               </option>
@@ -124,15 +316,23 @@ export default function WeeklyTimetableMatrix() {
           </select>
 
           {/* Search */}
-          <div className="relative w-full sm:w-56">
+          <div className="relative w-full sm:w-64">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari matakuliah / dosen..."
+              placeholder="Cari matakuliah, dosen, kelas..."
               className="w-full pl-8 pr-3 py-2 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
             />
             <span className="absolute left-2.5 top-2.5 text-xs text-zinc-400">🔍</span>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 text-xs text-zinc-400 hover:text-zinc-600"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -176,7 +376,7 @@ export default function WeeklyTimetableMatrix() {
                   )}
                 </div>
 
-                {/* Day Schedule Cards (Clean, Compact, Non-Spammy) */}
+                {/* Day Schedule Cards */}
                 <div className="pt-2.5 space-y-2 flex-1 overflow-y-auto">
                   {list.length === 0 ? (
                     <div className="h-32 flex flex-col items-center justify-center text-center p-3">
@@ -206,15 +406,21 @@ export default function WeeklyTimetableMatrix() {
                             </span>
                           </div>
 
-                          {/* Course title (clean line clamped) */}
+                          {/* Course title */}
                           <p className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                            {item.courseCode ? `[${item.courseCode}] ` : ''}{item.courseName || item.title}
+                            {item.courseCode ? `[${item.courseCode}] ` : ''}
+                            {item.courseName || item.title}
                           </p>
 
                           {/* Student Info chip */}
                           {user && (
                             <div className="flex items-center gap-1.5 pt-1 border-t border-zinc-200/50 dark:border-zinc-800/50">
-                              <UserAvatar src={user.avatarUrl} name={user.name} size="xs" square />
+                              <UserAvatar
+                                src={user.avatarUrl}
+                                name={user.name}
+                                size="xs"
+                                square
+                              />
                               <p className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400 truncate flex-1">
                                 {user.name}
                               </p>
@@ -231,9 +437,7 @@ export default function WeeklyTimetableMatrix() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* DETAILED SCHEDULE INSPECTOR POPUP (Non-spammy Modal) */}
-      {/* ========================================================================= */}
+      {/* Schedule Item Detail Popup */}
       {selectedSchedule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
           <div
@@ -284,26 +488,30 @@ export default function WeeklyTimetableMatrix() {
               <div className="p-4 rounded-2xl bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/20 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-md">
-                    {selectedSchedule.item.dayOfWeek ? DAY_OF_WEEK_NAMES[selectedSchedule.item.dayOfWeek]?.name : 'Jadwal'}
+                    {selectedSchedule.item.dayOfWeek
+                      ? DAY_OF_WEEK_NAMES[selectedSchedule.item.dayOfWeek]?.name
+                      : 'Jadwal'}
                   </span>
                   <span className="text-xs font-mono font-bold text-purple-700 dark:text-purple-300">
                     ⏰ {selectedSchedule.item.startTime} - {selectedSchedule.item.endTime} WIB
                   </span>
                 </div>
 
-                {/* 1. Kode & Nama Matakuliah */}
                 <h4 className="text-base font-black text-zinc-900 dark:text-zinc-100">
                   {selectedSchedule.item.courseCode ? `[${selectedSchedule.item.courseCode}] ` : ''}
                   {selectedSchedule.item.courseName || selectedSchedule.item.title}
                 </h4>
 
-                {/* 3. Kelas & Kampus, 4. Dosen, Ruangan */}
                 <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1.5 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50">
                   {(selectedSchedule.item.classCode || selectedSchedule.item.campusName) && (
                     <p className="flex items-center gap-1.5">
                       <span>🏛️</span>
                       <span>
-                        Kelas: <strong className="text-zinc-800 dark:text-zinc-200">{selectedSchedule.item.classCode || '-'}</strong> ({selectedSchedule.item.campusName || selectedSchedule.user?.university || '-'})
+                        Kelas:{' '}
+                        <strong className="text-zinc-800 dark:text-zinc-200">
+                          {selectedSchedule.item.classCode || '-'}
+                        </strong>{' '}
+                        ({selectedSchedule.item.campusName || selectedSchedule.user?.university || '-'})
                       </span>
                     </p>
                   )}
@@ -311,14 +519,23 @@ export default function WeeklyTimetableMatrix() {
                     <p className="flex items-center gap-1.5">
                       <span>👨‍🏫</span>
                       <span>
-                        Dosen: <strong className="text-zinc-800 dark:text-zinc-200">{selectedSchedule.item.lecturerCode ? `[${selectedSchedule.item.lecturerCode}] ` : ''}{selectedSchedule.item.lecturerName}</strong>
+                        Dosen:{' '}
+                        <strong className="text-zinc-800 dark:text-zinc-200">
+                          {selectedSchedule.item.lecturerCode ? `[${selectedSchedule.item.lecturerCode}] ` : ''}
+                          {selectedSchedule.item.lecturerName}
+                        </strong>
                       </span>
                     </p>
                   )}
                   {selectedSchedule.item.room && (
                     <p className="flex items-center gap-1.5">
                       <span>📍</span>
-                      <span>Ruangan: <strong className="text-zinc-800 dark:text-zinc-200">{selectedSchedule.item.room}</strong></span>
+                      <span>
+                        Ruangan:{' '}
+                        <strong className="text-zinc-800 dark:text-zinc-200">
+                          {selectedSchedule.item.room}
+                        </strong>
+                      </span>
                     </p>
                   )}
                   {selectedSchedule.item.semesterLabel && (
@@ -362,6 +579,22 @@ export default function WeeklyTimetableMatrix() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Exclusion Settings Modal */}
+      {isStaffOrManager && (
+        <ExclusionSettingsModal
+          isOpen={showExclusionModal}
+          onClose={() => setShowExclusionModal(false)}
+          initialSettings={exclusionSettings}
+          onSave={(newSettings) => {
+            saveExclusions(newSettings);
+            setShowExclusionModal(false);
+          }}
+          onReset={resetExclusions}
+          allUsers={users}
+          distinctRoles={allDistinctRoles}
+        />
       )}
     </div>
   );

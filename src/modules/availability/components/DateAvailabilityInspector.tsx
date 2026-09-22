@@ -7,6 +7,9 @@ import {
   UserDateAvailabilityDetail,
 } from '../availabilityTypes';
 
+import { useAvailabilityExclusions } from '../useAvailabilityExclusions';
+import ExclusionSettingsModal from './ExclusionSettingsModal';
+
 interface DateAvailabilityInspectorProps {
   dateStr: string;
   dayName: string;
@@ -20,13 +23,6 @@ interface DateAvailabilityInspectorProps {
   loading?: boolean;
   isStaffOrManager?: boolean;
 }
-
-interface ExclusionSettings {
-  excludedRoles: string[];
-  excludedUserIds: string[];
-}
-
-const STORAGE_KEY_EXCLUSIONS = 'kian_availability_exclusions_v1';
 
 export default function DateAvailabilityInspector({
   dateStr,
@@ -52,64 +48,18 @@ export default function DateAvailabilityInspector({
   // Selected user for modal detail inspector
   const [selectedUserDetail, setSelectedUserDetail] = useState<UserDateAvailabilityDetail | null>(null);
 
-  // Exclusion Settings State
+  // Centralized Exclusion Hook
+  const {
+    exclusionSettings,
+    saveExclusions,
+    resetExclusions,
+    filterUsers,
+    hasActiveExclusions,
+  } = useAvailabilityExclusions();
   const [showExclusionModal, setShowExclusionModal] = useState(false);
-  const [exclusionSettings, setExclusionSettings] = useState<ExclusionSettings>({
-    excludedRoles: [],
-    excludedUserIds: [],
-  });
-
-  // Temp settings for modal editing
-  const [tempExclusionSettings, setTempExclusionSettings] = useState<ExclusionSettings>({
-    excludedRoles: [],
-    excludedUserIds: [],
-  });
-  const [exclusionUserSearch, setExclusionUserSearch] = useState('');
-
-  // Load exclusion settings from localStorage
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_EXCLUSIONS);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed?.excludedRoles) || Array.isArray(parsed?.excludedUserIds)) {
-          setExclusionSettings({
-            excludedRoles: Array.isArray(parsed.excludedRoles) ? parsed.excludedRoles : [],
-            excludedUserIds: Array.isArray(parsed.excludedUserIds) ? parsed.excludedUserIds : [],
-          });
-        }
-      }
-    } catch {
-      // Ignore JSON parse error
-    }
-  }, []);
-
-  // Save exclusion settings to localStorage
-  const handleSaveExclusions = (newSettings: ExclusionSettings) => {
-    setExclusionSettings(newSettings);
-    try {
-      localStorage.setItem(STORAGE_KEY_EXCLUSIONS, JSON.stringify(newSettings));
-    } catch (err) {
-      console.error('Failed to save exclusion settings:', err);
-    }
-    setShowExclusionModal(false);
-  };
-
-  const handleResetExclusions = () => {
-    const emptySettings = { excludedRoles: [], excludedUserIds: [] };
-    setExclusionSettings(emptySettings);
-    setTempExclusionSettings(emptySettings);
-    try {
-      localStorage.removeItem(STORAGE_KEY_EXCLUSIONS);
-    } catch {
-      // Ignore
-    }
-  };
 
   const openExclusionModal = () => {
     if (!isStaffOrManager) return;
-    setTempExclusionSettings({ ...exclusionSettings });
-    setExclusionUserSearch('');
     setShowExclusionModal(true);
   };
 
@@ -382,7 +332,7 @@ export default function DateAvailabilityInspector({
               <span className="text-amber-400">•</span>
               <button
                 type="button"
-                onClick={handleResetExclusions}
+                onClick={resetExclusions}
                 className="text-[11px] font-bold text-amber-800 dark:text-amber-200 hover:text-amber-950 dark:hover:text-white"
               >
                 Tampilkan Semua
@@ -1012,231 +962,20 @@ export default function DateAvailabilityInspector({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* EXCLUSION SETTINGS MODAL (Admin & Koordinator Setting Pengecualian) */}
-      {/* ========================================================================= */}
-      {showExclusionModal && isStaffOrManager && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div
-            className="bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="px-6 py-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/40">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                    Pengaturan Koordinator
-                  </span>
-                </div>
-                <h3 className="text-lg font-black text-zinc-900 dark:text-white mt-1">
-                  Pengaturan Pengecualian Personil & Role
-                </h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Kecualikan role tertentu (misal Executive/Koordinator) atau user tertentu agar tidak muncul di daftar tugas harian.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowExclusionModal(false)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* 1. Pengecualian Berdasarkan Role */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-200 flex items-center gap-1.5">
-                    <span>🛡️</span>
-                    <span>1. Pengecualian Berdasarkan Role</span>
-                  </h4>
-                  <span className="text-[10px] text-zinc-400">
-                    Centang role yang ingin <strong>disembunyikan</strong>
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {allDistinctRoles.map((r) => {
-                    const isChecked = tempExclusionSettings.excludedRoles.some(
-                      (role) => role.toLowerCase() === r.name.toLowerCase()
-                    );
-
-                    return (
-                      <label
-                        key={r.name}
-                        className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-                          isChecked
-                            ? 'bg-amber-500/10 border-amber-500/40 text-amber-950 dark:text-amber-200'
-                            : 'bg-zinc-50 dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setTempExclusionSettings({
-                                  ...tempExclusionSettings,
-                                  excludedRoles: [...tempExclusionSettings.excludedRoles, r.name],
-                                });
-                              } else {
-                                setTempExclusionSettings({
-                                  ...tempExclusionSettings,
-                                  excludedRoles: tempExclusionSettings.excludedRoles.filter(
-                                    (role) => role.toLowerCase() !== r.name.toLowerCase()
-                                  ),
-                                });
-                              }
-                            }}
-                            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
-                          />
-                          <span className="text-xs font-bold">
-                            {r.name}
-                          </span>
-                        </div>
-                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400">
-                          {r.count} Orang
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* 2. Pengecualian User Spesifik */}
-              <div className="space-y-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-200 flex items-center gap-1.5">
-                    <span>👤</span>
-                    <span>2. Pengecualian Personil Spesifik</span>
-                  </h4>
-                  <span className="text-[10px] text-zinc-400">
-                    {tempExclusionSettings.excludedUserIds.length} personil terpilih
-                  </span>
-                </div>
-
-                {/* Quick Search */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={exclusionUserSearch}
-                    onChange={(e) => setExclusionUserSearch(e.target.value)}
-                    placeholder="Cari nama personil untuk dikecualikan..."
-                    className="w-full pl-8 pr-3 py-2 rounded-2xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-                  />
-                  <span className="absolute left-2.5 top-2.5 text-xs text-zinc-400">🔍</span>
-                </div>
-
-                {/* User selection list */}
-                <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1">
-                  {users
-                    .filter((u) => {
-                      if (!exclusionUserSearch.trim()) return true;
-                      const q = exclusionUserSearch.toLowerCase();
-                      return (
-                        u.user.name.toLowerCase().includes(q) ||
-                        (u.user.roleName || '').toLowerCase().includes(q)
-                      );
-                    })
-                    .map((u) => {
-                      const isUserExcluded = tempExclusionSettings.excludedUserIds.includes(u.user.id);
-                      const isRoleExcluded = tempExclusionSettings.excludedRoles.some(
-                        (r) => r.toLowerCase() === (u.user.roleName || 'Trooper').toLowerCase()
-                      );
-
-                      return (
-                        <label
-                          key={u.user.id}
-                          className={`p-2.5 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-                            isUserExcluded
-                              ? 'bg-amber-500/10 border-amber-500/40'
-                              : 'bg-zinc-50 dark:bg-zinc-900/60 border-zinc-200/80 dark:border-zinc-800/80 hover:border-zinc-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <input
-                              type="checkbox"
-                              checked={isUserExcluded}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setTempExclusionSettings({
-                                    ...tempExclusionSettings,
-                                    excludedUserIds: [
-                                      ...tempExclusionSettings.excludedUserIds,
-                                      u.user.id,
-                                    ],
-                                  });
-                                } else {
-                                  setTempExclusionSettings({
-                                    ...tempExclusionSettings,
-                                    excludedUserIds: tempExclusionSettings.excludedUserIds.filter(
-                                      (id) => id !== u.user.id
-                                    ),
-                                  });
-                                }
-                              }}
-                              className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 shrink-0"
-                            />
-                            <UserAvatar src={u.user.avatarUrl} name={u.user.name} size="xs" square />
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                                {u.user.name}
-                              </p>
-                              <p className="text-[10px] text-zinc-500 truncate">
-                                {u.user.roleName || 'Trooper'} • {u.user.university || 'Kian HQ'}
-                              </p>
-                            </div>
-                          </div>
-
-                          {isRoleExcluded && (
-                            <span className="text-[9px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
-                              Otomatis (Role)
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })}
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-4 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/40">
-              <button
-                type="button"
-                onClick={() => {
-                  setTempExclusionSettings({ excludedRoles: [], excludedUserIds: [] });
-                }}
-                className="text-xs font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline"
-              >
-                Kosongkan Semua Pengecualian
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowExclusionModal(false)}
-                  className="px-4 py-2 rounded-2xl text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                >
-                  Batal
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSaveExclusions(tempExclusionSettings)}
-                  className="px-5 py-2 rounded-2xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md transition-all active:scale-95"
-                >
-                  Terapkan & Simpan
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Exclusion Settings Modal */}
+      {isStaffOrManager && (
+        <ExclusionSettingsModal
+          isOpen={showExclusionModal}
+          onClose={() => setShowExclusionModal(false)}
+          initialSettings={exclusionSettings}
+          onSave={(newSettings) => {
+            saveExclusions(newSettings);
+            setShowExclusionModal(false);
+          }}
+          onReset={resetExclusions}
+          allUsers={users.map((u) => u.user)}
+          distinctRoles={allDistinctRoles}
+        />
       )}
     </div>
   );

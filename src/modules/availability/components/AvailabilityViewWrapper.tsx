@@ -78,8 +78,8 @@ export default function AvailabilityViewWrapper({
 
       {/* Main View Area */}
       {activeTab === 'CALENDAR' && <AvailabilityCalendar isStaffOrManager={isStaffOrManager} />}
-      {activeTab === 'COURSES' && <AllUsersCourseDirectory />}
-      {activeTab === 'TIMETABLE' && <WeeklyTimetableMatrix />}
+      {activeTab === 'COURSES' && <AllUsersCourseDirectory isStaffOrManager={isStaffOrManager} />}
+      {activeTab === 'TIMETABLE' && <WeeklyTimetableMatrix isStaffOrManager={isStaffOrManager} />}
       {activeTab === 'MY_SCHEDULE' && (
         <MyScheduleManager
           currentUserId={currentUserId}
