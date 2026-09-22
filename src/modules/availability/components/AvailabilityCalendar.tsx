@@ -18,7 +18,13 @@ const MONTH_NAMES = [
 
 const WEEK_DAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 
-export default function AvailabilityCalendar() {
+interface AvailabilityCalendarProps {
+  isStaffOrManager?: boolean;
+}
+
+export default function AvailabilityCalendar({
+  isStaffOrManager = false,
+}: AvailabilityCalendarProps) {
   const today = new Date();
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [currentMonth, setCurrentMonth] = useState(today.getMonth() + 1); // 1..12
@@ -296,6 +302,7 @@ export default function AvailabilityCalendar() {
           counts={selectedDayDetails.counts}
           users={selectedDayDetails.users}
           loading={loadingDetails}
+          isStaffOrManager={isStaffOrManager}
         />
       )}
     </div>
