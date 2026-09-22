@@ -13,13 +13,25 @@ export default async function AvailabilityPage() {
   if (!session) redirect('/');
 
   const ctx = await getSessionContext(session.userId);
-  const isStaffOrManager =
-    ctx.userType === 'STAFF' ||
-    ctx.roles.includes('COORDINATOR') ||
-    ctx.roles.includes('EXECUTIVE') ||
+  
+  const isExplicitAdminOrCoordinator =
+    ctx.roles.some((r) => {
+      const u = r.toUpperCase();
+      return u === 'COORDINATOR' || u === 'EXECUTIVE' || u.includes('COORDINATOR') || u.includes('EXECUTIVE');
+    }) ||
+    ctx.can('ADMIN_SYSTEM') ||
     ctx.can('ADMIN_USERS') ||
-    ctx.can('MANAGE') ||
-    ctx.permissions.has('ADMIN_SYSTEM');
+    ctx.can('AVAILABILITY_MANAGE');
+
+  const isTrooperOrMentorRole = ctx.roles.some((r) => {
+    const u = r.toUpperCase();
+    return u.includes('TROOPER') || u.includes('MENTOR') || u.includes('OJT') || u.includes('TRAINING');
+  });
+
+  // Only Admin or Coordinator (or with AVAILABILITY_MANAGE permission) can configure availability exclusions & management settings
+  const isStaffOrManager =
+    isExplicitAdminOrCoordinator ||
+    (ctx.userType === 'STAFF' && !isTrooperOrMentorRole && ctx.can('MANAGE'));
 
   return (
     <div className="space-y-6 pb-14 max-w-7xl mx-auto">

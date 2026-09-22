@@ -107,6 +107,7 @@ export default function DateAvailabilityInspector({
   };
 
   const openExclusionModal = () => {
+    if (!isStaffOrManager) return;
     setTempExclusionSettings({ ...exclusionSettings });
     setExclusionUserSearch('');
     setShowExclusionModal(true);
@@ -318,25 +319,27 @@ export default function DateAvailabilityInspector({
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Exclusion Settings Button (Admin/Koordinator) */}
-          <button
-            type="button"
-            onClick={openExclusionModal}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-bold border flex items-center gap-1.5 transition-all active:scale-95 ${
-              excludedCount > 0
-                ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30 ring-1 ring-amber-500/20'
-                : 'bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700'
-            }`}
-            title="Atur role atau personil yang dikecualikan dari list ini"
-          >
-            <span>⚙️</span>
-            <span>Setting Pengecualian</span>
-            {excludedCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-black">
-                {excludedCount} Dikecualikan
-              </span>
-            )}
-          </button>
+          {/* Exclusion Settings Button (Admin & Koordinator only) */}
+          {isStaffOrManager && (
+            <button
+              type="button"
+              onClick={openExclusionModal}
+              className={`px-3.5 py-2 rounded-2xl text-xs font-bold border flex items-center gap-1.5 transition-all active:scale-95 ${
+                excludedCount > 0
+                  ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30 ring-1 ring-amber-500/20'
+                  : 'bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700'
+              }`}
+              title="Atur role atau personil yang dikecualikan dari list ini"
+            >
+              <span>⚙️</span>
+              <span>Setting Pengecualian</span>
+              {excludedCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-black">
+                  {excludedCount} Dikecualikan
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Copy Avail List */}
           <button
@@ -367,23 +370,25 @@ export default function DateAvailabilityInspector({
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-            <button
-              type="button"
-              onClick={openExclusionModal}
-              className="text-[11px] font-bold text-amber-800 dark:text-amber-200 underline hover:no-underline"
-            >
-              Ubah Setting
-            </button>
-            <span className="text-amber-400">•</span>
-            <button
-              type="button"
-              onClick={handleResetExclusions}
-              className="text-[11px] font-bold text-amber-800 dark:text-amber-200 hover:text-amber-950 dark:hover:text-white"
-            >
-              Tampilkan Semua
-            </button>
-          </div>
+          {isStaffOrManager && (
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <button
+                type="button"
+                onClick={openExclusionModal}
+                className="text-[11px] font-bold text-amber-800 dark:text-amber-200 underline hover:no-underline"
+              >
+                Ubah Setting
+              </button>
+              <span className="text-amber-400">•</span>
+              <button
+                type="button"
+                onClick={handleResetExclusions}
+                className="text-[11px] font-bold text-amber-800 dark:text-amber-200 hover:text-amber-950 dark:hover:text-white"
+              >
+                Tampilkan Semua
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -1010,7 +1015,7 @@ export default function DateAvailabilityInspector({
       {/* ========================================================================= */}
       {/* EXCLUSION SETTINGS MODAL (Admin & Koordinator Setting Pengecualian) */}
       {/* ========================================================================= */}
-      {showExclusionModal && (
+      {showExclusionModal && isStaffOrManager && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
           <div
             className="bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[88vh]"

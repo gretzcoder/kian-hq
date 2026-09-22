@@ -42,6 +42,10 @@ export default async function PermissionsPage() {
   const activeSimRole = await getActiveSimulatedRole();
   const db = await getDB();
 
+  // Ensure system permissions exist in DB
+  const { ensureSystemPermissions } = await import('@/modules/permissions/actions');
+  await ensureSystemPermissions();
+
   const [rolesRaw, permissionsRaw, grantedRaw, memberCountsRaw] = await Promise.all([
     // All roles ordered by clearance level
     db.prepare(`

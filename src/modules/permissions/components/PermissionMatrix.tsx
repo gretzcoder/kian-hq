@@ -65,16 +65,19 @@ function getRoleBadgeStyle(role: Role): string {
 // Risk levels for new domain-based permissions taxonomy
 const PERMISSION_RISK: Record<string, 'low' | 'medium' | 'high'> = {
   // Admin Domain
-  ADMIN_SYSTEM: 'high', ADMIN_USERS: 'high', ADMIN_ROLES: 'high', VIEW_OJT_DATA: 'medium',
+  ADMIN_SYSTEM: 'high', ADMIN_USERS: 'high', ADMIN_ROLES: 'high', VIEW_OJT_DATA: 'medium', VIEW_AS_ROLE: 'high',
   // Project & Workspace
-  PROJECT_CREATE: 'low', PROJECT_MANAGE: 'medium',
-  WORKSPACE_MANAGE: 'medium', WORKSPACE_MEMBER: 'medium',
+  PROJECT_CREATE: 'low', PROJECT_MANAGE: 'medium', WORKSPACE_MANAGE: 'medium', WORKSPACE_MEMBER: 'medium',
   // Task Workflow
   TASK_CREATE: 'low', TASK_ASSIGN: 'medium', TASK_REVIEW: 'high', TASK_EXECUTE: 'low',
   // Content & Knowledge
-  BRIEF_CREATE: 'low', BRIEF_REVIEW: 'medium', KB_MANAGE: 'low', ANNOUNCEMENT_POST: 'low',
+  BRIEF_CREATE: 'low', BRIEF_REVIEW: 'medium', KB_MANAGE: 'low', ANNOUNCEMENT_POST: 'low', CONTENT_BANK_MANAGE: 'low',
+  // Availability & Documents
+  AVAILABILITY_MANAGE: 'medium', AVAILABILITY_VIEW: 'low', DOCUMENTS_MANAGE: 'medium', CERTIFICATES_MANAGE: 'medium',
+  // Team Engagement & Organization
+  BADGES_MANAGE: 'low', ORGANIZATION_MANAGE: 'medium', FEEDBACK_MANAGE: 'low', SPARKS_MANAGE: 'medium',
   // Feature Domain
-  USE_AI: 'low', EXPORT_DATA: 'medium', SPARKS_MANAGE: 'medium',
+  USE_AI: 'low', EXPORT_DATA: 'medium',
 };
 
 // Permission categories for clean UI grouping
@@ -82,7 +85,7 @@ const PERMISSION_CATEGORIES: { label: string; icon: string; permissions: string[
   {
     label: 'Platform Administration',
     icon: '🛡️',
-    permissions: ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'VIEW_OJT_DATA'],
+    permissions: ['ADMIN_SYSTEM', 'ADMIN_USERS', 'ADMIN_ROLES', 'VIEW_OJT_DATA', 'VIEW_AS_ROLE'],
   },
   {
     label: 'Projects & Workspaces',
@@ -95,14 +98,24 @@ const PERMISSION_CATEGORIES: { label: string; icon: string; permissions: string[
     permissions: ['TASK_CREATE', 'TASK_ASSIGN', 'TASK_REVIEW', 'TASK_EXECUTE'],
   },
   {
+    label: 'Availability & Penugasan Tim',
+    icon: '📅',
+    permissions: ['AVAILABILITY_MANAGE', 'AVAILABILITY_VIEW', 'DOCUMENTS_MANAGE', 'CERTIFICATES_MANAGE'],
+  },
+  {
     label: 'Content & Knowledge Base',
     icon: '📚',
-    permissions: ['BRIEF_CREATE', 'BRIEF_REVIEW', 'KB_MANAGE', 'ANNOUNCEMENT_POST'],
+    permissions: ['BRIEF_CREATE', 'BRIEF_REVIEW', 'KB_MANAGE', 'ANNOUNCEMENT_POST', 'CONTENT_BANK_MANAGE'],
+  },
+  {
+    label: 'Engagement, Badges & Organisasi',
+    icon: '🏅',
+    permissions: ['BADGES_MANAGE', 'ORGANIZATION_MANAGE', 'FEEDBACK_MANAGE', 'SPARKS_MANAGE'],
   },
   {
     label: 'System Features & Reports',
     icon: '📊',
-    permissions: ['USE_AI', 'EXPORT_DATA', 'SPARKS_MANAGE'],
+    permissions: ['USE_AI', 'EXPORT_DATA'],
   },
 ];
 
