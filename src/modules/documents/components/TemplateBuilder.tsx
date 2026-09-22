@@ -28,6 +28,9 @@ import {
   DEFAULT_SURAT_TUGAS_LAYOUT,
   DEFAULT_SURAT_TUGAS_SCHEMA,
   DEFAULT_SURAT_TUGAS_VALUES,
+  DEFAULT_SURAT_DISPENSASI_LAYOUT,
+  DEFAULT_SURAT_DISPENSASI_SCHEMA,
+  DEFAULT_SURAT_DISPENSASI_VALUES,
   getDefaultTemplateForType,
 } from '../defaultTemplates';
 import { getRealtimeDocumentDate } from '@/lib/dateUtils';
@@ -35,6 +38,7 @@ import { getRealtimeDocumentDate } from '@/lib/dateUtils';
 interface TemplateBuilderProps {
   initialTemplate?: DocumentTemplateItem | null;
   documentTypes: DocumentTypeItem[];
+  existingTemplates?: DocumentTemplateItem[];
 }
 
 const AVAILABLE_FONTS = [
@@ -51,6 +55,7 @@ const AVAILABLE_FONTS = [
 export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
   initialTemplate,
   documentTypes = [],
+  existingTemplates = [],
 }) => {
   const router = useRouter();
   const isEditing = Boolean(initialTemplate?.id);
@@ -261,6 +266,12 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
     } else if (type === 'ASSIGNEE_TABLE') {
       newSec.title = 'Tabel Personil / Kru';
       newSec.contentKey = 'assignees';
+    } else if (type === 'DISPENSATION_TABLE') {
+      newSec.title = 'Tabel Dispensasi Perkuliahan';
+      newSec.contentKey = 'dispensation_assignees';
+      if (!previewData.dispensation_assignees || !previewData.dispensation_assignees.length) {
+        updateFieldValue('dispensation_assignees', DEFAULT_SURAT_DISPENSASI_VALUES.dispensation_assignees);
+      }
     } else if (type === 'REPEATABLE_LIST') {
       newSec.title = 'Poin-Poin Pernyataan';
       newSec.contentKey = 'statement_points';
@@ -915,6 +926,58 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
               <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 rounded-xl text-[11px] text-purple-700 dark:text-purple-300">
                 ✨ <strong>Drag &amp; Drop Interaktif:</strong> Klik &amp; geser <strong>Logo</strong>, <strong>Judul Surat</strong>, atau <strong>Teks Tambahan</strong> langsung pada Canvas A4 di sebelah kanan!
               </div>
+
+              {/* Centralized Kop Surat Quick-Import Picker */}
+              {existingTemplates && existingTemplates.length > 0 && (
+                <div className="p-3.5 bg-blue-50/80 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-800/60 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-blue-950 dark:text-blue-200 flex items-center gap-1.5">
+                      <span>👑</span> Kop Surat &amp; Frame Terpusat
+                    </span>
+                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-blue-900/60 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-700">
+                      Import Sekali Klik
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+                    Terapkan desain kop surat, frame background border, logo, dan styling dari template resmi lainnya:
+                  </p>
+                  <select
+                    onChange={(e) => {
+                      const tpl = existingTemplates.find((t) => t.id === e.target.value);
+                      if (tpl?.layout_config?.kopConfig) {
+                        handleKopChange({
+                          ...tpl.layout_config.kopConfig,
+                          titleBlock: {
+                            ...kopConfig.titleBlock,
+                            ...tpl.layout_config.kopConfig.titleBlock,
+                          },
+                        });
+                        if (tpl.layout_config.frameAssetUrl) {
+                          setLayoutConfig((prev) => ({
+                            ...prev,
+                            frameAssetUrl: tpl.layout_config?.frameAssetUrl,
+                            logoAssetUrl: tpl.layout_config?.logoAssetUrl,
+                            primaryColor: tpl.layout_config?.primaryColor || prev.primaryColor,
+                          }));
+                        }
+                        setMessage({
+                          type: 'success',
+                          text: `Kop Surat dan Frame berhasil disalin dari "${tpl.name}"!`,
+                        });
+                      }
+                    }}
+                    defaultValue=""
+                    className="w-full px-3 py-2 rounded-xl border border-blue-300 dark:border-blue-700 bg-white dark:bg-zinc-900 text-xs font-semibold text-zinc-900 dark:text-zinc-100 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="" disabled>-- Pilih Template Sumber Kop Surat &amp; Frame --</option>
+                    {existingTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.type_name || t.type_code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* 1. Upload / Select Frame Background */}
               <div className="p-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl border border-zinc-200 dark:border-zinc-700/60 space-y-3">
@@ -1581,6 +1644,13 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                   </button>
                   <button
                     type="button"
+                    onClick={() => handleAddSection('DISPENSATION_TABLE')}
+                    className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-purple-600 dark:text-purple-400 text-left transition-all"
+                  >
+                    <span>🎓</span> Tabel Dispensasi
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleAddSection('REPEATABLE_LIST')}
                     className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 hover:border-purple-500 text-[10.5px] font-bold text-zinc-700 dark:text-zinc-300 text-left transition-all"
                   >
@@ -1641,6 +1711,8 @@ export const TemplateBuilder: React.FC<TemplateBuilderProps> = ({
                       ? '📋 Grid Rincian / Detail'
                       : sec.type === 'ASSIGNEE_TABLE'
                       ? '👥 Tabel Personil / Kru'
+                      : sec.type === 'DISPENSATION_TABLE'
+                      ? '🎓 Tabel Dispensasi Perkuliahan'
                       : sec.type === 'REPEATABLE_LIST'
                       ? '📑 Poin-Poin Diktum / Pernyataan'
                       : sec.type === 'DIVIDER'

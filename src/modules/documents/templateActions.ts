@@ -145,6 +145,37 @@ export async function ensureDefaultSeedTemplates(): Promise<void> {
         .run();
     }
 
+    // Retrieve master template's Kop & Frame if customized
+    const masterTugasVersion = await db
+      .prepare("SELECT layout_config FROM document_template_versions WHERE template_id = 'tpl_surat_tugas_troopers' ORDER BY version DESC LIMIT 1")
+      .first() as any;
+
+    let inheritedDispLayout = { ...DEFAULT_SURAT_DISPENSASI_LAYOUT };
+    if (masterTugasVersion?.layout_config) {
+      try {
+        const parsedTugas = JSON.parse(masterTugasVersion.layout_config);
+        if (parsedTugas?.kopConfig) {
+          inheritedDispLayout.kopConfig = {
+            ...inheritedDispLayout.kopConfig,
+            ...parsedTugas.kopConfig,
+            titleBlock: {
+              ...inheritedDispLayout.kopConfig?.titleBlock,
+              ...parsedTugas.kopConfig?.titleBlock,
+            },
+          };
+        }
+        if (parsedTugas?.frameAssetUrl) {
+          inheritedDispLayout.frameAssetUrl = parsedTugas.frameAssetUrl;
+        }
+        if (parsedTugas?.logoAssetUrl) {
+          inheritedDispLayout.logoAssetUrl = parsedTugas.logoAssetUrl;
+        }
+        if (parsedTugas?.primaryColor) {
+          inheritedDispLayout.primaryColor = parsedTugas.primaryColor;
+        }
+      } catch {}
+    }
+
     const existingDisp = await db
       .prepare("SELECT id FROM document_templates WHERE id = 'tpl_surat_dispensasi_troopers'")
       .first();
@@ -177,13 +208,38 @@ export async function ensureDefaultSeedTemplates(): Promise<void> {
         .bind(
           versionId,
           templateId,
-          JSON.stringify(DEFAULT_SURAT_DISPENSASI_LAYOUT),
+          JSON.stringify(inheritedDispLayout),
           JSON.stringify(DEFAULT_SURAT_DISPENSASI_SCHEMA),
           JSON.stringify(DEFAULT_SURAT_DISPENSASI_VALUES),
           JSON.stringify(DEFAULT_SURAT_DISPENSASI_VALUES),
           nowSec
         )
         .run();
+    } else if (inheritedDispLayout.kopConfig?.frameAssetUrl || inheritedDispLayout.frameAssetUrl) {
+      // If master has a frame, ensure existing dispensation version also gets it if currently empty
+      const currDispVer = await db
+        .prepare("SELECT id, layout_config FROM document_template_versions WHERE template_id = 'tpl_surat_dispensasi_troopers' ORDER BY version DESC LIMIT 1")
+        .first() as any;
+      if (currDispVer) {
+        try {
+          const parsed = JSON.parse(currDispVer.layout_config || '{}');
+          if (!parsed.kopConfig?.frameAssetUrl && !parsed.frameAssetUrl) {
+            const updated = {
+              ...parsed,
+              frameAssetUrl: inheritedDispLayout.frameAssetUrl || parsed.frameAssetUrl,
+              kopConfig: {
+                ...parsed.kopConfig,
+                frameAssetUrl: inheritedDispLayout.kopConfig?.frameAssetUrl || parsed.kopConfig?.frameAssetUrl,
+                logo: inheritedDispLayout.kopConfig?.logo || parsed.kopConfig?.logo,
+              },
+            };
+            await db
+              .prepare('UPDATE document_template_versions SET layout_config = ? WHERE id = ?')
+              .bind(JSON.stringify(updated), currDispVer.id)
+              .run();
+          }
+        } catch {}
+      }
     }
   } catch (err) {
     console.error('ensureDefaultSeedTemplates error:', err);

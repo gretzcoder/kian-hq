@@ -1563,12 +1563,14 @@ export async function getUsersCourseSchedulesForDispensationAction(params: {
         courseName: s.course_name || s.title || 'Mata Kuliah',
         classCode: s.class_code || detectedClassCode || '',
         campusName: s.campus_name || detectedCampus || '',
+        lecturerCode: s.lecturer_code || '',
+        lecturerName: s.lecturer_name || '',
         dayOfWeek: s.day_of_week,
         dayName: s.day_of_week ? DAY_NAMES_MAP[s.day_of_week] || '' : '',
         startTime: s.start_time || '08:00',
         endTime: s.end_time || '10:00',
         room: s.room || '',
-        lecturerName: s.lecturer_name || '',
+        notes: s.notes || '',
         selected: isTargetDay,
       });
     }
@@ -1580,14 +1582,19 @@ export async function getUsersCourseSchedulesForDispensationAction(params: {
       return (a.startTime || '').localeCompare(b.startTime || '');
     });
 
+    const uniName = user.university || 'Universitas Bina Sarana Informatika (UBSI)';
+    const fullUniLabel = detectedCampus && !uniName.toLowerCase().includes(detectedCampus.toLowerCase())
+      ? `${uniName} - ${detectedCampus}`
+      : uniName;
+
     resultRows.push({
       no: i + 1,
       userId: user.id,
       name: user.name,
       nim: user.student_id_number || '',
-      studyProgram: user.study_program || user.department || 'Sistem Informasi',
-      university: detectedCampus || user.university || 'Universitas Bina Sarana Informatika (UBSI)',
-      classCode: detectedClassCode || '17.4A.07',
+      studyProgram: user.study_program || user.department || 'Teknologi Informasi',
+      university: fullUniLabel,
+      classCode: detectedClassCode || '17.3B.01',
       courses: formattedCourses,
     });
   }
@@ -1606,9 +1613,9 @@ export async function getUsersCourseSchedulesForDispensationAction(params: {
           no: resultRows.length + 1,
           name: uq.name,
           nim: uq.nip || '',
-          studyProgram: 'Sistem Informasi',
+          studyProgram: 'Teknologi Informasi',
           university: 'Universitas Bina Sarana Informatika (UBSI)',
-          classCode: '17.4A.07',
+          classCode: '17.3B.01',
           courses: [],
         });
       }
@@ -1667,8 +1674,8 @@ export async function getSuratTugasDispensationPreloadAction(suratTugasId: strin
       source_surat_tugas_number: doc.document_number,
       document_title: 'SURAT PERMOHONAN DISPENSASI\nPERKULIAHAN',
       target_university: primaryUniversity,
-      recipient_info: `Kepada Yth.\nBapak/Ibu Dekan / Ketua Program Studi / Dosen Pengampu\n${primaryUniversity}\ndi Tempat`,
-      intro_text: `Dengan hormat,\nSehubungan dengan penugasan dan partisipasi aktif mahasiswa/i kami dalam agenda kegiatan ${eventName} (Berdasarkan Surat Tugas No. ${doc.document_number}), bersama ini kami dari Management KIAN Troopers mengajukan permohonan dispensasi / izin tidak mengikuti perkuliahan pada:`,
+      recipient_info: `Kepada Yth.\nExecutive Director / Pimpinan Management KIAN\ndi Tempat`,
+      intro_text: `Dengan hormat,\nSehubungan dengan pelaksanaan penugasan operasional kru dalam agenda kegiatan ${eventName} (Ref. Surat Tugas No. ${doc.document_number}), bersama ini saya selaku Program Director mengajukan permohonan penerbitan surat dispensasi perkuliahan resmi bagi personil mahasiswa/i yang bertugas pada:`,
       event_name: eventName,
       event_days: eventDays,
       event_time: eventTime,
@@ -1681,7 +1688,7 @@ export async function getSuratTugasDispensationPreloadAction(suratTugasId: strin
         'Adapun daftar mahasiswa dan rincian mata kuliah yang dimohonkan dispensasi perkuliahan adalah sebagai berikut:',
       dispensation_assignees: dispensationAssignees,
       closing_text:
-        'Demikian surat permohonan dispensasi ini kami sampaikan. Besar harapan kami Bapak/Ibu dapat memberikan izin kepada mahasiswa/i tersebut di atas agar dapat menjalankan penugasan dengan sebaik-baiknya. Atas perhatian, kebijaksanaan, dan kerja sama yang baik, kami mengucapkan terima kasih.',
+        'Demikian surat permohonan dispensasi ini kami sampaikan. Besar harapan kami Bapak/Ibu dapat memberikan izin dan memproses penerbitan surat dispensasi resmi kepada institusi kampus terkait agar mahasiswa/i tersebut dapat menjalankan penugasan dengan sebaik-baiknya. Atas perhatian dan kebijaksanaannya, kami mengucapkan terima kasih.',
       document_date_place: getRealtimeDocumentDate('Jakarta'),
       signatory_position: formData.signatory_position || 'Program Director Kian Troopers',
       signatory_name: formData.signatory_name || 'Mohamad Abi',

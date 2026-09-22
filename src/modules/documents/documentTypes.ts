@@ -20,7 +20,9 @@ export interface DispensationCourseItem {
   startTime: string;
   endTime: string;
   room?: string;
+  lecturerCode?: string;
   lecturerName?: string;
+  notes?: string; // Moda perkuliahan (tatap muka / online) atau catatan ruang
   selected?: boolean;
 }
 

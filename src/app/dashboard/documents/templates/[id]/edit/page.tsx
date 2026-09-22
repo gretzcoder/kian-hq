@@ -4,6 +4,7 @@ import { getSession } from '@/modules/auth/session';
 import { getSessionContext } from '@/modules/roles/rbac';
 import {
   getDocumentTypes,
+  getDocumentTemplates,
   getTemplateById,
 } from '@/modules/documents/templateActions';
 import { TemplateBuilder } from '@/modules/documents/components/TemplateBuilder';
@@ -29,9 +30,10 @@ export default async function EditTemplatePage({
   }
 
   const resolvedParams = await params;
-  const [template, documentTypes] = await Promise.all([
+  const [template, documentTypes, existingTemplates] = await Promise.all([
     getTemplateById(resolvedParams.id),
     getDocumentTypes(),
+    getDocumentTemplates(),
   ]);
 
   if (!template) {
@@ -43,6 +45,7 @@ export default async function EditTemplatePage({
       <TemplateBuilder
         initialTemplate={template}
         documentTypes={documentTypes}
+        existingTemplates={existingTemplates}
       />
     </div>
   );

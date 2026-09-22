@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   DocumentSignatoryItem,
   DocumentTemplateItem,
+  TemplateLayoutConfig,
 } from '@/modules/documents/documentTypes';
 import {
   generateDocumentAction,
@@ -112,6 +113,37 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
   );
   const [customNumber, setCustomNumber] = useState<string>('');
   const [resolvedLiveNumber, setResolvedLiveNumber] = useState<string>('');
+
+  // Auto-inherit custom frame/logo from master template if current template does not have one yet
+  const masterTplWithFrame = templates.find(
+    (t) => Boolean(t.layout_config?.kopConfig?.frameAssetUrl || t.layout_config?.frameAssetUrl)
+  );
+
+  const effectiveLayoutConfig = React.useMemo(() => {
+    if (!currentTemplate?.layout_config) return undefined;
+    const cfg: TemplateLayoutConfig = { ...currentTemplate.layout_config };
+    const hasFrame = Boolean(cfg.kopConfig?.frameAssetUrl || cfg.frameAssetUrl);
+    if (!hasFrame && masterTplWithFrame?.layout_config) {
+      const masterCfg = masterTplWithFrame.layout_config;
+      cfg.frameAssetUrl = masterCfg.frameAssetUrl;
+      cfg.logoAssetUrl = masterCfg.logoAssetUrl || cfg.logoAssetUrl;
+      if (masterCfg.kopConfig) {
+        cfg.kopConfig = {
+          ...masterCfg.kopConfig,
+          ...(cfg.kopConfig || {}),
+          frameAssetUrl: masterCfg.kopConfig.frameAssetUrl || cfg.kopConfig?.frameAssetUrl,
+          logo: masterCfg.kopConfig.logo || cfg.kopConfig?.logo || {
+            enabled: true,
+            x: 56,
+            y: 44,
+            width: 220,
+            height: 48,
+          },
+        };
+      }
+    }
+    return cfg;
+  }, [currentTemplate, masterTplWithFrame]);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatingMode, setGeneratingMode] = useState<string | null>(null);
@@ -517,7 +549,7 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
                   (isPrivileged ? '001/KIAN/TROOPERS/IX/2026' : 'DRAF/PENGAJUAN'),
                 status: isPrivileged ? 'ISSUED' : 'PENDING_APPROVAL',
               }}
-              layoutConfig={currentTemplate?.layout_config}
+              layoutConfig={effectiveLayoutConfig}
               signatory={
                 selectedSignatory
                   ? {

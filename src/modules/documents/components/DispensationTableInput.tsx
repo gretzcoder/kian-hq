@@ -434,88 +434,138 @@ export const DispensationTableInput: React.FC<DispensationTableInputProps> = ({
                         return (
                           <div
                             key={course.id || cIdx}
-                            className={`p-2.5 rounded-xl border transition-all flex flex-wrap lg:flex-nowrap items-center gap-2.5 ${
+                            className={`p-2.5 rounded-xl border transition-all space-y-2 ${
                               isChecked
                                 ? 'bg-white dark:bg-zinc-900 border-purple-500/40 shadow-xs'
                                 : 'bg-zinc-100/60 dark:bg-zinc-900/30 border-zinc-200 dark:border-zinc-800 opacity-60'
                             }`}
                           >
-                            {/* Checkbox Toggle */}
-                            <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0">
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={() => handleToggleCourseSelected(sIdx, cIdx)}
-                                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
-                              />
-                              <span className="text-[11px] font-bold text-zinc-700 dark:text-zinc-300">
-                                Ajukan
-                              </span>
-                            </label>
-
-                            {/* Course Name */}
-                            <div className="flex-1 min-w-[160px]">
-                              <input
-                                type="text"
-                                value={course.courseName}
-                                onChange={(e) =>
-                                  handleCourseFieldChange(sIdx, cIdx, 'courseName', e.target.value)
-                                }
-                                placeholder="Nama Mata Kuliah (e.g. Pemrograman Web)"
-                                className="w-full px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-xs font-semibold text-zinc-900 dark:text-zinc-100"
-                              />
-                            </div>
-
-                            {/* Day & Time */}
-                            <div className="flex items-center gap-1 shrink-0">
-                              {course.dayName && (
-                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                                  {course.dayName}
+                            {/* Row 1: Checkbox, Course Code, Course Name, Day/Time, Delete */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Checkbox Toggle */}
+                              <label className="flex items-center gap-1.5 cursor-pointer select-none shrink-0 bg-purple-50 dark:bg-purple-950/50 px-2 py-1 rounded-lg border border-purple-200 dark:border-purple-800/60">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleToggleCourseSelected(sIdx, cIdx)}
+                                  className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500"
+                                />
+                                <span className="text-[10.5px] font-bold text-purple-700 dark:text-purple-300">
+                                  {isChecked ? 'Dimohonkan' : 'Dilewati'}
                                 </span>
-                              )}
-                              <input
-                                type="text"
-                                value={course.startTime}
-                                onChange={(e) =>
-                                  handleCourseFieldChange(sIdx, cIdx, 'startTime', e.target.value)
-                                }
-                                placeholder="08:00"
-                                className="w-16 px-1.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-xs font-mono text-center"
-                              />
-                              <span className="text-zinc-400 font-bold">-</span>
-                              <input
-                                type="text"
-                                value={course.endTime}
-                                onChange={(e) =>
-                                  handleCourseFieldChange(sIdx, cIdx, 'endTime', e.target.value)
-                                }
-                                placeholder="10:30"
-                                className="w-16 px-1.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-xs font-mono text-center"
-                              />
+                              </label>
+
+                              {/* Course Code */}
+                              <div className="w-20 shrink-0">
+                                <input
+                                  type="text"
+                                  value={course.courseCode || ''}
+                                  onChange={(e) =>
+                                    handleCourseFieldChange(sIdx, cIdx, 'courseCode', e.target.value)
+                                  }
+                                  placeholder="Kode (876)"
+                                  className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-[11px] font-mono font-bold text-center text-zinc-900 dark:text-zinc-100"
+                                  title="Kode Mata Kuliah"
+                                />
+                              </div>
+
+                              {/* Course Name */}
+                              <div className="flex-1 min-w-[170px]">
+                                <input
+                                  type="text"
+                                  value={course.courseName}
+                                  onChange={(e) =>
+                                    handleCourseFieldChange(sIdx, cIdx, 'courseName', e.target.value)
+                                  }
+                                  placeholder="Nama Mata Kuliah (e.g. Praktikum Jaringan Komputer)"
+                                  className="w-full px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100"
+                                />
+                              </div>
+
+                              {/* Day & Time */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                {course.dayName && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
+                                    {course.dayName}
+                                  </span>
+                                )}
+                                <input
+                                  type="text"
+                                  value={course.startTime}
+                                  onChange={(e) =>
+                                    handleCourseFieldChange(sIdx, cIdx, 'startTime', e.target.value)
+                                  }
+                                  placeholder="08:00"
+                                  className="w-14 px-1 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-mono text-center"
+                                />
+                                <span className="text-zinc-400 font-bold">-</span>
+                                <input
+                                  type="text"
+                                  value={course.endTime}
+                                  onChange={(e) =>
+                                    handleCourseFieldChange(sIdx, cIdx, 'endTime', e.target.value)
+                                  }
+                                  placeholder="10:30"
+                                  className="w-14 px-1 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-mono text-center"
+                                />
+                                <span className="text-[10px] font-bold text-zinc-400">WIB</span>
+                              </div>
+
+                              {/* Delete Course Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCourseFromStudent(sIdx, cIdx)}
+                                className="text-red-500 hover:text-red-700 p-1 text-xs shrink-0"
+                                title="Hapus Matakuliah"
+                              >
+                                ✕
+                              </button>
                             </div>
 
-                            {/* Room & Class */}
-                            <div className="w-24 shrink-0">
-                              <input
-                                type="text"
-                                value={course.room || ''}
-                                onChange={(e) =>
-                                  handleCourseFieldChange(sIdx, cIdx, 'room', e.target.value)
-                                }
-                                placeholder="Ruang / Lab"
-                                className="w-full px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-xs text-center"
-                              />
-                            </div>
+                            {/* Row 2: Room, Lecturer, Mode / Notes, Campus */}
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 border-t border-zinc-100 dark:border-zinc-800/80">
+                              {/* Room */}
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-bold text-zinc-400 shrink-0">📍 Ruang:</span>
+                                <input
+                                  type="text"
+                                  value={course.room || ''}
+                                  onChange={(e) =>
+                                    handleCourseFieldChange(sIdx, cIdx, 'room', e.target.value)
+                                  }
+                                  placeholder="E-D2 / Lab Komputer"
+                                  className="w-full px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-[11px] text-zinc-800 dark:text-zinc-200"
+                                />
+                              </div>
 
-                            {/* Delete Course Button */}
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveCourseFromStudent(sIdx, cIdx)}
-                              className="text-red-500 hover:text-red-700 p-1 text-xs shrink-0"
-                              title="Hapus Matakuliah"
-                            >
-                              ✕
-                            </button>
+                              {/* Lecturer */}
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-bold text-zinc-400 shrink-0">👨‍🏫 Dosen:</span>
+                                <input
+                                  type="text"
+                                  value={course.lecturerName || ''}
+                                  onChange={(e) =>
+                                    handleCourseFieldChange(sIdx, cIdx, 'lecturerName', e.target.value)
+                                  }
+                                  placeholder="[AUM] Ade Surya Budiman"
+                                  className="w-full px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-[11px] text-zinc-800 dark:text-zinc-200"
+                                />
+                              </div>
+
+                              {/* Mode / Notes */}
+                              <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-bold text-zinc-400 shrink-0">📝 Moda:</span>
+                                <input
+                                  type="text"
+                                  value={course.notes || ''}
+                                  onChange={(e) =>
+                                    handleCourseFieldChange(sIdx, cIdx, 'notes', e.target.value)
+                                  }
+                                  placeholder="Tatap Muka / Online"
+                                  className="w-full px-2 py-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-transparent text-[11px] text-zinc-800 dark:text-zinc-200"
+                                />
+                              </div>
+                            </div>
                           </div>
                         );
                       })

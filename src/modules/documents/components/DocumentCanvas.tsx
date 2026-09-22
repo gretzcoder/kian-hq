@@ -945,20 +945,35 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                                 {activeCourses.length === 0 ? (
                                   <span className="text-zinc-500 italic text-[8pt]">Semua Perkuliahan pada Hari Tersebut</span>
                                 ) : (
-                                  <div className="space-y-1">
-                                    {activeCourses.map((c, cIdx) => (
-                                      <div key={c.id || cIdx} className="text-[8pt] leading-tight">
-                                        <span className="font-bold text-zinc-950">• {c.courseName}</span>
-                                        {(c.startTime || c.endTime) && (
-                                          <span className="text-zinc-700 ml-1">
-                                            ({c.startTime} - {c.endTime} WIB)
-                                          </span>
-                                        )}
-                                        {c.room && (
-                                          <span className="text-zinc-600 ml-1 italic">[{c.room}]</span>
-                                        )}
-                                      </div>
-                                    ))}
+                                  <div className="space-y-1.5">
+                                    {activeCourses.map((c, cIdx) => {
+                                      const codePrefix = c.courseCode ? `[${c.courseCode}] ` : '';
+                                      const lecturerStr = c.lecturerName
+                                        ? (c.lecturerCode ? `[${c.lecturerCode}] ${c.lecturerName}` : c.lecturerName)
+                                        : '';
+
+                                      return (
+                                        <div
+                                          key={c.id || cIdx}
+                                          className="text-[8pt] leading-tight pb-1.5 last:pb-0 border-b border-zinc-200/70 last:border-b-0"
+                                        >
+                                          <div className="font-bold text-zinc-950">
+                                            • {codePrefix}{c.courseName}
+                                          </div>
+                                          <div className="text-[7.5pt] text-zinc-700 pl-2 mt-0.5">
+                                            <span>⏰ {c.dayName ? `${c.dayName}, ` : ''}{c.startTime} - {c.endTime} WIB</span>
+                                            {c.room && <span className="ml-1.5 text-zinc-600 font-medium">| 📍 Ruang: {c.room}</span>}
+                                          </div>
+                                          {(lecturerStr || c.notes) && (
+                                            <div className="text-[7.5pt] text-zinc-600 pl-2 italic mt-0.5">
+                                              {lecturerStr && <span>👨‍🏫 Dosen: {lecturerStr}</span>}
+                                              {lecturerStr && c.notes && <span className="mx-1">|</span>}
+                                              {c.notes && <span className="text-zinc-500 font-normal">({c.notes})</span>}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </td>
@@ -1510,20 +1525,35 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                               {activeCourses.length === 0 ? (
                                 <span className="text-zinc-500 italic text-[8pt]">Semua Perkuliahan pada Hari Tersebut</span>
                               ) : (
-                                <div className="space-y-1">
-                                  {activeCourses.map((c, cIdx) => (
-                                    <div key={c.id || cIdx} className="text-[8pt] leading-tight">
-                                      <span className="font-bold text-zinc-950">• {c.courseName}</span>
-                                      {(c.startTime || c.endTime) && (
-                                        <span className="text-zinc-700 ml-1">
-                                          ({c.startTime} - {c.endTime} WIB)
-                                        </span>
-                                      )}
-                                      {c.room && (
-                                        <span className="text-zinc-600 ml-1 italic">[{c.room}]</span>
-                                      )}
-                                    </div>
-                                  ))}
+                                <div className="space-y-1.5">
+                                  {activeCourses.map((c, cIdx) => {
+                                    const codePrefix = c.courseCode ? `[${c.courseCode}] ` : '';
+                                    const lecturerStr = c.lecturerName
+                                      ? (c.lecturerCode ? `[${c.lecturerCode}] ${c.lecturerName}` : c.lecturerName)
+                                      : '';
+
+                                    return (
+                                      <div
+                                        key={c.id || cIdx}
+                                        className="text-[8pt] leading-tight pb-1.5 last:pb-0 border-b border-zinc-200/70 last:border-b-0"
+                                      >
+                                        <div className="font-bold text-zinc-950">
+                                          • {codePrefix}{c.courseName}
+                                        </div>
+                                        <div className="text-[7.5pt] text-zinc-700 pl-2 mt-0.5">
+                                          <span>⏰ {c.dayName ? `${c.dayName}, ` : ''}{c.startTime} - {c.endTime} WIB</span>
+                                          {c.room && <span className="ml-1.5 text-zinc-600 font-medium">| 📍 Ruang: {c.room}</span>}
+                                        </div>
+                                        {(lecturerStr || c.notes) && (
+                                          <div className="text-[7.5pt] text-zinc-600 pl-2 italic mt-0.5">
+                                            {lecturerStr && <span>👨‍🏫 Dosen: {lecturerStr}</span>}
+                                            {lecturerStr && c.notes && <span className="mx-1">|</span>}
+                                            {c.notes && <span className="text-zinc-500 font-normal">({c.notes})</span>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </td>

@@ -4,6 +4,7 @@ import { getSession } from '@/modules/auth/session';
 import { getSessionContext } from '@/modules/roles/rbac';
 import {
   getDocumentTypes,
+  getDocumentTemplates,
   ensureDefaultSeedTemplates,
 } from '@/modules/documents/templateActions';
 import { TemplateBuilder } from '@/modules/documents/components/TemplateBuilder';
@@ -26,11 +27,17 @@ export default async function NewTemplatePage() {
     redirect('/dashboard/documents');
   }
 
-  const documentTypes = await getDocumentTypes();
+  const [documentTypes, existingTemplates] = await Promise.all([
+    getDocumentTypes(),
+    getDocumentTemplates(),
+  ]);
 
   return (
     <div className="max-w-7xl mx-auto pb-12">
-      <TemplateBuilder documentTypes={documentTypes} />
+      <TemplateBuilder
+        documentTypes={documentTypes}
+        existingTemplates={existingTemplates}
+      />
     </div>
   );
 }
