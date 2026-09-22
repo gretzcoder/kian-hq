@@ -871,3 +871,108 @@ export async function getWeeklyTimetableMatrixAction(): Promise<{
     schedules: rawSchedules,
   };
 }
+
+/**
+ * Resolves default academic values (Campus/University, Class Code, Semester)
+ * based on user profile and previously saved schedule inputs.
+ */
+export async function getUserAcademicDefaultsAction(targetUserId?: string): Promise<{
+  campusName: string;
+  classCode: string;
+  semesterLabel: string;
+}> {
+  const session = await getSession();
+  if (!session) return { campusName: '', classCode: '', semesterLabel: 'Semester Ganjil 2026/2027' };
+
+  const effectiveUserId = targetUserId || session.userId;
+  await ensureAvailabilityTables();
+  const db = await getDB();
+
+  // 1. Fetch user profile
+  const userRow = await db.prepare(`
+    SELECT university, study_program, semester FROM users WHERE id = ?
+  `).bind(effectiveUserId).first() as any;
+
+  // 2. Fetch latest saved kuliah item
+  const latestKuliah = await db.prepare(`
+    SELECT campus_name, class_code, semester_label 
+    FROM user_availabilities 
+    WHERE user_id = ? AND type = 'KULIAH'
+    ORDER BY created_at DESC 
+    LIMIT 1
+  `).bind(effectiveUserId).first() as any;
+
+  const campusName = latestKuliah?.campus_name || userRow?.university || '';
+  const classCode = latestKuliah?.class_code || '';
+  const semesterLabel = latestKuliah?.semester_label || (userRow?.semester ? `Semester ${userRow.semester}` : 'Semester Ganjil 2026/2027');
+
+  return {
+    campusName,
+    classCode,
+    semesterLabel,
+  };
+}
+
+/**
+ * Gets all active users with their college course schedules aggregated for the Perkuliahan directory.
+ */
+export async function getAllUsersCourseSchedulesAction(): Promise<{
+  usersWithCourses: {
+    user: UserProfileSnapshot;
+    totalCourses: number;
+    daysCount: number;
+    daysActive: number[];
+    latestSemester: string | null;
+    courses: UserAvailabilityItem[];
+  }[];
+}> {
+  await ensureAvailabilityTables();
+  const db = await getDB();
+
+  const [activeUsers, rawSchedules] = await Promise.all([
+    getAllActiveUsers(db),
+    db.prepare(`
+      SELECT * FROM user_availabilities 
+      WHERE type = 'KULIAH' AND is_active = 1
+      ORDER BY day_of_week ASC, start_time ASC
+    `).all().then((res: any) => (res.results || []).map(mapAvailabilityRow)),
+  ]);
+
+  const coursesByUser = new Map<string, UserAvailabilityItem[]>();
+  for (const s of rawSchedules) {
+    if (!coursesByUser.has(s.userId)) {
+      coursesByUser.set(s.userId, []);
+    }
+    coursesByUser.get(s.userId)!.push(s);
+  }
+
+  const usersWithCourses = activeUsers.map((user) => {
+    const courses = coursesByUser.get(user.id) || [];
+    const daysSet = new Set<number>();
+    courses.forEach((c) => {
+      if (c.dayOfWeek) daysSet.add(c.dayOfWeek);
+    });
+
+    const latestSemester = courses[0]?.semesterLabel || (user.semester ? `Semester ${user.semester}` : null);
+
+    return {
+      user,
+      totalCourses: courses.length,
+      daysCount: daysSet.size,
+      daysActive: Array.from(daysSet).sort((a, b) => a - b),
+      latestSemester,
+      courses,
+    };
+  });
+
+  // Sort: users with courses first (highest number of courses), then by name
+  usersWithCourses.sort((a, b) => {
+    if (a.totalCourses !== b.totalCourses) {
+      return b.totalCourses - a.totalCourses;
+    }
+    return a.user.name.localeCompare(b.user.name);
+  });
+
+  return { usersWithCourses };
+}
+

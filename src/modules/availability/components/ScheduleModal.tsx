@@ -8,7 +8,11 @@ import {
   DAY_OF_WEEK_NAMES,
   UserAvailabilityItem,
 } from '../availabilityTypes';
-import { createAvailabilityAction, updateAvailabilityAction } from '../availabilityActions';
+import {
+  createAvailabilityAction,
+  updateAvailabilityAction,
+  getUserAcademicDefaultsAction,
+} from '../availabilityActions';
 
 interface ScheduleModalProps {
   isOpen: boolean;
@@ -78,8 +82,6 @@ export default function ScheduleModal({
       setSemesterLabel(defaultSemester);
       setCourseCode('');
       setCourseName('');
-      setClassCode('');
-      setCampusName('');
       setLecturerCode('');
       setLecturerName('');
       setRoom('');
@@ -91,6 +93,15 @@ export default function ScheduleModal({
       setIsAllDay(false);
       setLocation('');
       setNotes('');
+
+      // Auto-fetch defaults from user profile & previously input schedules
+      if (isOpen) {
+        getUserAcademicDefaultsAction().then((defaults) => {
+          if (defaults.campusName) setCampusName(defaults.campusName);
+          if (defaults.classCode) setClassCode(defaults.classCode);
+          if (defaults.semesterLabel) setSemesterLabel(defaults.semesterLabel);
+        }).catch(() => {});
+      }
     }
     setError(null);
   }, [editItem, defaultType, defaultDate, defaultSemester, isOpen]);
@@ -314,31 +325,36 @@ export default function ScheduleModal({
               </div>
 
               {/* 3. Kode Kelas & Nama Kampus */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    3. Kode Kelas
-                  </label>
-                  <input
-                    type="text"
-                    value={classCode}
-                    onChange={(e) => setClassCode(e.target.value)}
-                    placeholder="Contoh: 12.4A.01 / TI-2024"
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                  />
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                      3. Kode Kelas
+                    </label>
+                    <input
+                      type="text"
+                      value={classCode}
+                      onChange={(e) => setClassCode(e.target.value)}
+                      placeholder="Contoh: 12.4A.01 / TI-2024"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                      Nama Kampus / Institusi
+                    </label>
+                    <input
+                      type="text"
+                      value={campusName}
+                      onChange={(e) => setCampusName(e.target.value)}
+                      placeholder="Contoh: UBSI Margonda / Nusa Mandiri"
+                      className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    Nama Kampus / Institusi
-                  </label>
-                  <input
-                    type="text"
-                    value={campusName}
-                    onChange={(e) => setCampusName(e.target.value)}
-                    placeholder="Contoh: UBSI Margonda / Nusa Mandiri"
-                    className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                  />
-                </div>
+                <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-medium">
+                  💡 Terisi otomatis dari riwayat / profil Anda. Anda dapat mengubahnya jika ada perbedaan kelas/kampus.
+                </p>
               </div>
 
               {/* 4. Kode & Nama Dosen */}

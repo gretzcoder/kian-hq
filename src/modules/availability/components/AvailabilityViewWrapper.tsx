@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import AvailabilityCalendar from './AvailabilityCalendar';
+import AllUsersCourseDirectory from './AllUsersCourseDirectory';
 import WeeklyTimetableMatrix from './WeeklyTimetableMatrix';
 import MyScheduleManager from './MyScheduleManager';
 
@@ -16,7 +17,7 @@ export default function AvailabilityViewWrapper({
   currentUserName,
   isStaffOrManager,
 }: AvailabilityViewWrapperProps) {
-  const [activeTab, setActiveTab] = useState<'CALENDAR' | 'TIMETABLE' | 'MY_SCHEDULE'>('CALENDAR');
+  const [activeTab, setActiveTab] = useState<'CALENDAR' | 'COURSES' | 'TIMETABLE' | 'MY_SCHEDULE'>('CALENDAR');
 
   return (
     <div className="space-y-6">
@@ -25,7 +26,7 @@ export default function AvailabilityViewWrapper({
         <button
           type="button"
           onClick={() => setActiveTab('CALENDAR')}
-          className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'CALENDAR'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
@@ -37,21 +38,34 @@ export default function AvailabilityViewWrapper({
 
         <button
           type="button"
+          onClick={() => setActiveTab('COURSES')}
+          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
+            activeTab === 'COURSES'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
+              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
+          }`}
+        >
+          <span>🎓</span>
+          <span>Perkuliahan Seluruh User</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab('TIMETABLE')}
-          className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'TIMETABLE'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
           }`}
         >
           <span>🗓️</span>
-          <span>Matriks Mingguan Tim</span>
+          <span>Matriks Mingguan</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('MY_SCHEDULE')}
-          className={`flex-1 min-w-[140px] py-2.5 px-4 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
             activeTab === 'MY_SCHEDULE'
               ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
               : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
@@ -64,6 +78,7 @@ export default function AvailabilityViewWrapper({
 
       {/* Main View Area */}
       {activeTab === 'CALENDAR' && <AvailabilityCalendar />}
+      {activeTab === 'COURSES' && <AllUsersCourseDirectory />}
       {activeTab === 'TIMETABLE' && <WeeklyTimetableMatrix />}
       {activeTab === 'MY_SCHEDULE' && (
         <MyScheduleManager
