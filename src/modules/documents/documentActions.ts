@@ -1366,7 +1366,7 @@ export async function duplicateDocumentAction(documentId: string): Promise<{
  * Extracts matching day(s) of week (1..7) from a freeform event date/days text.
  * 1 = Senin, 2 = Selasa, ..., 7 = Minggu
  */
-export function extractDaysOfWeekFromText(eventDaysText?: string, specificDateStr?: string): number[] {
+function extractDaysOfWeekFromText(eventDaysText?: string, specificDateStr?: string): number[] {
   const daysFound = new Set<number>();
 
   if (specificDateStr && /^\d{4}-\d{2}-\d{2}$/.test(specificDateStr.trim())) {
