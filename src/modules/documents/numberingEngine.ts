@@ -84,6 +84,15 @@ export const NUMBERING_CATEGORIES: NumberingCategoryPreset[] = [
     icon: '📝',
   },
   {
+    id: 'DISP',
+    name: 'Surat Dispensasi Kuliah',
+    companyCode: 'KIAN',
+    orgCode: 'DISP',
+    formatPattern: '{sequence:3}/{company_code}/{org_code}/{roman_month}/{year}',
+    description: 'Surat permohonan dispensasi / izin perkuliahan kampus',
+    icon: '🎓',
+  },
+  {
     id: 'EXT',
     name: 'Eksternal & Mitra',
     companyCode: 'KIAN',

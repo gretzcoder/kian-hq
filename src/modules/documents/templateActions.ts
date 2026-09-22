@@ -17,10 +17,13 @@ import {
   DEFAULT_SURAT_MAGANG_LAYOUT,
   DEFAULT_SURAT_MAGANG_SCHEMA,
   DEFAULT_SURAT_MAGANG_VALUES,
+  DEFAULT_SURAT_DISPENSASI_LAYOUT,
+  DEFAULT_SURAT_DISPENSASI_SCHEMA,
+  DEFAULT_SURAT_DISPENSASI_VALUES,
 } from './defaultTemplates';
 
 /**
- * Ensures default Master Templates ("Surat Tugas" and "SK Penerimaan Magang") exist on D1.
+ * Ensures default Master Templates ("Surat Tugas", "SK Penerimaan Magang", and "Surat Dispensasi Perkuliahan") exist on D1.
  */
 export async function ensureDefaultSeedTemplates(): Promise<void> {
   const db = await getDB();
@@ -121,6 +124,63 @@ export async function ensureDefaultSeedTemplates(): Promise<void> {
           JSON.stringify(DEFAULT_SURAT_MAGANG_SCHEMA),
           JSON.stringify(DEFAULT_SURAT_MAGANG_VALUES),
           JSON.stringify(DEFAULT_SURAT_MAGANG_VALUES),
+          nowSec
+        )
+        .run();
+    }
+
+    // 3. Ensure Surat Dispensasi Perkuliahan Document Type & Template
+    const existingDispType = await db
+      .prepare("SELECT id FROM document_types WHERE code = 'SURAT_DISPENSASI'")
+      .first();
+
+    if (!existingDispType) {
+      await db
+        .prepare(`
+          INSERT INTO document_types (
+            id, code, name, description, numbering_format, icon, is_active, created_at, updated_at
+          ) VALUES ('doctype_surat_dispensasi', 'SURAT_DISPENSASI', 'Surat Permohonan Dispensasi Perkuliahan', 'Surat resmi permohonan dispensasi / izin perkuliahan kru event KIAN', '{sequence}/DISP/KIAN/{roman_month}/{year}', '🎓', 1, ?, ?)
+        `)
+        .bind(nowSec, nowSec)
+        .run();
+    }
+
+    const existingDisp = await db
+      .prepare("SELECT id FROM document_templates WHERE id = 'tpl_surat_dispensasi_troopers'")
+      .first();
+
+    if (!existingDisp) {
+      const templateId = 'tpl_surat_dispensasi_troopers';
+      const versionId = 'tplv_surat_dispensasi_v1';
+
+      await db
+        .prepare(`
+          INSERT INTO document_templates (
+            id, type_id, name, description, status, current_version, created_by, updated_by, created_at, updated_at
+          ) VALUES (?, 'doctype_surat_dispensasi', ?, ?, 'ACTIVE', 1, 'system', 'system', ?, ?)
+        `)
+        .bind(
+          templateId,
+          'Surat Permohonan Dispensasi Perkuliahan',
+          'Template resmi Surat Permohonan Dispensasi Perkuliahan kru & mahasiswa KIAN Troopers dengan rincian jadwal matakuliah otomatis.',
+          nowSec,
+          nowSec
+        )
+        .run();
+
+      await db
+        .prepare(`
+          INSERT INTO document_template_versions (
+            id, template_id, version, layout_config, form_schema, default_values, sample_data, created_by, created_at
+          ) VALUES (?, ?, 1, ?, ?, ?, ?, 'system', ?)
+        `)
+        .bind(
+          versionId,
+          templateId,
+          JSON.stringify(DEFAULT_SURAT_DISPENSASI_LAYOUT),
+          JSON.stringify(DEFAULT_SURAT_DISPENSASI_SCHEMA),
+          JSON.stringify(DEFAULT_SURAT_DISPENSASI_VALUES),
+          JSON.stringify(DEFAULT_SURAT_DISPENSASI_VALUES),
           nowSec
         )
         .run();

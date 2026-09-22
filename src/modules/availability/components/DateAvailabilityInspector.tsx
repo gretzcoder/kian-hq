@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import Link from 'next/link';
 import UserAvatar from '@/components/ui/UserAvatar';
 import {
   AvailabilityStatusCategory,
@@ -289,6 +290,18 @@ export default function DateAvailabilityInspector({
                 </span>
               )}
             </button>
+          )}
+
+          {/* Ajukan Dispensasi Kuliah (Koordinator & Admin) */}
+          {isStaffOrManager && (
+            <Link
+              href={`/dashboard/documents/create?fromEventDays=${encodeURIComponent(formattedDate)}&specificDate=${dateStr}`}
+              className="px-3.5 py-2 rounded-2xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs flex items-center gap-1.5 transition-all active:scale-95"
+              title="Buat Surat Dispensasi Perkuliahan untuk personil pada tanggal ini"
+            >
+              <span>🎓</span>
+              <span>Ajukan Dispensasi Kuliah</span>
+            </Link>
           )}
 
           {/* Copy Avail List */}

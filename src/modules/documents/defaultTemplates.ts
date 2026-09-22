@@ -1215,6 +1215,308 @@ export const DEFAULT_SURAT_MAGANG_VALUES = {
 };
 
 // ============================================================================
+// 7. SURAT PERMOHONAN DISPENSASI PERKULIAHAN
+// ============================================================================
+export const DEFAULT_SURAT_DISPENSASI_LAYOUT: TemplateLayoutConfig = {
+  pageSize: 'A4',
+  orientation: 'portrait',
+  paddingMm: {
+    top: 14,
+    bottom: 14,
+    left: 15,
+    right: 15,
+  },
+  contentPaddingLeftPx: 56,
+  contentPaddingRightPx: 56,
+  fontFamily: 'Times New Roman',
+  fontSizeBasePt: 10,
+  primaryColor: '#002B7F',
+  annexThresholdRows: 3, // If students >= 3, automatically paginated as Lampiran on Page 2+
+  tableFontFamily: 'Times New Roman',
+  tableFontSizePt: 9,
+  kopConfig: {
+    frameAssetUrl: '',
+    frameOpacity: 1,
+    kopHeightPx: 215,
+    logo: {
+      enabled: true,
+      x: 56,
+      y: 44,
+      width: 220,
+      height: 48,
+    },
+    titleBlock: {
+      enabled: true,
+      x: 56,
+      y: 138,
+      width: 682,
+      align: 'center',
+      titleFontSizePt: 13,
+      numberFontSizePt: 10,
+    },
+    customTexts: [],
+  },
+  signatureConfig: {
+    align: 'right',
+    showSignature: true,
+    showStamp: true,
+    showQrVerification: true,
+    signatureType: 'BOTH',
+    qrSize: 84,
+    stampScale: 1,
+    stampOffsetX: -12,
+    stampOffsetY: 0,
+    stampOpacity: 0.85,
+    stampRotation: 0,
+    signatureScale: 1,
+    signatureOffsetX: 0,
+    signatureOffsetY: 0,
+  },
+  tableColumns: [
+    { key: 'no', label: 'No', widthPercent: 6, align: 'center' },
+    { key: 'name_nim', label: 'Nama & NIM', widthPercent: 25, align: 'left' },
+    { key: 'prodi_campus', label: 'Program Studi & Kampus', widthPercent: 25, align: 'left' },
+    { key: 'class_code', label: 'Kelas', widthPercent: 12, align: 'center' },
+    { key: 'courses', label: 'Mata Kuliah & Waktu Perkuliahan', widthPercent: 32, align: 'left' },
+  ],
+  flowSections: [
+    { id: 'sec_recipient', type: 'RECIPIENT_BLOCK', visible: true, spacingBottomMm: 3 },
+    { id: 'sec_intro', type: 'INTRO_TEXT', visible: true, spacingBottomMm: 3 },
+    { id: 'sec_event', type: 'EVENT_DETAILS', visible: true, spacingBottomMm: 4 },
+    { id: 'sec_disp_intro', type: 'CUSTOM_PARAGRAPH', contentKey: 'dispensation_intro_text', visible: true, spacingBottomMm: 3 },
+    { id: 'sec_disp_table', type: 'DISPENSATION_TABLE', visible: true, spacingBottomMm: 5 },
+    { id: 'sec_closing', type: 'CLOSING_TEXT', visible: true, spacingBottomMm: 6 },
+    { id: 'sec_sig', type: 'SIGNATURE_BLOCK', visible: true, spacingBottomMm: 4 },
+    { id: 'sec_cc', type: 'TEMBUSAN_BLOCK', visible: true, spacingBottomMm: 3 },
+  ],
+};
+
+export const DEFAULT_SURAT_DISPENSASI_SCHEMA: FormFieldSchema[] = [
+  {
+    key: 'document_title',
+    label: 'Judul Dokumen (Bisa Multi-Line)',
+    type: 'textarea',
+    required: true,
+    defaultValue: 'SURAT PERMOHONAN DISPENSASI\nPERKULIAHAN',
+    placeholder: 'Contoh: SURAT PERMOHONAN DISPENSASI',
+    helpText: 'Tekan Enter jika ingin membagi judul menjadi 2 baris.',
+  },
+  {
+    key: 'recipient_info',
+    label: 'Kepada Yth. (Penerima Surat Dispensasi)',
+    type: 'textarea',
+    required: true,
+    defaultValue: 'Kepada Yth.\nBapak/Ibu Dekan / Ketua Program Studi / Dosen Pengampu\ndi Tempat',
+    helpText: 'Nama pejabat fakultas/prodi, instansi kampus, atau dosen bersangkutan.',
+  },
+  {
+    key: 'intro_text',
+    label: 'Kalimat Pembuka',
+    type: 'textarea',
+    required: true,
+    defaultValue:
+      'Dengan hormat,\nSehubungan dengan penugasan dan partisipasi aktif mahasiswa/i kami dalam agenda kegiatan {event_name}, bersama ini kami dari Management KIAN Troopers mengajukan permohonan dispensasi / izin tidak mengikuti perkuliahan pada:',
+  },
+  {
+    key: 'event_name',
+    label: 'Nama Kegiatan / Event Penugasan',
+    type: 'text',
+    required: true,
+    defaultValue: 'BKOT (Bincang Kampus Bersama Orang Tua) UBSI',
+    placeholder: 'Contoh: BKOT UBSI 2026',
+  },
+  {
+    key: 'event_days',
+    label: 'Hari / Tanggal Penugasan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Sabtu, 12 September 2026',
+    placeholder: 'Contoh: Sabtu, 12 September 2026',
+  },
+  {
+    key: 'event_time',
+    label: 'Waktu / Pukul',
+    type: 'text',
+    required: true,
+    defaultValue: '07.30 WIB - Selesai',
+    placeholder: 'Contoh: 08.00 WIB - 17.00 WIB',
+  },
+  {
+    key: 'event_location',
+    label: 'Tempat / Lokasi Kegiatan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Hotel Santika Depok',
+    placeholder: 'Contoh: Hotel Santika Depok',
+  },
+  {
+    key: 'event_custom_details',
+    label: 'Rincian Tambahan / Penugasan (Opsional)',
+    type: 'key_value_list',
+    required: false,
+    defaultValue: [
+      { id: '1', label: 'Tugas / Peran', value: 'Tim Pelaksana Produksi & Multimedia Event' },
+    ],
+  },
+  {
+    key: 'dispensation_intro_text',
+    label: 'Teks Pengantar Tabel Mahasiswa & Matakuliah',
+    type: 'textarea',
+    required: true,
+    defaultValue: 'Adapun daftar mahasiswa dan rincian mata kuliah yang dimohonkan dispensasi perkuliahan adalah sebagai berikut:',
+  },
+  {
+    key: 'dispensation_assignees',
+    label: 'Daftar Mahasiswa & Rincian Perkuliahan',
+    type: 'dispensation_table',
+    required: true,
+    defaultValue: [
+      {
+        no: 1,
+        name: 'Muhammad Naufal Revian',
+        nim: '17250703',
+        studyProgram: 'Sistem Informasi',
+        university: 'Universitas Bina Sarana Informatika (UBSI)',
+        classCode: '17.4A.07',
+        courses: [
+          {
+            courseCode: 'SI-201',
+            courseName: 'Pemrograman Web Dasar',
+            startTime: '08:00',
+            endTime: '10:30',
+            room: 'Lab Komputer 3',
+            classCode: '17.4A.07',
+            selected: true,
+          },
+          {
+            courseCode: 'SI-204',
+            courseName: 'Rekayasa Perangkat Lunak',
+            startTime: '13:00',
+            endTime: '15:30',
+            room: 'R. 402',
+            classCode: '17.4A.07',
+            selected: true,
+          },
+        ],
+      },
+    ],
+    helpText: 'Pilih personil dari database untuk otomatis mengisi NIM, Prodi, Kampus, dan Matakuliah pada hari event.',
+  },
+  {
+    key: 'closing_text',
+    label: 'Kalimat Penutup',
+    type: 'textarea',
+    required: true,
+    defaultValue:
+      'Demikian surat permohonan dispensasi ini kami sampaikan. Besar harapan kami Bapak/Ibu dapat memberikan izin kepada mahasiswa/i tersebut di atas agar dapat menjalankan penugasan dengan sebaik-baiknya. Atas perhatian, kebijaksanaan, dan kerja sama yang baik, kami mengucapkan terima kasih.',
+  },
+  {
+    key: 'document_date_place',
+    label: 'Tempat & Tanggal Surat',
+    type: 'text',
+    required: true,
+    defaultValue: getRealtimeDocumentDate('Jakarta'),
+    placeholder: 'Contoh: Jakarta, 16 September 2026',
+  },
+  {
+    key: 'signatory_position',
+    label: 'Jabatan Penandatangan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Program Director Kian Troopers',
+  },
+  {
+    key: 'signatory_name',
+    label: 'Nama Penandatangan',
+    type: 'text',
+    required: true,
+    defaultValue: 'Mohamad Abi',
+  },
+  {
+    key: 'show_signature',
+    label: 'Tampilkan Tanda Tangan Basah (Gambar)',
+    type: 'checkbox',
+    required: false,
+    defaultValue: true,
+  },
+  {
+    key: 'show_stamp',
+    label: 'Tampilkan Stempel / Cap Resmi KIAN',
+    type: 'checkbox',
+    required: false,
+    defaultValue: true,
+  },
+  {
+    key: 'show_qr_verification',
+    label: 'Tampilkan TTD Digital (QR Code Verifikasi Resmi)',
+    type: 'checkbox',
+    required: false,
+    defaultValue: true,
+  },
+  {
+    key: 'cc_list',
+    label: 'Tembusan (CC)',
+    type: 'repeatable_list',
+    required: false,
+    defaultValue: ['1. Arsip Sekretariat KIAN', '2. Mahasiswa yang bersangkutan'],
+  },
+];
+
+export const DEFAULT_SURAT_DISPENSASI_VALUES = {
+  document_title: 'SURAT PERMOHONAN DISPENSASI\nPERKULIAHAN',
+  recipient_info: 'Kepada Yth.\nBapak/Ibu Dekan / Ketua Program Studi / Dosen Pengampu\ndi Tempat',
+  intro_text:
+    'Dengan hormat,\nSehubungan dengan penugasan dan partisipasi aktif mahasiswa/i kami dalam agenda kegiatan {event_name}, bersama ini kami dari Management KIAN Troopers mengajukan permohonan dispensasi / izin tidak mengikuti perkuliahan pada:',
+  event_name: 'BKOT (Bincang Kampus Bersama Orang Tua) UBSI',
+  event_days: 'Sabtu, 12 September 2026',
+  event_time: '07.30 WIB - Selesai',
+  event_location: 'Hotel Santika Depok',
+  event_custom_details: [
+    { id: '1', label: 'Tugas / Peran', value: 'Tim Pelaksana Produksi & Multimedia Event' },
+  ],
+  dispensation_intro_text: 'Adapun daftar mahasiswa dan rincian mata kuliah yang dimohonkan dispensasi perkuliahan adalah sebagai berikut:',
+  dispensation_assignees: [
+    {
+      no: 1,
+      name: 'Muhammad Naufal Revian',
+      nim: '17250703',
+      studyProgram: 'Sistem Informasi',
+      university: 'Universitas Bina Sarana Informatika (UBSI)',
+      classCode: '17.4A.07',
+      courses: [
+        {
+          courseCode: 'SI-201',
+          courseName: 'Pemrograman Web Dasar',
+          startTime: '08:00',
+          endTime: '10:30',
+          room: 'Lab Komputer 3',
+          classCode: '17.4A.07',
+          selected: true,
+        },
+        {
+          courseCode: 'SI-204',
+          courseName: 'Rekayasa Perangkat Lunak',
+          startTime: '13:00',
+          endTime: '15:30',
+          room: 'R. 402',
+          classCode: '17.4A.07',
+          selected: true,
+        },
+      ],
+    },
+  ],
+  closing_text:
+    'Demikian surat permohonan dispensasi ini kami sampaikan. Besar harapan kami Bapak/Ibu dapat memberikan izin kepada mahasiswa/i tersebut di atas agar dapat menjalankan penugasan dengan sebaik-baiknya. Atas perhatian, kebijaksanaan, dan kerja sama yang baik, kami mengucapkan terima kasih.',
+  document_date_place: getRealtimeDocumentDate('Jakarta'),
+  signatory_position: 'Program Director Kian Troopers',
+  signatory_name: 'Mohamad Abi',
+  show_signature: true,
+  show_stamp: true,
+  show_qr_verification: true,
+  cc_list: ['1. Arsip Sekretariat KIAN', '2. Mahasiswa yang bersangkutan'],
+};
+
+// ============================================================================
 // HELPER: GET STARTER TEMPLATE FOR ANY DOCUMENT TYPE CODE
 // ============================================================================
 export function getDefaultTemplateForType(typeCode: string): {
@@ -1225,6 +1527,16 @@ export function getDefaultTemplateForType(typeCode: string): {
   name: string;
 } {
   const code = (typeCode || '').toUpperCase().trim();
+
+  if (code.includes('DISPENSASI') || code.includes('DISP')) {
+    return {
+      layout_config: DEFAULT_SURAT_DISPENSASI_LAYOUT,
+      form_schema: DEFAULT_SURAT_DISPENSASI_SCHEMA,
+      default_values: DEFAULT_SURAT_DISPENSASI_VALUES,
+      sample_data: DEFAULT_SURAT_DISPENSASI_VALUES,
+      name: 'Surat Permohonan Dispensasi Perkuliahan',
+    };
+  }
 
   if (code.includes('MAGANG') || code.includes('OJT') || code.includes('INTERN')) {
     return {

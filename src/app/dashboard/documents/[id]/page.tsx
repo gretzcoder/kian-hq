@@ -88,7 +88,18 @@ export default async function DocumentDetailPage({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          {doc.type_code === 'SURAT_TUGAS' && (
+            <Link
+              href={`/dashboard/documents/create?fromSuratTugasId=${doc.id}`}
+              className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 transition-all flex items-center gap-1.5 shrink-0"
+              title="Otomatis buat surat permohonan dispensasi perkuliahan untuk personil bertugas"
+            >
+              <span>🎓</span>
+              <span>Ajukan Dispensasi Kuliah</span>
+            </Link>
+          )}
+
           <DocumentPDFExporter
             documentNumber={doc.document_number}
             documentTitle={doc.title}
@@ -96,6 +107,30 @@ export default async function DocumentDetailPage({
           />
         </div>
       </div>
+
+      {/* Smart Shortcut Banner for Surat Tugas */}
+      {doc.type_code === 'SURAT_TUGAS' && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border border-purple-500/25 flex flex-wrap items-center justify-between gap-3 text-xs no-print shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">🎓</span>
+            <div>
+              <p className="font-bold text-zinc-900 dark:text-zinc-100">
+                Perlu Surat Pengajuan Dispensasi Perkuliahan untuk Petugas Ini?
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Otomatis sinkronkan jadwal kuliah seluruh kru bertugas pada hari event dan susun surat dispensasi resmi ke kampus/dosen.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/dashboard/documents/create?fromSuratTugasId=${doc.id}`}
+            className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-sm shadow-purple-500/20 transition-all flex items-center gap-1.5"
+          >
+            <span>⚡</span>
+            <span>Buat Dispensasi Kuliah →</span>
+          </Link>
+        </div>
+      )}
 
       {/* Approval & Review Bar */}
       <DocumentDetailApprovalBar

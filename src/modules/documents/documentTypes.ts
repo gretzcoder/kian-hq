@@ -9,11 +9,38 @@ export type DocumentStatusCode =
 export type TemplateStatusCode = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 export type AssetCategory = 'FRAME' | 'LOGO' | 'SIGNATURE' | 'STAMP' | 'DECORATION';
 
+export interface DispensationCourseItem {
+  id?: string;
+  courseCode?: string;
+  courseName: string;
+  classCode?: string;
+  campusName?: string;
+  dayOfWeek?: number;
+  dayName?: string;
+  startTime: string;
+  endTime: string;
+  room?: string;
+  lecturerName?: string;
+  selected?: boolean;
+}
+
+export interface DispensationAssigneeRow {
+  no?: number;
+  userId?: string;
+  name: string;
+  nim: string; // student_id_number / NIP
+  studyProgram: string; // program studi
+  university: string; // asal kampus / institusi
+  classCode: string; // kelas
+  courses: DispensationCourseItem[];
+}
+
 export interface AssigneeRow {
   no?: number;
   nip?: string;
   name: string;
   role: string;
+  [key: string]: any;
 }
 
 export interface DocumentTypeItem {
@@ -86,6 +113,7 @@ export interface FlowSectionConfig {
     | 'KEY_VALUE_GRID'
     | 'EVENT_DETAILS'
     | 'ASSIGNEE_TABLE'
+    | 'DISPENSATION_TABLE'
     | 'CUSTOM_TABLE'
     | 'REPEATABLE_LIST'
     | 'CLOSING_TEXT'
@@ -223,6 +251,7 @@ export interface FormFieldSchema {
     | 'event_picker'
     | 'signatory_picker'
     | 'assignee_table'
+    | 'dispensation_table'
     | 'repeatable_list'
     | 'key_value_list'
     | 'custom_details'

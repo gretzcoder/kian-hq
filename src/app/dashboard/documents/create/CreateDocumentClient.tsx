@@ -7,7 +7,10 @@ import {
   DocumentSignatoryItem,
   DocumentTemplateItem,
 } from '@/modules/documents/documentTypes';
-import { generateDocumentAction } from '@/modules/documents/documentActions';
+import {
+  generateDocumentAction,
+  getSuratTugasDispensationPreloadAction,
+} from '@/modules/documents/documentActions';
 import { DynamicDocumentForm } from '@/modules/documents/components/DynamicDocumentForm';
 import { DocumentCanvas } from '@/modules/documents/components/DocumentCanvas';
 import { DocumentPDFExporter } from '@/modules/documents/components/DocumentPDFExporter';
@@ -30,9 +33,21 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
 }) => {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const preselectedTplId = searchParams.get('templateId') || initialTemplateId || templates[0]?.id;
+  const fromSuratTugasId = searchParams.get('fromSuratTugasId') || searchParams.get('fromDocId');
 
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(preselectedTplId);
+  // Find dispensation template if coming from Surat Tugas
+  const dispTemplate = templates.find(
+    (t) =>
+      t.type_code === 'SURAT_DISPENSASI' ||
+      t.type_code?.includes('DISP') ||
+      t.name.toLowerCase().includes('dispensasi')
+  );
+
+  const initialTpl = fromSuratTugasId && dispTemplate
+    ? dispTemplate.id
+    : searchParams.get('templateId') || initialTemplateId || templates[0]?.id;
+
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(initialTpl);
   const currentTemplate = templates.find((t) => t.id === selectedTemplateId) || templates[0];
 
   const [selectedSignatoryId, setSelectedSignatoryId] = useState<string>(
@@ -77,14 +92,24 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
     return raw;
   };
 
+  const isCurrentDispTemplate = Boolean(
+    currentTemplate?.type_code === 'SURAT_DISPENSASI' ||
+    currentTemplate?.type_code?.includes('DISP') ||
+    currentTemplate?.name?.toLowerCase().includes('dispensasi')
+  );
+
   const [formData, setFormData] = useState<Record<string, any>>(() =>
     getPreparedFormData(currentTemplate)
   );
 
   // Smart Numbering States
-  const [selectedCategory, setSelectedCategory] = useState<string>('TROOPERS');
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    isCurrentDispTemplate ? 'DISP' : 'TROOPERS'
+  );
   const [companyCode, setCompanyCode] = useState<string>('KIAN');
-  const [orgCode, setOrgCode] = useState<string>('TROOPERS');
+  const [orgCode, setOrgCode] = useState<string>(
+    isCurrentDispTemplate ? 'DISP' : 'TROOPERS'
+  );
   const [customNumber, setCustomNumber] = useState<string>('');
   const [resolvedLiveNumber, setResolvedLiveNumber] = useState<string>('');
 
@@ -92,11 +117,77 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
   const [generatingMode, setGeneratingMode] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [createdDocInfo, setCreatedDocInfo] = useState<{ id: string; number: string; status: string } | null>(null);
+  const [importedTaskInfo, setImportedTaskInfo] = useState<{
+    docNumber: string;
+    eventName: string;
+    studentCount: number;
+    totalCourses: number;
+  } | null>(null);
+  const [isPreloadingTask, setIsPreloadingTask] = useState(false);
 
-  // When selected template changes, reset form data to its defaults with realtime date
+  // Preload from Surat Tugas on Mount
+  useEffect(() => {
+    if (fromSuratTugasId) {
+      setIsPreloadingTask(true);
+      getSuratTugasDispensationPreloadAction(fromSuratTugasId)
+        .then((res) => {
+          if (res.success && res.preloadData) {
+            setFormData((prev) => ({
+              ...prev,
+              ...res.preloadData,
+            }));
+
+            const students = res.preloadData.dispensation_assignees || [];
+            const courseCount = students.reduce((sum: number, s: any) => {
+              return sum + (s.courses || []).filter((c: any) => c.selected !== false).length;
+            }, 0);
+
+            setImportedTaskInfo({
+              docNumber: res.preloadData.source_surat_tugas_number || '',
+              eventName: res.preloadData.event_name || '',
+              studentCount: students.length,
+              totalCourses: courseCount,
+            });
+
+            if (dispTemplate) {
+              setSelectedTemplateId(dispTemplate.id);
+            }
+            setSelectedCategory('DISP');
+            setOrgCode('DISP');
+          }
+        })
+        .catch((e) => {
+          console.error('Error preloading Surat Tugas data:', e);
+        })
+        .finally(() => {
+          setIsPreloadingTask(false);
+        });
+    }
+  }, [fromSuratTugasId]);
+
+  // When selected template changes, sync defaults and category
   useEffect(() => {
     if (currentTemplate) {
-      setFormData(getPreparedFormData(currentTemplate));
+      const isDisp =
+        currentTemplate.type_code === 'SURAT_DISPENSASI' ||
+        currentTemplate.type_code?.includes('DISP') ||
+        currentTemplate.name?.toLowerCase().includes('dispensasi');
+
+      if (isDisp) {
+        setSelectedCategory('DISP');
+        setOrgCode('DISP');
+      }
+
+      setFormData((prev) => {
+        // If we already have imported task data, preserve event & dispensation assignees
+        if (importedTaskInfo && prev.dispensation_assignees) {
+          return {
+            ...getPreparedFormData(currentTemplate),
+            ...prev,
+          };
+        }
+        return getPreparedFormData(currentTemplate);
+      });
     }
   }, [currentTemplate]);
 
@@ -136,8 +227,6 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
         setErrorMsg(res.error || 'Gagal memproses dokumen.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
-    } finally {
       setIsGenerating(false);
       setGeneratingMode(null);
     }
@@ -242,6 +331,34 @@ export const CreateDocumentClient: React.FC<CreateDocumentClientProps> = ({
           )}
         </div>
       </div>
+
+      {isPreloadingTask && (
+        <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 text-xs font-bold flex items-center gap-2 animate-pulse">
+          <span className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin shrink-0" />
+          <span>Sedang menyelaraskan data personil dan jadwal perkuliahan dari Surat Tugas...</span>
+        </div>
+      )}
+
+      {importedTaskInfo && !isPreloadingTask && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border border-purple-500/30 text-xs flex flex-wrap items-center justify-between gap-3 shadow-xs">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚡</span>
+              <span className="font-black text-purple-900 dark:text-purple-200">
+                Data Otomatis Diimpor dari Surat Tugas: <span className="font-mono underline">{importedTaskInfo.docNumber}</span>
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
+              Event: <strong>{importedTaskInfo.eventName}</strong> • Berhasil menyinkronkan <strong>{importedTaskInfo.studentCount} personil</strong> dan <strong>{importedTaskInfo.totalCourses} matakuliah</strong> yang aktif pada hari pelaksanaan event.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+              ✓ Siap Disesuaikan &amp; Diterbitkan
+            </span>
+          </div>
+        </div>
+      )}
 
       {errorMsg && (
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-bold flex items-center gap-2">

@@ -4,6 +4,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import {
   AssigneeRow,
   CustomKopTextElement,
+  DispensationAssigneeRow,
   FlowSectionConfig,
   KopSuratConfig,
   OrganizationSnapshot,
@@ -88,6 +89,12 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
     ? formData.assignees
     : [];
 
+  const dispensationAssignees: DispensationAssigneeRow[] = Array.isArray(formData.dispensation_assignees)
+    ? formData.dispensation_assignees
+    : Array.isArray(formData.dispensationAssignees)
+    ? formData.dispensationAssignees
+    : [];
+
   const kop: KopSuratConfig = layoutConfig?.kopConfig || {
     frameAssetUrl: layoutConfig?.frameAssetUrl || '',
     kopHeightPx: 215,
@@ -132,6 +139,16 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
   if (isMultiPageAnnex) {
     for (let i = 0; i < assignees.length; i += ROWS_PER_ANNEX_PAGE) {
       annexPages.push(assignees.slice(i, i + ROWS_PER_ANNEX_PAGE));
+    }
+  }
+
+  // Dispensation multi-page Annex chunking
+  const isMultiPageDispAnnex = dispensationAssignees.length >= (layoutConfig?.annexThresholdRows ?? 3);
+  const ROWS_PER_DISP_ANNEX_PAGE = 5;
+  const dispAnnexPages: DispensationAssigneeRow[][] = [];
+  if (isMultiPageDispAnnex) {
+    for (let i = 0; i < dispensationAssignees.length; i += ROWS_PER_DISP_ANNEX_PAGE) {
+      dispAnnexPages.push(dispensationAssignees.slice(i, i + ROWS_PER_DISP_ANNEX_PAGE));
     }
   }
 
@@ -882,6 +899,87 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 );
               }
 
+              // 4b. DISPENSATION_TABLE (Mahasiswa & Perkuliahan)
+              if (sec.type === 'DISPENSATION_TABLE') {
+                if (dispensationAssignees.length === 0) return null;
+
+                return !isMultiPageDispAnnex ? (
+                  <div key={sec.id || secIdx} style={{ marginBottom: mbStyle }}>
+                    <table
+                      className="w-full border-collapse border border-zinc-800 text-zinc-900 bg-white/95"
+                      style={{ fontFamily: tableFontFamily, fontSize: tableFontSize }}
+                    >
+                      <thead>
+                        <tr className="bg-zinc-100/80 text-zinc-950 font-bold">
+                          <th className="border border-zinc-800 px-1.5 py-1.5 text-center w-[6%]">No</th>
+                          <th className="border border-zinc-800 px-2 py-1.5 text-left w-[25%]">Nama &amp; NIM</th>
+                          <th className="border border-zinc-800 px-2 py-1.5 text-left w-[25%]">Program Studi &amp; Kampus</th>
+                          <th className="border border-zinc-800 px-1.5 py-1.5 text-center w-[12%]">Kelas</th>
+                          <th className="border border-zinc-800 px-2 py-1.5 text-left w-[32%]">Mata Kuliah &amp; Waktu</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {dispensationAssignees.map((row, idx) => {
+                          const activeCourses = (row.courses || []).filter((c) => c.selected !== false);
+                          return (
+                            <tr key={idx} className="align-top">
+                              <td className="border border-zinc-800 px-1.5 py-1.5 text-center font-bold">
+                                {row.no || idx + 1}
+                              </td>
+                              <td className="border border-zinc-800 px-2 py-1.5">
+                                <div className="font-bold text-zinc-950">{row.name}</div>
+                                {row.nim && (
+                                  <div className="text-[8pt] font-mono text-zinc-600">NIM: {row.nim}</div>
+                                )}
+                              </td>
+                              <td className="border border-zinc-800 px-2 py-1.5">
+                                <div className="font-medium text-zinc-900">{row.studyProgram}</div>
+                                {row.university && (
+                                  <div className="text-[8pt] text-zinc-600 leading-tight">{row.university}</div>
+                                )}
+                              </td>
+                              <td className="border border-zinc-800 px-1.5 py-1.5 text-center font-medium font-mono text-[8.5pt]">
+                                {row.classCode || '-'}
+                              </td>
+                              <td className="border border-zinc-800 px-2 py-1.5">
+                                {activeCourses.length === 0 ? (
+                                  <span className="text-zinc-500 italic text-[8pt]">Semua Perkuliahan pada Hari Tersebut</span>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {activeCourses.map((c, cIdx) => (
+                                      <div key={c.id || cIdx} className="text-[8pt] leading-tight">
+                                        <span className="font-bold text-zinc-950">• {c.courseName}</span>
+                                        {(c.startTime || c.endTime) && (
+                                          <span className="text-zinc-700 ml-1">
+                                            ({c.startTime} - {c.endTime} WIB)
+                                          </span>
+                                        )}
+                                        {c.room && (
+                                          <span className="text-zinc-600 ml-1 italic">[{c.room}]</span>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div key={sec.id || secIdx} style={{ marginBottom: mbStyle }} className="p-3 bg-zinc-50/90 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
+                    <span>
+                      📋 <strong>Daftar Rincian Mahasiswa &amp; Perkuliahan ({dispensationAssignees.length} Mahasiswa)</strong> terlampir lengkap pada <strong>Lampiran Dokumen</strong> (Halaman 2).
+                    </span>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
+                      Lihat Lampiran
+                    </span>
+                  </div>
+                );
+              }
+
               // 5. REPEATABLE LIST
               if (sec.type === 'REPEATABLE_LIST') {
                 const listData: string[] = Array.isArray(formData[sec.contentKey || 'statement_points'])
@@ -1292,6 +1390,201 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 <div className="relative z-10 pt-2 border-t border-zinc-200 mt-2 flex items-center justify-between text-[8px] text-zinc-500 font-sans">
                   <span>
                     Lampiran Surat Tugas Resmi KIAN Troopers - {docNumber}
+                  </span>
+                  <span>{organization.website}</span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+      {/* ======================================================== */}
+      {/* PAGE 2+: LAMPIRAN SURAT DISPENSASI (If Multi-page Annex) */}
+      {/* ======================================================== */}
+      {isMultiPageDispAnnex &&
+        dispAnnexPages.map((pageRows, pageIdx) => {
+          const isLastPage = pageIdx === dispAnnexPages.length - 1;
+          const pageNumber = pageIdx + 2;
+
+          return (
+            <div
+              key={pageIdx}
+              id={`document-page-${pageNumber}`}
+              className="document-print-page relative bg-white text-zinc-900 shadow-2xl print:shadow-none box-border flex flex-col overflow-hidden"
+              style={{
+                width: '794px',
+                minWidth: '794px',
+                maxWidth: '794px',
+                height: '1123px',
+                minHeight: '1123px',
+                maxHeight: '1123px',
+                flexShrink: 0,
+                paddingTop: '48px',
+                paddingBottom: '42px',
+                paddingLeft: `${contentPaddingLeft}px`,
+                paddingRight: `${contentPaddingRight}px`,
+                fontFamily: baseFontFamily,
+                fontSize: baseFontSize,
+                boxSizing: 'border-box',
+              }}
+            >
+              {/* Frame Background Layer */}
+              {hasCustomFrame ? (
+                <img
+                  src={kop.frameAssetUrl}
+                  alt="Custom Frame"
+                  className="absolute inset-0 w-full h-full object-fill pointer-events-none z-0 select-none"
+                  style={{ opacity: kop.frameOpacity ?? 1 }}
+                />
+              ) : (
+                <>
+                  <div className="absolute inset-5 border-[1.5px] border-[#002B7F]/80 pointer-events-none z-1" />
+                  <CornerAccentTopRight />
+                  <CornerAccentBottomLeft />
+                </>
+              )}
+
+              <div className="relative z-10 flex flex-col flex-1">
+                {/* Header Logo */}
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-200">
+                  <BrandLogoHeader />
+                  <span className="text-[10px] font-sans font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded">
+                    Halaman {pageNumber} dari {dispAnnexPages.length + 1}
+                  </span>
+                </div>
+
+                {/* Annex Title Block */}
+                <div className="text-center my-3">
+                  <h2 className="text-sm font-bold tracking-wider underline uppercase text-black">
+                    LAMPIRAN PERMOHONAN DISPENSASI PERKULIAHAN
+                  </h2>
+                  <p className="text-[11px] font-normal text-zinc-700 mt-0.5">
+                    Nomor : {docNumber}
+                  </p>
+                  <p className="text-[10px] text-zinc-600">
+                    Event: <strong>{eventName}</strong> ({eventDays})
+                  </p>
+                </div>
+
+                {/* Full Paginated Dispensation Table */}
+                <div className="mb-4">
+                  <table
+                    className="w-full border-collapse border border-zinc-800 text-zinc-900 bg-white/95"
+                    style={{ fontFamily: tableFontFamily, fontSize: tableFontSize }}
+                  >
+                    <thead>
+                      <tr className="bg-zinc-100 text-zinc-950 font-bold">
+                        <th className="border border-zinc-800 px-1.5 py-1.5 text-center w-[6%]">No</th>
+                        <th className="border border-zinc-800 px-2 py-1.5 text-left w-[25%]">Nama &amp; NIM</th>
+                        <th className="border border-zinc-800 px-2 py-1.5 text-left w-[25%]">Program Studi &amp; Kampus</th>
+                        <th className="border border-zinc-800 px-1.5 py-1.5 text-center w-[12%]">Kelas</th>
+                        <th className="border border-zinc-800 px-2 py-1.5 text-left w-[32%]">Mata Kuliah &amp; Waktu</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageRows.map((row, rIdx) => {
+                        const globalIndex = pageIdx * ROWS_PER_DISP_ANNEX_PAGE + rIdx + 1;
+                        const activeCourses = (row.courses || []).filter((c) => c.selected !== false);
+
+                        return (
+                          <tr key={rIdx} className="align-top hover:bg-zinc-50">
+                            <td className="border border-zinc-800 px-1.5 py-1.5 text-center font-bold">
+                              {row.no || globalIndex}
+                            </td>
+                            <td className="border border-zinc-800 px-2 py-1.5">
+                              <div className="font-bold text-zinc-950">{row.name}</div>
+                              {row.nim && (
+                                <div className="text-[8pt] font-mono text-zinc-600">NIM: {row.nim}</div>
+                              )}
+                            </td>
+                            <td className="border border-zinc-800 px-2 py-1.5">
+                              <div className="font-medium text-zinc-900">{row.studyProgram}</div>
+                              {row.university && (
+                                <div className="text-[8pt] text-zinc-600 leading-tight">{row.university}</div>
+                              )}
+                            </td>
+                            <td className="border border-zinc-800 px-1.5 py-1.5 text-center font-medium font-mono text-[8.5pt]">
+                              {row.classCode || '-'}
+                            </td>
+                            <td className="border border-zinc-800 px-2 py-1.5">
+                              {activeCourses.length === 0 ? (
+                                <span className="text-zinc-500 italic text-[8pt]">Semua Perkuliahan pada Hari Tersebut</span>
+                              ) : (
+                                <div className="space-y-1">
+                                  {activeCourses.map((c, cIdx) => (
+                                    <div key={c.id || cIdx} className="text-[8pt] leading-tight">
+                                      <span className="font-bold text-zinc-950">• {c.courseName}</span>
+                                      {(c.startTime || c.endTime) && (
+                                        <span className="text-zinc-700 ml-1">
+                                          ({c.startTime} - {c.endTime} WIB)
+                                        </span>
+                                      )}
+                                      {c.room && (
+                                        <span className="text-zinc-600 ml-1 italic">[{c.room}]</span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* On Last Page, render official Signatory */}
+                {isLastPage && (
+                  <div className="flex justify-end mt-auto mb-2 pr-4">
+                    <div className="flex flex-col items-center text-center w-64">
+                      <p className="text-zinc-900">{docDatePlace}</p>
+                      <p className="font-normal text-zinc-900 mb-1">{signatoryPos}</p>
+
+                      <div className="relative w-48 h-16 flex items-center justify-center gap-2">
+                        {showStamp && (
+                          <div
+                            className="absolute pointer-events-none z-10"
+                            style={{
+                              left: `${sigConfig.stampOffsetX ?? -12}px`,
+                              top: `${sigConfig.stampOffsetY ?? 0}px`,
+                              transform: `scale(${sigConfig.stampScale ?? 1}) rotate(${sigConfig.stampRotation ?? 0}deg)`,
+                              opacity: sigConfig.stampOpacity ?? 0.85,
+                              width: '72px',
+                              height: '72px',
+                            }}
+                          >
+                            <svg viewBox="0 0 100 100" className="w-full h-full">
+                              <circle cx="50" cy="50" r="45" stroke="#0066CC" strokeWidth="2.5" fill="none" strokeDasharray="4 2" />
+                              <text x="50" y="52" textAnchor="middle" fill="#002B7F" fontSize="12" fontWeight="900">
+                                ★ KIAN ★
+                              </text>
+                            </svg>
+                          </div>
+                        )}
+                        {showSignature && (
+                          <svg
+                            viewBox="0 0 200 80"
+                            className="w-32 h-12 text-zinc-900 z-20 stroke-current fill-none"
+                            strokeWidth="2.5"
+                            style={{ transform: `scale(${sigConfig.signatureScale ?? 1})` }}
+                          >
+                            <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40" />
+                          </svg>
+                        )}
+                      </div>
+
+                      <p className="font-bold text-zinc-950 underline">{signatoryName}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Annex Page Footer */}
+              {!hasCustomFrame && (
+                <div className="relative z-10 pt-2 border-t border-zinc-200 mt-2 flex items-center justify-between text-[8px] text-zinc-500 font-sans">
+                  <span>
+                    Lampiran Surat Permohonan Dispensasi KIAN Troopers - {docNumber}
                   </span>
                   <span>{organization.website}</span>
                 </div>

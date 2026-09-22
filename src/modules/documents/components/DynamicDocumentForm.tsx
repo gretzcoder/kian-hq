@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { CustomDetailItem, FormFieldSchema } from '../documentTypes';
 import { AssigneeTableInput } from './AssigneeTableInput';
+import { DispensationTableInput } from './DispensationTableInput';
 import { searchProjectsAction } from '../documentActions';
 import { getRealtimeDocumentDate } from '@/lib/dateUtils';
 
@@ -128,6 +129,21 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
           (!value || typeof value !== 'string' || !value.trim())
         ) {
           value = getRealtimeDocumentDate('Jakarta');
+        }
+
+        // Dispensation Table Type (Mahasiswa & Perkuliahan)
+        if (field.type === 'dispensation_table' || field.key === 'dispensation_assignees') {
+          return (
+            <div key={field.key}>
+              <DispensationTableInput
+                value={Array.isArray(value) ? value : []}
+                onChange={(newVal) => onChange(field.key, newVal)}
+                eventDays={formData.event_days}
+                specificDate={formData.specific_date}
+                annexThreshold={annexThreshold}
+              />
+            </div>
+          );
         }
 
         // Assignee Table Type

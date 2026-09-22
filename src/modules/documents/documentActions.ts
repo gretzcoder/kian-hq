@@ -1358,3 +1358,347 @@ export async function duplicateDocumentAction(documentId: string): Promise<{
   }
 }
 
+// ============================================================================
+// DISPENSATION SERVER ACTIONS & PRELOAD ENGINE
+// ============================================================================
+
+/**
+ * Extracts matching day(s) of week (1..7) from a freeform event date/days text.
+ * 1 = Senin, 2 = Selasa, ..., 7 = Minggu
+ */
+export function extractDaysOfWeekFromText(eventDaysText?: string, specificDateStr?: string): number[] {
+  const daysFound = new Set<number>();
+
+  if (specificDateStr && /^\d{4}-\d{2}-\d{2}$/.test(specificDateStr.trim())) {
+    const d = new Date(specificDateStr.trim());
+    if (!isNaN(d.getTime())) {
+      const jsDay = d.getDay(); // 0 = Sun
+      daysFound.add(jsDay === 0 ? 7 : jsDay);
+    }
+  }
+
+  if (!eventDaysText || typeof eventDaysText !== 'string') {
+    return Array.from(daysFound);
+  }
+
+  const text = eventDaysText.toLowerCase();
+
+  if (text.includes('senin')) daysFound.add(1);
+  if (text.includes('selasa')) daysFound.add(2);
+  if (text.includes('rabu')) daysFound.add(3);
+  if (text.includes('kamis')) daysFound.add(4);
+  if (text.includes('jumat') || text.includes("jum'at")) daysFound.add(5);
+  if (text.includes('sabtu')) daysFound.add(6);
+  if (text.includes('minggu') || text.includes('ahad')) daysFound.add(7);
+
+  // If no day names found, attempt date parsing e.g. "12 September 2026"
+  if (daysFound.size === 0) {
+    const dateMatch = text.match(/(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})/i);
+    if (dateMatch) {
+      const day = parseInt(dateMatch[1], 10);
+      const monthNames: Record<string, number> = {
+        januari: 0, jan: 0, februari: 1, feb: 1, maret: 2, mar: 2,
+        april: 3, apr: 3, mei: 4, may: 4, juni: 5, jun: 5, juli: 6, jul: 6,
+        agustus: 7, agu: 7, agt: 7, september: 8, sep: 8, sept: 8,
+        oktober: 9, okt: 9, november: 10, nov: 10, desember: 11, des: 11,
+      };
+      const mNum = monthNames[dateMatch[2].toLowerCase()];
+      const year = parseInt(dateMatch[3], 10);
+      if (mNum !== undefined) {
+        const d = new Date(year, mNum, day);
+        if (!isNaN(d.getTime())) {
+          const jsDay = d.getDay();
+          daysFound.add(jsDay === 0 ? 7 : jsDay);
+        }
+      }
+    }
+  }
+
+  return Array.from(daysFound);
+}
+
+const DAY_NAMES_MAP: Record<number, string> = {
+  1: 'Senin',
+  2: 'Selasa',
+  3: 'Rabu',
+  4: 'Kamis',
+  5: "Jum'at",
+  6: 'Sabtu',
+  7: 'Minggu',
+};
+
+/**
+ * Fetches user profile metadata and college schedules (KULIAH) formatted for Surat Dispensasi.
+ */
+export async function getUsersCourseSchedulesForDispensationAction(params: {
+  userIds?: string[];
+  userQueries?: Array<{ id?: string; nip?: string; name?: string; role?: string }>;
+  eventDaysText?: string;
+  specificDateStr?: string;
+}): Promise<any[]> {
+  const session = await getSession();
+  if (!session) return [];
+
+  const db = await getDB();
+  const targetDays = extractDaysOfWeekFromText(params.eventDaysText, params.specificDateStr);
+
+  // 1. Gather all candidate users
+  const candidates: Array<{
+    id: string;
+    name: string;
+    student_id_number: string | null;
+    study_program: string | null;
+    university: string | null;
+    semester: string | null;
+    department: string | null;
+  }> = [];
+
+  const queriedIds = new Set<string>(params.userIds || []);
+
+  if (params.userQueries && params.userQueries.length > 0) {
+    for (const uq of params.userQueries) {
+      if (uq.id) queriedIds.add(uq.id);
+    }
+  }
+
+  if (queriedIds.size > 0) {
+    const idList = Array.from(queriedIds);
+    const placeholders = idList.map(() => '?').join(',');
+    const { results } = await db
+      .prepare(`
+        SELECT id, name, student_id_number, study_program, university, semester, department
+        FROM users
+        WHERE id IN (${placeholders})
+      `)
+      .bind(...idList)
+      .all();
+    candidates.push(...((results || []) as any));
+  }
+
+  // If some userQueries had no ID, search by NIP or name
+  if (params.userQueries) {
+    for (const uq of params.userQueries) {
+      if (!uq.id || !candidates.some((c) => c.id === uq.id)) {
+        if (uq.nip && uq.nip.trim()) {
+          const row = await db
+            .prepare(`
+              SELECT id, name, student_id_number, study_program, university, semester, department
+              FROM users
+              WHERE student_id_number = ?
+              LIMIT 1
+            `)
+            .bind(uq.nip.trim())
+            .first() as any;
+          if (row && !candidates.some((c) => c.id === row.id)) {
+            candidates.push(row);
+            continue;
+          }
+        }
+        if (uq.name && uq.name.trim()) {
+          const row = await db
+            .prepare(`
+              SELECT id, name, student_id_number, study_program, university, semester, department
+              FROM users
+              WHERE LOWER(name) = ?
+              LIMIT 1
+            `)
+            .bind(uq.name.trim().toLowerCase())
+            .first() as any;
+          if (row && !candidates.some((c) => c.id === row.id)) {
+            candidates.push(row);
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Fetch all courses for these candidates
+  const allUserIds = candidates.map((c) => c.id);
+  const coursesByUser = new Map<string, any[]>();
+
+  if (allUserIds.length > 0) {
+    const placeholders = allUserIds.map(() => '?').join(',');
+    const { results: rawSchedules } = await db
+      .prepare(`
+        SELECT *
+        FROM user_availabilities
+        WHERE user_id IN (${placeholders})
+          AND type = 'KULIAH'
+          AND is_active = 1
+        ORDER BY day_of_week ASC, start_time ASC
+      `)
+      .bind(...allUserIds)
+      .all();
+
+    for (const s of (rawSchedules || []) as any[]) {
+      if (!coursesByUser.has(s.user_id)) {
+        coursesByUser.set(s.user_id, []);
+      }
+      coursesByUser.get(s.user_id)!.push(s);
+    }
+  }
+
+  // 3. Build structured DispensationAssigneeRow array
+  const resultRows: any[] = [];
+
+  for (let i = 0; i < candidates.length; i++) {
+    const user = candidates[i];
+    const userCourses = coursesByUser.get(user.id) || [];
+
+    // Find predominant class code and campus
+    let detectedClassCode = '';
+    let detectedCampus = user.university || '';
+
+    const formattedCourses: any[] = [];
+
+    for (const s of userCourses) {
+      if (!detectedClassCode && s.class_code) detectedClassCode = s.class_code;
+      if (!detectedCampus && s.campus_name) detectedCampus = s.campus_name;
+
+      const isTargetDay = targetDays.length === 0 || targetDays.includes(s.day_of_week);
+
+      formattedCourses.push({
+        id: s.id,
+        courseCode: s.course_code || '',
+        courseName: s.course_name || s.title || 'Mata Kuliah',
+        classCode: s.class_code || detectedClassCode || '',
+        campusName: s.campus_name || detectedCampus || '',
+        dayOfWeek: s.day_of_week,
+        dayName: s.day_of_week ? DAY_NAMES_MAP[s.day_of_week] || '' : '',
+        startTime: s.start_time || '08:00',
+        endTime: s.end_time || '10:00',
+        room: s.room || '',
+        lecturerName: s.lecturer_name || '',
+        selected: isTargetDay,
+      });
+    }
+
+    // Sort: selected courses on top, then by start_time
+    formattedCourses.sort((a, b) => {
+      if (a.selected && !b.selected) return -1;
+      if (!a.selected && b.selected) return 1;
+      return (a.startTime || '').localeCompare(b.startTime || '');
+    });
+
+    resultRows.push({
+      no: i + 1,
+      userId: user.id,
+      name: user.name,
+      nim: user.student_id_number || '',
+      studyProgram: user.study_program || user.department || 'Sistem Informasi',
+      university: detectedCampus || user.university || 'Universitas Bina Sarana Informatika (UBSI)',
+      classCode: detectedClassCode || '17.4A.07',
+      courses: formattedCourses,
+    });
+  }
+
+  // If some userQueries couldn't be matched in DB, create manual placeholder rows
+  if (params.userQueries) {
+    for (const uq of params.userQueries) {
+      const alreadyHandled = resultRows.some(
+        (r) =>
+          (uq.id && r.userId === uq.id) ||
+          (uq.nip && r.nim === uq.nip) ||
+          (uq.name && r.name.toLowerCase() === uq.name.toLowerCase())
+      );
+      if (!alreadyHandled && uq.name) {
+        resultRows.push({
+          no: resultRows.length + 1,
+          name: uq.name,
+          nim: uq.nip || '',
+          studyProgram: 'Sistem Informasi',
+          university: 'Universitas Bina Sarana Informatika (UBSI)',
+          classCode: '17.4A.07',
+          courses: [],
+        });
+      }
+    }
+  }
+
+  return resultRows;
+}
+
+/**
+ * Loads a Surat Tugas document and generates a complete pre-populated data package
+ * for creating a corresponding Surat Permohonan Dispensasi Perkuliahan.
+ */
+export async function getSuratTugasDispensationPreloadAction(suratTugasId: string): Promise<{
+  success: boolean;
+  preloadData?: Record<string, any>;
+  error?: string;
+}> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const db = await getDB();
+
+  try {
+    const doc = await db
+      .prepare('SELECT id, document_number, title, form_data, rendered_snapshot FROM generated_documents WHERE id = ?')
+      .bind(suratTugasId)
+      .first() as any;
+
+    if (!doc) {
+      return { success: false, error: 'Dokumen Surat Tugas tidak ditemukan.' };
+    }
+
+    let formData: any = {};
+    try {
+      formData = JSON.parse(doc.form_data || '{}');
+    } catch {}
+
+    const assignees: any[] = Array.isArray(formData.assignees) ? formData.assignees : [];
+    const eventName = formData.event_name || doc.title || 'Kegiatan KIAN Troopers';
+    const eventDays = formData.event_days || '';
+    const eventTime = formData.event_time || '07.30 WIB - Selesai';
+    const eventLocation = formData.event_location || 'Lokasi Event KIAN';
+
+    // Query courses for all assignees on the event days
+    const dispensationAssignees = await getUsersCourseSchedulesForDispensationAction({
+      userQueries: assignees,
+      eventDaysText: eventDays,
+    });
+
+    const primaryUniversity =
+      dispensationAssignees[0]?.university || 'Universitas Bina Sarana Informatika';
+
+    const preloadData = {
+      source_surat_tugas_id: doc.id,
+      source_surat_tugas_number: doc.document_number,
+      document_title: 'SURAT PERMOHONAN DISPENSASI\nPERKULIAHAN',
+      target_university: primaryUniversity,
+      recipient_info: `Kepada Yth.\nBapak/Ibu Dekan / Ketua Program Studi / Dosen Pengampu\n${primaryUniversity}\ndi Tempat`,
+      intro_text: `Dengan hormat,\nSehubungan dengan penugasan dan partisipasi aktif mahasiswa/i kami dalam agenda kegiatan ${eventName} (Berdasarkan Surat Tugas No. ${doc.document_number}), bersama ini kami dari Management KIAN Troopers mengajukan permohonan dispensasi / izin tidak mengikuti perkuliahan pada:`,
+      event_name: eventName,
+      event_days: eventDays,
+      event_time: eventTime,
+      event_location: eventLocation,
+      event_custom_details: [
+        { id: '1', label: 'Tugas / Peran', value: 'Tim Pelaksana Produksi & Kru Event KIAN' },
+        { id: '2', label: 'Ref. Surat Tugas', value: doc.document_number },
+      ],
+      dispensation_intro_text:
+        'Adapun daftar mahasiswa dan rincian mata kuliah yang dimohonkan dispensasi perkuliahan adalah sebagai berikut:',
+      dispensation_assignees: dispensationAssignees,
+      closing_text:
+        'Demikian surat permohonan dispensasi ini kami sampaikan. Besar harapan kami Bapak/Ibu dapat memberikan izin kepada mahasiswa/i tersebut di atas agar dapat menjalankan penugasan dengan sebaik-baiknya. Atas perhatian, kebijaksanaan, dan kerja sama yang baik, kami mengucapkan terima kasih.',
+      document_date_place: getRealtimeDocumentDate('Jakarta'),
+      signatory_position: formData.signatory_position || 'Program Director Kian Troopers',
+      signatory_name: formData.signatory_name || 'Mohamad Abi',
+      show_signature: true,
+      show_stamp: true,
+      show_qr_verification: true,
+      cc_list: ['1. Arsip Sekretariat KIAN', '2. Mahasiswa yang bersangkutan'],
+    };
+
+    return {
+      success: true,
+      preloadData,
+    };
+  } catch (err: any) {
+    console.error('getSuratTugasDispensationPreloadAction error:', err);
+    return { success: false, error: err.message || 'Gagal memuat data surat tugas.' };
+  }
+}
+
+
