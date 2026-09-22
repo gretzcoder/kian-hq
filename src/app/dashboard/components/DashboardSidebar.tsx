@@ -249,6 +249,7 @@ export default function DashboardSidebar({
         ...(canManageSparks
           ? [{ href: '/dashboard/sparks', label: 'Sparks', icon: '✨', exact: false }]
           : []),
+        { href: '/dashboard/availability', label: 'Availability', icon: '🗓️', exact: false },
         { href: '/dashboard/documents', label: 'Dokumen & Surat', icon: '📑', exact: false },
       ],
     },
