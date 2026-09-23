@@ -890,7 +890,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 ) : (
                   <div key={sec.id || secIdx} style={{ marginBottom: mbStyle }} className="p-3 bg-zinc-50/90 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
                     <span>
-                      📋 <strong>Daftar Nama Personil ({assignees.length} Orang)</strong> terlampir lengkap pada <strong>Lampiran Dokumen</strong> (Halaman 2).
+                      <strong>Daftar Nama Personil ({assignees.length} Orang)</strong> terlampir lengkap pada <strong>Lampiran Dokumen</strong> (Halaman 2).
                     </span>
                     <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
                       Lihat Lampiran
@@ -961,12 +961,12 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                                             • {codePrefix}{c.courseName}
                                           </div>
                                           <div className="text-[7.5pt] text-zinc-700 pl-2 mt-0.5">
-                                            <span>⏰ {c.dayName ? `${c.dayName}, ` : ''}{c.startTime} - {c.endTime} WIB</span>
-                                            {c.room && <span className="ml-1.5 text-zinc-600 font-medium">| 📍 Ruang: {c.room}</span>}
+                                            <span>{c.dayName ? `${c.dayName}, ` : ''}{c.startTime} - {c.endTime} WIB</span>
+                                            {c.room && <span className="ml-1.5 text-zinc-600 font-medium">| Ruang: {c.room}</span>}
                                           </div>
                                           {(lecturerStr || c.notes) && (
                                             <div className="text-[7.5pt] text-zinc-600 pl-2 italic mt-0.5">
-                                              {lecturerStr && <span>👨‍🏫 Dosen: {lecturerStr}</span>}
+                                              {lecturerStr && <span>Dosen: {lecturerStr}</span>}
                                               {lecturerStr && c.notes && <span className="mx-1">|</span>}
                                               {c.notes && <span className="text-zinc-500 font-normal">({c.notes})</span>}
                                             </div>
@@ -986,7 +986,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 ) : (
                   <div key={sec.id || secIdx} style={{ marginBottom: mbStyle }} className="p-3 bg-zinc-50/90 border border-dashed border-zinc-400 rounded text-xs text-zinc-700 italic flex items-center justify-between">
                     <span>
-                      📋 <strong>Daftar Rincian Mahasiswa &amp; Perkuliahan ({dispensationAssignees.length} Mahasiswa)</strong> terlampir lengkap pada <strong>Lampiran Dokumen</strong> (Halaman 2).
+                      <strong>Daftar Rincian Mahasiswa &amp; Perkuliahan ({dispensationAssignees.length} Mahasiswa)</strong> terlampir lengkap pada <strong>Lampiran Dokumen</strong> (Halaman 2).
                     </span>
                     <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded">
                       Lihat Lampiran
@@ -1315,89 +1315,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                   </table>
                 </div>
 
-                {/* On the Last Lampiran Page, show the Official Validation Signatory */}
-                {isLastPage && (
-                  <div className="flex justify-end mt-auto mb-2 pr-4">
-                    <div className="flex flex-col items-center text-center w-64">
-                      <p className="text-zinc-900">{docDatePlace}</p>
-                      <p className="font-normal text-zinc-900 mb-1">
-                        {signatoryPos}
-                      </p>
-
-                      <div className="relative w-48 h-16 flex items-center justify-center gap-2">
-                        {showStamp && (
-                          <div
-                            className="absolute pointer-events-none z-10"
-                            style={{
-                              left: `${sigConfig.stampOffsetX ?? -12}px`,
-                              top: `${sigConfig.stampOffsetY ?? 0}px`,
-                              transform: `scale(${sigConfig.stampScale ?? 1}) rotate(${sigConfig.stampRotation ?? 0}deg)`,
-                              opacity: sigConfig.stampOpacity ?? 0.85,
-                              width: '72px',
-                              height: '72px',
-                            }}
-                          >
-                            {sigConfig.stampAssetUrl ? (
-                              <img
-                                src={sigConfig.stampAssetUrl}
-                                alt="Stamp"
-                                className="w-full h-full object-contain"
-                              />
-                            ) : (
-                              <svg viewBox="0 0 100 100" className="w-full h-full">
-                                <circle
-                                  cx="50"
-                                  cy="50"
-                                  r="45"
-                                  stroke="#0066CC"
-                                  strokeWidth="2.5"
-                                  fill="none"
-                                  strokeDasharray="4 2"
-                                />
-                                <text
-                                  x="50"
-                                  y="52"
-                                  textAnchor="middle"
-                                  fill="#002B7F"
-                                  fontSize="12"
-                                  fontWeight="900"
-                                >
-                                  ★ KIAN ★
-                                </text>
-                              </svg>
-                            )}
-                          </div>
-                        )}
-                        {showSignature && (
-                          <svg
-                            viewBox="0 0 200 80"
-                            className="w-32 h-12 text-zinc-900 z-20 stroke-current fill-none"
-                            strokeWidth="2.5"
-                            style={{
-                              transform: `scale(${sigConfig.signatureScale ?? 1})`,
-                            }}
-                          >
-                            <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40" />
-                          </svg>
-                        )}
-                        {showQr && !showSignature && (
-                          <div className="z-20 w-14 h-14 bg-white p-0.5 rounded border border-blue-900/30 flex items-center justify-center relative">
-                            {qrCodeDataUrl && (
-                              <img src={qrCodeDataUrl} alt="QR" className="w-full h-full object-contain" />
-                            )}
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded bg-white border border-blue-900/40 flex items-center justify-center pointer-events-none">
-                              <span className="text-[6px] font-black text-blue-700">K</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <p className="font-bold text-zinc-950 underline">
-                        {signatoryName}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                {/* Lampiran is an attachment table; official signature is on Page 1 */}
               </div>
 
               {/* Annex Page Footer */}
@@ -1541,12 +1459,12 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                                           • {codePrefix}{c.courseName}
                                         </div>
                                         <div className="text-[7.5pt] text-zinc-700 pl-2 mt-0.5">
-                                          <span>⏰ {c.dayName ? `${c.dayName}, ` : ''}{c.startTime} - {c.endTime} WIB</span>
-                                          {c.room && <span className="ml-1.5 text-zinc-600 font-medium">| 📍 Ruang: {c.room}</span>}
+                                          <span>{c.dayName ? `${c.dayName}, ` : ''}{c.startTime} - {c.endTime} WIB</span>
+                                          {c.room && <span className="ml-1.5 text-zinc-600 font-medium">| Ruang: {c.room}</span>}
                                         </div>
                                         {(lecturerStr || c.notes) && (
                                           <div className="text-[7.5pt] text-zinc-600 pl-2 italic mt-0.5">
-                                            {lecturerStr && <span>👨‍🏫 Dosen: {lecturerStr}</span>}
+                                            {lecturerStr && <span>Dosen: {lecturerStr}</span>}
                                             {lecturerStr && c.notes && <span className="mx-1">|</span>}
                                             {c.notes && <span className="text-zinc-500 font-normal">({c.notes})</span>}
                                           </div>
@@ -1564,50 +1482,7 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                   </table>
                 </div>
 
-                {/* On Last Page, render official Signatory */}
-                {isLastPage && (
-                  <div className="flex justify-end mt-auto mb-2 pr-4">
-                    <div className="flex flex-col items-center text-center w-64">
-                      <p className="text-zinc-900">{docDatePlace}</p>
-                      <p className="font-normal text-zinc-900 mb-1">{signatoryPos}</p>
-
-                      <div className="relative w-48 h-16 flex items-center justify-center gap-2">
-                        {showStamp && (
-                          <div
-                            className="absolute pointer-events-none z-10"
-                            style={{
-                              left: `${sigConfig.stampOffsetX ?? -12}px`,
-                              top: `${sigConfig.stampOffsetY ?? 0}px`,
-                              transform: `scale(${sigConfig.stampScale ?? 1}) rotate(${sigConfig.stampRotation ?? 0}deg)`,
-                              opacity: sigConfig.stampOpacity ?? 0.85,
-                              width: '72px',
-                              height: '72px',
-                            }}
-                          >
-                            <svg viewBox="0 0 100 100" className="w-full h-full">
-                              <circle cx="50" cy="50" r="45" stroke="#0066CC" strokeWidth="2.5" fill="none" strokeDasharray="4 2" />
-                              <text x="50" y="52" textAnchor="middle" fill="#002B7F" fontSize="12" fontWeight="900">
-                                ★ KIAN ★
-                              </text>
-                            </svg>
-                          </div>
-                        )}
-                        {showSignature && (
-                          <svg
-                            viewBox="0 0 200 80"
-                            className="w-32 h-12 text-zinc-900 z-20 stroke-current fill-none"
-                            strokeWidth="2.5"
-                            style={{ transform: `scale(${sigConfig.signatureScale ?? 1})` }}
-                          >
-                            <path d="M20 50 C 40 10, 60 70, 80 30 C 100 10, 110 60, 140 35 Q 160 20 180 40" />
-                          </svg>
-                        )}
-                      </div>
-
-                      <p className="font-bold text-zinc-950 underline">{signatoryName}</p>
-                    </div>
-                  </div>
-                )}
+                {/* Lampiran is an attachment table; official signature is on Page 1 */}
               </div>
 
               {/* Annex Page Footer */}

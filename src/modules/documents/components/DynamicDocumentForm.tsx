@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { CustomDetailItem, FormFieldSchema } from '../documentTypes';
 import { AssigneeTableInput } from './AssigneeTableInput';
 import { DispensationTableInput } from './DispensationTableInput';
-import { searchProjectsAction } from '../documentActions';
+import { searchProjectsAction, searchTroopersAction } from '../documentActions';
 import { getRealtimeDocumentDate } from '@/lib/dateUtils';
 
 interface DynamicDocumentFormProps {
@@ -25,6 +25,12 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
   const [projectSearchResults, setProjectSearchResults] = useState<any[]>([]);
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [isSearchingProjects, setIsSearchingProjects] = useState(false);
+
+  // Recipient database search state
+  const [recipientSearchResults, setRecipientSearchResults] = useState<any[]>([]);
+  const [showRecipientModal, setShowRecipientModal] = useState(false);
+  const [isSearchingRecipients, setIsSearchingRecipients] = useState(false);
+  const [activeRecipientKey, setActiveRecipientKey] = useState('recipient_info');
 
   const handleSearchProjects = async (q: string) => {
     setIsSearchingProjects(true);
@@ -54,6 +60,25 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
       );
     }
     setShowProjectModal(false);
+  };
+
+  const handleSearchRecipients = async (q: string) => {
+    setIsSearchingRecipients(true);
+    try {
+      const results = await searchTroopersAction(q);
+      setRecipientSearchResults(results);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSearchingRecipients(false);
+    }
+  };
+
+  const handleSelectRecipient = (user: any) => {
+    const roleOrDept = user.roleTitle || user.department || 'Pimpinan / Anggota';
+    const autoFilledText = `Kepada Yth.\n${user.name}\n${roleOrDept}\ndi Tempat`;
+    onChange(activeRecipientKey, autoFilledText);
+    setShowRecipientModal(false);
   };
 
   // Repeatable list helpers
@@ -410,6 +435,100 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
           );
         }
 
+        // Recipient Info field (Kepada Yth) with Database Search & Auto-Fill
+        if (
+          field.key === 'recipient_info' ||
+          field.key.includes('recipient') ||
+          (field.label && field.label.toLowerCase().includes('penerima surat'))
+        ) {
+          const availableTags = [
+            '{event_name}',
+            '{signer_title_intro}',
+            '{person_name}',
+            '{person_role}',
+          ];
+          return (
+            <div
+              key={field.key}
+              className="space-y-2 p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-2xl"
+            >
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  <span>✉️</span> {field.label}{' '}
+                  {field.required && <span className="text-red-500">*</span>}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveRecipientKey(field.key);
+                    setShowRecipientModal(true);
+                    handleSearchRecipients('');
+                  }}
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-95"
+                >
+                  <span>🔍</span> Cari dari Database
+                </button>
+              </div>
+
+              {/* Quick Preset Badges & Variable Insertion */}
+              <div className="flex flex-wrap gap-1 items-center pt-0.5">
+                <span className="text-[9px] font-semibold text-zinc-400 mr-0.5">Format Cepat:</span>
+                {[
+                  {
+                    label: 'Executive Director',
+                    text: 'Kepada Yth.\nExecutive Director / Pimpinan Management KIAN\ndi Tempat',
+                  },
+                  {
+                    label: 'Kaprodi / Dekan',
+                    text: 'Kepada Yth.\nKetua Program Studi / Dekan Fakultas\ndi Tempat',
+                  },
+                  {
+                    label: 'Dosen Pengampu',
+                    text: 'Kepada Yth.\nBapak/Ibu Dosen Pengampu Mata Kuliah\ndi Tempat',
+                  },
+                ].map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => onChange(field.key, preset.text)}
+                    className="text-[9.5px] font-medium px-2 py-0.5 rounded-md bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                  >
+                    + {preset.label}
+                  </button>
+                ))}
+                <div className="flex items-center gap-1 ml-auto">
+                  {availableTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => {
+                        const current = value || '';
+                        const next = current ? `${current} ${tag}` : tag;
+                        onChange(field.key, next);
+                      }}
+                      className="text-[9px] px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-mono font-bold hover:bg-purple-100 dark:hover:bg-purple-900/60 cursor-pointer transition-colors"
+                      title={`Sisipkan variabel ${tag}`}
+                    >
+                      +{tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <textarea
+                value={value}
+                onChange={(e) => onChange(field.key, e.target.value)}
+                placeholder={field.placeholder || 'Kepada Yth.\nNama Pejabat / Instansi Kampus / Dosen\ndi Tempat'}
+                rows={3}
+                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden resize-y leading-relaxed"
+              />
+              <p className="text-[10px] text-zinc-400">
+                {field.helpText || 'Cari personil/pejabat dari database atau ketik tujuan surat secara langsung.'}
+              </p>
+            </div>
+          );
+        }
+
         // Textarea Type
         if (field.type === 'textarea') {
           const availableTags = [
@@ -643,6 +762,97 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                 type="button"
                 onClick={() => setShowProjectModal(false)}
                 className="px-4 py-2 rounded-xl bg-zinc-200 dark:bg-zinc-800 text-xs font-bold"
+              >
+                Batal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Recipient Selector Modal */}
+      {showRecipientModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 w-full max-w-lg shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3">
+              <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                <span>👤</span> Pilih Penerima dari Database Pengguna / Pejabat
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowRecipientModal(false)}
+                className="text-zinc-400 hover:text-zinc-600 text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Cari berdasarkan nama, role, jurusan, atau email..."
+                onChange={(e) => handleSearchRecipients(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                autoFocus
+              />
+            </div>
+
+            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+              {isSearchingRecipients ? (
+                <div className="text-center text-xs py-8 text-zinc-400 space-y-1">
+                  <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p>Mencari pengguna...</p>
+                </div>
+              ) : recipientSearchResults.length === 0 ? (
+                <div className="text-center text-xs py-8 text-zinc-400">
+                  <p>Tidak ada data personil / pejabat yang cocok.</p>
+                  <p className="text-[10px] text-zinc-500 mt-1">Ketik kata kunci lain untuk mencari.</p>
+                </div>
+              ) : (
+                recipientSearchResults.map((u) => (
+                  <div
+                    key={u.id}
+                    onClick={() => handleSelectRecipient(u)}
+                    className="p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 hover:border-purple-500 hover:bg-purple-500/5 cursor-pointer bg-zinc-50/50 dark:bg-zinc-800/40 transition-all flex items-center justify-between gap-3 group"
+                  >
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                          {u.name}
+                        </span>
+                        {u.nip && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.2 bg-zinc-200/60 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 rounded">
+                            {u.nip}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] font-medium text-purple-700 dark:text-purple-300">
+                        {u.roleTitle || u.department || 'Anggota KIAN'}
+                      </p>
+                      {u.email && (
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 truncate">
+                          {u.email}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 group-hover:bg-purple-600 group-hover:text-white transition-all shrink-0 cursor-pointer"
+                    >
+                      Pilih &amp; Terapkan
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-zinc-200 dark:border-zinc-800">
+              <span className="text-[10px] text-zinc-400">
+                Memilih pengguna akan otomatis mengisi Nama &amp; Jabatan ke format surat.
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowRecipientModal(false)}
+                className="px-4 py-2 rounded-xl bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-xs font-bold text-zinc-800 dark:text-zinc-200 transition-colors cursor-pointer"
               >
                 Batal
               </button>
