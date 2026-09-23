@@ -683,17 +683,21 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
                 sec.type === 'CLOSING_TEXT'
               ) {
                 let rawText = '';
-                if (sec.contentKey && formData[sec.contentKey]) {
+                if (sec.contentKey && formData[sec.contentKey] !== undefined) {
                   rawText = formData[sec.contentKey];
-                } else if (formData[sec.id]) {
+                } else if (formData[sec.id] !== undefined) {
                   rawText = formData[sec.id];
+                } else if (sec.type === 'INTRO_TEXT' && formData.intro_text !== undefined) {
+                  rawText = formData.intro_text;
+                } else if (sec.type === 'CLOSING_TEXT' && formData.closing_text !== undefined) {
+                  rawText = formData.closing_text;
                 } else if (sec.content) {
                   rawText = sec.content;
                 } else if (sec.type === 'INTRO_TEXT') {
-                  rawText = introText;
+                  rawText = rawIntroText;
                 } else if (sec.type === 'CLOSING_TEXT') {
-                  rawText = closingText;
-                } else if (formData.body_content) {
+                  rawText = rawClosingText;
+                } else if (formData.body_content !== undefined) {
                   rawText = formData.body_content;
                 }
 

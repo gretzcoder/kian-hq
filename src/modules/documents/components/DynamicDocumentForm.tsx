@@ -450,10 +450,10 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
           return (
             <div
               key={field.key}
-              className="space-y-2 p-3.5 bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 rounded-2xl"
+              className="space-y-2.5 p-4 bg-zinc-50/80 dark:bg-zinc-900/70 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xs"
             >
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <label className="text-xs font-bold text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5">
+                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
                   <span>✉️</span> {field.label}{' '}
                   {field.required && <span className="text-red-500">*</span>}
                 </label>
@@ -464,15 +464,15 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                     setShowRecipientModal(true);
                     handleSearchRecipients('');
                   }}
-                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-95"
+                  className="text-[11px] font-bold px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1.5 shadow-xs transition-all cursor-pointer active:scale-95"
                 >
                   <span>🔍</span> Cari dari Database
                 </button>
               </div>
 
               {/* Quick Preset Badges & Variable Insertion */}
-              <div className="flex flex-wrap gap-1 items-center pt-0.5">
-                <span className="text-[9px] font-semibold text-zinc-400 mr-0.5">Format Cepat:</span>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="text-[10px] font-semibold text-zinc-400 mr-0.5">Format Cepat:</span>
                 {[
                   {
                     label: 'Executive Director',
@@ -491,12 +491,12 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                     key={preset.label}
                     type="button"
                     onClick={() => onChange(field.key, preset.text)}
-                    className="text-[9.5px] font-medium px-2 py-0.5 rounded-md bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+                    className="text-[10px] font-medium px-2.5 py-1 rounded-lg bg-zinc-200/80 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
                   >
                     + {preset.label}
                   </button>
                 ))}
-                <div className="flex items-center gap-1 ml-auto">
+                <div className="flex items-center gap-1 ml-auto flex-wrap">
                   {availableTags.map((tag) => (
                     <button
                       key={tag}
@@ -506,7 +506,7 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                         const next = current ? `${current} ${tag}` : tag;
                         onChange(field.key, next);
                       }}
-                      className="text-[9px] px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-mono font-bold hover:bg-purple-100 dark:hover:bg-purple-900/60 cursor-pointer transition-colors"
+                      className="text-[9.5px] px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-mono font-bold hover:bg-purple-100 dark:hover:bg-purple-900/60 cursor-pointer transition-colors"
                       title={`Sisipkan variabel ${tag}`}
                     >
                       +{tag}
@@ -520,16 +520,16 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                 onChange={(e) => onChange(field.key, e.target.value)}
                 placeholder={field.placeholder || 'Kepada Yth.\nNama Pejabat / Instansi Kampus / Dosen\ndi Tempat'}
                 rows={3}
-                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden resize-y leading-relaxed"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 font-sans focus:ring-2 focus:ring-purple-500 focus:outline-hidden resize-y leading-relaxed min-h-[90px]"
               />
-              <p className="text-[10px] text-zinc-400">
+              <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400">
                 {field.helpText || 'Cari personil/pejabat dari database atau ketik tujuan surat secara langsung.'}
               </p>
             </div>
           );
         }
 
-        // Textarea Type
+        // Textarea Type (Kalimat Pembuka, Penutup, Paragraf Bebas)
         if (field.type === 'textarea') {
           const availableTags = [
             '{event_name}',
@@ -538,10 +538,13 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
             '{person_role}',
           ];
           return (
-            <div key={field.key} className="space-y-1.5">
-              <div className="flex items-center justify-between flex-wrap gap-1">
-                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                  {field.label}{' '}
+            <div
+              key={field.key}
+              className="space-y-2 p-4 bg-zinc-50/80 dark:bg-zinc-900/70 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xs"
+            >
+              <div className="flex items-center justify-between flex-wrap gap-1.5">
+                <label className="text-xs font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                  <span>📝</span> {field.label}{' '}
                   {field.required && <span className="text-red-500">*</span>}
                 </label>
                 <div className="flex items-center gap-1 flex-wrap">
@@ -554,7 +557,7 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                         const next = current ? `${current} ${tag}` : tag;
                         onChange(field.key, next);
                       }}
-                      className="text-[9.5px] px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-mono font-bold hover:bg-purple-100 dark:hover:bg-purple-900/60 cursor-pointer transition-colors"
+                      className="text-[9.5px] px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-mono font-bold hover:bg-purple-100 dark:hover:bg-purple-900/60 cursor-pointer transition-colors"
                       title={`Sisipkan variabel ${tag}`}
                     >
                       +{tag}
@@ -566,14 +569,14 @@ export const DynamicDocumentForm: React.FC<DynamicDocumentFormProps> = ({
                 value={value}
                 onChange={(e) => onChange(field.key, e.target.value)}
                 placeholder={field.placeholder}
-                rows={2}
-                className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-purple-500 focus:outline-hidden resize-y font-mono"
+                rows={4}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 font-sans focus:ring-2 focus:ring-purple-500 focus:outline-hidden resize-y leading-relaxed min-h-[105px]"
               />
               {field.helpText ? (
-                <p className="text-[10px] text-zinc-400">{field.helpText}</p>
+                <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400">{field.helpText}</p>
               ) : (
-                <p className="text-[9.5px] text-zinc-400 dark:text-zinc-500">
-                  💡 Gunakan variabel <code className="font-mono text-purple-600 dark:text-purple-400 font-bold">{'{event_name}'}</code> agar nama event terisi otomatis tanpa perlu mengetik ulang.
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 flex items-center gap-1">
+                  <span>💡</span> Gunakan variabel <code className="font-mono text-purple-600 dark:text-purple-400 font-bold">{'{event_name}'}</code> agar nama event terisi otomatis tanpa perlu mengetik ulang.
                 </p>
               )}
             </div>
