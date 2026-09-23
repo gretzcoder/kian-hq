@@ -90,16 +90,21 @@ export default async function PublicDocumentVerificationPage({
                   ✅
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-sm sm:text-base font-black tracking-wide uppercase text-white">
                       DOKUMEN RESMI TERVERIFIKASI
                     </h2>
                     <span className="px-2 py-0.5 bg-emerald-500/30 border border-emerald-500/40 rounded-full text-[10px] font-mono font-black text-emerald-300">
                       VALID
                     </span>
+                    {doc.type_name && (
+                      <span className="px-2 py-0.5 bg-purple-500/20 border border-purple-500/30 rounded-full text-[10px] font-mono font-bold text-purple-300">
+                        {doc.type_name}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-emerald-400/90 mt-0.5">
-                    Surat Tugas ini terdaftar secara sah dan valid dalam database resmi sistem KIAN HQ.
+                    {doc.type_name || 'Dokumen'} ini terdaftar secara sah dan valid dalam database resmi sistem KIAN HQ.
                   </p>
                 </div>
               </div>
@@ -143,19 +148,40 @@ export default async function PublicDocumentVerificationPage({
                   {doc.organization?.name || 'KIAN Troopers Indonesia'}
                 </p>
               </div>
+
+              {/* Recipient info if present */}
+              {doc.recipient_info && (
+                <div className="sm:col-span-2 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-800/80 space-y-1">
+                  <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block">
+                    Tujuan / Penerima Surat (Kepada Yth)
+                  </span>
+                  <p className="text-xs font-mono text-zinc-200 whitespace-pre-line leading-relaxed">
+                    {doc.recipient_info}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Event / Penugasan Details if present */}
-            {(doc.event.intro || doc.event.days || doc.event.location || doc.event.time) && (
+            {(doc.event.name || doc.event.intro || doc.event.days || doc.event.location || doc.event.time || (doc.custom_details && doc.custom_details.length > 0)) && (
               <div className="bg-purple-500/5 border border-purple-500/20 rounded-2xl p-4 sm:p-5 space-y-2.5">
-                <span className="text-[10px] font-black uppercase text-purple-400 tracking-wider flex items-center gap-1.5">
-                  <span>📅</span> Rincian Penugasan / Kegiatan
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-purple-400 tracking-wider flex items-center gap-1.5">
+                    <span>📅</span> {doc.type_code?.includes('DISP') ? 'Rincian Kegiatan Penugasan' : 'Rincian Penugasan / Kegiatan'}
+                  </span>
+                  {doc.event.name && (
+                    <span className="text-xs font-bold text-white bg-purple-500/20 px-2.5 py-0.5 rounded-lg border border-purple-500/30">
+                      {doc.event.name}
+                    </span>
+                  )}
+                </div>
+
                 {doc.event.intro && (
                   <p className="text-xs text-zinc-300 leading-relaxed font-medium">
                     {doc.event.intro}
                   </p>
                 )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 text-xs">
                   {doc.event.days && (
                     <div className="bg-zinc-950/70 p-2.5 rounded-xl border border-zinc-800">
@@ -175,27 +201,129 @@ export default async function PublicDocumentVerificationPage({
                       <span className="font-semibold text-zinc-200">{doc.event.location}</span>
                     </div>
                   )}
+                  {doc.custom_details && doc.custom_details.map((cd: any, cIdx: number) => (
+                    <div key={cd.id || cIdx} className="bg-zinc-950/70 p-2.5 rounded-xl border border-zinc-800">
+                      <span className="text-[10px] text-zinc-500 block uppercase font-bold">{cd.label || 'Keterangan'}</span>
+                      <span className="font-semibold text-zinc-200">{cd.value || '-'}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Assignees Table (Daftar Petugas Terverifikasi) */}
-            <div className="pt-2 space-y-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div>
-                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
-                    <span>👥</span> Daftar Petugas / Personil Terverifikasi ({doc.assignees.length} Orang)
-                  </h3>
-                  <p className="text-[11px] text-zinc-500 mt-0.5">
-                    Daftar nama dan identitas resmi personil yang ditugaskan pada surat ini.
-                  </p>
+            {/* TABULAR CONTENT SECTION: Adapts dynamically to document type */}
+            {doc.dispensation_assignees && doc.dispensation_assignees.length > 0 ? (
+              /* DISPENSATION ASSIGNEES (Mahasiswa & Perkuliahan) */
+              <div className="pt-2 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+                      <span>🎓</span> Daftar Mahasiswa &amp; Rincian Perkuliahan ({doc.dispensation_assignees.length} Mahasiswa)
+                    </h3>
+                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                      Daftar nama, NIM, prodi, dan mata kuliah yang dimohonkan dispensasi pada surat resmi ini.
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/25 rounded-full text-[10px] font-mono font-bold">
+                    Dispensation Matrix
+                  </span>
                 </div>
-                <span className="px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/25 rounded-full text-[10px] font-mono font-bold">
-                  Official Delegation
-                </span>
-              </div>
 
-              {doc.assignees.length > 0 ? (
+                <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-950">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-zinc-900/80 border-b border-zinc-800 text-zinc-400 font-bold uppercase text-[10px]">
+                        <th className="py-3 px-3.5 text-center w-12">No</th>
+                        <th className="py-3 px-4 w-44">Nama &amp; NIM</th>
+                        <th className="py-3 px-4 w-44">Program Studi &amp; Kampus</th>
+                        <th className="py-3 px-3 text-center w-20">Kelas</th>
+                        <th className="py-3 px-4">Mata Kuliah &amp; Waktu</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800/60 font-medium text-zinc-300 align-top">
+                      {doc.dispensation_assignees.map((item: any, idx: number) => {
+                        const activeCourses = item.courses || [];
+                        return (
+                          <tr key={idx} className="hover:bg-zinc-900/40 transition-colors">
+                            <td className="py-3 px-3.5 text-center font-mono text-zinc-500 font-bold">
+                              {item.no || idx + 1}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-white">{item.name}</div>
+                              {item.nim && item.nim !== '-' && (
+                                <div className="text-[10.5px] font-mono text-purple-400">NIM: {item.nim}</div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-semibold text-zinc-200">{item.studyProgram}</div>
+                              {item.university && (
+                                <div className="text-[10px] text-zinc-400 leading-tight mt-0.5">{item.university}</div>
+                              )}
+                            </td>
+                            <td className="py-3 px-3 text-center font-mono font-semibold text-zinc-300 text-[11px]">
+                              {item.classCode || '-'}
+                            </td>
+                            <td className="py-3 px-4">
+                              {activeCourses.length === 0 ? (
+                                <span className="text-zinc-500 italic text-[11px]">
+                                  Semua Perkuliahan pada Hari Tersebut
+                                </span>
+                              ) : (
+                                <div className="space-y-2">
+                                  {activeCourses.map((c: any, cIdx: number) => {
+                                    const codePrefix = c.courseCode ? `[${c.courseCode}] ` : '';
+                                    const lecturerStr = c.lecturerName
+                                      ? (c.lecturerCode ? `[${c.lecturerCode}] ${c.lecturerName}` : c.lecturerName)
+                                      : '';
+                                    return (
+                                      <div
+                                        key={c.id || cIdx}
+                                        className="text-[11px] leading-tight pb-1.5 last:pb-0 border-b border-zinc-800/80 last:border-b-0"
+                                      >
+                                        <div className="font-bold text-white">
+                                          • {codePrefix}{c.courseName}
+                                        </div>
+                                        <div className="text-[10.5px] text-zinc-400 pl-2 mt-0.5">
+                                          <span>{c.dayName ? `${c.dayName}, ` : ''}{c.startTime} - {c.endTime} WIB</span>
+                                          {c.room && <span className="ml-1.5 text-zinc-400 font-medium">| Ruang: {c.room}</span>}
+                                        </div>
+                                        {(lecturerStr || c.notes) && (
+                                          <div className="text-[10px] text-zinc-400 pl-2 italic mt-0.5">
+                                            {lecturerStr && <span>Dosen: {lecturerStr}</span>}
+                                            {lecturerStr && c.notes && <span className="mx-1">|</span>}
+                                            {c.notes && <span className="text-zinc-500">({c.notes})</span>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : doc.assignees && doc.assignees.length > 0 ? (
+              /* STANDARD ASSIGNEES (Personil / Kru / Magang) */
+              <div className="pt-2 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-zinc-300 flex items-center gap-1.5">
+                      <span>👥</span> Daftar Petugas / Personil Terverifikasi ({doc.assignees.length} Orang)
+                    </h3>
+                    <p className="text-[11px] text-zinc-500 mt-0.5">
+                      Daftar nama dan identitas resmi personil yang ditugaskan pada surat ini.
+                    </p>
+                  </div>
+                  <span className="px-2.5 py-1 bg-blue-500/10 text-blue-400 border border-blue-500/25 rounded-full text-[10px] font-mono font-bold">
+                    Official Delegation
+                  </span>
+                </div>
+
                 <div className="overflow-x-auto rounded-2xl border border-zinc-800 bg-zinc-950">
                   <table className="w-full text-left text-xs">
                     <thead>
@@ -228,12 +356,22 @@ export default async function PublicDocumentVerificationPage({
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-800 text-center text-xs text-zinc-500 italic">
-                  Tidak ada data tabel petugas terlampir secara inline.
-                </div>
-              )}
-            </div>
+              </div>
+            ) : null}
+
+            {/* Statement points if any */}
+            {doc.statement_points && doc.statement_points.length > 0 && (
+              <div className="pt-2 text-xs text-zinc-300 space-y-1.5 p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
+                  Ketetapan / Pernyataan Resmi:
+                </span>
+                <ul className="list-decimal list-inside space-y-1 pl-1">
+                  {doc.statement_points.map((pt: string, idx: number) => (
+                    <li key={idx} className="leading-relaxed">{pt}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Tembusan list if any */}
             {doc.tembusan && doc.tembusan.length > 0 && (

@@ -1167,6 +1167,25 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
     const compiledData = snapshot.compiled_data || formData;
     const org: OrganizationSnapshot = snapshot.organization || DEFAULT_ORGANIZATION_PROFILE;
 
+    const typeCodeUpper = (row.type_code || '').toUpperCase();
+    const docNumUpper = (row.document_number || '').toUpperCase();
+    const titleUpper = (row.title || compiledData.document_title || '').toUpperCase();
+
+    let docTypeName = 'Surat Resmi';
+    if (typeCodeUpper.includes('DISP') || docNumUpper.includes('/DISP/') || titleUpper.includes('DISPENSASI')) {
+      docTypeName = 'Surat Permohonan Dispensasi Perkuliahan';
+    } else if (typeCodeUpper.includes('MAGANG') || docNumUpper.includes('MAGANG') || titleUpper.includes('MAGANG')) {
+      docTypeName = 'Surat Keputusan Penerimaan Magang';
+    } else if (typeCodeUpper.includes('UND') || docNumUpper.includes('/UND/') || titleUpper.includes('UNDANGAN')) {
+      docTypeName = 'Surat Undangan Resmi';
+    } else if (typeCodeUpper.includes('SK') || docNumUpper.includes('/SK/')) {
+      docTypeName = 'Surat Keterangan';
+    } else if (typeCodeUpper.includes('SP') || docNumUpper.includes('/SP/')) {
+      docTypeName = 'Surat Pernyataan';
+    } else if (typeCodeUpper.includes('TUGAS') || docNumUpper.includes('TROOPERS') || docNumUpper.includes('/PROD/') || docNumUpper.includes('/HQ/')) {
+      docTypeName = 'Surat Tugas';
+    }
+
     const assignees: Array<{ no?: number; nip?: string; name: string; role: string; campus?: string; division?: string; period?: string }> = Array.isArray(compiledData.assignees)
       ? compiledData.assignees.map((a: any, idx: number) => ({
           no: a.no || idx + 1,
@@ -1179,12 +1198,62 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
         }))
       : [];
 
+    const dispensationAssignees: Array<{
+      no?: number;
+      name: string;
+      nim?: string;
+      studyProgram?: string;
+      university?: string;
+      classCode?: string;
+      courses?: Array<{
+        courseCode?: string;
+        courseName: string;
+        dayName?: string;
+        startTime?: string;
+        endTime?: string;
+        room?: string;
+        lecturerName?: string;
+        lecturerCode?: string;
+        notes?: string;
+      }>;
+    }> = Array.isArray(compiledData.dispensation_assignees)
+      ? compiledData.dispensation_assignees.map((d: any, idx: number) => ({
+          no: d.no || idx + 1,
+          name: d.name || 'Mahasiswa',
+          nim: d.nim || '-',
+          studyProgram: d.studyProgram || d.department || '-',
+          university: d.university || '',
+          classCode: d.classCode || '-',
+          courses: Array.isArray(d.courses)
+            ? d.courses
+                .filter((c: any) => c.selected !== false)
+                .map((c: any) => ({
+                  courseCode: c.courseCode || '',
+                  courseName: c.courseName || '',
+                  dayName: c.dayName || '',
+                  startTime: c.startTime || '',
+                  endTime: c.endTime || '',
+                  room: c.room || '',
+                  lecturerName: c.lecturerName || '',
+                  lecturerCode: c.lecturerCode || '',
+                  notes: c.notes || '',
+                }))
+            : [],
+        }))
+      : [];
+
     const tembusanList = Array.isArray(compiledData.tembusan)
       ? compiledData.tembusan
       : Array.isArray(compiledData.cc_list)
       ? compiledData.cc_list
       : typeof compiledData.tembusan === 'string'
       ? compiledData.tembusan.split('\n').map((s: string) => s.trim()).filter(Boolean)
+      : [];
+
+    const customDetails = Array.isArray(compiledData.event_custom_details)
+      ? compiledData.event_custom_details
+      : Array.isArray(compiledData.person_custom_details)
+      ? compiledData.person_custom_details
       : [];
 
     return {
@@ -1194,6 +1263,7 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
         document_number: row.document_number,
         title: row.title || compiledData.document_title || 'Dokumen Resmi KIAN',
         type_code: row.type_code || 'SURAT_TUGAS',
+        type_name: docTypeName,
         status: row.status || 'ISSUED',
         issued_at: row.approved_at || snapshot.generated_at || row.created_at,
         created_at: row.created_at,
@@ -1202,15 +1272,20 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
           name: snapshot.signatory?.name || row.signatory_name || compiledData.signatory_name || 'Pimpinan KIAN HQ',
           position: snapshot.signatory?.position || row.signatory_position || compiledData.signatory_position || 'Program Director Kian Troopers',
         },
+        recipient_info: compiledData.recipient_info || '',
         event: {
-          intro: compiledData.event_intro || '',
+          name: compiledData.event_name || '',
+          intro: compiledData.event_intro || compiledData.intro_text || '',
           days: compiledData.event_days || '',
           time: compiledData.event_time || '',
           location: compiledData.event_location || '',
         },
+        custom_details: customDetails,
+        statement_points: Array.isArray(compiledData.statement_points) ? compiledData.statement_points : [],
         intro_text: compiledData.intro_text || '',
         closing_text: compiledData.closing_text || '',
         assignees,
+        dispensation_assignees: dispensationAssignees,
         tembusan: tembusanList,
       },
     };
