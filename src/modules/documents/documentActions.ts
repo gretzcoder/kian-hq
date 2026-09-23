@@ -1097,6 +1097,7 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
     document_number: string;
     title: string;
     type_code: string;
+    type_name?: string;
     status: string;
     issued_at: number;
     created_at: number;
@@ -1105,12 +1106,16 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
       name: string;
       position: string;
     };
+    recipient_info?: string;
     event: {
+      name?: string;
       intro?: string;
       days?: string;
       time?: string;
       location?: string;
     };
+    custom_details?: any[];
+    statement_points?: string[];
     intro_text?: string;
     closing_text?: string;
     assignees: Array<{
@@ -1121,6 +1126,25 @@ export async function getPublicDocumentVerification(idOrNumber: string): Promise
       campus?: string;
       division?: string;
       period?: string;
+    }>;
+    dispensation_assignees?: Array<{
+      no?: number;
+      name: string;
+      nim?: string;
+      studyProgram?: string;
+      university?: string;
+      classCode?: string;
+      courses?: Array<{
+        courseCode?: string;
+        courseName: string;
+        dayName?: string;
+        startTime?: string;
+        endTime?: string;
+        room?: string;
+        lecturerName?: string;
+        lecturerCode?: string;
+        notes?: string;
+      }>;
     }>;
     tembusan?: string[];
   };
