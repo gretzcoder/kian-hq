@@ -60,13 +60,25 @@ const CornerAccentBottomLeft = () => (
 
 // KIAN Troopers Brand Logo Header Vector
 const BrandLogoHeader = ({ className = '' }: { className?: string }) => (
-  <div className={`flex flex-col select-none ${className}`}>
-    <div className="flex items-center gap-2">
-      <span className="text-2xl font-black italic tracking-tighter text-[#0066CC]">
-        KI<span className="text-[#002B7F]">AN</span>
-      </span>
-      <span className="text-2xl font-black italic tracking-wider text-black font-sans">
-        TROOPERS
+  <div className={`flex items-center gap-2.5 select-none ${className}`}>
+    <div className="flex items-center justify-center shrink-0 w-8 h-8">
+      <svg viewBox="0 0 48 48" className="w-full h-full" fill="none">
+        <path d="M4 6 L22 24 L4 42 Z" fill="#0066CC" />
+        <path d="M16 6 L34 24 L16 42 Z" fill="#E52320" />
+        <path d="M28 6 L44 18 L38 28 L28 18 Z" fill="#002B7F" />
+      </svg>
+    </div>
+    <div className="flex flex-col">
+      <div className="flex items-center gap-1.5 leading-none">
+        <span className="text-2xl font-black italic tracking-tighter text-[#0066CC]">
+          KI<span className="text-[#002B7F]">AN</span>
+        </span>
+        <span className="text-2xl font-black italic tracking-wider text-black font-sans">
+          TROOPERS
+        </span>
+      </div>
+      <span className="text-[7.5px] font-bold tracking-wider text-zinc-600 uppercase mt-0.5 font-sans">
+        Kreasi Inovasi Anak Nusantara
       </span>
     </div>
   </div>
@@ -1242,9 +1254,17 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               )}
 
               <div className="relative z-10 flex flex-col flex-1">
-                {/* Header Logo */}
-                <div className="flex items-center justify-between pb-2 border-b border-zinc-200">
-                  <BrandLogoHeader />
+                {/* Header Logo (Identical to Page 1 Kop) */}
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-200 min-h-[48px]">
+                  {kop.logo.assetUrl ? (
+                    <img
+                      src={kop.logo.assetUrl}
+                      alt="Logo"
+                      className="max-h-12 max-w-[240px] object-contain pointer-events-none select-none"
+                    />
+                  ) : (
+                    <BrandLogoHeader />
+                  )}
                   <span className="text-[10px] font-sans font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded">
                     Halaman {pageNumber} dari {annexPages.length + 1}
                   </span>
@@ -1382,9 +1402,17 @@ export const DocumentCanvas: React.FC<DocumentCanvasProps> = ({
               )}
 
               <div className="relative z-10 flex flex-col flex-1">
-                {/* Header Logo */}
-                <div className="flex items-center justify-between pb-2 border-b border-zinc-200">
-                  <BrandLogoHeader />
+                {/* Header Logo (Identical to Page 1 Kop) */}
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-200 min-h-[48px]">
+                  {kop.logo.assetUrl ? (
+                    <img
+                      src={kop.logo.assetUrl}
+                      alt="Logo"
+                      className="max-h-12 max-w-[240px] object-contain pointer-events-none select-none"
+                    />
+                  ) : (
+                    <BrandLogoHeader />
+                  )}
                   <span className="text-[10px] font-sans font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded">
                     Halaman {pageNumber} dari {dispAnnexPages.length + 1}
                   </span>
