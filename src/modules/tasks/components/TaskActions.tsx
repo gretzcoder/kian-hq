@@ -1178,8 +1178,22 @@ export default function TaskActions({
     const isMentorWs = workspaceType === 'MENTOR';
     const isReviewer = isLeader || isMentor || isCoordinator;
     const directSlots = parseDirectBriefSlots(taskDescription);
+
+    // Compute all assigned user IDs for this task across assignments and slot configs
+    const taskAssignedUserIds = new Set<string>();
+    assignments.forEach((a) => {
+      if (a.user_id) taskAssignedUserIds.add(a.user_id);
+    });
+    directSlots.forEach((s) => {
+      if (s.assignedUserId) taskAssignedUserIds.add(s.assignedUserId);
+    });
+
+    const isTaskLockedToSpecificUsers = taskAssignedUserIds.size > 0;
+    const isUserAssignedToTask = taskAssignedUserIds.has(currentUserId);
+    const isPrivilegedUser = isMentor || isCoordinator || isLeader || isTaskCreator;
+
     const isAssignedToAnySlot = directSlots.some(s => s.assignedUserId === currentUserId);
-    const canUserSubmitDirect = !isCoordinator || isMentor || isLeader || isAssignedToAnySlot;
+    const canUserSubmitDirect = isPrivilegedUser || (isTaskLockedToSpecificUsers ? isUserAssignedToTask : !isCoordinator);
 
     // Deduplicate assignments by user_id & role for DIRECT_BRIEF tasks & filter for clean display
     let displayAssignments = assignments;
@@ -1284,14 +1298,17 @@ export default function TaskActions({
                       const isClaimedByOther = claimedAss && !isClaimedByMe && (claimedAss.user_id !== currentUserId);
                       const isAssignedToOther = slot.assignedUserId && slot.assignedUserId !== currentUserId;
                       const isAssignedToMe = slot.assignedUserId === currentUserId;
+                      const isSlotLockedForMe = isTaskLockedToSpecificUsers && !isUserAssignedToTask && !isPrivilegedUser;
 
-                      const isDisabled = Boolean(isClaimedByOther || isAssignedToOther);
+                      const isDisabled = Boolean(isClaimedByOther || isAssignedToOther || isSlotLockedForMe);
 
                       let label = `✓ ${cat}`;
                       if (isAssignedToMe) {
                         label = `⭐ ${cat} (Ditugaskan untuk Anda)`;
                       } else if (isAssignedToOther) {
                         label = `🔒 ${cat} (Khusus ${slot.assignedUserName || 'Peserta Lain'})`;
+                      } else if (isSlotLockedForMe) {
+                        label = `🔒 ${cat} (Khusus Trooper Ditugaskan)`;
                       } else if (isClaimedByOther) {
                         label = `❌ ${cat} (Sudah diambil oleh ${claimedAss.user_name || 'Peserta lain'})`;
                       }
@@ -1382,7 +1399,15 @@ export default function TaskActions({
               const isMine = categoryAss?.user_id === currentUserId;
               const isAssignedToMe = slot.assignedUserId === currentUserId;
               const isAssignedToOther = Boolean(slot.assignedUserId && slot.assignedUserId !== currentUserId);
-              const canUserSubmit = (!isCoordinator || isAssignedToMe || isMentor || isLeader) && (!isAssignedToOther || isAssignedToMe || isMentor || isCoordinator || isLeader || isTaskCreator);
+
+              let canUserSubmit = false;
+              if (slot.assignedUserId) {
+                canUserSubmit = isAssignedToMe || isPrivilegedUser;
+              } else if (isTaskLockedToSpecificUsers) {
+                canUserSubmit = isUserAssignedToTask || isPrivilegedUser;
+              } else {
+                canUserSubmit = !isCoordinator || isPrivilegedUser;
+              }
 
               return (
                 <div
@@ -1483,6 +1508,10 @@ export default function TaskActions({
                     ) : isAssignedToOther ? (
                       <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 px-2.5 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">
                         🔒 Khusus {slot.assignedUserName || 'Peserta Terpilih'}
+                      </span>
+                    ) : (isTaskLockedToSpecificUsers && !isUserAssignedToTask && !isPrivilegedUser) ? (
+                      <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
+                        🔒 Khusus Trooper Ditugaskan
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
@@ -1648,6 +1677,10 @@ export default function TaskActions({
                       {isAssignedToOther ? (
                         <p className="text-[11px] text-zinc-400 italic">
                           🔒 Slot ini dialokasikan khusus untuk <strong>{slot.assignedUserName || 'peserta tertentu'}</strong>.
+                        </p>
+                      ) : (isTaskLockedToSpecificUsers && !isUserAssignedToTask && !isPrivilegedUser) ? (
+                        <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 italic">
+                          🔒 Slot tugas ini dikunci khusus untuk Trooper yang ditugaskan pada tugas ini.
                         </p>
                       ) : canUserSubmit ? (
                         <div>

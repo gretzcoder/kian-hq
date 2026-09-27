@@ -34,7 +34,9 @@ export default function CreateTaskForm({
   ]);
   const [priority, setPriority] = useState<'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'>('NORMAL');
   const [parentTaskId, setParentTaskId] = useState('');
-  const [assigneeUserId, setAssigneeUserId] = useState('');
+  const [selectedAssigneeUserIds, setSelectedAssigneeUserIds] = useState<string[]>([]);
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -59,7 +61,8 @@ export default function CreateTaskForm({
     formData.set('priority', priority);
     formData.set('parentTaskId', parentTaskId);
     formData.set('isDirectBrief', String(isDirectBrief));
-    formData.set('assigneeUserId', assigneeUserId);
+    formData.set('assigneeUserId', selectedAssigneeUserIds[0] || '');
+    formData.set('assigneeUserIds', JSON.stringify(selectedAssigneeUserIds));
     formData.set('description', description);
 
     try {
@@ -75,7 +78,7 @@ export default function CreateTaskForm({
         ]);
         setPriority('NORMAL');
         setParentTaskId('');
-        setAssigneeUserId('');
+        setSelectedAssigneeUserIds([]);
         setDescription('');
         setSuccess(true);
         setTimeout(() => setSuccess(false), 3000);
@@ -437,30 +440,145 @@ export default function CreateTaskForm({
             />
           </div>
 
-          {/* Optional Assignee Selection for Koordinator */}
+          {/* Optional Multi-Trooper Assignee Selection & Task Lock */}
           {members.length > 0 && (
-            <div>
-              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
-                Penugasan Langsung ke Trooper (Opsional)
-              </label>
-              <select
-                name="assigneeUserId"
-                value={assigneeUserId}
-                onChange={(e) => setAssigneeUserId(e.target.value)}
-                className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 dark:focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-700 dark:text-zinc-300 text-xs rounded-xl px-4 py-3 focus:outline-none transition-all cursor-pointer"
-              >
-                <option value="">-- Pilih Trooper / Anggota Workspace (Nanti Dibuat di Daftar Task) --</option>
-                {members.map((m) => {
-                  const uid = m.userId || m.id || '';
-                  const uname = m.userName || m.name || m.userEmail || 'Anggota';
-                  if (!uid) return null;
-                  return (
-                    <option key={uid} value={uid}>
-                      👤 {uname}
-                    </option>
-                  );
-                })}
-              </select>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                  Penugasan Langsung ke Trooper / Kunci Task (Opsional)
+                </label>
+                {selectedAssigneeUserIds.length > 0 ? (
+                  <span className="text-[10px] font-extrabold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20 flex items-center gap-1">
+                    <span>🔒</span> {selectedAssigneeUserIds.length} Trooper Terpilih (Tugas Dikunci)
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">
+                    🌐 Terbuka Untuk Semua
+                  </span>
+                )}
+              </div>
+
+              {/* Selected Troopers Chips */}
+              {selectedAssigneeUserIds.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-purple-500/5 dark:bg-purple-500/10 border border-purple-500/20">
+                  {selectedAssigneeUserIds.map((uid) => {
+                    const matched = members.find((m) => (m.userId || m.id) === uid);
+                    const uname = matched ? (matched.userName || matched.name || matched.userEmail || 'Trooper') : uid;
+                    return (
+                      <span
+                        key={uid}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-purple-700 dark:text-purple-300 bg-white dark:bg-zinc-900 px-2.5 py-1 rounded-lg border border-purple-500/30 shadow-xs"
+                      >
+                        <span>👤</span>
+                        <span>{uname}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAssigneeUserIds((prev) => prev.filter((id) => id !== uid))}
+                          className="text-zinc-400 hover:text-red-500 ml-1 cursor-pointer font-black"
+                          title="Hapus Penugasan"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAssigneeUserIds([])}
+                    className="text-[10px] font-bold text-red-500 hover:underline px-2 py-1 cursor-pointer"
+                  >
+                    Hapus Semua
+                  </button>
+                </div>
+              )}
+
+              {/* Dropdown Toggle / Selector */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowAssigneeDropdown((prev) => !prev)}
+                  className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 hover:border-purple-500/50 focus:border-purple-500 text-left text-xs rounded-xl px-4 py-3 focus:outline-none transition-all flex items-center justify-between cursor-pointer"
+                >
+                  <span className={selectedAssigneeUserIds.length > 0 ? 'text-zinc-900 dark:text-zinc-100 font-bold' : 'text-zinc-500 dark:text-zinc-400'}>
+                    {selectedAssigneeUserIds.length > 0
+                      ? `👥 ${selectedAssigneeUserIds.length} Trooper Ditugaskan (Klik untuk ubah pilihan)`
+                      : '-- Pilih 1 atau Lebih Trooper untuk Mengunci Task (Opsional) --'}
+                  </span>
+                  <span className="text-zinc-400 text-xs">{showAssigneeDropdown ? '▲' : '▼'}</span>
+                </button>
+
+                {showAssigneeDropdown && (
+                  <div className="absolute z-30 left-0 right-0 mt-1.5 p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xl space-y-2.5 max-h-60 overflow-y-auto">
+                    <div className="flex items-center justify-between gap-2 pb-1 border-b border-zinc-100 dark:border-zinc-800">
+                      <input
+                        type="text"
+                        value={assigneeSearch}
+                        onChange={(e) => setAssigneeSearch(e.target.value)}
+                        placeholder="Cari nama trooper..."
+                        className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-xs rounded-lg px-2.5 py-1.5 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
+                      />
+                      {members.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const allIds = members
+                              .map((m) => m.userId || m.id || '')
+                              .filter(Boolean);
+                            setSelectedAssigneeUserIds(allIds);
+                          }}
+                          className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline shrink-0 px-1 cursor-pointer"
+                        >
+                          Pilih Semua
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      {members
+                        .filter((m) => {
+                          const uname = (m.userName || m.name || m.userEmail || '').toLowerCase();
+                          return uname.includes(assigneeSearch.toLowerCase());
+                        })
+                        .map((m) => {
+                          const uid = m.userId || m.id || '';
+                          const uname = m.userName || m.name || m.userEmail || 'Anggota';
+                          if (!uid) return null;
+                          const isSelected = selectedAssigneeUserIds.includes(uid);
+                          return (
+                            <label
+                              key={uid}
+                              className={`flex items-center gap-2.5 p-2 rounded-xl text-xs cursor-pointer transition-all ${
+                                isSelected
+                                  ? 'bg-purple-500/10 text-purple-800 dark:text-purple-200 font-bold'
+                                  : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedAssigneeUserIds((prev) => [...prev, uid]);
+                                  } else {
+                                    setSelectedAssigneeUserIds((prev) => prev.filter((id) => id !== uid));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                              />
+                              <span>👤 {uname}</span>
+                            </label>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {selectedAssigneeUserIds.length > 0 && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                  🔒 <strong>Task ini akan dikunci:</strong> Hanya Trooper yang Anda pilih di atas (atau peserta yang di-assign per slot) yang dapat mengklaim & mengerjakan output tugas ini.
+                </p>
+              )}
             </div>
           )}
 

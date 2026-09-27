@@ -342,6 +342,20 @@ export async function createTask(workspaceId: string, formData: FormData) {
 
   const briefUrl = (formData.get('briefUrl') as string) || (formData.get('brief_url') as string);
   const assigneeUserId = (formData.get('assigneeUserId') as string) || (formData.get('assigned_user_id') as string);
+  const assigneeUserIdsStr = formData.get('assigneeUserIds') as string;
+  let selectedTrooperIds: string[] = [];
+  if (assigneeUserIdsStr) {
+    try {
+      const parsed = JSON.parse(assigneeUserIdsStr);
+      if (Array.isArray(parsed)) {
+        selectedTrooperIds = parsed.filter(Boolean);
+      }
+    } catch {
+      selectedTrooperIds = assigneeUserIdsStr.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+  } else if (assigneeUserId && assigneeUserId.trim()) {
+    selectedTrooperIds = [assigneeUserId.trim()];
+  }
 
   let finalDescription = description ? description.trim() : '';
   if (isDirectBrief) {
@@ -394,19 +408,7 @@ export async function createTask(workspaceId: string, formData: FormData) {
       ? ['RESEARCHER', 'PLANNER', 'CREATOR']
       : ['RESEARCHER', 'PLANNER', 'DESIGNER'];
 
-    if (assigneeUserId && assigneeUserId.trim()) {
-      // Direct assignment: assign ONLY the selected Trooper to the task step roles
-      for (const role of stepRoles) {
-        const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
-        batchStatements.push(
-          db.prepare(`
-            INSERT OR IGNORE INTO task_assignments
-              (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
-            VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
-          `).bind(assignId, taskId, assigneeUserId.trim(), role, session.userId, deadline, startAt)
-        );
-      }
-    } else if (isDirectBrief) {
+    if (isDirectBrief) {
       const assignedSlotUserIds = new Set<string>();
       // 1. Assign users assigned to specific slots
       for (const slot of parsedSlots) {
@@ -424,8 +426,22 @@ export async function createTask(workspaceId: string, formData: FormData) {
         }
       }
 
-      // 2. Mass auto-assign active OJT / Trooper members of workspace ONLY if no specific slots were assigned
-      if (assignedSlotUserIds.size === 0) {
+      // 2. If task-level troopers were selected, register any selected trooper who is not already assigned to a slot
+      if (selectedTrooperIds.length > 0) {
+        for (const uId of selectedTrooperIds) {
+          if (!assignedSlotUserIds.has(uId)) {
+            const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+            batchStatements.push(
+              db.prepare(`
+                INSERT OR IGNORE INTO task_assignments
+                  (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+                VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+              `).bind(assignId, taskId, uId, defaultRole, session.userId, deadline, startAt)
+            );
+          }
+        }
+      } else if (assignedSlotUserIds.size === 0) {
+        // 3. Mass auto-assign active OJT / Trooper members of workspace ONLY if no specific slots AND no direct assignees were chosen
         const { results: ojtMembers } = await db
           .prepare(`
             SELECT DISTINCT u.id AS user_id
@@ -449,6 +465,20 @@ export async function createTask(workspaceId: string, formData: FormData) {
                 (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
               VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
             `).bind(assignId, taskId, m.user_id, defaultRole, session.userId, deadline, startAt)
+          );
+        }
+      }
+    } else if (selectedTrooperIds.length > 0) {
+      // Direct assignment for standard workflow tasks (assigned to selected troopers only)
+      for (const uId of selectedTrooperIds) {
+        for (const role of stepRoles) {
+          const assignId = `ta_${crypto.randomUUID().replace(/-/g, '')}`;
+          batchStatements.push(
+            db.prepare(`
+              INSERT OR IGNORE INTO task_assignments
+                (id, task_id, user_id, assignment_role, assigned_by, status, deadline, start_at, created_at)
+              VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, ?, strftime('%s', 'now'))
+            `).bind(assignId, taskId, uId, role, session.userId, deadline, startAt)
           );
         }
       }
@@ -1210,8 +1240,27 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
   const isTaskCreator = Boolean(task?.created_by && task.created_by === session.userId);
 
+  // Check if task has specific designated assigned members (task-level or slot-level)
+  const { results: existingTaskAssRows } = await db
+    .prepare('SELECT DISTINCT user_id FROM task_assignments WHERE task_id = ?')
+    .bind(taskId)
+    .all();
+
+  const slots = parseSlotsFromDescription(task.description);
+  const slotAssignedUserIds = slots.map((s) => s.assignedUserId).filter(Boolean) as string[];
+  const allAssignedUserIds = new Set<string>([
+    ...(existingTaskAssRows || []).map((a: any) => a.user_id),
+    ...slotAssignedUserIds,
+  ]);
+
+  if (allAssignedUserIds.size > 0 && !allAssignedUserIds.has(session.userId) && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
+    return {
+      success: false,
+      error: 'Tugas ini dikunci khusus dan hanya dapat dikerjakan/diklaim oleh Trooper yang ditugaskan pada tugas ini.',
+    };
+  }
+
   if (cleanCat) {
-    const slots = parseSlotsFromDescription(task.description);
     const matchedSlot = slots.find(s => s.name.replace(/^kategori:\s*/i, '').trim().toLowerCase() === cleanCatLower);
 
     if (matchedSlot) {
