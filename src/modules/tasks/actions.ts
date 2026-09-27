@@ -955,13 +955,16 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
       .first() as { id: string; project_id: string; workspace_id: string | null; status: string; task_type: string; description: string | null; parent_task_id: string | null; start_at: number | null; deadline: number | null; extended_deadline: number | null; created_by?: string | null } | null;
 
     const workspaceId = task?.workspace_id || '';
+    const ws = workspaceId
+      ? (await db.prepare('SELECT workspace_type FROM workspaces WHERE id = ?').bind(workspaceId).first() as any)
+      : null;
+    const isMentorWs = ws?.workspace_type === 'MENTOR';
     const isLeader = workspaceId
       ? (await db
           .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
           .bind(workspaceId, session.userId)
           .first()) !== null
       : false;
-
     const isMentor = workspaceId
       ? (await db
           .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
@@ -970,8 +973,17 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
       : false;
 
     const ctx = await getSessionContext(session.userId);
-    const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+    const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM'));
     const isTaskCreator = Boolean(task?.created_by && task.created_by === session.userId);
+    const isPrivilegedManager = isCoordinator || isTaskCreator || (isMentorWs && isMentor);
+
+    const explicitTrooperIds = parseAssignedTrooperIds(task?.description);
+    if (explicitTrooperIds.length > 0 && !explicitTrooperIds.includes(session.userId) && !isPrivilegedManager) {
+      return {
+        success: false,
+        error: 'Tugas ini dikunci khusus dan hanya dapat dikerjakan/diklaim oleh Trooper yang ditugaskan pada tugas ini.',
+      };
+    }
 
     // Direct Brief Category Claim & Slot Validation
     const effectiveCategory = (selectedCategory && selectedCategory.trim())
@@ -988,7 +1000,7 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
       }
     }
 
-    const canTakeOver = isOwner || isAssignedToSlot || isMentor || isCoordinator || isLeader || isTaskCreator || canUpload;
+    const canTakeOver = isOwner || isAssignedToSlot || isPrivilegedManager || canUpload;
     if (!canTakeOver) {
       return { success: false, error: 'You can only submit results for your own assignments or tasks assigned to you.' };
     }
@@ -1017,7 +1029,7 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
     }
 
     if (matchedSlot) {
-      if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
+      if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId && !isPrivilegedManager) {
         return {
           success: false,
           error: `Slot output "${matchedSlot.name}" dialokasikan khusus untuk ${matchedSlot.assignedUserName || 'peserta lain'}.`,
@@ -1051,7 +1063,7 @@ export async function submitResult(assignmentId: string, resultUrl: string, sele
         .bind(assignment.task_id, assignmentId, session.userId, cleanCat, `Kategori: ${cleanCat}`)
         .first() as { id: string; user_name: string } | null;
 
-      if (existingClaim && !isAssignedToSlot && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
+      if (existingClaim && !isAssignedToSlot && !isPrivilegedManager) {
         return {
           success: false,
           error: `Kategori output "${cleanCat}" sudah diambil oleh ${existingClaim.user_name || 'peserta lain'}. Silakan pilih kategori output lain yang masih tersedia.`,
@@ -1225,13 +1237,10 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   const isFirstSubmission = !assignment || (!assignment.submitted_at && (!assignment.result_url || assignment.result_url.trim() === ''));
 
   const workspaceId = task.workspace_id || '';
-  const isLeader = workspaceId
-    ? (await db
-        .prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'")
-        .bind(workspaceId, session.userId)
-        .first()) !== null
-    : false;
-
+  const ws = workspaceId
+    ? (await db.prepare('SELECT workspace_type FROM workspaces WHERE id = ?').bind(workspaceId).first() as any)
+    : null;
+  const isMentorWs = ws?.workspace_type === 'MENTOR';
   const isMentor = workspaceId
     ? (await db
         .prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?')
@@ -1240,15 +1249,16 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
     : false;
 
   const ctx = await getSessionContext(session.userId);
-  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM'));
   const isTaskCreator = Boolean(task?.created_by && task.created_by === session.userId);
+  const isPrivilegedManager = isCoordinator || isTaskCreator || (isMentorWs && isMentor);
 
   const explicitTrooperIds = parseAssignedTrooperIds(task.description);
   const slots = parseSlotsFromDescription(task.description);
 
   // If task explicitly specifies troopers at the task level:
   if (explicitTrooperIds.length > 0) {
-    if (!explicitTrooperIds.includes(session.userId) && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
+    if (!explicitTrooperIds.includes(session.userId) && !isPrivilegedManager) {
       return {
         success: false,
         error: 'Tugas ini dikunci khusus dan hanya dapat dikerjakan/diklaim oleh Trooper yang ditugaskan pada tugas ini.',
@@ -1260,7 +1270,7 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
     const matchedSlot = slots.find(s => s.name.replace(/^kategori:\s*/i, '').trim().toLowerCase() === cleanCatLower);
 
     if (matchedSlot) {
-      if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
+      if (matchedSlot.assignedUserId && matchedSlot.assignedUserId !== session.userId && !isPrivilegedManager) {
         return {
           success: false,
           error: `Slot output "${matchedSlot.name}" dialokasikan khusus untuk ${matchedSlot.assignedUserName || 'peserta lain'}.`,
@@ -1293,7 +1303,7 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
 
     if (existingClaim) {
       const isAssignedToMe = matchedSlot?.assignedUserId === session.userId;
-      const canTakeOverExisting = (isAssignedToMe || isMentor || isCoordinator || isLeader || isTaskCreator) && !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(existingClaim.status);
+      const canTakeOverExisting = (isAssignedToMe || isPrivilegedManager) && !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(existingClaim.status);
 
       if (canTakeOverExisting) {
         return submitResult(existingClaim.id, resultUrl, selectedCategory);

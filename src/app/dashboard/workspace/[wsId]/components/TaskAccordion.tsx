@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskActions, { getDirectBriefCategories, parseDirectBriefSlots, DirectBriefOutputSlot } from '@/modules/tasks/components/TaskActions';
+import { parseAssignedTrooperIds } from '@/lib/slotUtils';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
@@ -748,6 +749,11 @@ function EditTaskModal({
 
   const rawDesc = task.description ?? '';
   const isDirectBrief = rawDesc.includes('[DIRECT_BRIEF]') || task.task_type === 'DIRECT_BRIEF';
+  const initialAssignedTroopers = parseAssignedTrooperIds(rawDesc);
+  const [selectedAssigneeUserIds, setSelectedAssigneeUserIds] = useState<string[]>(initialAssignedTroopers);
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState('');
+
   const initialSlots = parseDirectBriefSlots(rawDesc);
   const [editSlots, setEditSlots] = useState<DirectBriefOutputSlot[]>(
     initialSlots.length > 0
@@ -758,6 +764,7 @@ function EditTaskModal({
         ]
   );
   const initialHtml = rawDesc
+    .replace(/^\[ASSIGNED_TROOPERS:\s*(\[[\s\S]*?\])\]\s*/i, '')
     .replace(/^\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]\s*/i, '')
     .replace(/^\[DIRECT_BRIEF\]\s*/i, '')
     .trim();
@@ -774,14 +781,21 @@ function EditTaskModal({
     const formData = new FormData(e.currentTarget);
     formData.set('priority', priority);
     formData.set('outputType', outputType);
+    formData.set('assigneeUserId', selectedAssigneeUserIds[0] || '');
+    formData.set('assigneeUserIds', JSON.stringify(selectedAssigneeUserIds));
 
     const validSlots = editSlots.filter((s) => s.name && s.name.trim().length > 0);
-    let finalDescription = description;
+    let finalDescription = description ? description.trim() : '';
+
+    if (selectedAssigneeUserIds.length > 0) {
+      finalDescription = `[ASSIGNED_TROOPERS: ${JSON.stringify(selectedAssigneeUserIds)}]\n${finalDescription}`;
+    }
+
     if (isDirectBrief) {
       if (validSlots.length > 0) {
-        finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(validSlots)}]\n[DIRECT_BRIEF]\n${description}`;
+        finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(validSlots)}]\n[DIRECT_BRIEF]\n${finalDescription}`;
       } else {
-        finalDescription = `[DIRECT_BRIEF]\n${description}`;
+        finalDescription = `[DIRECT_BRIEF]\n${finalDescription}`;
       }
     }
     formData.set('description', finalDescription);
@@ -825,7 +839,7 @@ function EditTaskModal({
                 )}
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Perbarui judul, instruksi brief, tenggat waktu, atau rincian slot output karya.
+                Perbarui judul, penugasan trooper, instruksi brief, tenggat waktu, atau rincian slot output karya.
               </p>
             </div>
           </div>
@@ -861,6 +875,153 @@ function EditTaskModal({
                   className="w-full bg-zinc-100/50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-800 focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 text-zinc-900 dark:text-zinc-100 text-sm rounded-xl px-4 py-2.5 focus:outline-none transition-all font-medium"
                 />
               </div>
+
+              {/* Multi-Trooper Assignment Selector */}
+              {members.length > 0 && (
+                <div className="relative space-y-1.5 p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800">
+                  <div className="flex items-center justify-between gap-1">
+                    <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                      🎯 Ditujukan Kepada (Kunci Tugas)
+                    </label>
+                    {selectedAssigneeUserIds.length > 0 ? (
+                      <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
+                        🔒 {selectedAssigneeUserIds.length} Terpilih
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-zinc-400">
+                        🌐 Semua Anggota
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Selected badges preview */}
+                  {selectedAssigneeUserIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {selectedAssigneeUserIds.map((uid) => {
+                        const m = members.find((mb) => (mb.userId || (mb as any).id) === uid);
+                        const uname = m ? (m.userName || (m as any).name || m.userEmail || 'Trooper') : 'Trooper';
+                        return (
+                          <span
+                            key={uid}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 px-2.5 py-1 rounded-xl border border-purple-500/30 shadow-xs"
+                          >
+                            <span>👤 {uname}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedAssigneeUserIds((prev) => prev.filter((id) => id !== uid));
+                              }}
+                              className="w-3.5 h-3.5 rounded-full hover:bg-purple-500/20 text-purple-500 flex items-center justify-center font-black text-[9px] cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAssigneeUserIds([])}
+                        className="text-[10px] font-bold text-zinc-400 hover:text-red-500 underline ml-1 cursor-pointer"
+                      >
+                        Reset / Buka ke Semua
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Dropdown toggle button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowAssigneeDropdown((prev) => !prev)}
+                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-purple-500/50 focus:border-purple-500 text-left text-xs rounded-xl px-3 py-2 focus:outline-none transition-all flex items-center justify-between cursor-pointer shadow-xs"
+                  >
+                    <span className={selectedAssigneeUserIds.length > 0 ? 'text-zinc-900 dark:text-zinc-100 font-bold' : 'text-zinc-500 dark:text-zinc-400'}>
+                      {selectedAssigneeUserIds.length > 0
+                        ? `👥 ${selectedAssigneeUserIds.length} Trooper Ditugaskan (Ubah)`
+                        : '-- Buka Untuk Semua / Pilih Trooper Tertentu --'}
+                    </span>
+                    <span className="text-zinc-400 text-xs">{showAssigneeDropdown ? '▲' : '▼'}</span>
+                  </button>
+
+                  {/* Dropdown Menu */}
+                  {showAssigneeDropdown && (
+                    <div className="absolute z-30 left-3 right-3 mt-1 p-3 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl space-y-2 max-h-56 overflow-y-auto">
+                      <div className="flex items-center justify-between gap-2 pb-1 border-b border-zinc-100 dark:border-zinc-800">
+                        <input
+                          type="text"
+                          value={assigneeSearch}
+                          onChange={(e) => setAssigneeSearch(e.target.value)}
+                          placeholder="Cari nama trooper..."
+                          className="w-full bg-zinc-50 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700 text-xs rounded-lg px-2.5 py-1 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
+                        />
+                        {members.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const allIds = members
+                                .filter((m: any) => {
+                                  const role = (m.teamRole || (m.teamRoles || []).join(' ') || m.role || '').toUpperCase();
+                                  return !role.includes('MENTOR') && m.userType !== 'STAFF';
+                                })
+                                .map((m: any) => m.userId || m.id || '')
+                                .filter(Boolean);
+                              setSelectedAssigneeUserIds(allIds);
+                            }}
+                            className="text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:underline shrink-0 px-1 cursor-pointer"
+                          >
+                            Semua
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="space-y-1">
+                        {members
+                          .filter((m: any) => {
+                            const role = (m.teamRole || (m.teamRoles || []).join(' ') || m.role || '').toUpperCase();
+                            if (role.includes('MENTOR') || m.userType === 'STAFF') return false;
+                            const uname = (m.userName || m.name || m.userEmail || '').toLowerCase();
+                            return uname.includes(assigneeSearch.toLowerCase());
+                          })
+                          .map((m) => {
+                            const uid = m.userId || (m as any).id || '';
+                            const uname = m.userName || (m as any).name || m.userEmail || 'Anggota';
+                            if (!uid) return null;
+                            const isSelected = selectedAssigneeUserIds.includes(uid);
+                            return (
+                              <label
+                                key={uid}
+                                className={`flex items-center gap-2 p-1.5 rounded-xl text-xs cursor-pointer transition-all ${
+                                  isSelected
+                                    ? 'bg-purple-500/10 text-purple-800 dark:text-purple-200 font-bold'
+                                    : 'hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedAssigneeUserIds((prev) => [...prev, uid]);
+                                    } else {
+                                      setSelectedAssigneeUserIds((prev) => prev.filter((id) => id !== uid));
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer accent-purple-600"
+                                />
+                                <span>👤 {uname}</span>
+                              </label>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedAssigneeUserIds.length > 0 && (
+                    <p className="text-[9px] text-amber-600 dark:text-amber-400 font-medium">
+                      🔒 Tugas ini dikunci khusus untuk {selectedAssigneeUserIds.length} Trooper terpilih.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2">
@@ -956,26 +1117,40 @@ function EditTaskModal({
                               value={slot.assignedUserId || ''}
                               onChange={(e) => {
                                 const uid = e.target.value;
-                                const matched = members.find((m) => m.userId === uid);
-                                const uname = matched ? (matched.userName || matched.userEmail || '') : '';
+                                const matched = members.find((m) => (m.userId || (m as any).id) === uid);
+                                const uname = matched ? (matched.userName || (matched as any).name || matched.userEmail || '') : '';
                                 const updated = [...editSlots];
                                 updated[idx].assignedUserId = uid || null;
                                 updated[idx].assignedUserName = uname || null;
                                 setEditSlots(updated);
                               }}
-                              className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-blue-500 text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                              className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-2.5 py-1.5 focus:outline-none focus:border-blue-500 text-zinc-700 dark:text-zinc-300 cursor-pointer font-medium"
                             >
-                              <option value="">-- Open Claim (Siapa Saja) --</option>
+                              <option value="">
+                                {selectedAssigneeUserIds.length > 0
+                                  ? '-- Open Claim (Trooper Ditugaskan Saja) --'
+                                  : '-- Open Claim (Siapa Saja) --'}
+                              </option>
                               {members
                                 .filter((m: any) => {
+                                  const uid = m.userId || (m as any).id || '';
                                   const role = (m.teamRole || m.role || '').toUpperCase();
-                                  return role !== 'MENTOR' && m.userType !== 'STAFF';
+                                  if (role === 'MENTOR' || m.userType === 'STAFF') return false;
+                                  if (selectedAssigneeUserIds.length > 0) {
+                                    return selectedAssigneeUserIds.includes(uid);
+                                  }
+                                  return true;
                                 })
-                                .map((m) => (
-                                  <option key={m.userId} value={m.userId}>
-                                    👤 {m.userName || m.userEmail || 'Anggota'}
-                                  </option>
-                                ))}
+                                .map((m) => {
+                                  const uid = m.userId || (m as any).id || '';
+                                  const uname = m.userName || (m as any).name || m.userEmail || 'Anggota';
+                                  if (!uid) return null;
+                                  return (
+                                    <option key={uid} value={uid}>
+                                      👤 {uname}
+                                    </option>
+                                  );
+                                })}
                             </select>
                           </div>
                         )}

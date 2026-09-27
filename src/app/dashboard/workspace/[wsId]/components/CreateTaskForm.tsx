@@ -272,13 +272,22 @@ export default function CreateTaskForm({
                         updated[idx].assignedUserName = uname || null;
                         setOutputSlots(updated);
                       }}
-                      className="w-full bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 text-zinc-700 dark:text-zinc-300 cursor-pointer"
+                      className="w-full bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-blue-500 text-zinc-700 dark:text-zinc-300 cursor-pointer font-medium"
                     >
-                      <option value="">-- Terbuka Untuk Siapa Saja (Open Claim) --</option>
+                      <option value="">
+                        {selectedAssigneeUserIds.length > 0
+                          ? '-- Open Claim (Trooper Ditugaskan Saja) --'
+                          : '-- Terbuka Untuk Siapa Saja (Open Claim) --'}
+                      </option>
                       {members
                         .filter((m: any) => {
+                          const uid = m.userId || m.id || '';
                           const role = (m.teamRole || m.role || '').toUpperCase();
-                          return role !== 'MENTOR' && m.userType !== 'STAFF';
+                          if (role === 'MENTOR' || m.userType === 'STAFF') return false;
+                          if (selectedAssigneeUserIds.length > 0) {
+                            return selectedAssigneeUserIds.includes(uid);
+                          }
+                          return true;
                         })
                         .map((m) => {
                           const uid = m.userId || m.id || '';
