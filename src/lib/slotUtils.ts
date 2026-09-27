@@ -49,6 +49,20 @@ export function parseDirectBriefSlots(description: string | null | undefined): D
 
 export const parseSlotsFromDescription = parseDirectBriefSlots;
 
+export function parseAssignedTrooperIds(description: string | null | undefined): string[] {
+  if (!description || !description.includes('[ASSIGNED_TROOPERS:')) return [];
+  const match = description.match(/\[ASSIGNED_TROOPERS:\s*(\[[\s\S]*?\])\]/);
+  if (match && match[1]) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      if (Array.isArray(parsed)) {
+        return parsed.filter(Boolean);
+      }
+    } catch {}
+  }
+  return [];
+}
+
 export function getDirectBriefCategories(description: string | null | undefined): string[] {
   return parseDirectBriefSlots(description).map((s) => s.name);
 }

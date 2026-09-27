@@ -11,6 +11,7 @@ import {
   assignCreatorToTask,
   removeTaskAssignment,
   submitDirectTaskResult,
+  resetTaskAssignmentSubmission,
 } from '@/modules/tasks/actions';
 import { isServerActionMismatchError } from '@/lib/safeAction';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
@@ -27,10 +28,11 @@ import {
   DirectBriefOutputSlot,
   parseDirectBriefSlots,
   getDirectBriefCategories,
+  parseAssignedTrooperIds,
 } from '@/lib/slotUtils';
 
 export type { DirectBriefOutputSlot };
-export { parseDirectBriefSlots, getDirectBriefCategories };
+export { parseDirectBriefSlots, getDirectBriefCategories, parseAssignedTrooperIds };
 
 
 // ─── CreatorDrivePreview ────────────────────────────────────────────────────
@@ -279,6 +281,30 @@ export default function TaskActions({
     } catch {
       toast('Gagal menghapus tugas. Silakan coba lagi.', 'error');
       setDeleting(false);
+    }
+  };
+
+  const handleResetSubmission = async (assignmentId: string, slotName?: string) => {
+    const isConfirmed = await confirmModal({
+      title: 'Reset Submission Hasil Karya',
+      message: `Apakah Anda yakin ingin menghapus / mereset hasil submit untuk ${slotName ? `slot "${slotName}"` : 'tugas ini'}? Slot akan kembali terbuka / kosong.`,
+      confirmText: 'Ya, Reset Submission',
+      variant: 'danger',
+    });
+    if (!isConfirmed) return;
+
+    setLoading(`reset_${assignmentId}`);
+    try {
+      const res = await resetTaskAssignmentSubmission(assignmentId);
+      if (res.success) {
+        toast('Hasil submit berhasil direset dan dihapus!', 'success');
+      } else {
+        toast(res.error || 'Gagal mereset submission.', 'error');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Terjadi kesalahan sistem.', 'error');
+    } finally {
+      setLoading(null);
     }
   };
 
@@ -1178,22 +1204,17 @@ export default function TaskActions({
     const isMentorWs = workspaceType === 'MENTOR';
     const isReviewer = isLeader || isMentor || isCoordinator;
     const directSlots = parseDirectBriefSlots(taskDescription);
+    const explicitTrooperIds = parseAssignedTrooperIds(taskDescription);
 
-    // Compute all assigned user IDs for this task across assignments and slot configs
-    const taskAssignedUserIds = new Set<string>();
-    assignments.forEach((a) => {
-      if (a.user_id) taskAssignedUserIds.add(a.user_id);
-    });
-    directSlots.forEach((s) => {
-      if (s.assignedUserId) taskAssignedUserIds.add(s.assignedUserId);
-    });
+    const hasExplicitTaskTroopers = explicitTrooperIds.length > 0;
+    const isUserExplicitlyAssignedToTask = explicitTrooperIds.includes(currentUserId);
+    const isAssignedToAnySlot = directSlots.some((s) => s.assignedUserId === currentUserId);
+    const isPrivilegedManager = isCoordinator || isTaskCreator || (isMentorWs && isMentor);
 
-    const isTaskLockedToSpecificUsers = taskAssignedUserIds.size > 0;
-    const isUserAssignedToTask = taskAssignedUserIds.has(currentUserId);
-    const isPrivilegedUser = isMentor || isCoordinator || isLeader || isTaskCreator;
-
-    const isAssignedToAnySlot = directSlots.some(s => s.assignedUserId === currentUserId);
-    const canUserSubmitDirect = isPrivilegedUser || (isTaskLockedToSpecificUsers ? isUserAssignedToTask : !isCoordinator);
+    const canUserSubmitDirect =
+      isPrivilegedManager ||
+      isAssignedToAnySlot ||
+      (hasExplicitTaskTroopers ? isUserExplicitlyAssignedToTask : !isCoordinator);
 
     // Deduplicate assignments by user_id & role for DIRECT_BRIEF tasks & filter for clean display
     let displayAssignments = assignments;
@@ -1298,7 +1319,8 @@ export default function TaskActions({
                       const isClaimedByOther = claimedAss && !isClaimedByMe && (claimedAss.user_id !== currentUserId);
                       const isAssignedToOther = slot.assignedUserId && slot.assignedUserId !== currentUserId;
                       const isAssignedToMe = slot.assignedUserId === currentUserId;
-                      const isSlotLockedForMe = isTaskLockedToSpecificUsers && !isUserAssignedToTask && !isPrivilegedUser;
+                      const isSlotLockedForMe =
+                        (slot.assignedUserId ? !isAssignedToMe : (hasExplicitTaskTroopers && !isUserExplicitlyAssignedToTask)) && !isPrivilegedManager;
 
                       const isDisabled = Boolean(isClaimedByOther || isAssignedToOther || isSlotLockedForMe);
 
@@ -1402,11 +1424,11 @@ export default function TaskActions({
 
               let canUserSubmit = false;
               if (slot.assignedUserId) {
-                canUserSubmit = isAssignedToMe || isPrivilegedUser;
-              } else if (isTaskLockedToSpecificUsers) {
-                canUserSubmit = isUserAssignedToTask || isPrivilegedUser;
+                canUserSubmit = isAssignedToMe || isPrivilegedManager;
+              } else if (hasExplicitTaskTroopers) {
+                canUserSubmit = isUserExplicitlyAssignedToTask || isPrivilegedManager;
               } else {
-                canUserSubmit = !isCoordinator || isPrivilegedUser;
+                canUserSubmit = !isCoordinator || isPrivilegedManager;
               }
 
               return (
@@ -1509,7 +1531,7 @@ export default function TaskActions({
                       <span className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/80 px-2.5 py-0.5 rounded-full border border-zinc-200 dark:border-zinc-700">
                         🔒 Khusus {slot.assignedUserName || 'Peserta Terpilih'}
                       </span>
-                    ) : (isTaskLockedToSpecificUsers && !isUserAssignedToTask && !isPrivilegedUser) ? (
+                    ) : (hasExplicitTaskTroopers && !isUserExplicitlyAssignedToTask && !isPrivilegedManager) ? (
                       <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
                         🔒 Khusus Trooper Ditugaskan
                       </span>
@@ -1596,76 +1618,92 @@ export default function TaskActions({
                         </div>
                       )}
 
-                      {/* Resubmit / Edit Link button / Takeover button */}
+                      {/* Resubmit / Edit Link button / Takeover button / Reset button */}
                       {(() => {
+                        const canResetSubmission = (isPrivilegedManager || isMentor || isLeader || isMine);
                         const canEditSlotSubmission =
-                          (isMine || isAssignedToMe || isMentor || isCoordinator || isLeader || isTaskCreator) &&
+                          (isMine || isAssignedToMe || isPrivilegedManager) &&
                           !['APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(categoryAss.status) &&
                           (isMine || isAssignedToMe || (categoryAss.mentor_approved !== 1 && categoryAss.coordinator_approved !== 1));
 
-                        if (!canEditSlotSubmission) return null;
+                        const isTakeover = !isMine && (isAssignedToMe || isPrivilegedManager);
 
-                        const isTakeover = !isMine && (isAssignedToMe || isMentor || isCoordinator || isLeader || isTaskCreator);
+                        if (!canEditSlotSubmission && !canResetSubmission) return null;
 
                         return (
-                          <div className="pt-2">
-                            {showSubmitMap[categoryAss.id] ? (
-                              <form onSubmit={(e) => handleSubmitResult(e, categoryAss.id)} className="space-y-2 bg-purple-500/5 dark:bg-purple-500/10 p-3 rounded-2xl border border-purple-500/20">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-1">
-                                    <span>✏️</span> {isTakeover ? 'Submit Karya (Ambil Alih)' : 'Edit Link Hasil Karya'}
-                                  </span>
+                          <div className="pt-2 flex items-center justify-between gap-2 flex-wrap">
+                            {canEditSlotSubmission && (
+                              showSubmitMap[categoryAss.id] ? (
+                                <form onSubmit={(e) => handleSubmitResult(e, categoryAss.id)} className="w-full space-y-2 bg-purple-500/5 dark:bg-purple-500/10 p-3 rounded-2xl border border-purple-500/20">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[10px] font-black text-purple-700 dark:text-purple-300 uppercase tracking-wide flex items-center gap-1">
+                                      <span>✏️</span> {isTakeover ? 'Submit Karya (Ambil Alih)' : 'Edit Link Hasil Karya'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowSubmitMap((prev) => ({ ...prev, [categoryAss.id]: false }))}
+                                      className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer"
+                                    >
+                                      Batal
+                                    </button>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="url"
+                                      value={urlInputs[categoryAss.id] ?? categoryAss.result_url ?? ''}
+                                      onChange={(e) => setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: e.target.value }))}
+                                      placeholder="Paste URL Karya (Google Drive / Figma / Canva / Youtube)..."
+                                      required
+                                      className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
+                                    />
+                                    <button
+                                      type="submit"
+                                      disabled={loading === categoryAss.id}
+                                      className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 cursor-pointer active:scale-95 shrink-0"
+                                    >
+                                      {loading === categoryAss.id ? 'Menyimpan...' : (isTakeover ? '🚀 Kirim & Ambil Alih' : '💾 Simpan Perubahan')}
+                                    </button>
+                                  </div>
+                                </form>
+                              ) : (
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <button
                                     type="button"
-                                    onClick={() => setShowSubmitMap((prev) => ({ ...prev, [categoryAss.id]: false }))}
-                                    className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 underline cursor-pointer"
+                                    onClick={() => {
+                                      setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: categoryAss.result_url ?? '' }));
+                                      setShowSubmitMap((prev) => ({ ...prev, [categoryAss.id]: true }));
+                                      setCategoryInputs((prev) => ({ ...prev, [categoryAss.id]: cat }));
+                                    }}
+                                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
                                   >
-                                    Batal
+                                    <span>✏️</span> {
+                                      categoryAss.status === 'REVISION_REQUESTED'
+                                        ? (isTakeover ? 'Kirim Hasil Revisi (Ambil Alih)' : 'Kirim Ulang Hasil Revisi')
+                                        : categoryAss.result_url
+                                        ? (isTakeover ? 'Ganti Link Karya (Ambil Alih)' : 'Edit / Ganti Link Karya')
+                                        : (isTakeover ? '📤 Submit Hasil Karya (Ambil Alih)' : '📤 Submit Hasil Karya')
+                                    }
                                   </button>
+                                  {categoryAss.result_url && !isTakeover && (
+                                    <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">
+                                      Link dapat diedit selama belum ada tindakan QC Mentor
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="flex gap-2">
-                                  <input
-                                    type="url"
-                                    value={urlInputs[categoryAss.id] ?? categoryAss.result_url ?? ''}
-                                    onChange={(e) => setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: e.target.value }))}
-                                    placeholder="Paste URL Karya (Google Drive / Figma / Canva / Youtube)..."
-                                    required
-                                    className="flex-1 bg-white dark:bg-zinc-900 border border-purple-500/30 text-xs rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/20 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400"
-                                  />
-                                  <button
-                                    type="submit"
-                                    disabled={loading === categoryAss.id}
-                                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 cursor-pointer active:scale-95 shrink-0"
-                                  >
-                                    {loading === categoryAss.id ? 'Menyimpan...' : (isTakeover ? '🚀 Kirim & Ambil Alih' : '💾 Simpan Perubahan')}
-                                  </button>
-                                </div>
-                              </form>
-                            ) : (
-                              <div className="flex items-center justify-between gap-2 flex-wrap">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setUrlInputs((prev) => ({ ...prev, [categoryAss.id]: categoryAss.result_url ?? '' }));
-                                    setShowSubmitMap((prev) => ({ ...prev, [categoryAss.id]: true }));
-                                    setCategoryInputs((prev) => ({ ...prev, [categoryAss.id]: cat }));
-                                  }}
-                                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-all shadow-md shadow-purple-500/20 active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
-                                >
-                                  <span>✏️</span> {
-                                    categoryAss.status === 'REVISION_REQUESTED'
-                                      ? (isTakeover ? 'Kirim Hasil Revisi (Ambil Alih)' : 'Kirim Ulang Hasil Revisi')
-                                      : categoryAss.result_url
-                                      ? (isTakeover ? 'Ganti Link Karya (Ambil Alih)' : 'Edit / Ganti Link Karya')
-                                      : (isTakeover ? '📤 Submit Hasil Karya (Ambil Alih)' : '📤 Submit Hasil Karya')
-                                  }
-                                </button>
-                                {categoryAss.result_url && !isTakeover && (
-                                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 italic">
-                                    Link dapat diedit selama belum ada tindakan QC Mentor
-                                  </span>
-                                )}
-                              </div>
+                              )
+                            )}
+
+                            {canResetSubmission && !showSubmitMap[categoryAss.id] && (
+                              <button
+                                type="button"
+                                onClick={() => handleResetSubmission(categoryAss.id, cat)}
+                                disabled={loading === `reset_${categoryAss.id}`}
+                                className="text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-500/10 bg-red-500/5 px-3 py-1.5 rounded-xl border border-red-500/20 transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                                title="Hapus / Reset submission ini agar slot kembali kosong"
+                              >
+                                <span>🗑️</span>
+                                <span>{loading === `reset_${categoryAss.id}` ? 'Mereset...' : 'Reset / Hapus Submit'}</span>
+                              </button>
                             )}
                           </div>
                         );
@@ -1678,7 +1716,7 @@ export default function TaskActions({
                         <p className="text-[11px] text-zinc-400 italic">
                           🔒 Slot ini dialokasikan khusus untuk <strong>{slot.assignedUserName || 'peserta tertentu'}</strong>.
                         </p>
-                      ) : (isTaskLockedToSpecificUsers && !isUserAssignedToTask && !isPrivilegedUser) ? (
+                      ) : (hasExplicitTaskTroopers && !isUserExplicitlyAssignedToTask && !isPrivilegedManager) ? (
                         <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 italic">
                           🔒 Slot tugas ini dikunci khusus untuk Trooper yang ditugaskan pada tugas ini.
                         </p>

@@ -73,7 +73,7 @@ async function checkOJTPrerequisites(db: any, taskId: string, role: string, user
   return { allowed: true };
 }
 
-import { parseSlotsFromDescription } from '@/lib/slotUtils';
+import { parseSlotsFromDescription, parseAssignedTrooperIds } from '@/lib/slotUtils';
 
 // ---------------------------------------------------------------------------
 // Helper: Calculate Fair Rolling Creative Assignments (Researcher, Planner, Creator)
@@ -358,6 +358,9 @@ export async function createTask(workspaceId: string, formData: FormData) {
   }
 
   let finalDescription = description ? description.trim() : '';
+  if (selectedTrooperIds.length > 0) {
+    finalDescription = `[ASSIGNED_TROOPERS: ${JSON.stringify(selectedTrooperIds)}]\n${finalDescription}`;
+  }
   if (isDirectBrief) {
     if (parsedSlots.length > 0) {
       finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(parsedSlots)}]\n[DIRECT_BRIEF]\n${finalDescription}`;
@@ -1240,24 +1243,17 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
   const isTaskCreator = Boolean(task?.created_by && task.created_by === session.userId);
 
-  // Check if task has specific designated assigned members (task-level or slot-level)
-  const { results: existingTaskAssRows } = await db
-    .prepare('SELECT DISTINCT user_id FROM task_assignments WHERE task_id = ?')
-    .bind(taskId)
-    .all();
-
+  const explicitTrooperIds = parseAssignedTrooperIds(task.description);
   const slots = parseSlotsFromDescription(task.description);
-  const slotAssignedUserIds = slots.map((s) => s.assignedUserId).filter(Boolean) as string[];
-  const allAssignedUserIds = new Set<string>([
-    ...(existingTaskAssRows || []).map((a: any) => a.user_id),
-    ...slotAssignedUserIds,
-  ]);
 
-  if (allAssignedUserIds.size > 0 && !allAssignedUserIds.has(session.userId) && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
-    return {
-      success: false,
-      error: 'Tugas ini dikunci khusus dan hanya dapat dikerjakan/diklaim oleh Trooper yang ditugaskan pada tugas ini.',
-    };
+  // If task explicitly specifies troopers at the task level:
+  if (explicitTrooperIds.length > 0) {
+    if (!explicitTrooperIds.includes(session.userId) && !isMentor && !isCoordinator && !isLeader && !isTaskCreator) {
+      return {
+        success: false,
+        error: 'Tugas ini dikunci khusus dan hanya dapat dikerjakan/diklaim oleh Trooper yang ditugaskan pada tugas ini.',
+      };
+    }
   }
 
   if (cleanCat) {
@@ -1340,6 +1336,75 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
     // Reuse submitResult logic for existing assignment
     return submitResult(assignment.id, resultUrl, selectedCategory);
   }
+}
+
+/**
+ * Resets / deletes a submitted result on a task assignment.
+ * Allowed for: Coordinator, Admin, Task Creator, Workspace Mentor, Leader, or Submitter.
+ */
+export async function resetTaskAssignmentSubmission(assignmentId: string) {
+  const session = await getSession();
+  if (!session) throw new Error('Unauthorized');
+
+  const db = await getDB();
+
+  const ass = await db
+    .prepare(`
+      SELECT ta.id, ta.task_id, ta.user_id, ta.assignment_role, ta.status, t.workspace_id, t.created_by, t.task_type
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      WHERE ta.id = ?
+    `)
+    .bind(assignmentId)
+    .first() as { id: string; task_id: string; user_id: string; assignment_role: string; status: string; workspace_id: string | null; created_by: string | null; task_type: string } | null;
+
+  if (!ass) return { success: false, error: 'Penugasan tidak ditemukan.' };
+
+  const ctx = await getSessionContext(session.userId);
+  const isCoordinator = ctx.userType === 'STAFF' && (ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE') || ctx.can('MANAGE'));
+  const isTaskCreator = Boolean(ass.created_by && ass.created_by === session.userId);
+
+  const workspaceId = ass.workspace_id || '';
+  const isMentor = workspaceId
+    ? (await db.prepare('SELECT 1 FROM workspaces WHERE id = ? AND ojt_coordinator_id = ?').bind(workspaceId, session.userId).first()) !== null
+    : false;
+  const isLeader = workspaceId
+    ? (await db.prepare("SELECT 1 FROM workspace_members WHERE workspace_id = ? AND user_id = ? AND team_role = 'LEADER'").bind(workspaceId, session.userId).first()) !== null
+    : false;
+
+  const isAssignedUser = ass.user_id === session.userId;
+
+  if (!isCoordinator && !isTaskCreator && !isMentor && !isLeader && !isAssignedUser) {
+    return { success: false, error: 'Anda tidak memiliki izin untuk mereset submission ini.' };
+  }
+
+  // Reset the assignment: clear result_url, submitted_at, approvals, revision_note, and set status back to 'ASSIGNED'
+  await db
+    .prepare(`
+      UPDATE task_assignments
+      SET result_url = NULL,
+          submitted_at = NULL,
+          status = 'ASSIGNED',
+          mentor_approved = 0,
+          coordinator_approved = 0,
+          lead_approved = 0,
+          sparks = 0,
+          revision_note = NULL,
+          submission_data = NULL
+      WHERE id = ?
+    `)
+    .bind(assignmentId)
+    .run();
+
+  await syncTaskOverallStatus(db, ass.task_id);
+
+  if (workspaceId) {
+    await invalidateWorkspaceTaskCache(workspaceId);
+    revalidatePath(`/dashboard/workspace/${workspaceId}`);
+  }
+  revalidatePath('/dashboard/workspace');
+  revalidatePath('/dashboard/review');
+  return { success: true };
 }
 
 // ---------------------------------------------------------------------------
