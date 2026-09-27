@@ -28,6 +28,7 @@ export interface BankContentItem {
   userLiked: boolean;
   commentsCount: number;
   comments: BankContentCommentItem[];
+  canPublish: boolean;
 }
 
 export interface BankContentCommentItem {
@@ -93,18 +94,104 @@ async function ensureBankContentSchema(db: any) {
   }
 }
 
-/** Check if current user has Coordinator, Admin, or Mentor authority to publish/unpublish content */
+/** Check if current user has Global Coordinator, Admin, or elevated Manager authority to publish/unpublish content */
 export async function canManageBankContent(sessionUserId: string): Promise<boolean> {
   const ctx = await getSessionContext(sessionUserId);
-  const isStaffManager =
+
+  // Superadmin check
+  if (ctx.permissions.has('ADMIN_SYSTEM') || ctx.permissions.has('MANAGE')) {
+    if (ctx.userType !== 'OJT') return true;
+  }
+
+  // Staff with elevated coordinator / manager / executive roles
+  const isElevatedStaff =
     ctx.userType === 'STAFF' &&
-    (ctx.roles.includes('COORDINATOR') ||
-      ctx.roles.includes('EXECUTIVE') ||
+    (ctx.roles.some((r) =>
+      ['ADMIN', 'SUPERADMIN', 'COORDINATOR', 'EXECUTIVE', 'DIRECTOR', 'MANAGER'].includes(r.toUpperCase())
+    ) ||
       ctx.can('MANAGE') ||
       ctx.can('WORKSPACE_MANAGE') ||
-      ctx.permissions.has('ADMIN_SYSTEM'));
-  const isMentor = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
-  return isStaffManager || isMentor || ctx.can('SPARKS_MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
+      ctx.can('ADMIN_SYSTEM') ||
+      ctx.can('TASK_REVIEW'));
+
+  if (isElevatedStaff) return true;
+
+  // Global mentor role for staff
+  const isGlobalMentor = ctx.roles.some((r) => r.toUpperCase().includes('MENTOR'));
+  if (isGlobalMentor && ctx.userType === 'STAFF') return true;
+
+  return false;
+}
+
+/**
+ * Checks if a user has authority to publish/unpublish a specific assignment/content item.
+ * True if:
+ * 1. Global Admin / Staff Coordinator / Executive (canManageBankContent)
+ * 2. Designated Workspace Coordinator (ojt_coordinator_id)
+ * 3. Designated Workspace Mentor (workspace_mentors)
+ * 4. Designated Project Coordinator (project_coordinators)
+ * 5. Creator of the task (t.created_by)
+ */
+export async function canUserPublishAssignment(sessionUserId: string, assignmentId: string): Promise<boolean> {
+  const isGlobal = await canManageBankContent(sessionUserId);
+  if (isGlobal) return true;
+
+  const db = await getDB();
+  const assignment = await db
+    .prepare(`
+      SELECT
+        ta.id,
+        ta.task_id,
+        t.created_by AS task_created_by,
+        t.workspace_id,
+        ws.ojt_coordinator_id,
+        ws.project_id
+      FROM task_assignments ta
+      JOIN tasks t ON ta.task_id = t.id
+      LEFT JOIN workspaces ws ON t.workspace_id = ws.id
+      WHERE ta.id = ?
+    `)
+    .bind(assignmentId)
+    .first() as {
+      id: string;
+      task_id: string;
+      task_created_by: string | null;
+      workspace_id: string | null;
+      ojt_coordinator_id: string | null;
+      project_id: string | null;
+    } | null;
+
+  if (!assignment) return false;
+
+  // 1. Task creator
+  if (assignment.task_created_by === sessionUserId) return true;
+
+  // 2. Workspace coordinator (ojt_coordinator_id)
+  if (assignment.ojt_coordinator_id === sessionUserId) return true;
+
+  // 3. Workspace designated mentor in workspace_mentors
+  if (assignment.workspace_id) {
+    try {
+      const wsMentor = await db
+        .prepare('SELECT 1 FROM workspace_mentors WHERE workspace_id = ? AND user_id = ? LIMIT 1')
+        .bind(assignment.workspace_id, sessionUserId)
+        .first();
+      if (wsMentor) return true;
+    } catch (_e) {}
+  }
+
+  // 4. Project coordinator in project_coordinators
+  if (assignment.project_id) {
+    try {
+      const projMentor = await db
+        .prepare('SELECT 1 FROM project_coordinators WHERE project_id = ? AND user_id = ? LIMIT 1')
+        .bind(assignment.project_id, sessionUserId)
+        .first();
+      if (projMentor) return true;
+    } catch (_e) {}
+  }
+
+  return false;
 }
 
 /**
@@ -156,8 +243,11 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
       ta.task_id AS taskId,
       t.title AS taskTitle,
       t.task_type AS taskType,
+      t.created_by AS taskCreatedBy,
       t.workspace_id AS workspaceId,
       ws.name AS workspaceName,
+      ws.ojt_coordinator_id AS ojtCoordinatorId,
+      ws.project_id AS projectId,
       ta.user_id AS submitterId,
       u.name AS submitterName,
       u.email AS submitterEmail,
@@ -249,6 +339,28 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
   const assignmentIds = allItems.map((item) => item.assignmentId);
   const placeholders = assignmentIds.map(() => '?').join(',');
 
+  // Fetch designated permissions in bulk for current user
+  const isGlobalManager = await canManageBankContent(currentUserId);
+  let designatedWsIds = new Set<string>();
+  let designatedProjIds = new Set<string>();
+
+  if (!isGlobalManager) {
+    try {
+      const [wsMentorsRes, projCoordsRes, wsCoordRes] = await Promise.all([
+        db.prepare('SELECT workspace_id FROM workspace_mentors WHERE user_id = ?').bind(currentUserId).all().catch(() => ({ results: [] })),
+        db.prepare('SELECT project_id FROM project_coordinators WHERE user_id = ?').bind(currentUserId).all().catch(() => ({ results: [] })),
+        db.prepare('SELECT id FROM workspaces WHERE ojt_coordinator_id = ?').bind(currentUserId).all().catch(() => ({ results: [] })),
+      ]);
+      designatedWsIds = new Set<string>([
+        ...(((wsMentorsRes as any).results || []).map((r: any) => r.workspace_id)),
+        ...(((wsCoordRes as any).results || []).map((r: any) => r.id)),
+      ]);
+      designatedProjIds = new Set<string>(
+        (((projCoordsRes as any).results || []).map((r: any) => r.project_id))
+      );
+    } catch (_e) {}
+  }
+
   // Fetch Likes for these assignments
   let likesRaw: any[] = [];
   try {
@@ -337,6 +449,13 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
     const likeData = likesMap[r.assignmentId] || { count: 0, userLiked: false };
     const commentList = commentsMap[r.assignmentId] || [];
 
+    const canPublishThisItem =
+      isGlobalManager ||
+      r.taskCreatedBy === currentUserId ||
+      (r.workspaceId && designatedWsIds.has(r.workspaceId)) ||
+      (r.projectId && designatedProjIds.has(r.projectId)) ||
+      (r.ojtCoordinatorId === currentUserId);
+
     items.push({
       assignmentId: r.assignmentId,
       taskId: r.taskId,
@@ -359,6 +478,7 @@ export async function getBankContentFeed(filters: BankContentFilters = {}) {
       userLiked: likeData.userLiked,
       commentsCount: commentList.length,
       comments: commentList,
+      canPublish: Boolean(canPublishThisItem),
     });
   }
 
@@ -381,11 +501,11 @@ export async function toggleBankContentPublishStatus(
   const session = await getSession();
   if (!session) throw new Error('Unauthorized');
 
-  const canManage = await canManageBankContent(session.userId);
-  if (!canManage) {
+  const canPublish = await canUserPublishAssignment(session.userId, assignmentId);
+  if (!canPublish) {
     return {
       success: false,
-      error: 'Forbidden: Anda tidak memiliki wewenang merubah status publish konten.',
+      error: 'Forbidden: Hanya admin, koordinator, atau user yang ditunjuk yang dapat mengubah status publish konten ini.',
     };
   }
 
@@ -559,15 +679,15 @@ export async function deleteBankContentComment(commentId: string) {
 
   try {
     const existing = await db
-      .prepare('SELECT user_id FROM bank_content_comments WHERE id = ?')
+      .prepare('SELECT user_id, assignment_id FROM bank_content_comments WHERE id = ?')
       .bind(commentId)
-      .first() as { user_id: string } | null;
+      .first() as { user_id: string; assignment_id: string } | null;
 
     if (!existing) return { success: false, error: 'Komentar tidak ditemukan.' };
 
     if (existing.user_id !== session.userId) {
-      const canManage = await canManageBankContent(session.userId);
-      if (!canManage) {
+      const canManageItem = await canUserPublishAssignment(session.userId, existing.assignment_id);
+      if (!canManageItem) {
         return { success: false, error: 'Forbidden: Anda tidak memiliki akses menghapus komentar ini.' };
       }
     }

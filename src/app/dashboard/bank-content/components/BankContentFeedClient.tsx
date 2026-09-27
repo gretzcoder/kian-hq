@@ -645,8 +645,8 @@ export default function BankContentFeedClient({
                       </button>
                     </div>
 
-                    {/* Admin / Coordinator / Mentor Publish Toggle Switch */}
-                    {canManage && (
+                    {/* Admin / Coordinator / Designated User Publish Toggle Switch */}
+                    {(item.canPublish || canManage) && (
                       <button
                         type="button"
                         disabled={isToggling}
@@ -706,7 +706,7 @@ export default function BankContentFeedClient({
                                     {c.userName}
                                   </span>
                                 </div>
-                                {(c.userId === sessionUserId || canManage) && (
+                                {(c.userId === sessionUserId || item.canPublish || canManage) && (
                                   <button
                                     onClick={() => handleDeleteComment(c.id)}
                                     className="text-[10px] text-zinc-400 hover:text-red-500 transition-colors cursor-pointer"
