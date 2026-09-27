@@ -73,7 +73,7 @@ async function checkOJTPrerequisites(db: any, taskId: string, role: string, user
   return { allowed: true };
 }
 
-import { parseSlotsFromDescription, parseAssignedTrooperIds } from '@/lib/slotUtils';
+import { parseSlotsFromDescription, parseAssignedTrooperIds, stripMetadataTags } from '@/lib/slotUtils';
 
 // ---------------------------------------------------------------------------
 // Helper: Calculate Fair Rolling Creative Assignments (Researcher, Planner, Creator)
@@ -357,7 +357,10 @@ export async function createTask(workspaceId: string, formData: FormData) {
     selectedTrooperIds = [assigneeUserId.trim()];
   }
 
-  let finalDescription = description ? description.trim() : '';
+  const rawDescription = description ? description.trim() : '';
+  const cleanDescription = stripMetadataTags(rawDescription);
+  let finalDescription = cleanDescription;
+
   if (selectedTrooperIds.length > 0) {
     finalDescription = `[ASSIGNED_TROOPERS: ${JSON.stringify(selectedTrooperIds)}]\n${finalDescription}`;
   }
@@ -1876,7 +1879,7 @@ export async function updateTask(taskId: string, formData: FormData) {
   }
 
   const title = (formData.get('title') as string)?.trim();
-  const description = (formData.get('description') as string)?.trim() || null;
+  let description = (formData.get('description') as string)?.trim() || null;
   const priority = (formData.get('priority') as string) || 'NORMAL';
   const deadlineStr = formData.get('deadline') as string;
   const startAtStr = (formData.get('start_at') as string) || (formData.get('startAt') as string);
@@ -1885,6 +1888,47 @@ export async function updateTask(taskId: string, formData: FormData) {
 
   if (!title) {
     return { success: false, error: 'Judul tugas wajib diisi.' };
+  }
+
+  const assigneeUserIdsStr = formData.get('assigneeUserIds') as string;
+  let selectedTrooperIds: string[] = [];
+  if (assigneeUserIdsStr) {
+    try {
+      const parsed = JSON.parse(assigneeUserIdsStr);
+      if (Array.isArray(parsed)) {
+        selectedTrooperIds = parsed.filter(Boolean);
+      }
+    } catch {
+      selectedTrooperIds = assigneeUserIdsStr.split(',').map((s) => s.trim()).filter(Boolean);
+    }
+  }
+
+  if (description) {
+    const rawDesc = description;
+    const cleanDesc = stripMetadataTags(rawDesc);
+    const slots = parseSlotsFromDescription(rawDesc);
+    const isDirectBrief = Boolean(
+      rawDesc.includes('[DIRECT_BRIEF]') || outputType === 'DIRECT_BRIEF'
+    );
+
+    let rebuilt = cleanDesc;
+    if (selectedTrooperIds.length > 0) {
+      rebuilt = `[ASSIGNED_TROOPERS: ${JSON.stringify(selectedTrooperIds)}]\n${rebuilt}`;
+    } else {
+      const existingTroopers = parseAssignedTrooperIds(rawDesc);
+      if (existingTroopers.length > 0) {
+        rebuilt = `[ASSIGNED_TROOPERS: ${JSON.stringify(existingTroopers)}]\n${rebuilt}`;
+      }
+    }
+
+    if (isDirectBrief) {
+      if (slots.length > 0) {
+        rebuilt = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(slots)}]\n[DIRECT_BRIEF]\n${rebuilt}`;
+      } else {
+        rebuilt = `[DIRECT_BRIEF]\n${rebuilt}`;
+      }
+    }
+    description = rebuilt;
   }
 
   const deadline = parseIndonesiaDate(deadlineStr);

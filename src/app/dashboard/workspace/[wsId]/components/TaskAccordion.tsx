@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskActions, { getDirectBriefCategories, parseDirectBriefSlots, DirectBriefOutputSlot } from '@/modules/tasks/components/TaskActions';
-import { parseAssignedTrooperIds } from '@/lib/slotUtils';
+import { parseAssignedTrooperIds, stripMetadataTags } from '@/lib/slotUtils';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
@@ -618,7 +618,7 @@ export default function TaskAccordion({
                       {task.description && (
                         <div className="mb-4">
                           <DocxDocumentViewer
-                            content={task.description.replace('[DIRECT_BRIEF]', '')}
+                            content={stripMetadataTags(task.description)}
                             docTitle="Brief / Instruksi Pengerjaan"
                             roleName={isDirectBriefTask ? "Brief Diberikan Langsung" : "Catatan & Instruksi Tugas"}
                             badgeText={isDirectBriefTask ? "⚡ Brief Diberikan Langsung" : "Brief Active"}
@@ -763,11 +763,7 @@ function EditTaskModal({
           { id: 'slot_2', name: 'Desain Feed Post 2', assignedUserId: '', assignedUserName: '', deadline: '', specificBrief: '' },
         ]
   );
-  const initialHtml = rawDesc
-    .replace(/^\[ASSIGNED_TROOPERS:\s*(\[[\s\S]*?\])\]\s*/i, '')
-    .replace(/^\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]\s*/i, '')
-    .replace(/^\[DIRECT_BRIEF\]\s*/i, '')
-    .trim();
+  const initialHtml = stripMetadataTags(rawDesc);
   const [description, setDescription] = useState(initialHtml);
 
   const defaultStartAt = formatDatetimeLocalInput(task.start_at);
@@ -785,7 +781,8 @@ function EditTaskModal({
     formData.set('assigneeUserIds', JSON.stringify(selectedAssigneeUserIds));
 
     const validSlots = editSlots.filter((s) => s.name && s.name.trim().length > 0);
-    let finalDescription = description ? description.trim() : '';
+    const cleanDescription = stripMetadataTags(description ? description.trim() : '');
+    let finalDescription = cleanDescription;
 
     if (selectedAssigneeUserIds.length > 0) {
       finalDescription = `[ASSIGNED_TROOPERS: ${JSON.stringify(selectedAssigneeUserIds)}]\n${finalDescription}`;
