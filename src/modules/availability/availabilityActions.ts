@@ -574,7 +574,7 @@ export async function createAvailabilityAction(payload: CreateAvailabilityPayloa
         lecturerName: payload.lecturerName || null,
         room: payload.room || null,
         deliveryMode,
-        dayOfWeek: dayOfWeek as DayOfWeekNumber | null,
+        dayOfWeek: targetDays[0] as DayOfWeekNumber | null,
         specificDate,
         startTime,
         endTime,
