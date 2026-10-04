@@ -21,6 +21,29 @@ import { syncGroupAndTeamTaskAssignments } from '@/modules/workspaces/assessment
 let badgeColumnsEnsured = false;
 
 /**
+ * Ensure all badge-related columns exist in the database (auto-healing schema)
+ */
+async function ensureBadgeColumns(db: any) {
+  if (badgeColumnsEnsured) return;
+  try {
+    await db.prepare('ALTER TABLE sparks_adjustments ADD COLUMN badge_id TEXT').run();
+  } catch (_e) {}
+  try {
+    await db.prepare('ALTER TABLE user_badges ADD COLUMN claimed_at INTEGER').run();
+  } catch (_e) {}
+  try {
+    await db.prepare('ALTER TABLE user_badges ADD COLUMN claim_count INTEGER DEFAULT 1').run();
+  } catch (_e) {}
+  try {
+    await db.prepare('ALTER TABLE badges ADD COLUMN is_continuous_earning INTEGER DEFAULT 0').run();
+  } catch (_e) {}
+  try {
+    await db.prepare('ALTER TABLE badges ADD COLUMN sparks_reward INTEGER DEFAULT 0').run();
+  } catch (_e) {}
+  badgeColumnsEnsured = true;
+}
+
+/**
  * Safely parse date string (YYYY-MM-DD, DD/MM/YYYY, or ISO) to WIB start timestamp (seconds)
  */
 function parseCutoffTimestamp(dateStr?: string | null): number {
@@ -437,6 +460,8 @@ export async function getAllBadgesWithUserProgress(): Promise<{
     ctx.permissions.has('ADMIN_SYSTEM');
 
   try {
+    await ensureBadgeColumns(db);
+
     // Parallel fetch for all required badge data in ONE optimized round-trip
     const [
       rawBadgesRes,
@@ -1133,87 +1158,127 @@ export async function getBadgeRequirementOptions(): Promise<{
 export async function claimBadgeSparksAction(
   badgeId: string
 ): Promise<{ success: boolean; claimedSparks?: number; error?: string }> {
-  const session = await getSession();
-  if (!session) return { success: false, error: 'Unauthorized' };
+  try {
+    const session = await getSession();
+    if (!session) return { success: false, error: 'Unauthorized' };
 
-  const db = await getDB();
-  const now = Date.now();
+    const db = await getDB();
+    await ensureBadgeColumns(db);
+    const now = Date.now();
+    const nowSec = Math.floor(now / 1000);
 
-  const userBadge = (await db
-    .prepare('SELECT id, claimed_at FROM user_badges WHERE user_id = ? AND badge_id = ?')
-    .bind(session.userId, badgeId)
-    .first()) as { id: string; claimed_at: number | null } | null;
+    const userBadge = (await db
+      .prepare('SELECT id, claimed_at FROM user_badges WHERE user_id = ? AND badge_id = ?')
+      .bind(session.userId, badgeId)
+      .first()) as { id: string; claimed_at: number | null } | null;
 
-  if (!userBadge) {
-    return { success: false, error: 'Anda belum memiliki badge ini.' };
+    if (!userBadge) {
+      return { success: false, error: 'Anda belum memiliki badge ini.' };
+    }
+
+    if (userBadge.claimed_at) {
+      return { success: false, error: 'Sparks dari badge ini sudah pernah Anda claim.' };
+    }
+
+    const badge = (await db
+      .prepare('SELECT name, sparks_reward FROM badges WHERE id = ?')
+      .bind(badgeId)
+      .first()) as { name: string; sparks_reward: number } | null;
+
+    if (!badge) {
+      return { success: false, error: 'Badge tidak ditemukan.' };
+    }
+
+    const sparksReward = Number(badge.sparks_reward) || 0;
+    if (sparksReward <= 0) {
+      return { success: false, error: 'Badge ini tidak memiliki reward Sparks.' };
+    }
+
+    // Check if a claim adjustment already exists in sparks_adjustments
+    let existingClaim = null;
+    try {
+      existingClaim = await db
+        .prepare(`
+          SELECT id FROM sparks_adjustments
+          WHERE user_id = ?
+            AND category = 'BADGE_REWARD'
+            AND (badge_id = ? OR note LIKE '%' || ? || '%')
+        `)
+        .bind(session.userId, badgeId, badge.name)
+        .first();
+    } catch (_e) {
+      try {
+        existingClaim = await db
+          .prepare(`
+            SELECT id FROM sparks_adjustments
+            WHERE user_id = ?
+              AND category = 'BADGE_REWARD'
+              AND note LIKE '%' || ? || '%'
+          `)
+          .bind(session.userId, badge.name)
+          .first();
+      } catch (_e2) {}
+    }
+
+    if (existingClaim) {
+      // Backfill claimed_at in user_badges and badge_id in sparks_adjustments
+      try {
+        await db
+          .prepare('UPDATE user_badges SET claimed_at = ? WHERE user_id = ? AND badge_id = ?')
+          .bind(now, session.userId, badgeId)
+          .run();
+      } catch (_e) {}
+
+      try {
+        await db
+          .prepare("UPDATE sparks_adjustments SET badge_id = ? WHERE id = ? AND (badge_id IS NULL OR badge_id = '')")
+          .bind(badgeId, (existingClaim as any).id)
+          .run();
+      } catch (_e) {}
+
+      return { success: false, error: 'Sparks dari badge ini sudah pernah Anda claim.' };
+    }
+
+    // Mark all user_badges rows for this user & badge as claimed
+    try {
+      await db
+        .prepare('UPDATE user_badges SET claimed_at = ? WHERE user_id = ? AND badge_id = ?')
+        .bind(now, session.userId, badgeId)
+        .run();
+    } catch (_e) {}
+
+    // Credit Sparks in sparks_adjustments
+    const saId = `sa_${crypto.randomUUID().replace(/-/g, '')}`;
+    try {
+      await db
+        .prepare(`
+          INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at, badge_id)
+          VALUES (?, ?, 'APPRECIATION', ?, 'BADGE_REWARD', ?, ?, ?, ?)
+        `)
+        .bind(saId, session.userId, sparksReward, `Claim Reward Badge: ${badge.name}`, session.userId, nowSec, badgeId)
+        .run();
+    } catch (_insertErr) {
+      await db
+        .prepare(`
+          INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at)
+          VALUES (?, ?, 'APPRECIATION', ?, 'BADGE_REWARD', ?, ?, ?)
+        `)
+        .bind(saId, session.userId, sparksReward, `Claim Reward Badge: ${badge.name}`, session.userId, nowSec)
+        .run();
+    }
+
+    try {
+      revalidatePath('/dashboard/badges');
+      revalidatePath('/dashboard/sparks');
+      revalidatePath('/dashboard/profile');
+      revalidatePath('/dashboard/leaderboard');
+    } catch (_revErr) {}
+
+    return { success: true, claimedSparks: sparksReward };
+  } catch (err: any) {
+    console.error('claimBadgeSparksAction failed:', err);
+    return { success: false, error: err?.message || 'Gagal claim Sparks dari badge.' };
   }
-
-  if (userBadge.claimed_at) {
-    return { success: false, error: 'Sparks dari badge ini sudah pernah Anda claim.' };
-  }
-
-  const badge = (await db
-    .prepare('SELECT name, sparks_reward FROM badges WHERE id = ?')
-    .bind(badgeId)
-    .first()) as { name: string; sparks_reward: number } | null;
-
-  if (!badge) {
-    return { success: false, error: 'Badge tidak ditemukan.' };
-  }
-
-  const sparksReward = badge.sparks_reward || 0;
-  if (sparksReward <= 0) {
-    return { success: false, error: 'Badge ini tidak memiliki reward Sparks.' };
-  }
-
-  // Check if a claim adjustment already exists in sparks_adjustments
-  const existingClaim = await db
-    .prepare(`
-      SELECT id FROM sparks_adjustments
-      WHERE user_id = ?
-        AND category = 'BADGE_REWARD'
-        AND (badge_id = ? OR note LIKE '%' || ? || '%')
-    `)
-    .bind(session.userId, badgeId, badge.name)
-    .first();
-
-  if (existingClaim) {
-    // Backfill claimed_at in user_badges and badge_id in sparks_adjustments
-    await db
-      .prepare('UPDATE user_badges SET claimed_at = ? WHERE user_id = ? AND badge_id = ?')
-      .bind(now, session.userId, badgeId)
-      .run();
-
-    await db
-      .prepare("UPDATE sparks_adjustments SET badge_id = ? WHERE id = ? AND (badge_id IS NULL OR badge_id = '')")
-      .bind(badgeId, (existingClaim as any).id)
-      .run();
-
-    return { success: false, error: 'Sparks dari badge ini sudah pernah Anda claim.' };
-  }
-
-  // Mark all user_badges rows for this user & badge as claimed
-  await db
-    .prepare('UPDATE user_badges SET claimed_at = ? WHERE user_id = ? AND badge_id = ?')
-    .bind(now, session.userId, badgeId)
-    .run();
-
-  // Credit Sparks in sparks_adjustments
-  const saId = `sa_${crypto.randomUUID().replace(/-/g, '')}`;
-  await db
-    .prepare(`
-      INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at, badge_id)
-      VALUES (?, ?, 'APPRECIATION', ?, 'BADGE_REWARD', ?, ?, strftime('%s', 'now'), ?)
-    `)
-    .bind(saId, session.userId, sparksReward, `Claim Reward Badge: ${badge.name}`, session.userId, badgeId)
-    .run();
-
-  revalidatePath('/dashboard/badges');
-  revalidatePath('/dashboard/sparks');
-  revalidatePath('/dashboard/profile');
-  revalidatePath('/dashboard/leaderboard');
-
-  return { success: true, claimedSparks: sparksReward };
 }
 
 /**
