@@ -58,6 +58,41 @@ export async function ensureAvailabilityTables(): Promise<void> {
       // Column already exists
     }
 
+    // Auto-migrate legacy user inputs where online/tatap muka/hybrid was typed in notes, room, or location
+    try {
+      await db.prepare(`
+        UPDATE user_availabilities 
+        SET delivery_mode = 'ONLINE' 
+        WHERE (
+          LOWER(COALESCE(notes, '')) LIKE '%online%' OR 
+          LOWER(COALESCE(notes, '')) LIKE '%daring%' OR 
+          LOWER(COALESCE(notes, '')) LIKE '%zoom%' OR 
+          LOWER(COALESCE(notes, '')) LIKE '%gmeet%' OR 
+          LOWER(COALESCE(room, '')) LIKE '%online%' OR 
+          LOWER(COALESCE(room, '')) LIKE '%zoom%' OR
+          LOWER(COALESCE(room, '')) LIKE '%gmeet%'
+        ) AND LOWER(COALESCE(notes, '')) NOT LIKE '%hybrid%'
+      `).run();
+
+      await db.prepare(`
+        UPDATE user_availabilities 
+        SET delivery_mode = 'HYBRID' 
+        WHERE LOWER(COALESCE(notes, '')) LIKE '%hybrid%' OR LOWER(COALESCE(room, '')) LIKE '%hybrid%'
+      `).run();
+
+      await db.prepare(`
+        UPDATE user_availabilities 
+        SET delivery_mode = 'TATAP_MUKA' 
+        WHERE (
+          LOWER(COALESCE(notes, '')) LIKE '%tatap muka%' OR 
+          LOWER(COALESCE(notes, '')) LIKE '%offline%' OR
+          LOWER(COALESCE(notes, '')) LIKE '%luring%'
+        ) AND LOWER(COALESCE(notes, '')) NOT LIKE '%online%'
+      `).run();
+    } catch (migErr) {
+      console.warn('Auto-migration notes warning:', migErr);
+    }
+
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_user_availabilities_user ON user_availabilities(user_id)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_user_availabilities_day ON user_availabilities(day_of_week)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_user_availabilities_date ON user_availabilities(specific_date)').run();
@@ -221,9 +256,111 @@ async function getIssuedSuratTugasDocuments(db: any): Promise<any[]> {
 }
 
 /**
+ * Automatically detects whether an item is Online, Tatap Muka, or Hybrid based on
+ * explicitly saved delivery_mode, notes content, room, or location.
+ */
+function resolveDeliveryMode(
+  rawDeliveryMode: string | null | undefined,
+  notes: string | null | undefined,
+  room: string | null | undefined,
+  location: string | null | undefined,
+  type?: string
+): string {
+  const n = (notes || '').toLowerCase().trim();
+  const r = (room || '').toLowerCase().trim();
+  const l = (location || '').toLowerCase().trim();
+
+  // If explicitly set to ONLINE, HYBRID, or WFH
+  if (rawDeliveryMode === 'ONLINE' || rawDeliveryMode === 'HYBRID' || rawDeliveryMode === 'WFH') {
+    return rawDeliveryMode;
+  }
+
+  // Detect online from legacy notes, room, or location
+  if (
+    n.includes('online') ||
+    n.includes('daring') ||
+    n.includes('zoom') ||
+    n.includes('gmeet') ||
+    n.includes('google meet') ||
+    r.includes('online') ||
+    r.includes('zoom') ||
+    r.includes('gmeet') ||
+    r.includes('google meet') ||
+    l.includes('online') ||
+    l.includes('zoom')
+  ) {
+    if (n.includes('hybrid') || r.includes('hybrid')) {
+      return 'HYBRID';
+    }
+    return 'ONLINE';
+  }
+
+  // Detect hybrid
+  if (n.includes('hybrid') || r.includes('hybrid') || l.includes('hybrid')) {
+    return 'HYBRID';
+  }
+
+  // Detect tatap muka
+  if (
+    n.includes('tatap muka') ||
+    n.includes('offline') ||
+    n.includes('luring')
+  ) {
+    return 'TATAP_MUKA';
+  }
+
+  if (type === 'KERJA') {
+    if (n.includes('wfh') || n.includes('remote')) return 'WFH';
+    if (n.includes('hybrid')) return 'HYBRID';
+    return rawDeliveryMode || 'WFO';
+  }
+
+  return rawDeliveryMode || 'TATAP_MUKA';
+}
+
+/**
+ * Clean redundant delivery mode keywords from notes if it was only used to indicate format.
+ */
+function cleanLegacyNotes(notes: string | null | undefined): string | null {
+  if (!notes) return null;
+  const trimmed = notes.trim();
+  const lower = trimmed.toLowerCase();
+
+  const exactMatches = [
+    'online',
+    'daring',
+    'tatap muka',
+    'perkuliahan tatap muka',
+    'perkuliahan online',
+    'perkuliahan tatap muka / hybrid',
+    'kuliah online',
+    'kuliah tatap muka',
+    'offline',
+    'hybrid',
+    'kuliah hybrid',
+    'tatap muka (offline)',
+    'online (daring)',
+  ];
+
+  if (exactMatches.includes(lower)) {
+    return null;
+  }
+
+  // Remove leading "Online - " or "Tatap Muka - " prefix if user had both mode and additional notes
+  const cleaned = trimmed
+    .replace(/^(perkuliahan\s+)?(tatap\s+muka|online|hybrid|offline|daring)\s*[-–:,/]\s*/i, '')
+    .trim();
+
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+/**
  * Convert user_availabilities DB row into TypeScript object.
  */
 function mapAvailabilityRow(r: any): UserAvailabilityItem {
+  const deliveryMode = resolveDeliveryMode(r.delivery_mode, r.notes, r.room, r.location, r.type);
+  const notes = cleanLegacyNotes(r.notes);
+
   return {
     id: r.id,
     userId: r.user_id,
@@ -237,14 +374,14 @@ function mapAvailabilityRow(r: any): UserAvailabilityItem {
     lecturerCode: r.lecturer_code || null,
     lecturerName: r.lecturer_name || null,
     room: r.room || null,
-    deliveryMode: r.delivery_mode || (r.type === 'KERJA' ? 'WFO' : 'TATAP_MUKA'),
+    deliveryMode,
     dayOfWeek: r.day_of_week as DayOfWeekNumber | null,
     specificDate: r.specific_date || null,
     startTime: r.start_time,
     endTime: r.end_time,
     isAllDay: r.is_all_day === 1,
     location: r.location || null,
-    notes: r.notes || null,
+    notes,
     isActive: r.is_active === 1,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
