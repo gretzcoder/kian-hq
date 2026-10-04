@@ -388,21 +388,41 @@ export default function WeeklyTimetableMatrix({
                   ) : (
                     list.map((item) => {
                       const user = userMap.get(item.userId);
+                      const isKerja = item.type === 'KERJA';
+                      const isOnline = item.deliveryMode === 'ONLINE';
 
                       return (
                         <div
                           key={item.id}
                           onClick={() => setSelectedSchedule({ item, user })}
-                          className="p-2.5 rounded-2xl bg-zinc-50 dark:bg-[#15151c] border border-purple-500/20 hover:border-purple-500/60 hover:bg-purple-50/30 dark:hover:bg-purple-950/20 transition-all cursor-pointer space-y-1.5 shadow-2xs group"
+                          className={`p-2.5 rounded-2xl border transition-all cursor-pointer space-y-1.5 shadow-2xs group ${
+                            isKerja
+                              ? 'bg-amber-500/5 dark:bg-amber-950/20 border-amber-500/30 hover:border-amber-500/70 hover:bg-amber-500/10'
+                              : isOnline
+                              ? 'bg-cyan-500/5 dark:bg-cyan-950/20 border-cyan-500/30 hover:border-cyan-500/70 hover:bg-cyan-500/10'
+                              : 'bg-zinc-50 dark:bg-[#15151c] border-purple-500/20 hover:border-purple-500/60 hover:bg-purple-50/30 dark:hover:bg-purple-950/20'
+                          }`}
                           title="Klik untuk melihat rincian jadwal lengkap"
                         >
                           {/* Time badge */}
                           <div className="flex items-center justify-between gap-1">
-                            <span className="text-[10px] font-black font-mono text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded-md">
+                            <span className={`text-[10px] font-black font-mono px-1.5 py-0.5 rounded-md ${
+                              isKerja
+                                ? 'text-amber-800 dark:text-amber-300 bg-amber-500/10'
+                                : isOnline
+                                ? 'text-cyan-800 dark:text-cyan-300 bg-cyan-500/10'
+                                : 'text-purple-700 dark:text-purple-300 bg-purple-500/10'
+                            }`}>
                               ⏰ {item.startTime} - {item.endTime}
                             </span>
-                            <span className="text-[9px] font-bold text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                              Lihat ➔
+                            <span className={`text-[9px] font-black px-1.5 py-0.2 rounded ${
+                              isKerja
+                                ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                                : isOnline
+                                ? 'bg-cyan-500/20 text-cyan-700 dark:text-cyan-300'
+                                : 'bg-purple-500/20 text-purple-700 dark:text-purple-300'
+                            }`}>
+                              {isKerja ? (item.deliveryMode || 'Kerja') : isOnline ? 'Online' : 'Tatap Muka'}
                             </span>
                           </div>
 
@@ -458,7 +478,7 @@ export default function WeeklyTimetableMatrix({
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-black text-zinc-900 dark:text-white">
-                      {selectedSchedule.user?.name || 'Jadwal Kuliah'}
+                      {selectedSchedule.user?.name || 'Jadwal'}
                     </h3>
                     {selectedSchedule.user?.roleName && (
                       <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-600 border border-purple-500/20">
@@ -485,13 +505,36 @@ export default function WeeklyTimetableMatrix({
 
             {/* Body */}
             <div className="p-6 space-y-4">
-              <div className="p-4 rounded-2xl bg-purple-500/5 dark:bg-purple-950/20 border border-purple-500/20 space-y-3">
+              <div className={`p-4 rounded-2xl border space-y-3 ${
+                selectedSchedule.item.type === 'KERJA'
+                  ? 'bg-amber-500/5 dark:bg-amber-950/20 border-amber-500/20'
+                  : selectedSchedule.item.deliveryMode === 'ONLINE'
+                  ? 'bg-cyan-500/5 dark:bg-cyan-950/20 border-cyan-500/20'
+                  : 'bg-purple-500/5 dark:bg-purple-950/20 border-purple-500/20'
+              }`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-md">
-                    {selectedSchedule.item.dayOfWeek
-                      ? DAY_OF_WEEK_NAMES[selectedSchedule.item.dayOfWeek]?.name
-                      : 'Jadwal'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2.5 py-0.5 rounded-md">
+                      {selectedSchedule.item.dayOfWeek
+                        ? DAY_OF_WEEK_NAMES[selectedSchedule.item.dayOfWeek]?.name
+                        : 'Jadwal'}
+                    </span>
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                      selectedSchedule.item.type === 'KERJA'
+                        ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                        : selectedSchedule.item.deliveryMode === 'ONLINE'
+                        ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
+                        : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                    }`}>
+                      {selectedSchedule.item.type === 'KERJA'
+                        ? `💼 Jadwal Kerja (${selectedSchedule.item.deliveryMode || 'WFO'})`
+                        : selectedSchedule.item.deliveryMode === 'ONLINE'
+                        ? '💻 Kuliah Online (Daring)'
+                        : selectedSchedule.item.deliveryMode === 'HYBRID'
+                        ? '🔄 Kuliah Hybrid'
+                        : '🏛️ Tatap Muka (Offline)'}
+                    </span>
+                  </div>
                   <span className="text-xs font-mono font-bold text-purple-700 dark:text-purple-300">
                     ⏰ {selectedSchedule.item.startTime} - {selectedSchedule.item.endTime} WIB
                   </span>
@@ -505,11 +548,11 @@ export default function WeeklyTimetableMatrix({
                 <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1.5 pt-2 border-t border-zinc-200/50 dark:border-zinc-800/50">
                   {(selectedSchedule.item.classCode || selectedSchedule.item.campusName) && (
                     <p className="flex items-center gap-1.5">
-                      <span>🏛️</span>
+                      <span>{selectedSchedule.item.type === 'KERJA' ? '🏢' : '🏛️'}</span>
                       <span>
-                        Kelas:{' '}
+                        {selectedSchedule.item.type === 'KERJA' ? 'Tempat Kerja / Perusahaan: ' : 'Kelas: '}
                         <strong className="text-zinc-800 dark:text-zinc-200">
-                          {selectedSchedule.item.classCode || '-'}
+                          {selectedSchedule.item.classCode || ''}
                         </strong>{' '}
                         ({selectedSchedule.item.campusName || selectedSchedule.user?.university || '-'})
                       </span>
@@ -531,7 +574,7 @@ export default function WeeklyTimetableMatrix({
                     <p className="flex items-center gap-1.5">
                       <span>📍</span>
                       <span>
-                        Ruangan:{' '}
+                        Ruangan / Platform:{' '}
                         <strong className="text-zinc-800 dark:text-zinc-200">
                           {selectedSchedule.item.room}
                         </strong>

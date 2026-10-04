@@ -1,4 +1,7 @@
-export type AvailabilityType = 'KULIAH' | 'APPOINTMENT';
+export type AvailabilityType = 'KULIAH' | 'KERJA' | 'APPOINTMENT';
+
+export type DeliveryMode = 'TATAP_MUKA' | 'ONLINE' | 'HYBRID';
+export type WorkMode = 'WFO' | 'WFH' | 'HYBRID';
 
 export type DayOfWeekNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -18,17 +21,19 @@ export interface UserAvailabilityItem {
   type: AvailabilityType;
   title: string;
   semesterLabel?: string | null;
-  // 1. Kode & Nama Matakuliah
+  // 1. Kode & Nama Matakuliah (atau Posisi Pekerjaan jika KERJA)
   courseCode?: string | null;
   courseName?: string | null;
-  // 3. Kode Kelas & Nama Kampus
+  // 3. Kode Kelas & Nama Kampus (atau Nama Perusahaan / Instansi jika KERJA)
   classCode?: string | null;
   campusName?: string | null;
   // 4. Kode & Nama Dosen
   lecturerCode?: string | null;
   lecturerName?: string | null;
   room?: string | null;
-  // 2. Waktu Perkuliahan
+  // Format / Metode perkuliahan (Tatap Muka / Online / Hybrid) atau format kerja (WFO / WFH / Hybrid)
+  deliveryMode?: DeliveryMode | WorkMode | string | null;
+  // 2. Waktu Perkuliahan / Kerja
   dayOfWeek?: DayOfWeekNumber | null;
   specificDate?: string | null; // YYYY-MM-DD
   startTime: string; // HH:mm
@@ -76,12 +81,13 @@ export interface UserProfileSnapshot {
   whatsappNumber: string | null;
 }
 
-export type AvailabilityStatusCategory = 'AVAIL' | 'BERKEGIATAN' | 'BERTUGAS';
+export type AvailabilityStatusCategory = 'AVAIL' | 'KULIAH' | 'KULIAH_ONLINE' | 'KERJA' | 'BERKEGIATAN' | 'BERTUGAS';
 
 export interface UserDateAvailabilityDetail {
   user: UserProfileSnapshot;
   status: AvailabilityStatusCategory;
   kuliahList: UserAvailabilityItem[];
+  kerjaList: UserAvailabilityItem[];
   appointmentList: UserAvailabilityItem[];
   suratTugasList: SuratTugasDutyItem[];
 }
@@ -91,6 +97,9 @@ export interface DayAvailabilitySummary {
   dayOfWeek: number;
   dayName: string;
   availCount: number;
+  kuliahCount: number;
+  kuliahOnlineCount: number;
+  kerjaCount: number;
   berkegiatanCount: number;
   bertugasCount: number;
   totalUsers: number;
@@ -100,7 +109,7 @@ export interface CreateAvailabilityPayload {
   type: AvailabilityType;
   title?: string;
   semesterLabel?: string;
-  // Kuliah fields:
+  // Kuliah & Kerja fields:
   courseCode?: string;
   courseName?: string;
   classCode?: string;
@@ -108,6 +117,7 @@ export interface CreateAvailabilityPayload {
   lecturerCode?: string;
   lecturerName?: string;
   room?: string;
+  deliveryMode?: string;
   dayOfWeek?: number;
   // Appointment fields:
   specificDate?: string;

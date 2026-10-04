@@ -5,6 +5,7 @@ import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { revalidatePath } from 'next/cache';
 import {
+  AvailabilityStatusCategory,
   AvailabilityType,
   CreateAvailabilityPayload,
   DayAvailabilitySummary,
@@ -37,6 +38,7 @@ export async function ensureAvailabilityTables(): Promise<void> {
         lecturer_code TEXT,
         lecturer_name TEXT,
         room TEXT,
+        delivery_mode TEXT DEFAULT 'TATAP_MUKA',
         day_of_week INTEGER,
         specific_date TEXT,
         start_time TEXT NOT NULL,
@@ -49,6 +51,12 @@ export async function ensureAvailabilityTables(): Promise<void> {
         updated_at INTEGER NOT NULL
       )
     `).run();
+
+    try {
+      await db.prepare("ALTER TABLE user_availabilities ADD COLUMN delivery_mode TEXT DEFAULT 'TATAP_MUKA'").run();
+    } catch {
+      // Column already exists
+    }
 
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_user_availabilities_user ON user_availabilities(user_id)').run();
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_user_availabilities_day ON user_availabilities(day_of_week)').run();
@@ -229,6 +237,7 @@ function mapAvailabilityRow(r: any): UserAvailabilityItem {
     lecturerCode: r.lecturer_code || null,
     lecturerName: r.lecturer_name || null,
     room: r.room || null,
+    deliveryMode: r.delivery_mode || (r.type === 'KERJA' ? 'WFO' : 'TATAP_MUKA'),
     dayOfWeek: r.day_of_week as DayOfWeekNumber | null,
     specificDate: r.specific_date || null,
     startTime: r.start_time,
@@ -318,7 +327,7 @@ export async function getUserAvailabilitiesAction(targetUserId?: string): Promis
 }
 
 /**
- * Creates a new availability record (Kuliah or Appointment).
+ * Creates a new availability record (Kuliah, Kerja, or Appointment).
  */
 export async function createAvailabilityAction(payload: CreateAvailabilityPayload): Promise<{
   success: boolean;
@@ -334,6 +343,8 @@ export async function createAvailabilityAction(payload: CreateAvailabilityPayloa
   const id = `avail_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
 
   let title = (payload.title || '').trim();
+  let deliveryMode = payload.deliveryMode || (payload.type === 'KERJA' ? 'WFO' : 'TATAP_MUKA');
+
   if (payload.type === 'KULIAH') {
     const courseCode = (payload.courseCode || '').trim();
     const courseName = (payload.courseName || '').trim();
@@ -341,15 +352,22 @@ export async function createAvailabilityAction(payload: CreateAvailabilityPayloa
       return { success: false, message: 'Nama matakuliah wajib diisi.' };
     }
     title = courseCode ? `${courseCode} - ${courseName}` : courseName;
+  } else if (payload.type === 'KERJA') {
+    const company = (payload.campusName || payload.location || '').trim();
+    const position = (payload.courseName || payload.title || '').trim();
+    if (!company && !position) {
+      return { success: false, message: 'Nama tempat kerja / posisi pekerjaan wajib diisi.' };
+    }
+    title = position && company ? `${position} @ ${company}` : position || company || 'Jadwal Kerja';
   } else {
     if (!title) {
-      return { success: false, message: 'Judul kegiatan/appointment wajib diisi.' };
+      return { success: false, message: 'Judul kegiatan / appointment wajib diisi.' };
     }
   }
 
   const startTime = (payload.startTime || '08:00').trim();
   const endTime = (payload.endTime || '10:00').trim();
-  const dayOfWeek = payload.type === 'KULIAH' ? (payload.dayOfWeek || 1) : null;
+  const dayOfWeek = (payload.type === 'KULIAH' || payload.type === 'KERJA') ? (payload.dayOfWeek || 1) : null;
   const specificDate = payload.type === 'APPOINTMENT' ? (payload.specificDate || null) : null;
 
   try {
@@ -357,9 +375,9 @@ export async function createAvailabilityAction(payload: CreateAvailabilityPayloa
       INSERT INTO user_availabilities (
         id, user_id, type, title, semester_label, course_code, course_name,
         class_code, campus_name, lecturer_code, lecturer_name, room,
-        day_of_week, specific_date, start_time, end_time, is_all_day,
+        delivery_mode, day_of_week, specific_date, start_time, end_time, is_all_day,
         location, notes, is_active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `).bind(
       id,
       session.userId,
@@ -373,6 +391,7 @@ export async function createAvailabilityAction(payload: CreateAvailabilityPayloa
       payload.lecturerCode || null,
       payload.lecturerName || null,
       payload.room || null,
+      deliveryMode,
       dayOfWeek,
       specificDate,
       startTime,
@@ -402,6 +421,7 @@ export async function createAvailabilityAction(payload: CreateAvailabilityPayloa
         lecturerCode: payload.lecturerCode || null,
         lecturerName: payload.lecturerName || null,
         room: payload.room || null,
+        deliveryMode,
         dayOfWeek: dayOfWeek as DayOfWeekNumber | null,
         specificDate,
         startTime,
@@ -460,6 +480,12 @@ export async function updateAvailabilityAction(
     if (courseName) {
       title = courseCode ? `${courseCode} - ${courseName}` : courseName;
     }
+  } else if (itemType === 'KERJA') {
+    const company = (payload.campusName !== undefined ? payload.campusName : existing.campus_name || '').trim();
+    const position = (payload.courseName !== undefined ? payload.courseName : existing.course_name || '').trim();
+    if (position || company) {
+      title = position && company ? `${position} @ ${company}` : position || company || 'Jadwal Kerja';
+    }
   } else if (payload.title) {
     title = payload.title.trim();
   }
@@ -476,6 +502,7 @@ export async function updateAvailabilityAction(
         lecturer_code = ?,
         lecturer_name = ?,
         room = ?,
+        delivery_mode = COALESCE(?, delivery_mode),
         day_of_week = ?,
         specific_date = ?,
         start_time = COALESCE(?, start_time),
@@ -496,6 +523,7 @@ export async function updateAvailabilityAction(
       payload.lecturerCode !== undefined ? payload.lecturerCode : existing.lecturer_code,
       payload.lecturerName !== undefined ? payload.lecturerName : existing.lecturer_name,
       payload.room !== undefined ? payload.room : existing.room,
+      payload.deliveryMode !== undefined ? payload.deliveryMode : existing.delivery_mode,
       payload.dayOfWeek !== undefined ? payload.dayOfWeek : existing.day_of_week,
       payload.specificDate !== undefined ? payload.specificDate : existing.specific_date,
       payload.startTime,
@@ -637,8 +665,6 @@ export async function getMonthlyAvailabilityOverviewAction(
     const dateStr = `${year}-${monthStr}-${dayStr}`;
 
     const dateObj = new Date(year, month - 1, day);
-    // JS getDay(): 0 = Minggu, 1 = Senin .. 6 = Sabtu.
-    // Our convention: 1 = Senin .. 7 = Minggu
     const jsDay = dateObj.getDay();
     const dayOfWeek: DayOfWeekNumber = (jsDay === 0 ? 7 : jsDay) as DayOfWeekNumber;
     const dayName = DAY_OF_WEEK_NAMES[dayOfWeek]?.name || '';
@@ -666,28 +692,59 @@ export async function getMonthlyAvailabilityOverviewAction(
       }
     }
 
-    // 2. Resolve users who are BERKEGIATAN (Kuliah on this dayOfWeek OR Appointment on this dateStr)
+    // 2. Resolve users for KERJA, KULIAH (Tatap Muka vs Online), APPOINTMENT
+    const kerjaUserIds = new Set<string>();
+    const kuliahOfflineUserIds = new Set<string>();
+    const kuliahOnlineUserIds = new Set<string>();
     const berkegiatanUserIds = new Set<string>();
-    for (const item of rawSchedules) {
-      if (bertugasUserIds.has(item.userId)) continue; // priority to Bertugas
 
-      if (item.type === 'KULIAH' && item.dayOfWeek === dayOfWeek) {
-        berkegiatanUserIds.add(item.userId);
+    for (const item of rawSchedules) {
+      if (bertugasUserIds.has(item.userId)) continue;
+
+      if (item.type === 'KERJA' && item.dayOfWeek === dayOfWeek) {
+        kerjaUserIds.add(item.userId);
+      } else if (item.type === 'KULIAH' && item.dayOfWeek === dayOfWeek) {
+        if (item.deliveryMode === 'ONLINE') {
+          kuliahOnlineUserIds.add(item.userId);
+        } else {
+          kuliahOfflineUserIds.add(item.userId);
+        }
       } else if (item.type === 'APPOINTMENT' && item.specificDate === dateStr) {
         berkegiatanUserIds.add(item.userId);
       }
     }
 
+    // If user has both offline and online classes, prioritize offline
+    for (const uid of kuliahOfflineUserIds) {
+      kuliahOnlineUserIds.delete(uid);
+    }
+
     const bertugasCount = bertugasUserIds.size;
-    const berkegiatanCount = berkegiatanUserIds.size;
-    const availCount = Math.max(0, totalUsersCount - bertugasCount - berkegiatanCount);
+    const kerjaCount = kerjaUserIds.size;
+    const kuliahCount = kuliahOfflineUserIds.size;
+    const kuliahOnlineCount = kuliahOnlineUserIds.size;
+    
+    // Total busy users (distinct)
+    const busyUserIds = new Set<string>([
+      ...bertugasUserIds,
+      ...kerjaUserIds,
+      ...kuliahOfflineUserIds,
+      ...kuliahOnlineUserIds,
+      ...berkegiatanUserIds,
+    ]);
+
+    const berkegiatanTotalCount = busyUserIds.size - bertugasCount;
+    const availCount = Math.max(0, totalUsersCount - busyUserIds.size);
 
     summaries.push({
       dateStr,
       dayOfWeek,
       dayName,
       availCount,
-      berkegiatanCount,
+      kuliahCount,
+      kuliahOnlineCount,
+      kerjaCount,
+      berkegiatanCount: berkegiatanTotalCount,
       bertugasCount,
       totalUsers: totalUsersCount,
     });
@@ -697,7 +754,7 @@ export async function getMonthlyAvailabilityOverviewAction(
 }
 
 /**
- * Gets the categorized list of all users for a specific date (Avail, Berkegiatan, Bertugas).
+ * Gets the categorized list of all users for a specific date (Avail, Kuliah, Kuliah Online, Kerja, Berkegiatan, Bertugas).
  */
 export async function getDateAvailabilityDetailsAction(
   dateStr: string // YYYY-MM-DD
@@ -705,7 +762,15 @@ export async function getDateAvailabilityDetailsAction(
   dateStr: string;
   dayOfWeek: number;
   dayName: string;
-  counts: { avail: number; berkegiatan: number; bertugas: number; total: number };
+  counts: { 
+    avail: number; 
+    kuliah: number; 
+    kuliahOnline: number; 
+    kerja: number; 
+    berkegiatan: number; 
+    bertugas: number; 
+    total: number 
+  };
   users: UserDateAvailabilityDetail[];
 }> {
   await ensureAvailabilityTables();
@@ -724,7 +789,7 @@ export async function getDateAvailabilityDetailsAction(
       SELECT * FROM user_availabilities 
       WHERE is_active = 1 
         AND (
-          (type = 'KULIAH' AND day_of_week = ?) 
+          ((type = 'KULIAH' OR type = 'KERJA') AND day_of_week = ?) 
           OR (type = 'APPOINTMENT' AND specific_date = ?)
         )
       ORDER BY start_time ASC
@@ -732,14 +797,21 @@ export async function getDateAvailabilityDetailsAction(
   ]);
 
   // Group schedules by user
-  const schedulesByUser = new Map<string, { kuliah: UserAvailabilityItem[]; appointment: UserAvailabilityItem[] }>();
+  const schedulesByUser = new Map<string, { 
+    kuliah: UserAvailabilityItem[]; 
+    kerja: UserAvailabilityItem[]; 
+    appointment: UserAvailabilityItem[] 
+  }>();
+
   for (const item of rawSchedules) {
     if (!schedulesByUser.has(item.userId)) {
-      schedulesByUser.set(item.userId, { kuliah: [], appointment: [] });
+      schedulesByUser.set(item.userId, { kuliah: [], kerja: [], appointment: [] });
     }
     const userBucket = schedulesByUser.get(item.userId)!;
     if (item.type === 'KULIAH') {
       userBucket.kuliah.push(item);
+    } else if (item.type === 'KERJA') {
+      userBucket.kerja.push(item);
     } else {
       userBucket.appointment.push(item);
     }
@@ -769,11 +841,14 @@ export async function getDateAvailabilityDetailsAction(
 
   const userDetails: UserDateAvailabilityDetail[] = [];
   let availCount = 0;
+  let kuliahCount = 0;
+  let kuliahOnlineCount = 0;
+  let kerjaCount = 0;
   let berkegiatanCount = 0;
   let bertugasCount = 0;
 
   for (const user of activeUsers) {
-    const userSchedules = schedulesByUser.get(user.id) || { kuliah: [], appointment: [] };
+    const userSchedules = schedulesByUser.get(user.id) || { kuliah: [], kerja: [], appointment: [] };
     const userNameLower = (user.name || '').toLowerCase().trim();
     const userNip = (user.studentIdNumber || '').trim();
 
@@ -804,11 +879,23 @@ export async function getDateAvailabilityDetailsAction(
     }
 
     // Determine status
-    let status: 'AVAIL' | 'BERKEGIATAN' | 'BERTUGAS' = 'AVAIL';
+    let status: AvailabilityStatusCategory = 'AVAIL';
     if (userDuties.length > 0) {
       status = 'BERTUGAS';
       bertugasCount++;
-    } else if (userSchedules.kuliah.length > 0 || userSchedules.appointment.length > 0) {
+    } else if (userSchedules.kerja.length > 0) {
+      status = 'KERJA';
+      kerjaCount++;
+    } else if (userSchedules.kuliah.length > 0) {
+      const hasOffline = userSchedules.kuliah.some((k) => k.deliveryMode !== 'ONLINE');
+      if (hasOffline) {
+        status = 'KULIAH';
+        kuliahCount++;
+      } else {
+        status = 'KULIAH_ONLINE';
+        kuliahOnlineCount++;
+      }
+    } else if (userSchedules.appointment.length > 0) {
       status = 'BERKEGIATAN';
       berkegiatanCount++;
     } else {
@@ -820,15 +907,24 @@ export async function getDateAvailabilityDetailsAction(
       user,
       status,
       kuliahList: userSchedules.kuliah,
+      kerjaList: userSchedules.kerja,
       appointmentList: userSchedules.appointment,
       suratTugasList: userDuties,
     });
   }
 
-  // Sort: Bertugas first, Berkegiatan next, Avail last
-  const priorityOrder = { BERTUGAS: 1, BERKEGIATAN: 2, AVAIL: 3 };
+  // Priority sorting: BERTUGAS -> KERJA -> KULIAH -> KULIAH_ONLINE -> BERKEGIATAN -> AVAIL
+  const priorityOrder: Record<AvailabilityStatusCategory, number> = {
+    BERTUGAS: 1,
+    KERJA: 2,
+    KULIAH: 3,
+    KULIAH_ONLINE: 4,
+    BERKEGIATAN: 5,
+    AVAIL: 6,
+  };
+
   userDetails.sort((a, b) => {
-    const diff = priorityOrder[a.status] - priorityOrder[b.status];
+    const diff = (priorityOrder[a.status] || 99) - (priorityOrder[b.status] || 99);
     if (diff !== 0) return diff;
     return a.user.name.localeCompare(b.user.name);
   });
@@ -839,7 +935,10 @@ export async function getDateAvailabilityDetailsAction(
     dayName,
     counts: {
       avail: availCount,
-      berkegiatan: berkegiatanCount,
+      kuliah: kuliahCount,
+      kuliahOnline: kuliahOnlineCount,
+      kerja: kerjaCount,
+      berkegiatan: berkegiatanCount + kuliahCount + kuliahOnlineCount + kerjaCount,
       bertugas: bertugasCount,
       total: activeUsers.length,
     },
@@ -861,7 +960,7 @@ export async function getWeeklyTimetableMatrixAction(): Promise<{
     getAllActiveUsers(db),
     db.prepare(`
       SELECT * FROM user_availabilities 
-      WHERE type = 'KULIAH' AND is_active = 1
+      WHERE (type = 'KULIAH' OR type = 'KERJA') AND is_active = 1
       ORDER BY day_of_week ASC, start_time ASC
     `).all().then((res: any) => (res.results || []).map(mapAvailabilityRow)),
   ]);
@@ -975,4 +1074,3 @@ export async function getAllUsersCourseSchedulesAction(): Promise<{
 
   return { usersWithCourses };
 }
-

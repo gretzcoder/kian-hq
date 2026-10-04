@@ -39,7 +39,15 @@ export default function AvailabilityCalendar({
     dateStr: string;
     dayOfWeek: number;
     dayName: string;
-    counts: { avail: number; berkegiatan: number; bertugas: number; total: number };
+    counts: { 
+      avail: number; 
+      kuliah: number; 
+      kuliahOnline: number; 
+      kerja: number; 
+      berkegiatan: number; 
+      bertugas: number; 
+      total: number 
+    };
     users: UserDateAvailabilityDetail[];
   } | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -105,9 +113,7 @@ export default function AvailabilityCalendar({
   };
 
   // Calendar grid calculations
-  // First day of month: 0 = Sun, 1 = Mon ... 6 = Sat
   const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1).getDay();
-  // Monday-based offset: 0 for Monday, 6 for Sunday
   const startDayOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
   const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
 
@@ -165,11 +171,19 @@ export default function AvailabilityCalendar({
           <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">Petunjuk Status:</span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            <span>🟢 Avail (Bebas Kuliah)</span>
+            <span>🟢 Avail (Kosong)</span>
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-purple-500" />
-            <span>🟣 Berkegiatan (Ada Kuliah/Appt)</span>
+            <span>🟣 Kuliah (Tatap Muka)</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-500" />
+            <span>💻 Kuliah Online</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+            <span>💼 Kerja / Shift</span>
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
@@ -219,7 +233,7 @@ export default function AvailabilityCalendar({
                   key={cellDateStr}
                   type="button"
                   onClick={() => setSelectedDate(cellDateStr)}
-                  className={`min-h-[76px] sm:min-h-[100px] p-2 sm:p-2.5 rounded-2xl border text-left transition-all relative flex flex-col justify-between group ${
+                  className={`min-h-[76px] sm:min-h-[105px] p-2 sm:p-2.5 rounded-2xl border text-left transition-all relative flex flex-col justify-between group ${
                     isSelected
                       ? 'bg-purple-500/10 dark:bg-purple-950/30 border-purple-500 shadow-md ring-2 ring-purple-500/30'
                       : isToday
@@ -248,25 +262,37 @@ export default function AvailabilityCalendar({
                     )}
                   </div>
 
-                  {/* Bottom: Availability Badges / Dots */}
+                  {/* Bottom: Availability Badges */}
                   {summary && (
-                    <div className="space-y-1 mt-1">
+                    <div className="space-y-0.5 mt-1">
                       {/* Desktop pill badges */}
                       <div className="hidden sm:flex flex-col gap-0.5">
                         {summary.availCount > 0 && (
-                          <div className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md truncate flex items-center justify-between">
+                          <div className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded truncate flex items-center justify-between">
                             <span>Avail</span>
                             <span className="font-black">{summary.availCount}</span>
                           </div>
                         )}
-                        {summary.berkegiatanCount > 0 && (
-                          <div className="text-[10px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded-md truncate flex items-center justify-between">
+                        {(summary.kuliahCount ?? 0) > 0 && (
+                          <div className="text-[9px] font-bold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-1.5 py-0.2 rounded truncate flex items-center justify-between">
                             <span>Kuliah</span>
-                            <span className="font-black">{summary.berkegiatanCount}</span>
+                            <span className="font-black">{summary.kuliahCount}</span>
+                          </div>
+                        )}
+                        {(summary.kuliahOnlineCount ?? 0) > 0 && (
+                          <div className="text-[9px] font-bold text-cyan-700 dark:text-cyan-300 bg-cyan-500/10 px-1.5 py-0.2 rounded truncate flex items-center justify-between">
+                            <span>Online</span>
+                            <span className="font-black">{summary.kuliahOnlineCount}</span>
+                          </div>
+                        )}
+                        {(summary.kerjaCount ?? 0) > 0 && (
+                          <div className="text-[9px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.2 rounded truncate flex items-center justify-between">
+                            <span>Kerja</span>
+                            <span className="font-black">{summary.kerjaCount}</span>
                           </div>
                         )}
                         {summary.bertugasCount > 0 && (
-                          <div className="text-[10px] font-bold text-blue-700 dark:text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded-md truncate flex items-center justify-between animate-pulse">
+                          <div className="text-[9px] font-bold text-blue-700 dark:text-blue-300 bg-blue-500/10 px-1.5 py-0.2 rounded truncate flex items-center justify-between animate-pulse">
                             <span>Tugas</span>
                             <span className="font-black">{summary.bertugasCount}</span>
                           </div>
@@ -278,8 +304,14 @@ export default function AvailabilityCalendar({
                         {summary.availCount > 0 && (
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title={`Avail: ${summary.availCount}`} />
                         )}
-                        {summary.berkegiatanCount > 0 && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" title={`Kuliah: ${summary.berkegiatanCount}`} />
+                        {(summary.kuliahCount ?? 0) > 0 && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-purple-500" title={`Kuliah Offline: ${summary.kuliahCount}`} />
+                        )}
+                        {(summary.kuliahOnlineCount ?? 0) > 0 && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" title={`Kuliah Online: ${summary.kuliahOnlineCount}`} />
+                        )}
+                        {(summary.kerjaCount ?? 0) > 0 && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" title={`Kerja: ${summary.kerjaCount}`} />
                         )}
                         {summary.bertugasCount > 0 && (
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" title={`Tugas: ${summary.bertugasCount}`} />

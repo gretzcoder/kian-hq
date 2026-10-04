@@ -36,7 +36,7 @@ export default function ScheduleModal({
   const [type, setType] = useState<AvailabilityType>(defaultType);
   const [semesterLabel, setSemesterLabel] = useState(defaultSemester);
   
-  // Kuliah fields
+  // Kuliah & Kerja fields
   const [courseCode, setCourseCode] = useState('');
   const [courseName, setCourseName] = useState('');
   const [classCode, setClassCode] = useState('');
@@ -44,9 +44,10 @@ export default function ScheduleModal({
   const [lecturerCode, setLecturerCode] = useState('');
   const [lecturerName, setLecturerName] = useState('');
   const [room, setRoom] = useState('');
+  const [deliveryMode, setDeliveryMode] = useState<string>('TATAP_MUKA');
   const [dayOfWeek, setDayOfWeek] = useState<DayOfWeekNumber>(1);
   
-  // Appointment fields
+  // Appointment & generic fields
   const [title, setTitle] = useState('');
   const [specificDate, setSpecificDate] = useState(defaultDate || new Date().toISOString().split('T')[0]);
   const [startTime, setStartTime] = useState('08:00');
@@ -69,11 +70,12 @@ export default function ScheduleModal({
       setLecturerCode(editItem.lecturerCode || '');
       setLecturerName(editItem.lecturerName || '');
       setRoom(editItem.room || '');
+      setDeliveryMode(editItem.deliveryMode || (editItem.type === 'KERJA' ? 'WFO' : 'TATAP_MUKA'));
       setDayOfWeek((editItem.dayOfWeek || 1) as DayOfWeekNumber);
       setTitle(editItem.title || '');
       setSpecificDate(editItem.specificDate || new Date().toISOString().split('T')[0]);
-      setStartTime(editItem.startTime || '08:00');
-      setEndTime(editItem.endTime || '10:30');
+      setStartTime(editItem.startTime || (editItem.type === 'KERJA' ? '09:00' : '08:00'));
+      setEndTime(editItem.endTime || (editItem.type === 'KERJA' ? '17:00' : '10:30'));
       setIsAllDay(editItem.isAllDay || false);
       setLocation(editItem.location || '');
       setNotes(editItem.notes || '');
@@ -85,11 +87,12 @@ export default function ScheduleModal({
       setLecturerCode('');
       setLecturerName('');
       setRoom('');
+      setDeliveryMode(defaultType === 'KERJA' ? 'WFO' : 'TATAP_MUKA');
       setDayOfWeek(1);
       setTitle('');
       setSpecificDate(defaultDate || new Date().toISOString().split('T')[0]);
-      setStartTime('08:00');
-      setEndTime('10:30');
+      setStartTime(defaultType === 'KERJA' ? '09:00' : '08:00');
+      setEndTime(defaultType === 'KERJA' ? '17:00' : '10:30');
       setIsAllDay(false);
       setLocation('');
       setNotes('');
@@ -118,14 +121,15 @@ export default function ScheduleModal({
         type,
         semesterLabel: type === 'KULIAH' ? semesterLabel : undefined,
         courseCode: type === 'KULIAH' ? courseCode.trim() : undefined,
-        courseName: type === 'KULIAH' ? courseName.trim() : undefined,
+        courseName: type === 'KULIAH' || type === 'KERJA' ? courseName.trim() : undefined,
         classCode: type === 'KULIAH' ? classCode.trim() : undefined,
-        campusName: type === 'KULIAH' ? campusName.trim() : undefined,
+        campusName: type === 'KULIAH' || type === 'KERJA' ? campusName.trim() : undefined,
         lecturerCode: type === 'KULIAH' ? lecturerCode.trim() : undefined,
         lecturerName: type === 'KULIAH' ? lecturerName.trim() : undefined,
-        room: room.trim() || undefined,
-        dayOfWeek: type === 'KULIAH' ? dayOfWeek : undefined,
-        title: type === 'APPOINTMENT' ? title.trim() : undefined,
+        room: type === 'KULIAH' ? (room.trim() || undefined) : undefined,
+        deliveryMode: type === 'KULIAH' || type === 'KERJA' ? deliveryMode : undefined,
+        dayOfWeek: type === 'KULIAH' || type === 'KERJA' ? dayOfWeek : undefined,
+        title: type === 'APPOINTMENT' ? title.trim() : type === 'KERJA' ? (title.trim() || `${courseName.trim()} @ ${campusName.trim()}`) : undefined,
         specificDate: type === 'APPOINTMENT' ? specificDate : undefined,
         startTime,
         endTime,
@@ -160,7 +164,7 @@ export default function ScheduleModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
         className="bg-white dark:bg-[#121216] border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
@@ -193,43 +197,63 @@ export default function ScheduleModal({
             </div>
           )}
 
-          {/* Type Selector (Jadwal Kuliah vs Appointment) */}
+          {/* Type Selector (Jadwal Kuliah vs Jadwal Kerja vs Appointment) */}
           <div>
             <label className="block text-xs font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
               Kategori Jadwal
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
-                onClick={() => setType('KULIAH')}
-                className={`py-2.5 px-4 rounded-2xl text-xs font-black flex items-center justify-center gap-2 transition-all border ${
+                onClick={() => {
+                  setType('KULIAH');
+                  if (deliveryMode === 'WFO' || deliveryMode === 'WFH') setDeliveryMode('TATAP_MUKA');
+                }}
+                className={`py-2.5 px-3 rounded-2xl text-xs font-black flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all border ${
                   type === 'KULIAH'
                     ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-500/20'
                     : 'bg-zinc-100/70 dark:bg-zinc-900/60 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-purple-500/40'
                 }`}
               >
                 <span>🎓</span>
-                <span>Jadwal Kuliah (Semester)</span>
+                <span className="text-center">Jadwal Kuliah</span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setType('KERJA');
+                  if (deliveryMode === 'TATAP_MUKA' || deliveryMode === 'ONLINE') setDeliveryMode('WFO');
+                }}
+                className={`py-2.5 px-3 rounded-2xl text-xs font-black flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all border ${
+                  type === 'KERJA'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-md shadow-amber-500/20'
+                    : 'bg-zinc-100/70 dark:bg-zinc-900/60 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-amber-500/40'
+                }`}
+              >
+                <span>💼</span>
+                <span className="text-center">Jadwal Kerja</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setType('APPOINTMENT')}
-                className={`py-2.5 px-4 rounded-2xl text-xs font-black flex items-center justify-center gap-2 transition-all border ${
+                className={`py-2.5 px-3 rounded-2xl text-xs font-black flex flex-col sm:flex-row items-center justify-center gap-1.5 transition-all border ${
                   type === 'APPOINTMENT'
                     ? 'bg-purple-600 text-white border-purple-600 shadow-md shadow-purple-500/20'
                     : 'bg-zinc-100/70 dark:bg-zinc-900/60 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-purple-500/40'
                 }`}
               >
                 <span>🗓️</span>
-                <span>Agenda / Appointment</span>
+                <span className="text-center">Appointment</span>
               </button>
             </div>
           </div>
 
           {/* =============================================================== */}
-          {/* FIELDS UNTUK JADWAL KULIAH */}
+          {/* 1. FIELDS UNTUK JADWAL KULIAH */}
           {/* =============================================================== */}
-          {type === 'KULIAH' ? (
+          {type === 'KULIAH' && (
             <div className="space-y-4 pt-1">
               {/* Semester Info */}
               <div>
@@ -324,6 +348,48 @@ export default function ScheduleModal({
                 </div>
               </div>
 
+              {/* Status / Metode Perkuliahan (Form Option Tatap Muka vs Online vs Hybrid) */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Metode Perkuliahan <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMode('TATAP_MUKA')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border text-center ${
+                      deliveryMode === 'TATAP_MUKA'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                        : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-purple-400'
+                    }`}
+                  >
+                    🏛️ Tatap Muka (Offline)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMode('ONLINE')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border text-center ${
+                      deliveryMode === 'ONLINE'
+                        ? 'bg-cyan-600 text-white border-cyan-600 shadow-xs'
+                        : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-cyan-400'
+                    }`}
+                  >
+                    💻 Kuliah Online (Daring)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMode('HYBRID')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border text-center ${
+                      deliveryMode === 'HYBRID'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                        : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-indigo-400'
+                    }`}
+                  >
+                    🔄 Hybrid
+                  </button>
+                </div>
+              </div>
+
               {/* 3. Kode Kelas & Nama Kampus */}
               <div className="space-y-1.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -385,38 +451,203 @@ export default function ScheduleModal({
                 </div>
               </div>
 
-              {/* Ruangan & Catatan */}
+              {/* Ruangan & Catatan Murni */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    Ruangan / Lab (Opsional)
+                    Ruangan / Platform (Opsional)
                   </label>
                   <input
                     type="text"
                     value={room}
                     onChange={(e) => setRoom(e.target.value)}
-                    placeholder="Contoh: Lab 402 / Gd B Lt 3"
+                    placeholder="Contoh: Lab 402 / Zoom Meet"
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
-                    Catatan (Opsional)
+                    Catatan Tambahan (Opsional)
                   </label>
                   <input
                     type="text"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Contoh: Perkuliahan tatap muka / hybrid"
+                    placeholder="Contoh: Presentasi kelompok, praktikum wajib, dll"
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
                   />
                 </div>
               </div>
             </div>
-          ) : (
-            /* =============================================================== */
-            /* FIELDS UNTUK APPOINTMENT / KEGIATAN LAIN */
-            /* =============================================================== */
+          )}
+
+          {/* =============================================================== */}
+          {/* 2. FIELDS UNTUK JADWAL KERJA (Kuliah Sambil Kerja) */}
+          {/* =============================================================== */}
+          {type === 'KERJA' && (
+            <div className="space-y-4 pt-1">
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                <span>💼</span>
+                <span>
+                  <strong>Jadwal Kerja:</strong> Untuk Anda yang kuliah sambil bekerja / freelance / part-time agar jam kerja rutin terdata di kalender ketersediaan tim.
+                </span>
+              </div>
+
+              {/* Posisi & Perusahaan */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Posisi / Profesi Pekerjaan <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={courseName}
+                    onChange={(e) => setCourseName(e.target.value)}
+                    placeholder="Contoh: Graphic Designer, Barista, Staff IT"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Nama Perusahaan / Tempat Kerja <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={campusName}
+                    onChange={(e) => setCampusName(e.target.value)}
+                    placeholder="Contoh: PT Kian Digital / Kopi Kenangan / Freelance"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Waktu Kerja Rutin: Hari, Jam Mulai, Jam Selesai */}
+              <div className="p-3.5 rounded-2xl bg-amber-500/5 dark:bg-amber-950/20 border border-amber-500/20 space-y-3">
+                <label className="block text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                  Waktu & Shift Kerja
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                      Hari Rutin Kerja
+                    </label>
+                    <select
+                      value={dayOfWeek}
+                      onChange={(e) => setDayOfWeek(parseInt(e.target.value, 10) as DayOfWeekNumber)}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                        <option key={d} value={d}>
+                          {DAY_OF_WEEK_NAMES[d].name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                      Jam Masuk (Mulai)
+                    </label>
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
+                      Jam Pulang (Selesai)
+                    </label>
+                    <input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs font-bold text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sistem / Format Kerja (WFO / WFH / Hybrid) */}
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Sistem / Format Kerja <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMode('WFO')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border text-center ${
+                      deliveryMode === 'WFO'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-amber-400'
+                    }`}
+                  >
+                    🏢 WFO (Di Kantor)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMode('WFH')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border text-center ${
+                      deliveryMode === 'WFH'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-amber-400'
+                    }`}
+                  >
+                    🏠 WFH (Remote)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMode('HYBRID')}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border text-center ${
+                      deliveryMode === 'HYBRID'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : 'bg-zinc-50 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-amber-400'
+                    }`}
+                  >
+                    🔄 Hybrid
+                  </button>
+                </div>
+              </div>
+
+              {/* Lokasi Kantor & Catatan Kerja */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Lokasi / Cabang Kantor (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="Contoh: Sudirman Jakarta / Remote"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                    Catatan Shift / Kerja (Opsional)
+                  </label>
+                  <input
+                    type="text"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Contoh: Fleksibel, bisa izin jika ada tugas"
+                    className="w-full px-3.5 py-2.5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/80 border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* =============================================================== */}
+          {/* 3. FIELDS UNTUK APPOINTMENT / KEGIATAN LAIN */}
+          {/* =============================================================== */}
+          {type === 'APPOINTMENT' && (
             <div className="space-y-4 pt-1">
               <div>
                 <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5">
@@ -524,7 +755,11 @@ export default function ScheduleModal({
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2.5 rounded-2xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-500/25 transition-all active:scale-95 disabled:opacity-50"
+              className={`px-6 py-2.5 rounded-2xl text-xs font-black text-white shadow-md transition-all active:scale-95 disabled:opacity-50 ${
+                type === 'KERJA'
+                  ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-500/25'
+                  : 'bg-purple-600 hover:bg-purple-700 shadow-purple-500/25'
+              }`}
             >
               {loading ? 'Menyimpan...' : editItem ? 'Simpan Perubahan' : 'Tambahkan Jadwal'}
             </button>

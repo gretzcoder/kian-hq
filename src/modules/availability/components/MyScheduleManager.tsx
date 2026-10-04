@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import {
+  AvailabilityType,
   DAY_OF_WEEK_NAMES,
   SuratTugasDutyItem,
   UserAvailabilityItem,
@@ -28,13 +29,13 @@ export default function MyScheduleManager({
   const [suratTugasDuties, setSuratTugasDuties] = useState<SuratTugasDutyItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<'KULIAH' | 'APPOINTMENT' | 'SURAT_TUGAS'>('KULIAH');
+  const [activeTab, setActiveTab] = useState<'KULIAH' | 'KERJA' | 'APPOINTMENT' | 'SURAT_TUGAS'>('KULIAH');
   const [activeSemester, setActiveSemester] = useState('Semester Ganjil 2026/2027');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalEditItem, setModalEditItem] = useState<UserAvailabilityItem | null>(null);
-  const [modalDefaultType, setModalDefaultType] = useState<'KULIAH' | 'APPOINTMENT'>('KULIAH');
+  const [modalDefaultType, setModalDefaultType] = useState<AvailabilityType>('KULIAH');
 
   // Clear Semester Modal State
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -62,6 +63,10 @@ export default function MyScheduleManager({
     return schedules.filter((s) => s.type === 'KULIAH');
   }, [schedules]);
 
+  const kerjaList = useMemo(() => {
+    return schedules.filter((s) => s.type === 'KERJA');
+  }, [schedules]);
+
   const appointmentList = useMemo(() => {
     return schedules.filter((s) => s.type === 'APPOINTMENT');
   }, [schedules]);
@@ -79,6 +84,20 @@ export default function MyScheduleManager({
     });
     return map;
   }, [kuliahList]);
+
+  // Group kerja by day of week
+  const kerjaByDay = useMemo(() => {
+    const map = new Map<number, UserAvailabilityItem[]>();
+    for (let d = 1; d <= 7; d++) {
+      map.set(d, []);
+    }
+    kerjaList.forEach((k) => {
+      if (k.dayOfWeek && map.has(k.dayOfWeek)) {
+        map.get(k.dayOfWeek)!.push(k);
+      }
+    });
+    return map;
+  }, [kerjaList]);
 
   // Handle Delete
   const handleDelete = async (id: string) => {
@@ -135,10 +154,10 @@ export default function MyScheduleManager({
               Manajemen Jadwal Mandiri
             </span>
             <h2 className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white mt-1">
-              Pengaturan Jadwal Kuliah & Kegiatan {currentUserName}
+              Pengaturan Jadwal Kuliah & Kerja {currentUserName}
             </h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Input jadwal perkuliahan semester aktif dan agenda kegiatan pribadi agar koordinator mengetahui waktu luang Anda.
+              Input jadwal perkuliahan semester aktif, jadwal kerja rutin (kuliah sambil kerja), dan appointment pribadi Anda.
             </p>
           </div>
 
@@ -153,9 +172,23 @@ export default function MyScheduleManager({
               }}
               className="px-4 py-2.5 rounded-2xl text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-md shadow-purple-500/25 flex items-center gap-2 transition-all active:scale-95"
             >
-              <span>➕</span>
+              <span>🎓</span>
               <span>Tambah Jadwal Kuliah</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setModalDefaultType('KERJA');
+                setModalEditItem(null);
+                setIsModalOpen(true);
+              }}
+              className="px-4 py-2.5 rounded-2xl text-xs font-black bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-500/25 flex items-center gap-2 transition-all active:scale-95"
+            >
+              <span>💼</span>
+              <span>Tambah Jadwal Kerja</span>
+            </button>
+
             <button
               type="button"
               onClick={() => {
@@ -206,6 +239,22 @@ export default function MyScheduleManager({
             <span>Jadwal Perkuliahan Rutin</span>
             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-purple-500/10 text-purple-600">
               {kuliahList.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('KERJA')}
+            className={`pb-3 px-3 text-xs font-black transition-all flex items-center gap-2 border-b-2 whitespace-nowrap ${
+              activeTab === 'KERJA'
+                ? 'border-amber-600 text-amber-600 dark:text-amber-400'
+                : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+            }`}
+          >
+            <span>💼</span>
+            <span>Jadwal Kerja (Sambil Kerja)</span>
+            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500/10 text-amber-600">
+              {kerjaList.length}
             </span>
           </button>
 
@@ -322,18 +371,29 @@ export default function MyScheduleManager({
                             key={item.id}
                             className={`p-4 rounded-2xl border transition-all space-y-2.5 ${
                               item.isActive
-                                ? 'bg-zinc-50 dark:bg-[#121216] border-zinc-200/80 dark:border-zinc-800/80'
+                                ? item.deliveryMode === 'ONLINE'
+                                  ? 'bg-cyan-500/5 dark:bg-cyan-950/20 border-cyan-500/30'
+                                  : 'bg-zinc-50 dark:bg-[#121216] border-zinc-200/80 dark:border-zinc-800/80'
                                 : 'bg-zinc-100/50 dark:bg-zinc-900/40 border-zinc-200/40 dark:border-zinc-800/40 opacity-60'
                             }`}
                           >
                             {/* Card Top */}
                             <div className="flex items-start justify-between gap-2">
-                              <div className="space-y-0.5">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-[10px] font-black font-mono text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md">
                                   ⏰ {item.startTime} - {item.endTime} WIB
                                 </span>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                                  item.deliveryMode === 'ONLINE'
+                                    ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
+                                    : item.deliveryMode === 'HYBRID'
+                                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                                    : 'bg-zinc-200/80 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
+                                }`}>
+                                  {item.deliveryMode === 'ONLINE' ? '💻 Online (Daring)' : item.deliveryMode === 'HYBRID' ? '🔄 Hybrid' : '🏛️ Tatap Muka'}
+                                </span>
                                 {item.semesterLabel && (
-                                  <span className="text-[10px] text-zinc-400 ml-2 font-medium">
+                                  <span className="text-[10px] text-zinc-400 font-medium">
                                     • {item.semesterLabel}
                                   </span>
                                 )}
@@ -394,7 +454,7 @@ export default function MyScheduleManager({
                               )}
                               {item.room && (
                                 <p className="text-[11px] text-zinc-500">
-                                  📍 Ruangan: {item.room}
+                                  📍 Ruangan / Platform: {item.room}
                                 </p>
                               )}
                               {item.notes && (
@@ -414,7 +474,162 @@ export default function MyScheduleManager({
           </div>
         )}
 
-        {/* Tab 2: Agenda & Appointment */}
+        {/* Tab 2: Jadwal Kerja (Sambil Kerja) */}
+        {activeTab === 'KERJA' && (
+          <div className="pt-5 space-y-6">
+            <div className="p-4 rounded-2xl bg-amber-500/5 dark:bg-amber-950/20 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">💼</span>
+                <div>
+                  <h4 className="text-xs font-black text-amber-900 dark:text-amber-300">
+                    Jadwal Kerja Troopers (Kuliah Sambil Kerja)
+                  </h4>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5">
+                    Catat jadwal kerja harian / shift kerja rutin Anda (part-time, full-time, freelance) agar koordinator dapat memperhitungkan waktu ketersediaan penugasan.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setModalDefaultType('KERJA');
+                  setModalEditItem(null);
+                  setIsModalOpen(true);
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-500/20 transition-all shrink-0 active:scale-95"
+              >
+                ➕ Tambah Jadwal Kerja
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-2">
+                <div className="w-7 h-7 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                <p className="text-xs text-zinc-400 font-bold">Memuat jadwal kerja Anda...</p>
+              </div>
+            ) : kerjaList.length === 0 ? (
+              <div className="py-12 text-center border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl p-8 bg-zinc-50/50 dark:bg-zinc-900/20">
+                <span className="text-3xl">💼</span>
+                <p className="text-sm font-bold text-zinc-700 dark:text-zinc-300 mt-2">
+                  Belum ada jadwal kerja rutin yang dicatat
+                </p>
+                <p className="text-xs text-zinc-400 mt-1 max-w-md mx-auto">
+                  Jika Anda bekerja sambil kuliah, input jadwal kerja di sini agar ketersediaan waktu Anda terpantau transparan.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalDefaultType('KERJA');
+                    setModalEditItem(null);
+                    setIsModalOpen(true);
+                  }}
+                  className="mt-4 px-5 py-2.5 rounded-2xl text-xs font-black bg-amber-600 text-white shadow-md shadow-amber-500/20 hover:bg-amber-700 transition-all"
+                >
+                  ➕ Tambah Jadwal Kerja Pertama
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {[1, 2, 3, 4, 5, 6, 7].map((dayNum) => {
+                  const dayMeta = DAY_OF_WEEK_NAMES[dayNum];
+                  const dayWorkList = kerjaByDay.get(dayNum) || [];
+                  if (dayWorkList.length === 0) return null;
+
+                  return (
+                    <div key={dayNum} className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-500" />
+                        <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-200">
+                          {dayMeta.name}
+                        </h4>
+                        <span className="text-[10px] text-zinc-400 font-bold">
+                          ({dayWorkList.length} Shift / Pekerjaan)
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {dayWorkList.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`p-4 rounded-2xl border transition-all space-y-2.5 ${
+                              item.isActive
+                                ? 'bg-amber-500/5 dark:bg-amber-950/15 border-amber-500/25'
+                                : 'bg-zinc-100/50 dark:bg-zinc-900/40 border-zinc-200/40 opacity-60'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[10px] font-black font-mono text-amber-700 dark:text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-md">
+                                  ⏰ {item.startTime} - {item.endTime} WIB
+                                </span>
+                                <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-800 dark:text-amber-300">
+                                  {item.deliveryMode === 'WFH' ? '🏠 WFH' : item.deliveryMode === 'HYBRID' ? '🔄 Hybrid' : '🏢 WFO'}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggle(item.id, item.isActive)}
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                    item.isActive
+                                      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                      : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-500'
+                                  }`}
+                                  title="Toggle status aktif"
+                                >
+                                  {item.isActive ? 'Aktif' : 'Non-aktif'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setModalEditItem(item);
+                                    setIsModalOpen(true);
+                                  }}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-amber-600 text-xs"
+                                  title="Edit jadwal kerja"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(item.id)}
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-zinc-500 hover:text-red-600 text-xs"
+                                  title="Hapus"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </div>
+
+                            <h5 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                              {item.title || item.courseName || 'Jadwal Kerja'}
+                            </h5>
+
+                            <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1 pt-1 border-t border-amber-500/15">
+                              {item.campusName && (
+                                <p>🏢 Perusahaan: <strong className="text-zinc-800 dark:text-zinc-200">{item.campusName}</strong></p>
+                              )}
+                              {item.location && (
+                                <p>📍 Lokasi: {item.location}</p>
+                              )}
+                              {item.notes && (
+                                <p className="text-[11px] text-zinc-500 italic">📝 {item.notes}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: Agenda & Appointment */}
         {activeTab === 'APPOINTMENT' && (
           <div className="pt-5 space-y-4">
             {appointmentList.length === 0 ? (
@@ -495,7 +710,7 @@ export default function MyScheduleManager({
           </div>
         )}
 
-        {/* Tab 3: Surat Tugas (Automatic Integration) */}
+        {/* Tab 4: Surat Tugas (Automatic Integration) */}
         {activeTab === 'SURAT_TUGAS' && (
           <div className="pt-5 space-y-4">
             <div className="p-4 rounded-2xl bg-blue-500/5 dark:bg-blue-950/20 border border-blue-500/20 flex items-center gap-3">

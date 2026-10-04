@@ -531,19 +531,33 @@ export default function AllUsersCourseDirectory({
                         </div>
 
                         <div className="space-y-2.5">
-                          {classesForDay.map((kuliah) => (
-                            <div
-                              key={kuliah.id}
-                              className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/90 border border-purple-500/20 space-y-2 text-xs"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md">
-                                  Perkuliahan
-                                </span>
-                                <span className="text-xs font-mono font-bold text-purple-700 dark:text-purple-300">
-                                  ⏰ {kuliah.startTime} - {kuliah.endTime} WIB
-                                </span>
-                              </div>
+                          {classesForDay.map((kuliah) => {
+                            const isOnline = kuliah.deliveryMode === 'ONLINE';
+                            const isHybrid = kuliah.deliveryMode === 'HYBRID';
+
+                            return (
+                              <div
+                                key={kuliah.id}
+                                className={`p-4 rounded-2xl border space-y-2 text-xs ${
+                                  isOnline
+                                    ? 'bg-cyan-500/5 dark:bg-cyan-950/20 border-cyan-500/25'
+                                    : 'bg-zinc-50 dark:bg-zinc-900/90 border-purple-500/20'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
+                                    isOnline
+                                      ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
+                                      : isHybrid
+                                      ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400'
+                                      : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'
+                                  }`}>
+                                    {isOnline ? '💻 Kuliah Online (Daring)' : isHybrid ? '🔄 Hybrid' : '🏛️ Tatap Muka (Offline)'}
+                                  </span>
+                                  <span className="text-xs font-mono font-bold text-purple-700 dark:text-purple-300">
+                                    ⏰ {kuliah.startTime} - {kuliah.endTime} WIB
+                                  </span>
+                                </div>
 
                               <h5 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                                 {kuliah.courseCode ? `[${kuliah.courseCode}] ` : ''}
@@ -577,7 +591,8 @@ export default function AllUsersCourseDirectory({
                                 )}
                               </div>
                             </div>
-                          ))}
+                          );
+                        })}
                         </div>
                       </div>
                     );
