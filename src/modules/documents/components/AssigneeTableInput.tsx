@@ -106,6 +106,7 @@ export const AssigneeTableInput: React.FC<AssigneeTableInputProps> = ({
   const handleSelectTrooper = (trooper: any) => {
     const newRow: any = {
       no: rows.length + 1,
+      userId: trooper.id,
     };
     inputColumns.forEach((col) => {
       const k = col.key.toLowerCase();

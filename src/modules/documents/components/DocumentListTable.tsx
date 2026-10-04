@@ -11,6 +11,7 @@ import {
   submitForApprovalAction,
   duplicateDocumentAction,
 } from '../documentActions';
+import { SuratTugasDistributionModal } from './SuratTugasDistributionModal';
 
 interface DocumentListTableProps {
   documents: GeneratedDocumentItem[];
@@ -34,6 +35,9 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Sparks & Badge Distribution Modal state
+  const [selectedDocForDistribution, setSelectedDocForDistribution] = useState<GeneratedDocumentItem | null>(null);
 
   const pendingCount = documents.filter((d) => d.status === 'PENDING_APPROVAL').length;
   const issuedCount = documents.filter((d) => d.status === 'ISSUED' || d.status === 'GENERATED' || d.status === 'SIGNED').length;
@@ -304,6 +308,10 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
               minute: '2-digit',
             });
 
+            const isOfficial = doc.status === 'ISSUED' || doc.status === 'GENERATED' || doc.status === 'SIGNED';
+            const isSuratTugas = doc.type_code === 'SURAT_TUGAS';
+            const sparksDist = doc.form_data?.sparks_distribution;
+
             return (
               <div
                 key={doc.id}
@@ -324,6 +332,14 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                   {renderStatusBadge(doc.status)}
                 </div>
 
+                {/* Sparks distributed badge */}
+                {sparksDist && (
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-[11px] font-bold">
+                    <span>✨</span>
+                    <span>{sparksDist.total_sparks} Sparks Terdistribusi ({sparksDist.total_recipients} Petugas)</span>
+                  </div>
+                )}
+
                 {doc.status === 'REJECTED' && doc.rejection_reason && (
                   <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400">
                     <strong>Catatan Revisi:</strong> {doc.rejection_reason}
@@ -342,6 +358,19 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                   >
                     <span>👁️</span> Buka / PDF
                   </Link>
+
+                  {/* Sparks distribution shortcut */}
+                  {canManage && isSuratTugas && isOfficial && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDocForDistribution(doc)}
+                      className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold text-xs flex items-center gap-1 shadow-xs active:scale-95"
+                      title="Distribusi Sparks & Badge untuk Petugas"
+                    >
+                      <span>⚡</span>
+                      <span>{sparksDist ? 'Distribusi Ulang' : 'Bagi Sparks'}</span>
+                    </button>
+                  )}
 
                   {canManage && doc.status === 'PENDING_APPROVAL' && (
                     <button
@@ -399,137 +428,193 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
         )}
       </div>
 
-      {/* Desktop Table List (hidden sm:block) */}
+      {/* Desktop Responsive Table (fits within screen without forced horizontal scrolling) */}
       <div className="hidden sm:block border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 shadow-xs">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead className="bg-zinc-50 dark:bg-zinc-800/60 text-zinc-500 dark:text-zinc-400 font-bold border-b border-zinc-200 dark:border-zinc-800 uppercase tracking-wider">
+        <table className="w-full text-xs text-left border-collapse">
+          <thead className="bg-zinc-50 dark:bg-zinc-800/60 text-zinc-500 dark:text-zinc-400 font-bold border-b border-zinc-200 dark:border-zinc-800 uppercase tracking-wider">
+            <tr>
+              <th className="px-3.5 py-3 w-[24%]">Nomor &amp; Jenis Surat</th>
+              <th className="px-3.5 py-3 w-[28%]">Judul Dokumen</th>
+              <th className="px-3.5 py-3 w-[16%]">Status</th>
+              <th className="px-3.5 py-3 w-[14%]">Dibuat &amp; Tanggal</th>
+              <th className="px-3.5 py-3 w-[18%] text-right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 font-medium text-zinc-800 dark:text-zinc-200">
+            {filtered.length === 0 ? (
               <tr>
-                <th className="px-4 py-3">Nomor Surat</th>
-                <th className="px-4 py-3">Judul Dokumen</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Template / Jenis</th>
-                <th className="px-4 py-3">Dibuat Oleh</th>
-                <th className="px-4 py-3">Tanggal</th>
-                <th className="px-4 py-3 text-right">Aksi</th>
+                <td colSpan={5} className="text-center py-10 text-zinc-400">
+                  <p className="text-sm font-semibold">Tidak ada dokumen pada kategori ini.</p>
+                  <p className="text-xs mt-1">Klik &quot;+ Buat Surat Baru&quot; untuk membuat dokumen baru.</p>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 font-medium text-zinc-800 dark:text-zinc-200">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="text-center py-10 text-zinc-400">
-                    <p className="text-sm font-semibold">Tidak ada dokumen pada kategori ini.</p>
-                    <p className="text-xs mt-1">Klik &quot;+ Buat Surat Baru&quot; untuk membuat dokumen baru.</p>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((doc) => {
-                  const dateStr = new Date(doc.created_at * 1000).toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
+            ) : (
+              filtered.map((doc) => {
+                const dateStr = new Date(doc.created_at * 1000).toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                });
+                const timeStr = new Date(doc.created_at * 1000).toLocaleTimeString('id-ID', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
 
-                  return (
-                    <tr key={doc.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
-                      <td className="px-4 py-3.5 font-bold font-mono text-purple-600 dark:text-purple-400 whitespace-nowrap">
-                        <Link href={`/dashboard/documents/${doc.id}`} className="hover:underline">
+                const isOfficial = doc.status === 'ISSUED' || doc.status === 'GENERATED' || doc.status === 'SIGNED';
+                const isSuratTugas = doc.type_code === 'SURAT_TUGAS';
+                const sparksDist = doc.form_data?.sparks_distribution;
+                const eventName = doc.form_data?.event_name;
+
+                return (
+                  <tr key={doc.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
+                    {/* Nomor & Jenis */}
+                    <td className="px-3.5 py-3 align-top">
+                      <div className="space-y-1">
+                        <Link
+                          href={`/dashboard/documents/${doc.id}`}
+                          className="font-bold font-mono text-purple-600 dark:text-purple-400 text-xs hover:underline block leading-tight break-all"
+                          title={doc.document_number}
+                        >
                           {doc.document_number}
                         </Link>
-                      </td>
-                      <td className="px-4 py-3.5 max-w-xs">
-                        <div className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[10px] font-medium leading-none">
+                          {doc.template_name || doc.type_code} (v{doc.template_version})
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Judul & Event Subtitle */}
+                    <td className="px-3.5 py-3 align-top">
+                      <div className="space-y-0.5">
+                        <div className="font-bold text-zinc-900 dark:text-zinc-100 text-xs leading-snug">
                           {doc.title}
                         </div>
+                        {eventName && (
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 line-clamp-1">
+                            📍 {eventName}
+                          </p>
+                        )}
                         {doc.status === 'REJECTED' && doc.rejection_reason && (
-                          <span className="text-[10px] text-red-500 truncate block mt-0.5" title={doc.rejection_reason}>
+                          <span className="text-[10px] text-red-500 block line-clamp-1 mt-0.5" title={doc.rejection_reason}>
                             ⚠️ {doc.rejection_reason}
                           </span>
                         )}
-                      </td>
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        {renderStatusBadge(doc.status)}
-                      </td>
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 text-[11px] font-medium">
-                          {doc.template_name || doc.type_code} (v{doc.template_version})
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 whitespace-nowrap text-zinc-600 dark:text-zinc-400">
-                        {doc.created_by_name || 'Admin'}
-                      </td>
-                      <td className="px-4 py-3.5 whitespace-nowrap text-zinc-500 font-mono text-[11px]">
-                        {dateStr} WIB
-                      </td>
-                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {canManage && doc.status === 'PENDING_APPROVAL' && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedDocForApproval(doc);
-                                setShowRejectForm(false);
-                                setActionError(null);
-                              }}
-                              className="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-all flex items-center gap-1 shadow-xs"
-                            >
-                              <span>⚖️</span> Review
-                            </button>
-                          )}
+                      </div>
+                    </td>
 
-                          {(doc.status === 'DRAFT' || doc.status === 'REJECTED') && (
-                            <button
-                              type="button"
-                              onClick={() => handleQuickSubmit(doc.id)}
-                              className="px-2.5 py-1.5 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 font-bold transition-all text-xs"
-                            >
-                              Ajukan
-                            </button>
-                          )}
+                    {/* Status & Sparks Indicator */}
+                    <td className="px-3.5 py-3 align-top">
+                      <div className="space-y-1.5">
+                        <div>{renderStatusBadge(doc.status)}</div>
+                        {sparksDist ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-500/20"
+                            title={`Sparks dibagikan kepada ${sparksDist.total_recipients} petugas`}
+                          >
+                            <span>✨</span>
+                            <span>{sparksDist.total_sparks} Sparks</span>
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
 
+                    {/* Dibuat & Tanggal */}
+                    <td className="px-3.5 py-3 align-top text-zinc-600 dark:text-zinc-400">
+                      <div className="text-[11px] space-y-0.5">
+                        <div className="font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+                          {doc.created_by_name || 'Admin'}
+                        </div>
+                        <div className="text-zinc-400 dark:text-zinc-500 text-[10px] font-mono">
+                          {dateStr}, {timeStr}
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Action Buttons (Compact & Fully Visible) */}
+                    <td className="px-3.5 py-3 align-top text-right">
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        {/* Sparks Distribution Shortcut for Surat Tugas */}
+                        {canManage && isSuratTugas && isOfficial && (
                           <button
                             type="button"
-                            onClick={() => handleDuplicate(doc.id)}
-                            disabled={isDuplicatingId === doc.id}
-                            className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
-                            title="Duplikasi Dokumen Ini"
+                            onClick={() => setSelectedDocForDistribution(doc)}
+                            className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all flex items-center gap-1 shadow-xs active:scale-95 ${
+                              sparksDist
+                                ? 'bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border border-amber-500/30'
+                                : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white'
+                            }`}
+                            title={sparksDist ? 'Distribusi Ulang Sparks & Badge' : 'Bagi Sparks Otomatis untuk Petugas'}
                           >
-                            {isDuplicatingId === doc.id ? (
-                              <span className="w-3.5 h-3.5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin inline-block" />
-                            ) : (
-                              <span>📑</span>
-                            )}
+                            <span>⚡</span>
+                            <span className="hidden xl:inline">{sparksDist ? 'Sparks' : 'Bagi Sparks'}</span>
                           </button>
+                        )}
 
-                          <Link
-                            href={`/dashboard/documents/${doc.id}`}
-                            className="px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-bold transition-all text-xs"
+                        {canManage && doc.status === 'PENDING_APPROVAL' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedDocForApproval(doc);
+                              setShowRejectForm(false);
+                              setActionError(null);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-all flex items-center gap-1 shadow-xs"
                           >
-                            👁️ Buka
-                          </Link>
+                            <span>⚖️</span> Review
+                          </button>
+                        )}
 
-                          {canManage && (
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(doc.id, doc.document_number)}
-                              disabled={isDeletingId === doc.id}
-                              className="p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-400 hover:text-red-500 transition-colors"
-                              title="Hapus Dokumen"
-                            >
-                              🗑️
-                            </button>
+                        {(doc.status === 'DRAFT' || doc.status === 'REJECTED') && (
+                          <button
+                            type="button"
+                            onClick={() => handleQuickSubmit(doc.id)}
+                            className="px-2.5 py-1.5 rounded-xl bg-purple-600/10 hover:bg-purple-600/20 text-purple-600 dark:text-purple-400 font-bold transition-all text-xs"
+                          >
+                            Ajukan
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicate(doc.id)}
+                          disabled={isDuplicatingId === doc.id}
+                          className="p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors"
+                          title="Duplikasi Dokumen Ini"
+                        >
+                          {isDuplicatingId === doc.id ? (
+                            <span className="w-3.5 h-3.5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin inline-block" />
+                          ) : (
+                            <span>📑</span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                        </button>
+
+                        <Link
+                          href={`/dashboard/documents/${doc.id}`}
+                          className="px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 font-bold transition-all text-xs flex items-center gap-1 shrink-0"
+                          title="Buka Dokumen / Ekspor PDF"
+                        >
+                          <span>👁️</span> Buka
+                        </Link>
+
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(doc.id, doc.document_number)}
+                            disabled={isDeletingId === doc.id}
+                            className="p-1.5 rounded-lg hover:bg-red-500/10 text-zinc-400 hover:text-red-500 transition-colors"
+                            title="Hapus Dokumen"
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Review & Approval Modal for Admin */}
@@ -669,6 +754,15 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Sparks & Badge Distribution Modal */}
+      {selectedDocForDistribution && (
+        <SuratTugasDistributionModal
+          documentId={selectedDocForDistribution.id}
+          isOpen={true}
+          onClose={() => setSelectedDocForDistribution(null)}
+        />
       )}
     </div>
   );

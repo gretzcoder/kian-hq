@@ -1807,4 +1807,384 @@ export async function getSuratTugasDispensationPreloadAction(suratTugasId: strin
   }
 }
 
+export interface MatchedAssigneeInfo {
+  index: number;
+  rawName: string;
+  rawNip: string;
+  rawRole: string;
+  userId: string | null;
+  userName: string;
+  userEmail: string | null;
+  userType: string | null;
+  isMatched: boolean;
+  included: boolean;
+  sparks: number;
+}
+
+export interface SuratTugasSparksInfoResult {
+  success: boolean;
+  documentId?: string;
+  documentNumber?: string;
+  title?: string;
+  eventName?: string;
+  eventDays?: string;
+  eventTime?: string;
+  eventLocation?: string;
+  defaultSparks: number;
+  assignees: MatchedAssigneeInfo[];
+  availableUsers: Array<{
+    id: string;
+    name: string;
+    email: string;
+    student_id_number: string | null;
+    user_type: string | null;
+  }>;
+  existingDistribution?: {
+    distributed_at: number;
+    distributed_by: string;
+    distributed_by_name?: string;
+    total_recipients: number;
+    total_sparks: number;
+    badge_id?: string;
+    badge_name?: string;
+    recipients?: Array<{
+      userId: string;
+      name: string;
+      nip?: string;
+      role?: string;
+      sparks: number;
+      included: boolean;
+    }>;
+  } | null;
+  error?: string;
+}
+
+/**
+ * Prepares and matches assignee data from Surat Tugas with database users for Sparks & Badge distribution.
+ */
+export async function getSuratTugasSparksDistributionInfoAction(
+  documentId: string
+): Promise<SuratTugasSparksInfoResult> {
+  const session = await getSession();
+  if (!session) {
+    return { success: false, defaultSparks: 60, assignees: [], availableUsers: [], error: 'Unauthorized' };
+  }
+
+  const db = await getDB();
+
+  try {
+    const doc = (await db
+      .prepare('SELECT id, document_number, title, type_code, form_data, status FROM generated_documents WHERE id = ?')
+      .bind(documentId)
+      .first()) as any;
+
+    if (!doc) {
+      return { success: false, defaultSparks: 60, assignees: [], availableUsers: [], error: 'Dokumen tidak ditemukan.' };
+    }
+
+    let formData: any = {};
+    try {
+      formData = JSON.parse(doc.form_data || '{}');
+    } catch {}
+
+    const rawAssignees: any[] = Array.isArray(formData.assignees) ? formData.assignees : [];
+    const eventName = (formData.event_name || doc.title || 'Kegiatan KIAN Troopers').trim();
+    const eventDays = (formData.event_days || '').trim();
+    const eventTime = (formData.event_time || '08.00 WIB - Selesai').trim();
+    const eventLocation = (formData.event_location || '-').trim();
+
+    // Query all active users
+    const { results: rawUsers } = await db
+      .prepare(`
+        SELECT id, name, email, student_id_number, user_type
+        FROM users
+        WHERE status = 'ACTIVE'
+        ORDER BY name ASC
+      `)
+      .all();
+
+    const availableUsers = (rawUsers || []).map((u: any) => ({
+      id: u.id,
+      name: u.name || 'Pengguna',
+      email: u.email || '',
+      student_id_number: u.student_id_number || null,
+      user_type: u.user_type || 'OJT',
+    }));
+
+    const assignees: MatchedAssigneeInfo[] = rawAssignees.map((a: any, idx: number) => {
+      const rawName = (a.name || '').trim();
+      const rawNip = (a.nip || a.nim || '').trim();
+      const rawRole = (a.role || a.tugas || 'Petugas').trim();
+      const directUserId = (a.userId || '').trim();
+
+      let matchedUser = null;
+
+      // 1. Match by direct userId
+      if (directUserId) {
+        matchedUser = availableUsers.find((u) => u.id === directUserId);
+      }
+
+      // 2. Match by student_id_number / NIP
+      if (!matchedUser && rawNip) {
+        matchedUser = availableUsers.find(
+          (u) => u.student_id_number && u.student_id_number.trim().toLowerCase() === rawNip.toLowerCase()
+        );
+      }
+
+      // 3. Match by exact name
+      if (!matchedUser && rawName) {
+        matchedUser = availableUsers.find(
+          (u) => u.name.trim().toLowerCase() === rawName.toLowerCase()
+        );
+      }
+
+      // 4. Match by fuzzy name containment
+      if (!matchedUser && rawName && rawName.length >= 3) {
+        matchedUser = availableUsers.find(
+          (u) =>
+            u.name.toLowerCase().includes(rawName.toLowerCase()) ||
+            rawName.toLowerCase().includes(u.name.toLowerCase())
+        );
+      }
+
+      return {
+        index: idx,
+        rawName: rawName || `Petugas ${idx + 1}`,
+        rawNip: rawNip || '-',
+        rawRole: rawRole || 'Petugas',
+        userId: matchedUser ? matchedUser.id : null,
+        userName: matchedUser ? matchedUser.name : rawName || `Petugas ${idx + 1}`,
+        userEmail: matchedUser ? matchedUser.email : null,
+        userType: matchedUser ? matchedUser.user_type : null,
+        isMatched: !!matchedUser,
+        included: true, // by default everyone is present on event day
+        sparks: 60, // default 60 sparks
+      };
+    });
+
+    const existingDistribution = formData.sparks_distribution || null;
+
+    return {
+      success: true,
+      documentId: doc.id,
+      documentNumber: doc.document_number,
+      title: doc.title,
+      eventName,
+      eventDays,
+      eventTime,
+      eventLocation,
+      defaultSparks: 60,
+      assignees,
+      availableUsers,
+      existingDistribution,
+    };
+  } catch (err: any) {
+    console.error('getSuratTugasSparksDistributionInfoAction error:', err);
+    return { success: false, defaultSparks: 60, assignees: [], availableUsers: [], error: err.message || 'Gagal memuat data.' };
+  }
+}
+
+export interface DistributeSuratTugasSparksPayload {
+  documentId: string;
+  defaultSparks: number;
+  recipients: Array<{
+    userId: string;
+    name: string;
+    nip?: string;
+    role?: string;
+    sparks: number;
+    included: boolean;
+  }>;
+  createBadge: boolean;
+  badgeTitle?: string;
+  badgeDescription?: string;
+  badgeIconUrl?: string;
+}
+
+/**
+ * Server action: Distributes Sparks and awards an optional Event Badge to all participating personnel in Surat Tugas.
+ */
+export async function distributeSuratTugasSparksAndBadgesAction(
+  payload: DistributeSuratTugasSparksPayload
+): Promise<{
+  success: boolean;
+  totalSparks?: number;
+  recipientCount?: number;
+  badgeCreated?: boolean;
+  badgeName?: string;
+  error?: string;
+}> {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Unauthorized' };
+
+  const ctx = await getSessionContext(session.userId);
+  const canDistribute =
+    ctx.userType === 'STAFF' ||
+    ctx.roles.includes('COORDINATOR') ||
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.can('MANAGE') ||
+    ctx.can('SPARKS_MANAGE') ||
+    ctx.can('DOCUMENT_MANAGE') ||
+    ctx.permissions.has('ADMIN_SYSTEM');
+
+  if (!canDistribute) {
+    return { success: false, error: 'Anda tidak memiliki wewenang untuk mendistribusikan Sparks atau Badge.' };
+  }
+
+  const { documentId, recipients = [], createBadge, defaultSparks = 60 } = payload;
+  if (!documentId) return { success: false, error: 'ID Dokumen tidak valid.' };
+
+  const includedRecipients = recipients.filter((r) => r.included && r.userId && (Number(r.sparks) > 0 || r.sparks === 0));
+  if (includedRecipients.length === 0) {
+    return { success: false, error: 'Pilih setidaknya satu petugas yang hadir dan memiliki akun KIAN HQ.' };
+  }
+
+  const db = await getDB();
+
+  try {
+    const doc = (await db
+      .prepare('SELECT id, document_number, title, type_code, form_data, rendered_snapshot, status FROM generated_documents WHERE id = ?')
+      .bind(documentId)
+      .first()) as any;
+
+    if (!doc) {
+      return { success: false, error: 'Dokumen Surat Tugas tidak ditemukan.' };
+    }
+
+    let formData: any = {};
+    try {
+      formData = JSON.parse(doc.form_data || '{}');
+    } catch {}
+
+    const eventName = (formData.event_name || doc.title || 'Kegiatan KIAN Troopers').trim();
+    let badgeId: string | null = null;
+    let finalBadgeName: string | null = null;
+
+    // 1. Handle Badge Creation & Assignment (Category: EVENT)
+    if (createBadge) {
+      finalBadgeName = (payload.badgeTitle || eventName || 'Event KIAN Troopers').trim();
+      const badgeDescription = (payload.badgeDescription || `Lencana keikutsertaan event ${eventName} sesuai Surat Tugas No. ${doc.document_number}`).trim();
+      const badgeIcon = payload.badgeIconUrl || null;
+
+      // Check if existing EVENT badge with this exact name already exists
+      const existingBadge = (await db
+        .prepare("SELECT id, name FROM badges WHERE LOWER(name) = LOWER(?) AND category = 'EVENT'")
+        .bind(finalBadgeName)
+        .first()) as any;
+
+      if (existingBadge) {
+        badgeId = existingBadge.id;
+      } else {
+        badgeId = `badge_${crypto.randomUUID().replace(/-/g, '')}`;
+        const nowMs = Date.now();
+        await db
+          .prepare(`
+            INSERT INTO badges (id, name, category, icon_url, description, requirement_type, requirement_data, is_continuous_earning, sparks_reward, created_by, created_at)
+            VALUES (?, ?, 'EVENT', ?, ?, 'NONE', NULL, 0, 0, ?, ?)
+          `)
+          .bind(badgeId, finalBadgeName, badgeIcon, badgeDescription, session.userId, nowMs)
+          .run();
+      }
+
+      // Award badge to each participating recipient
+      const nowMs = Date.now();
+      for (const recipient of includedRecipients) {
+        const ubId = `ub_${crypto.randomUUID().replace(/-/g, '')}`;
+        try {
+          await db
+            .prepare(`
+              INSERT OR IGNORE INTO user_badges (id, user_id, badge_id, awarded_by, awarded_at, claimed_at, claim_count)
+              VALUES (?, ?, ?, ?, ?, ?, 1)
+            `)
+            .bind(ubId, recipient.userId, badgeId, session.userId, nowMs, nowMs)
+            .run();
+        } catch (_e) {
+          // ignore duplicate
+        }
+      }
+    }
+
+    // 2. Distribute Sparks to Included Recipients in sparks_adjustments
+    let totalSparks = 0;
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    for (const recipient of includedRecipients) {
+      const sparksVal = Number(recipient.sparks) || 0;
+      if (sparksVal > 0) {
+        const saId = `sa_${crypto.randomUUID().replace(/-/g, '')}`;
+        const note = `Sparks Tugas: ${eventName} (${doc.document_number}) - ${recipient.role || 'Petugas'}`;
+        await db
+          .prepare(`
+            INSERT INTO sparks_adjustments (id, user_id, type, sparks, category, note, created_by, created_at, badge_id)
+            VALUES (?, ?, 'APPRECIATION', ?, 'SURAT_TUGAS', ?, ?, ?, ?)
+          `)
+          .bind(saId, recipient.userId, sparksVal, note, session.userId, nowSec, badgeId || null)
+          .run();
+
+        totalSparks += sparksVal;
+      }
+    }
+
+    // 3. Save distribution metadata into generated_documents.form_data
+    const currentUser = (await db
+      .prepare('SELECT name FROM users WHERE id = ?')
+      .bind(session.userId)
+      .first()) as any;
+
+    formData.sparks_distribution = {
+      distributed_at: nowSec,
+      distributed_by: session.userId,
+      distributed_by_name: currentUser?.name || 'Admin',
+      default_sparks: defaultSparks,
+      total_recipients: includedRecipients.length,
+      total_sparks: totalSparks,
+      badge_id: badgeId,
+      badge_name: finalBadgeName,
+      recipients: recipients.map((r) => ({
+        userId: r.userId,
+        name: r.name,
+        nip: r.nip || '',
+        role: r.role || '',
+        sparks: r.included ? Number(r.sparks) || 0 : 0,
+        included: r.included,
+      })),
+    };
+
+    await db
+      .prepare('UPDATE generated_documents SET form_data = ?, updated_at = ? WHERE id = ?')
+      .bind(JSON.stringify(formData), nowSec, documentId)
+      .run();
+
+    // 4. Log Workflow Event
+    await logWorkflowEvent({
+      entityType: 'task',
+      entityId: doc.id,
+      fromStatus: doc.status,
+      toStatus: doc.status,
+      triggeredBy: session.userId,
+      note: `Distribusi ${totalSparks} Sparks & Badge '${finalBadgeName || 'Event'}' kepada ${includedRecipients.length} personil bertugas (${doc.document_number})`,
+    });
+
+    // 5. Revalidate paths
+    revalidatePath('/dashboard/documents');
+    revalidatePath(`/dashboard/documents/${documentId}`);
+    revalidatePath('/dashboard/sparks');
+    revalidatePath('/dashboard/badges');
+    revalidatePath('/dashboard/profile');
+    revalidatePath('/dashboard/leaderboard');
+
+    return {
+      success: true,
+      totalSparks,
+      recipientCount: includedRecipients.length,
+      badgeCreated: !!badgeId,
+      badgeName: finalBadgeName || undefined,
+    };
+  } catch (err: any) {
+    console.error('distributeSuratTugasSparksAndBadgesAction error:', err);
+    return { success: false, error: err.message || 'Gagal mendistribusikan Sparks.' };
+  }
+}
+
+
 

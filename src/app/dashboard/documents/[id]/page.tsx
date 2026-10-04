@@ -8,6 +8,7 @@ import { DocumentCanvas } from '@/modules/documents/components/DocumentCanvas';
 import { DocumentPDFExporter } from '@/modules/documents/components/DocumentPDFExporter';
 import { DocumentPreviewContainer } from '@/modules/documents/components/DocumentPreviewContainer';
 import { DocumentDetailApprovalBar } from '@/modules/documents/components/DocumentDetailApprovalBar';
+import { SuratTugasSparksDistributionButton } from '@/modules/documents/components/SuratTugasSparksDistributionButton';
 
 export default async function DocumentDetailPage({
   params,
@@ -49,6 +50,7 @@ export default async function DocumentDetailPage({
   });
 
   const isOfficial = doc.status === 'ISSUED' || doc.status === 'GENERATED' || doc.status === 'SIGNED';
+  const sparksDist = (doc.form_data as any)?.sparks_distribution;
 
   return (
     <div className="space-y-5 pb-16 max-w-7xl mx-auto px-1 sm:px-0">
@@ -89,6 +91,16 @@ export default async function DocumentDetailPage({
 
         {/* Actions */}
         <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          {doc.type_code === 'SURAT_TUGAS' && isOfficial && (
+            <SuratTugasSparksDistributionButton
+              documentId={doc.id}
+              isOfficial={isOfficial}
+              canManage={isPrivileged}
+              hasDistributed={!!sparksDist}
+              totalSparks={sparksDist?.total_sparks}
+            />
+          )}
+
           {doc.type_code === 'SURAT_TUGAS' && (
             <Link
               href={`/dashboard/documents/create?fromSuratTugasId=${doc.id}`}
@@ -107,6 +119,33 @@ export default async function DocumentDetailPage({
           />
         </div>
       </div>
+
+      {/* Sparks Distribution Banner if Distributed */}
+      {doc.type_code === 'SURAT_TUGAS' && sparksDist && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-yellow-500/10 border border-amber-500/25 flex flex-wrap items-center justify-between gap-3 text-xs no-print shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">✨</span>
+            <div>
+              <p className="font-bold text-zinc-900 dark:text-zinc-100">
+                Sparks &amp; Badge Telah Didistribusikan ({sparksDist.total_sparks} Sparks ke {sparksDist.total_recipients} Petugas)
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                {sparksDist.badge_name ? `🎖️ Badge Event: "${sparksDist.badge_name}" disematkan ke penerima • ` : ''}
+                Didistribusikan oleh <strong>{sparksDist.distributed_by_name || 'Admin'}</strong>
+              </p>
+            </div>
+          </div>
+          {isPrivileged && (
+            <SuratTugasSparksDistributionButton
+              documentId={doc.id}
+              isOfficial={isOfficial}
+              canManage={isPrivileged}
+              hasDistributed={true}
+              totalSparks={sparksDist.total_sparks}
+            />
+          )}
+        </div>
+      )}
 
       {/* Smart Shortcut Banner for Surat Tugas */}
       {doc.type_code === 'SURAT_TUGAS' && (
