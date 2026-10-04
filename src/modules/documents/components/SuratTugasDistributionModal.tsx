@@ -40,6 +40,7 @@ export const SuratTugasDistributionModal: React.FC<SuratTugasDistributionModalPr
   const [badgeTitle, setBadgeTitle] = useState<string>('');
   const [badgeDescription, setBadgeDescription] = useState<string>('');
   const [selectedBadgeIcon, setSelectedBadgeIcon] = useState<string>('🌟');
+  const [badgeSparksReward, setBadgeSparksReward] = useState<number>(15); // default 15 for EVENT
 
   const BADGE_ICONS = [
     { label: 'Bintang Event', icon: '🌟' },
@@ -72,6 +73,7 @@ export const SuratTugasDistributionModal: React.FC<SuratTugasDistributionModalPr
           setBadgeDescription(
             `Lencana penugasan event ${res.eventName || res.title || ''} (${res.documentNumber || ''})`
           );
+          setBadgeSparksReward(15); // default 15 recommended for EVENT
         } else {
           setErrorMsg(res.error || 'Gagal memuat data penugasan.');
         }
@@ -161,6 +163,7 @@ export const SuratTugasDistributionModal: React.FC<SuratTugasDistributionModalPr
         badgeTitle: createBadge ? badgeTitle.trim() : undefined,
         badgeDescription: createBadge ? badgeDescription.trim() : undefined,
         badgeIconUrl: createBadge ? selectedBadgeIcon : undefined,
+        badgeSparksReward: createBadge ? badgeSparksReward : 0,
         recipients: assignees.map((a) => ({
           userId: a.userId || '',
           name: a.userName || a.rawName,
@@ -515,11 +518,64 @@ export const SuratTugasDistributionModal: React.FC<SuratTugasDistributionModalPr
                     </div>
                   </div>
 
+                  {/* Custom / Recommended Badge Sparks Reward */}
+                  <div className="space-y-2 p-3 rounded-xl bg-purple-500/5 border border-purple-500/15">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <label className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
+                          <span>✨</span> Bonus Sparks Reward Lencana:
+                        </label>
+                        <p className="text-[10px] text-zinc-500">
+                          Rekomendasi bawaan: <strong>15 Sparks</strong> (kategori EVENT).
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={0}
+                          max={500}
+                          value={badgeSparksReward}
+                          onChange={(e) => setBadgeSparksReward(Math.max(0, parseInt(e.target.value) || 0))}
+                          className="w-16 px-2 py-1 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-black text-center text-purple-600 dark:text-purple-400 focus:ring-2 focus:ring-purple-500"
+                        />
+                        <span className="text-xs font-bold text-purple-600 dark:text-purple-400">✨</span>
+                      </div>
+                    </div>
+
+                    {/* Presets */}
+                    <div className="flex flex-wrap gap-1 items-center pt-1 border-t border-purple-500/10 text-[9.5px]">
+                      <span className="text-zinc-400 mr-0.5">Preset:</span>
+                      {[
+                        { val: 0, label: '0 (Tanpa Bonus)' },
+                        { val: 10, label: '10' },
+                        { val: 15, label: '15 (Rekomendasi Event)' },
+                        { val: 20, label: '20' },
+                        { val: 25, label: '25' },
+                        { val: 35, label: '35' },
+                        { val: 50, label: '50' },
+                      ].map((item) => (
+                        <button
+                          key={item.val}
+                          type="button"
+                          onClick={() => setBadgeSparksReward(item.val)}
+                          className={`px-2 py-0.5 rounded-md font-bold transition-all ${
+                            badgeSparksReward === item.val
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-2 text-[11px] text-zinc-500">
                     <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold">
                       Kategori: EVENT
                     </span>
-                    <span>• Langsung terpasang di profil personil.</span>
+                    <span>• {badgeSparksReward > 0 ? `Bonus +${badgeSparksReward} ✨ reward badge.` : 'Tanpa bonus sparks reward.'}</span>
                   </div>
                 </div>
               )}

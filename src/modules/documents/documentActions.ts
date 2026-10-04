@@ -1999,6 +1999,7 @@ export interface DistributeSuratTugasSparksPayload {
   badgeTitle?: string;
   badgeDescription?: string;
   badgeIconUrl?: string;
+  badgeSparksReward?: number;
 }
 
 /**
@@ -2031,7 +2032,7 @@ export async function distributeSuratTugasSparksAndBadgesAction(
     return { success: false, error: 'Anda tidak memiliki wewenang untuk mendistribusikan Sparks atau Badge.' };
   }
 
-  const { documentId, recipients = [], createBadge, defaultSparks = 60 } = payload;
+  const { documentId, recipients = [], createBadge, defaultSparks = 60, badgeSparksReward } = payload;
   if (!documentId) return { success: false, error: 'ID Dokumen tidak valid.' };
 
   const includedRecipients = recipients.filter((r) => r.included && r.userId && (Number(r.sparks) > 0 || r.sparks === 0));
@@ -2065,24 +2066,31 @@ export async function distributeSuratTugasSparksAndBadgesAction(
       finalBadgeName = (payload.badgeTitle || eventName || 'Event KIAN Troopers').trim();
       const badgeDescription = (payload.badgeDescription || `Lencana keikutsertaan event ${eventName} sesuai Surat Tugas No. ${doc.document_number}`).trim();
       const badgeIcon = payload.badgeIconUrl || null;
+      const finalBadgeReward = typeof badgeSparksReward === 'number' && !isNaN(badgeSparksReward)
+        ? Math.max(0, badgeSparksReward)
+        : 15; // default recommended 15 sparks for EVENT category
 
       // Check if existing EVENT badge with this exact name already exists
       const existingBadge = (await db
-        .prepare("SELECT id, name FROM badges WHERE LOWER(name) = LOWER(?) AND category = 'EVENT'")
+        .prepare("SELECT id, name, sparks_reward FROM badges WHERE LOWER(name) = LOWER(?) AND category = 'EVENT'")
         .bind(finalBadgeName)
         .first()) as any;
 
       if (existingBadge) {
         badgeId = existingBadge.id;
+        // If existing badge had 0 sparks reward but admin provided custom reward, update it
+        if ((!existingBadge.sparks_reward || existingBadge.sparks_reward === 0) && finalBadgeReward > 0) {
+          await db.prepare('UPDATE badges SET sparks_reward = ? WHERE id = ?').bind(finalBadgeReward, badgeId).run();
+        }
       } else {
         badgeId = `badge_${crypto.randomUUID().replace(/-/g, '')}`;
         const nowMs = Date.now();
         await db
           .prepare(`
             INSERT INTO badges (id, name, category, icon_url, description, requirement_type, requirement_data, is_continuous_earning, sparks_reward, created_by, created_at)
-            VALUES (?, ?, 'EVENT', ?, ?, 'NONE', NULL, 0, 0, ?, ?)
+            VALUES (?, ?, 'EVENT', ?, ?, 'NONE', NULL, 0, ?, ?, ?)
           `)
-          .bind(badgeId, finalBadgeName, badgeIcon, badgeDescription, session.userId, nowMs)
+          .bind(badgeId, finalBadgeName, badgeIcon, badgeDescription, finalBadgeReward, session.userId, nowMs)
           .run();
       }
 
@@ -2094,9 +2102,9 @@ export async function distributeSuratTugasSparksAndBadgesAction(
           await db
             .prepare(`
               INSERT OR IGNORE INTO user_badges (id, user_id, badge_id, awarded_by, awarded_at, claimed_at, claim_count)
-              VALUES (?, ?, ?, ?, ?, ?, 1)
+              VALUES (?, ?, ?, ?, ?, NULL, 1)
             `)
-            .bind(ubId, recipient.userId, badgeId, session.userId, nowMs, nowMs)
+            .bind(ubId, recipient.userId, badgeId, session.userId, nowMs)
             .run();
         } catch (_e) {
           // ignore duplicate
