@@ -81,7 +81,7 @@ export async function deleteAnnouncement(id: string) {
   const session = await getSession();
   if (!session) throw new Error('Unauthorized: No active session');
 
-  await checkPermission(session.userId, 'DELETE');
+  await checkPermission(session.userId, 'ANNOUNCEMENT_POST');
 
   if (!id) return { success: false, error: 'Announcement ID is required.' };
 
@@ -143,7 +143,7 @@ export async function deleteAnnouncementComment(commentId: string) {
   const db = await getDB();
 
   try {
-    // Only allow owner or admin/delete permission
+    // Only allow owner or admin/announcement permission
     const existingRaw = await db
       .prepare('SELECT user_id FROM announcement_comments WHERE id = ?')
       .bind(commentId)
@@ -153,7 +153,7 @@ export async function deleteAnnouncementComment(commentId: string) {
     if (!existing) return { success: false, error: 'Comment not found.' };
 
     if (existing.user_id !== session.userId) {
-      await checkPermission(session.userId, 'DELETE');
+      await checkPermission(session.userId, 'ANNOUNCEMENT_POST');
     }
 
     await db.prepare('DELETE FROM announcement_comments WHERE id = ?').bind(commentId).run();

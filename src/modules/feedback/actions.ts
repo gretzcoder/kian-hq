@@ -401,11 +401,12 @@ export async function deleteExecutiveFeedbackReply(replyId: string) {
 
   const ctx = await getSessionContext(session.userId);
   const isCoordinator =
-    ctx.userType === 'STAFF' &&
-    (ctx.roles.includes('COORDINATOR') ||
-      ctx.roles.includes('EXECUTIVE') ||
-      ctx.can('MANAGE') ||
-      ctx.permissions.has('ADMIN_SYSTEM'));
+    ctx.can('FEEDBACK_MANAGE') ||
+    (ctx.userType === 'STAFF' &&
+      (ctx.roles.includes('COORDINATOR') ||
+        ctx.roles.includes('EXECUTIVE') ||
+        ctx.can('MANAGE') ||
+        ctx.permissions.has('ADMIN_SYSTEM')));
 
   const isOwner = reply.user_id === session.userId;
   const isAuthorized = isOwner || isCoordinator || ctx.userType === 'STAFF';

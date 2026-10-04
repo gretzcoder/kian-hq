@@ -602,7 +602,7 @@ export async function updateAvailabilityAction(
 
   const ctx = await getSessionContext(session.userId);
   const isOwner = existing.user_id === session.userId;
-  const canManage = ctx.can('ADMIN_USERS') || ctx.permissions.has('ADMIN_SYSTEM');
+  const canManage = ctx.can('AVAILABILITY_MANAGE') || ctx.can('ADMIN_USERS') || ctx.permissions.has('ADMIN_SYSTEM');
 
   if (!isOwner && !canManage) {
     return { success: false, message: 'Anda tidak memiliki izin mengedit jadwal ini.' };
@@ -697,7 +697,7 @@ export async function deleteAvailabilityAction(id: string): Promise<{ success: b
 
   const ctx = await getSessionContext(session.userId);
   const isOwner = existing.user_id === session.userId;
-  const canManage = ctx.can('ADMIN_USERS') || ctx.permissions.has('ADMIN_SYSTEM');
+  const canManage = ctx.can('AVAILABILITY_MANAGE') || ctx.can('ADMIN_USERS') || ctx.permissions.has('ADMIN_SYSTEM');
 
   if (!isOwner && !canManage) {
     return { success: false, message: 'Anda tidak memiliki izin menghapus jadwal ini.' };

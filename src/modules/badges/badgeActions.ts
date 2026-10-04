@@ -428,6 +428,8 @@ export async function getAllBadgesWithUserProgress(): Promise<{
   const ctx = await getSessionContext(session.userId);
 
   const isManager =
+    ctx.can('BADGES_MANAGE') ||
+    ctx.can('BADGE_MANAGE') ||
     ctx.userType === 'STAFF' ||
     ctx.roles.includes('COORDINATOR') ||
     ctx.roles.includes('EXECUTIVE') ||
@@ -764,6 +766,8 @@ export async function createBadgeAction(formData: FormData): Promise<{ success: 
   const ctx = await getSessionContext(session.userId);
 
   const isManager =
+    ctx.can('BADGES_MANAGE') ||
+    ctx.can('BADGE_MANAGE') ||
     ctx.userType === 'STAFF' ||
     ctx.roles.includes('COORDINATOR') ||
     ctx.roles.includes('EXECUTIVE') ||
@@ -852,6 +856,8 @@ export async function updateBadgeAction(badgeId: string, formData: FormData): Pr
   const ctx = await getSessionContext(session.userId);
 
   const isManager =
+    ctx.can('BADGES_MANAGE') ||
+    ctx.can('BADGE_MANAGE') ||
     ctx.userType === 'STAFF' ||
     ctx.roles.includes('COORDINATOR') ||
     ctx.roles.includes('EXECUTIVE') ||
@@ -980,6 +986,8 @@ export async function deleteBadgeAction(badgeId: string): Promise<{ success: boo
   const ctx = await getSessionContext(session.userId);
 
   const isManager =
+    ctx.can('BADGES_MANAGE') ||
+    ctx.can('BADGE_MANAGE') ||
     ctx.userType === 'STAFF' ||
     ctx.roles.includes('COORDINATOR') ||
     ctx.roles.includes('EXECUTIVE') ||
@@ -1016,6 +1024,8 @@ export async function awardBadgeToUsersAction(
   const ctx = await getSessionContext(session.userId);
 
   const isManager =
+    ctx.can('BADGES_MANAGE') ||
+    ctx.can('BADGE_MANAGE') ||
     ctx.userType === 'STAFF' ||
     ctx.roles.includes('COORDINATOR') ||
     ctx.roles.includes('EXECUTIVE') ||

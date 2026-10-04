@@ -321,6 +321,7 @@ export async function createOrgNodeAction(payload: {
 
   const ctx = await getSessionContext(session.userId);
   const canManage =
+    ctx.can('ORGANIZATION_MANAGE') ||
     ctx.can('ADMIN_USERS') ||
     ctx.can('ADMIN_ROLES') ||
     ctx.can('ADMIN_SYSTEM') ||
@@ -388,6 +389,7 @@ export async function updateOrgNodeAction(
 
   const ctx = await getSessionContext(session.userId);
   const canManage =
+    ctx.can('ORGANIZATION_MANAGE') ||
     ctx.can('ADMIN_USERS') ||
     ctx.can('ADMIN_ROLES') ||
     ctx.can('ADMIN_SYSTEM') ||
@@ -452,6 +454,7 @@ export async function deleteOrgNodeAction(id: string): Promise<{ success: boolea
 
   const ctx = await getSessionContext(session.userId);
   const canManage =
+    ctx.can('ORGANIZATION_MANAGE') ||
     ctx.can('ADMIN_USERS') ||
     ctx.can('ADMIN_ROLES') ||
     ctx.can('ADMIN_SYSTEM') ||
@@ -502,6 +505,7 @@ export async function assignOrgMemberAction(
 
   const ctx = await getSessionContext(session.userId);
   const canManage =
+    ctx.can('ORGANIZATION_MANAGE') ||
     ctx.can('ADMIN_USERS') ||
     ctx.can('ADMIN_ROLES') ||
     ctx.can('ADMIN_SYSTEM') ||
@@ -558,6 +562,7 @@ export async function removeOrgMemberAction(
 
   const ctx = await getSessionContext(session.userId);
   const canManage =
+    ctx.can('ORGANIZATION_MANAGE') ||
     ctx.can('ADMIN_USERS') ||
     ctx.can('ADMIN_ROLES') ||
     ctx.can('ADMIN_SYSTEM') ||

@@ -357,7 +357,7 @@ export default function BadgeGalleryView({
         <BadgeDetailModal
           badge={selectedBadge}
           isOpen={!!selectedBadge}
-          isManager={isManager}
+          isManager={isManagerState}
           onClose={() => setSelectedBadge(null)}
           onEdit={(b) => { setSelectedBadge(null); setEditingBadge(b); }}
           onAward={(b) => { setSelectedBadge(null); setAwardingBadge(b); }}

@@ -31,6 +31,8 @@ export async function isCertificateAdmin(): Promise<{ authorized: boolean; userI
 
   const ctx = await getSessionContext(session.userId);
   const authorized =
+    ctx.can('CERTIFICATES_MANAGE') ||
+    ctx.can('CERTIFICATE_MANAGE') ||
     ctx.userType === 'STAFF' ||
     ctx.can('MANAGE') ||
     ctx.can('WORKSPACE_MANAGE') ||

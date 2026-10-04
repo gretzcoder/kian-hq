@@ -98,6 +98,9 @@ async function ensureBankContentSchema(db: any) {
 export async function canManageBankContent(sessionUserId: string): Promise<boolean> {
   const ctx = await getSessionContext(sessionUserId);
 
+  // Explicit permission check
+  if (ctx.can('CONTENT_BANK_MANAGE')) return true;
+
   // Superadmin check
   if (ctx.permissions.has('ADMIN_SYSTEM') || ctx.permissions.has('MANAGE')) {
     if (ctx.userType !== 'OJT') return true;

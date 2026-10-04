@@ -310,6 +310,29 @@ export const getSessionContext = cache(async function getSessionContext(userId: 
     getUserType(userId),
   ]);
 
+const PERMISSION_ALIASES: Record<string, string[]> = {
+  'BADGES_MANAGE': ['BADGE_MANAGE'],
+  'BADGE_MANAGE': ['BADGES_MANAGE'],
+  'DOCUMENTS_MANAGE': ['DOCUMENT_MANAGE', 'DOCUMENT_CREATE', 'DOCUMENTS_CREATE'],
+  'DOCUMENT_MANAGE': ['DOCUMENTS_MANAGE', 'DOCUMENT_CREATE', 'DOCUMENTS_CREATE'],
+  'DOCUMENT_CREATE': ['DOCUMENT_MANAGE', 'DOCUMENTS_MANAGE', 'DOCUMENTS_CREATE'],
+  'DOCUMENTS_CREATE': ['DOCUMENT_MANAGE', 'DOCUMENTS_MANAGE', 'DOCUMENT_CREATE'],
+  'CERTIFICATES_MANAGE': ['CERTIFICATE_MANAGE', 'CERTIFICATE_ISSUE', 'CERTIFICATES_ISSUE'],
+  'CERTIFICATE_MANAGE': ['CERTIFICATES_MANAGE', 'CERTIFICATE_ISSUE', 'CERTIFICATES_ISSUE'],
+  'BRIEF_CREATE': ['CREATE_BRIEF'],
+  'CREATE_BRIEF': ['BRIEF_CREATE'],
+  'BRIEF_REVIEW': ['MANAGE_BRIEFS', 'BRIEF_MANAGE', 'BRIEFS_MANAGE'],
+  'MANAGE_BRIEFS': ['BRIEF_REVIEW', 'BRIEF_MANAGE', 'BRIEFS_MANAGE'],
+  'BRIEF_MANAGE': ['BRIEF_REVIEW', 'MANAGE_BRIEFS', 'BRIEFS_MANAGE'],
+  'CONTENT_BANK_MANAGE': ['CONTENT_BANK_CREATE', 'CONTENT_BANK_DELETE'],
+  'AVAILABILITY_MANAGE': ['AVAILABILITY_EDIT'],
+  'AVAILABILITY_VIEW': ['AVAILABILITY_MANAGE'],
+  'SPARKS_MANAGE': ['SPARK_MANAGE'],
+  'SPARK_MANAGE': ['SPARKS_MANAGE'],
+  'ORGANIZATION_MANAGE': ['ORG_MANAGE'],
+  'FEEDBACK_MANAGE': ['FEEDBACKS_MANAGE'],
+};
+
   const permSet = new Set([...permissions, ...orgPermissions]);
   const isSuperadmin = !simRole && (permSet.has('ADMIN_SYSTEM') || permSet.has('MANAGE'));
 
@@ -321,7 +344,14 @@ export const getSessionContext = cache(async function getSessionContext(userId: 
         return false;
       }
       if (isSuperadmin) return true;
-      return permSet.has(perm);
+      if (permSet.has(perm)) return true;
+      const aliases = PERMISSION_ALIASES[perm];
+      if (aliases) {
+        for (const alias of aliases) {
+          if (permSet.has(alias)) return true;
+        }
+      }
+      return false;
     },
     permissions: permSet,
     roles,
