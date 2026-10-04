@@ -504,49 +504,64 @@ export async function createAvailabilityAction(payload: CreateAvailabilityPayloa
 
   const startTime = (payload.startTime || '08:00').trim();
   const endTime = (payload.endTime || '10:00').trim();
-  const dayOfWeek = (payload.type === 'KULIAH' || payload.type === 'KERJA') ? (payload.dayOfWeek || 1) : null;
   const specificDate = payload.type === 'APPOINTMENT' ? (payload.specificDate || null) : null;
 
+  const targetDays: (number | null)[] = (payload.type === 'KULIAH' || payload.type === 'KERJA')
+    ? (Array.isArray(payload.daysOfWeek) && payload.daysOfWeek.length > 0
+        ? payload.daysOfWeek
+        : [payload.dayOfWeek || 1])
+    : [null];
+
   try {
-    await db.prepare(`
-      INSERT INTO user_availabilities (
-        id, user_id, type, title, semester_label, course_code, course_name,
-        class_code, campus_name, lecturer_code, lecturer_name, room,
-        delivery_mode, day_of_week, specific_date, start_time, end_time, is_all_day,
-        location, notes, is_active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-    `).bind(
-      id,
-      session.userId,
-      payload.type,
-      title,
-      payload.semesterLabel || null,
-      payload.courseCode || null,
-      payload.courseName || null,
-      payload.classCode || null,
-      payload.campusName || null,
-      payload.lecturerCode || null,
-      payload.lecturerName || null,
-      payload.room || null,
-      deliveryMode,
-      dayOfWeek,
-      specificDate,
-      startTime,
-      endTime,
-      payload.isAllDay ? 1 : 0,
-      payload.location || null,
-      payload.notes || null,
-      now,
-      now
-    ).run();
+    let firstItemId = id;
+    for (let i = 0; i < targetDays.length; i++) {
+      const d = targetDays[i];
+      const rowId = i === 0 ? id : `avail_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+      await db.prepare(`
+        INSERT INTO user_availabilities (
+          id, user_id, type, title, semester_label, course_code, course_name,
+          class_code, campus_name, lecturer_code, lecturer_name, room,
+          delivery_mode, day_of_week, specific_date, start_time, end_time, is_all_day,
+          location, notes, is_active, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      `).bind(
+        rowId,
+        session.userId,
+        payload.type,
+        title,
+        payload.semesterLabel || null,
+        payload.courseCode || null,
+        payload.courseName || null,
+        payload.classCode || null,
+        payload.campusName || null,
+        payload.lecturerCode || null,
+        payload.lecturerName || null,
+        payload.room || null,
+        deliveryMode,
+        d,
+        specificDate,
+        startTime,
+        endTime,
+        payload.isAllDay ? 1 : 0,
+        payload.location || null,
+        payload.notes || null,
+        now,
+        now
+      ).run();
+    }
 
     revalidatePath('/dashboard/availability');
 
+    const createdCount = targetDays.length;
+    const successMsg = createdCount > 1
+      ? `✓ Berhasil menambahkan ${createdCount} jadwal kerja untuk hari yang dipilih.`
+      : 'Jadwal berhasil disimpan.';
+
     return {
       success: true,
-      message: 'Jadwal berhasil disimpan.',
+      message: successMsg,
       item: {
-        id,
+        id: firstItemId,
         userId: session.userId,
         type: payload.type,
         title,

@@ -119,6 +119,7 @@ export interface CreateAvailabilityPayload {
   room?: string;
   deliveryMode?: string;
   dayOfWeek?: number;
+  daysOfWeek?: number[];
   // Appointment fields:
   specificDate?: string;
   startTime: string;

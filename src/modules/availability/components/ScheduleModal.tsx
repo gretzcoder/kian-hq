@@ -46,6 +46,7 @@ export default function ScheduleModal({
   const [room, setRoom] = useState('');
   const [deliveryMode, setDeliveryMode] = useState<string>('TATAP_MUKA');
   const [dayOfWeek, setDayOfWeek] = useState<DayOfWeekNumber>(1);
+  const [selectedWorkDays, setSelectedWorkDays] = useState<number[]>([1, 2, 3, 4, 5]);
   
   // Appointment & generic fields
   const [title, setTitle] = useState('');
@@ -72,6 +73,7 @@ export default function ScheduleModal({
       setRoom(editItem.room || '');
       setDeliveryMode(editItem.deliveryMode || (editItem.type === 'KERJA' ? 'WFO' : 'TATAP_MUKA'));
       setDayOfWeek((editItem.dayOfWeek || 1) as DayOfWeekNumber);
+      setSelectedWorkDays([editItem.dayOfWeek || 1]);
       setTitle(editItem.title || '');
       setSpecificDate(editItem.specificDate || new Date().toISOString().split('T')[0]);
       setStartTime(editItem.startTime || (editItem.type === 'KERJA' ? '09:00' : '08:00'));
@@ -89,6 +91,7 @@ export default function ScheduleModal({
       setRoom('');
       setDeliveryMode(defaultType === 'KERJA' ? 'WFO' : 'TATAP_MUKA');
       setDayOfWeek(1);
+      setSelectedWorkDays([1, 2, 3, 4, 5]);
       setTitle('');
       setSpecificDate(defaultDate || new Date().toISOString().split('T')[0]);
       setStartTime(defaultType === 'KERJA' ? '09:00' : '08:00');
@@ -128,7 +131,8 @@ export default function ScheduleModal({
         lecturerName: type === 'KULIAH' ? lecturerName.trim() : undefined,
         room: type === 'KULIAH' ? (room.trim() || undefined) : undefined,
         deliveryMode: type === 'KULIAH' || type === 'KERJA' ? deliveryMode : undefined,
-        dayOfWeek: type === 'KULIAH' || type === 'KERJA' ? dayOfWeek : undefined,
+        dayOfWeek: type === 'KERJA' && !editItem ? (selectedWorkDays[0] || 1) : (type === 'KULIAH' || type === 'KERJA' ? dayOfWeek : undefined),
+        daysOfWeek: type === 'KERJA' && !editItem ? selectedWorkDays : undefined,
         title: type === 'APPOINTMENT' ? title.trim() : type === 'KERJA' ? (title.trim() || `${courseName.trim()} @ ${campusName.trim()}`) : undefined,
         specificDate: type === 'APPOINTMENT' ? specificDate : undefined,
         startTime,
@@ -523,12 +527,109 @@ export default function ScheduleModal({
                 </div>
               </div>
 
-              {/* Waktu Kerja Rutin: Hari, Jam Mulai, Jam Selesai */}
-              <div className="p-3.5 rounded-2xl bg-amber-500/5 dark:bg-amber-950/20 border border-amber-500/20 space-y-3">
-                <label className="block text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
-                  Waktu & Shift Kerja
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Waktu Kerja Rutin: Hari (Multi-Day), Jam Mulai, Jam Selesai */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-500/5 dark:bg-amber-950/20 border border-amber-500/20 space-y-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <label className="block text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                    Waktu & Shift Kerja
+                  </label>
+                  {!editItem && (
+                    <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md inline-flex items-center gap-1 w-fit">
+                      <span>⚡</span> Multi-Hari Fleksibel
+                    </span>
+                  )}
+                </div>
+
+                {!editItem ? (
+                  <div className="space-y-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <label className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400">
+                        Pilih Hari Kerja (Bisa Lebih Dari 1 Hari)
+                      </label>
+                      {/* Preset Shortcuts */}
+                      <div className="flex flex-wrap items-center gap-1 text-[10px] font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedWorkDays([1, 2, 3, 4, 5])}
+                          className={`px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
+                            selectedWorkDays.length === 5 && [1, 2, 3, 4, 5].every((d) => selectedWorkDays.includes(d))
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-amber-400'
+                          }`}
+                        >
+                          Senin - Jumat
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedWorkDays([1, 2, 3, 4, 5, 6])}
+                          className={`px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
+                            selectedWorkDays.length === 6 && [1, 2, 3, 4, 5, 6].every((d) => selectedWorkDays.includes(d))
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-amber-400'
+                          }`}
+                        >
+                          Senin - Sabtu
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedWorkDays([1, 2, 3, 4, 5, 6, 7])}
+                          className={`px-2 py-0.5 rounded-md border transition-all cursor-pointer ${
+                            selectedWorkDays.length === 7
+                              ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                              : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-amber-400'
+                          }`}
+                        >
+                          Setiap Hari
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Multi-day Selection Chips */}
+                    <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+                      {[
+                        { day: 1, name: 'Senin', short: 'Sen' },
+                        { day: 2, name: 'Selasa', short: 'Sel' },
+                        { day: 3, name: 'Rabu', short: 'Rab' },
+                        { day: 4, name: 'Kamis', short: 'Kam' },
+                        { day: 5, name: "Jum'at", short: 'Jum' },
+                        { day: 6, name: 'Sabtu', short: 'Sab' },
+                        { day: 7, name: 'Minggu', short: 'Min' },
+                      ].map((d) => {
+                        const isSelected = selectedWorkDays.includes(d.day);
+                        return (
+                          <button
+                            key={d.day}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                if (selectedWorkDays.length > 1) {
+                                  setSelectedWorkDays(selectedWorkDays.filter((x) => x !== d.day));
+                                }
+                              } else {
+                                setSelectedWorkDays([...selectedWorkDays, d.day].sort());
+                              }
+                            }}
+                            className={`py-2 px-1 sm:px-2 rounded-xl text-xs font-black flex flex-col items-center justify-center transition-all border cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-600 text-white border-amber-600 shadow-xs ring-2 ring-amber-500/20'
+                                : 'bg-white dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800 hover:border-amber-400'
+                            }`}
+                          >
+                            <span>{d.short}</span>
+                            <span className="text-[9px] opacity-80 mt-0.5">{isSelected ? '✓' : '+'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-amber-800 dark:text-amber-300 font-medium bg-amber-500/10 px-2.5 py-1.5 rounded-xl border border-amber-500/20">
+                      <span>🗓️</span>
+                      <span>
+                        Diterapkan untuk <strong>{selectedWorkDays.length} hari</strong>: {selectedWorkDays.map((d) => DAY_OF_WEEK_NAMES[d].name).join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
                   <div>
                     <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
                       Hari Rutin Kerja
@@ -545,6 +646,9 @@ export default function ScheduleModal({
                       ))}
                     </select>
                   </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 pt-1">
                   <div>
                     <label className="block text-[11px] font-bold text-zinc-600 dark:text-zinc-400 mb-1">
                       Jam Masuk (Mulai)
