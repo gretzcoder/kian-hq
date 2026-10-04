@@ -5,7 +5,12 @@ import { getSession } from '@/modules/auth/session';
 import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
 import { getUserStreakBadgeMapAction } from '@/modules/achievements/actions';
 import { getCategoryMultipliers } from '@/modules/sparks/settingsCache';
-import { calculateEffectiveSparksMultiplier } from '@/lib/sparksUtils';
+import {
+  calculateEffectiveSparksMultiplier,
+  isDesignTaskOrRole,
+  isVideoTaskOrRole,
+  getSparksRoleMultiplier,
+} from '@/lib/sparksUtils';
 import { parseSlotsFromDescription } from '@/lib/slotUtils';
 import { getOrSetCache, invalidateCachePrefix } from '@/lib/sharedCache';
 
@@ -254,6 +259,9 @@ export async function getLeaderboardData(
               CASE 
                 WHEN ta.assignment_role IN ('DESIGNER', 'VIDEO_EDITOR') 
                   OR t.task_type IN ('DESIGN', 'VIDEO') 
+                  OR t.required_outputs IN ('DESIGN', 'VIDEO')
+                  OR (t.task_type = 'DIRECT_BRIEF' AND (t.required_outputs IS NULL OR t.required_outputs != 'OTHER'))
+                  OR (t.task_type NOT IN ('OTHER', 'ASSESSMENT') AND ta.assignment_role NOT IN ('RESEARCHER', 'PLANNER', 'MENTOR'))
                   OR UPPER(t.title) LIKE '%DESIGN%' 
                   OR UPPER(t.title) LIKE '%VIDEO%' 
                   OR UPPER(ta.assignment_role) LIKE '%DESIGN%' 
@@ -263,8 +271,8 @@ export async function getLeaderboardData(
               END * ${disciplineMultiplier('ta')}) *
             CASE
               WHEN t.sparks_multiplier IS NOT NULL AND t.sparks_multiplier != 1.0 THEN t.sparks_multiplier
-              WHEN ta.assignment_role = 'DESIGNER' OR t.task_type = 'DESIGN' OR UPPER(t.title) LIKE '%DESIGN%' THEN ${designMultiplier}
-              WHEN ta.assignment_role = 'VIDEO_EDITOR' OR t.task_type = 'VIDEO' OR UPPER(t.title) LIKE '%VIDEO%' THEN ${videoMultiplier}
+              WHEN ta.assignment_role = 'VIDEO_EDITOR' OR t.task_type = 'VIDEO' OR t.required_outputs = 'VIDEO' OR UPPER(t.title) LIKE '%VIDEO%' THEN ${videoMultiplier}
+              WHEN ta.assignment_role = 'DESIGNER' OR t.task_type = 'DESIGN' OR t.required_outputs = 'DESIGN' OR (t.task_type = 'DIRECT_BRIEF' AND t.required_outputs != 'OTHER') OR UPPER(t.title) LIKE '%DESIGN%' OR (t.task_type NOT IN ('OTHER', 'ASSESSMENT') AND ta.assignment_role NOT IN ('RESEARCHER', 'PLANNER', 'MENTOR')) THEN ${designMultiplier}
               ELSE 1.0
             END
           ) AS weightedSparks,
@@ -641,6 +649,7 @@ export async function getSparksHistory(
         ta.id   AS assignmentId,
         t.title AS taskTitle,
         t.task_type AS taskType,
+        t.required_outputs AS requiredOutputs,
         t.description AS taskDesc,
         COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
         ta.assignment_role                                                              AS assignmentRole,
@@ -717,20 +726,28 @@ export async function getSparksHistory(
     else if (isZeroRevision || isOnTime) qualityMultiplier = 1.10;
 
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
-    const isDesign =
-      r.assignmentRole === 'DESIGNER' ||
-      r.taskType === 'DESIGN' ||
-      (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN')) ||
-      (r.assignmentRole && r.assignmentRole.toUpperCase().includes('DESIGN')) ||
-      (r.taskDesc && r.taskDesc.toUpperCase().includes('[DESIGN]'));
-    const isVideo =
-      r.assignmentRole === 'VIDEO_EDITOR' ||
-      r.taskType === 'VIDEO' ||
-      (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO')) ||
-      (r.assignmentRole && r.assignmentRole.toUpperCase().includes('VIDEO')) ||
-      (r.taskDesc && r.taskDesc.toUpperCase().includes('[VIDEO]'));
+    const isDesign = isDesignTaskOrRole({
+      role: r.assignmentRole,
+      taskType: r.taskType,
+      requiredOutputs: r.requiredOutputs,
+      taskTitle: r.taskTitle,
+      taskDesc: r.taskDesc,
+    });
+    const isVideo = isVideoTaskOrRole({
+      role: r.assignmentRole,
+      taskType: r.taskType,
+      requiredOutputs: r.requiredOutputs,
+      taskTitle: r.taskTitle,
+      taskDesc: r.taskDesc,
+    });
 
-    const roleMultiplier = (isDesign || isVideo || ['DESIGNER', 'VIDEO_EDITOR'].includes(r.assignmentRole)) ? 2 : 1;
+    const roleMultiplier = getSparksRoleMultiplier({
+      role: r.assignmentRole,
+      taskType: r.taskType,
+      requiredOutputs: r.requiredOutputs,
+      taskTitle: r.taskTitle,
+      taskDesc: r.taskDesc,
+    });
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
 
     let slotMult = 1.0;

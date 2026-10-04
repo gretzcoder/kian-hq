@@ -4,6 +4,12 @@ import { getSession } from '@/modules/auth/session';
 import { getDB } from '@/db/client';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { getCategoryMultipliers } from '@/modules/sparks/settingsCache';
+import {
+  calculateEffectiveSparksMultiplier,
+  isDesignTaskOrRole,
+  isVideoTaskOrRole,
+  getSparksRoleMultiplier,
+} from '@/lib/sparksUtils';
 
 export interface WorkspaceNotifItem {
   wsId: string;
@@ -242,7 +248,7 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
   const { results: myAssignments } = await db
     .prepare(
       `SELECT ta.id, ta.status, ta.assignment_role AS role, ta.sparks, ta.revision_note,
-              t.task_type, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
+              t.task_type, t.required_outputs AS requiredOutputs, t.description AS taskDesc, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
               COALESCE(ta.reviewed_at, ta.submitted_at, ta.created_at) AS ts,
               t.id AS taskId, t.title AS taskTitle, t.workspace_id AS wsId,
               ws.name AS wsName, p.name AS pName
@@ -262,21 +268,31 @@ export async function fetchUserNotifications(): Promise<NotificationFeedItem[]> 
     const taskId = r.taskId || '';
     const rawSparks = Number(r.sparks) || 8;
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
-    const isDesign =
-      r.role === 'DESIGNER' ||
-      r.task_type === 'DESIGN' ||
-      (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN')) ||
-      (r.role && r.role.toUpperCase().includes('DESIGN'));
-    const isVideo =
-      r.role === 'VIDEO_EDITOR' ||
-      r.task_type === 'VIDEO' ||
-      (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO')) ||
-      (r.role && r.role.toUpperCase().includes('VIDEO'));
+    const isDesign = isDesignTaskOrRole({
+      role: r.role,
+      taskType: r.task_type,
+      requiredOutputs: r.requiredOutputs,
+      taskTitle: r.taskTitle,
+      taskDesc: r.taskDesc,
+    });
+    const isVideo = isVideoTaskOrRole({
+      role: r.role,
+      taskType: r.task_type,
+      requiredOutputs: r.requiredOutputs,
+      taskTitle: r.taskTitle,
+      taskDesc: r.taskDesc,
+    });
 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
-    const effectiveTaskMult = customTaskMult !== 1.0 ? customTaskMult : catMult;
+    const effectiveTaskMult = calculateEffectiveSparksMultiplier(customTaskMult, 1.0, catMult);
 
-    const roleMult = (isDesign || isVideo || ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role)) ? 2 : 1;
+    const roleMult = getSparksRoleMultiplier({
+      role: r.role,
+      taskType: r.task_type,
+      requiredOutputs: r.requiredOutputs,
+      taskTitle: r.taskTitle,
+      taskDesc: r.taskDesc,
+    });
     const calculatedSparks = Math.round(rawSparks * roleMult * 1.1 * effectiveTaskMult);
 
     if (r.status === 'ACTIVE') {

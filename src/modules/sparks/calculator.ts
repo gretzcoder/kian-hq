@@ -3,7 +3,12 @@ import { evaluateAndAutoAwardBadges } from '@/modules/badges/badgeActions';
 import { syncGroupAndTeamTaskAssignments } from '@/modules/workspaces/assessmentActions';
 import { getCategoryMultipliers } from './settingsCache';
 
-import { calculateEffectiveSparksMultiplier } from '@/lib/sparksUtils';
+import {
+  calculateEffectiveSparksMultiplier,
+  isDesignTaskOrRole,
+  isVideoTaskOrRole,
+  getSparksRoleMultiplier,
+} from '@/lib/sparksUtils';
 import { parseSlotsFromDescription } from '@/lib/slotUtils';
 
 export interface UserSparksSummary {
@@ -42,7 +47,7 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
   const { results: taRows } = await db
     .prepare(`
       SELECT ta.id, ta.sparks, ta.assignment_role AS role,
-             t.task_type, t.title AS taskTitle, t.description AS taskDesc, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
+             t.task_type, t.required_outputs AS requiredOutputs, t.title AS taskTitle, t.description AS taskDesc, COALESCE(t.sparks_multiplier, 1.0) AS customTaskMultiplier,
              CASE WHEN (ta.revision_note IS NULL OR ta.revision_note = '') THEN 1 ELSE 0 END AS isZeroRev,
              CASE WHEN (ta.deadline IS NULL OR ta.reviewed_at <= ta.deadline) THEN 1 ELSE 0 END AS isOnTime
       FROM task_assignments ta
@@ -98,7 +103,7 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
     tasksCompleted += 1;
     const raw = Number(r.sparks) || 8;
 
-    if (r.task_type === 'OTHER') {
+    if (r.task_type === 'OTHER' || r.requiredOutputs === 'OTHER') {
       // For OTHER category tasks, score/points awarded are treated as APPRECIATION sparks
       taskAppreciationSparks += raw;
       appreciationSparks += raw;
@@ -109,18 +114,20 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
     }
 
     const customTaskMult = Number(r.customTaskMultiplier) || 1.0;
-    const isDesign =
-      r.role === 'DESIGNER' ||
-      r.task_type === 'DESIGN' ||
-      (r.taskTitle && r.taskTitle.toUpperCase().includes('DESIGN')) ||
-      (r.role && r.role.toUpperCase().includes('DESIGN')) ||
-      (r.taskDesc && r.taskDesc.toUpperCase().includes('[DESIGN]'));
-    const isVideo =
-      r.role === 'VIDEO_EDITOR' ||
-      r.task_type === 'VIDEO' ||
-      (r.taskTitle && r.taskTitle.toUpperCase().includes('VIDEO')) ||
-      (r.role && r.role.toUpperCase().includes('VIDEO')) ||
-      (r.taskDesc && r.taskDesc.toUpperCase().includes('[VIDEO]'));
+    const isDesign = isDesignTaskOrRole({
+      role: r.role,
+      taskType: r.task_type,
+      requiredOutputs: r.requiredOutputs,
+      taskTitle: r.taskTitle,
+      taskDesc: r.taskDesc,
+    });
+    const isVideo = isVideoTaskOrRole({
+      role: r.role,
+      taskType: r.task_type,
+      requiredOutputs: r.requiredOutputs,
+      taskTitle: r.taskTitle,
+      taskDesc: r.taskDesc,
+    });
 
     const catMult = isDesign ? designMultiplier : isVideo ? videoMultiplier : 1.0;
 
@@ -140,8 +147,13 @@ export async function getUserSparksSummary(targetUserId: string): Promise<UserSp
     }
 
     const effectiveTaskMult = calculateEffectiveSparksMultiplier(customTaskMult, slotMult, catMult);
-
-    const roleMult = (isDesign || isVideo || ['DESIGNER', 'VIDEO_EDITOR'].includes(r.role)) ? 2 : 1;
+    const roleMult = getSparksRoleMultiplier({
+      role: r.role,
+      taskType: r.task_type,
+      requiredOutputs: r.requiredOutputs,
+      taskTitle: r.taskTitle,
+      taskDesc: r.taskDesc,
+    });
     let qualMult = 1.0;
     if (r.isZeroRev && r.isOnTime) qualMult = 1.21;
     else if (r.isZeroRev || r.isOnTime) qualMult = 1.10;
