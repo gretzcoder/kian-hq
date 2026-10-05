@@ -182,7 +182,7 @@ export default async function PublicDocumentVerificationPage({
                   )}
                 </div>
 
-                {doc.event.intro && (
+                {!isDispensation && doc.event.intro && (
                   <p className="text-xs text-zinc-300 leading-relaxed font-medium">
                     {doc.event.intro}
                   </p>
