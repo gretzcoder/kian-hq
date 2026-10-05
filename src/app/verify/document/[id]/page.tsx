@@ -34,6 +34,12 @@ export default async function PublicDocumentVerificationPage({
   const res = await getPublicDocumentVerification(id);
   const doc = res.document;
 
+  const isDispensation =
+    Boolean(doc?.type_code?.toUpperCase().includes('DISP')) ||
+    Boolean(doc?.document_number?.toUpperCase().includes('/DISP/')) ||
+    Boolean(doc?.title?.toUpperCase().includes('DISPENSASI')) ||
+    Boolean(doc?.dispensation_assignees && doc.dispensation_assignees.length > 0);
+
   const formattedDate = doc?.issued_at
     ? new Date(
         doc.issued_at > 10000000000 ? doc.issued_at : doc.issued_at * 1000
@@ -149,8 +155,8 @@ export default async function PublicDocumentVerificationPage({
                 </p>
               </div>
 
-              {/* Recipient info if present */}
-              {doc.recipient_info && (
+              {/* Recipient info if present (Hidden for Surat Dispensasi) */}
+              {!isDispensation && doc.recipient_info && (
                 <div className="sm:col-span-2 bg-zinc-950/60 p-4 rounded-2xl border border-zinc-800/80 space-y-1">
                   <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block">
                     Tujuan / Penerima Surat (Kepada Yth)
@@ -359,8 +365,8 @@ export default async function PublicDocumentVerificationPage({
               </div>
             ) : null}
 
-            {/* Statement points if any */}
-            {doc.statement_points && doc.statement_points.length > 0 && (
+            {/* Statement points if any (only for non-dispensation documents) */}
+            {!isDispensation && doc.statement_points && doc.statement_points.length > 0 && (
               <div className="pt-2 text-xs text-zinc-300 space-y-1.5 p-4 rounded-2xl bg-zinc-950/70 border border-zinc-800">
                 <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
                   Ketetapan / Pernyataan Resmi:
