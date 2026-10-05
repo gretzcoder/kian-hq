@@ -82,7 +82,8 @@ export default async function ProfilePage({
       SELECT
         u.id, u.email, u.name, u.status, u.user_type, u.created_at, r.name as role_name,
         u.university, u.study_program, u.semester, u.whatsapp_number, u.avatar_url,
-        u.main_roles, u.custom_role, u.tools, u.portfolio_url, u.department, u.bio
+        u.main_roles, u.custom_role, u.tools, u.portfolio_url, u.department, u.bio,
+        u.financial_details
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
@@ -233,6 +234,18 @@ export default async function ProfilePage({
   const normalizedWhatsapp = profile?.whatsapp_number
     ? await normalizeWhatsappNumber(profile.whatsapp_number)
     : null;
+
+  let finDetails: { bank_accounts?: any[]; ewallets?: any[] } = {};
+  if ((profile as any)?.financial_details) {
+    try {
+      finDetails = typeof (profile as any).financial_details === 'string'
+        ? JSON.parse((profile as any).financial_details)
+        : (profile as any).financial_details;
+    } catch {}
+  }
+  const bankAccountsList = Array.isArray(finDetails.bank_accounts) ? finDetails.bank_accounts : [];
+  const ewalletsList = Array.isArray(finDetails.ewallets) ? finDetails.ewallets : [];
+  const hasFinancialDetails = bankAccountsList.length > 0 || ewalletsList.length > 0;
 
   const roleColors: Record<string, string> = {
     RESEARCHER: 'text-blue-700   dark:text-blue-400   bg-blue-500/10   border-blue-500/20',
@@ -479,6 +492,98 @@ export default async function ProfilePage({
           )}
         </div>
       </div>
+
+      {/* ── FINANCIAL DETAILS CARD (Rekening Bank & E-Wallet) ── */}
+      {(isSelf || isCoordinator) && (
+        <div className={`${card} p-5 space-y-4`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💳</span>
+              <div>
+                <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+                  Detail Keuangan (Rekening Bank & E-Wallet)
+                </h3>
+                <p className="text-[10px] text-zinc-500 font-bold dark:text-zinc-400">
+                  Informasi pembayaran & disbursement resmi
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {!hasFinancialDetails ? (
+            <div className="p-4 text-center bg-zinc-50 dark:bg-zinc-900/40 rounded-2xl border border-zinc-200/60 dark:border-zinc-800 space-y-1">
+              <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400">
+                Belum ada detail rekening bank atau e-wallet yang ditambahkan.
+              </p>
+              {isSelf && (
+                <p className="text-[10px] text-zinc-400">
+                  Klik tombol &quot;Edit Profil&quot; untuk menambahkan data keuangan Anda.
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Rekening Bank Card */}
+              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-zinc-800 space-y-3">
+                <div className="flex items-center gap-2 pb-2 border-b border-zinc-200/60 dark:border-zinc-800">
+                  <span className="text-base">🏦</span>
+                  <h4 className="text-xs font-black uppercase text-zinc-800 dark:text-zinc-200">
+                    Rekening Bank ({bankAccountsList.length})
+                  </h4>
+                </div>
+                {bankAccountsList.length === 0 ? (
+                  <p className="text-[11px] text-zinc-400 italic">Tidak ada rekening bank.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {bankAccountsList.map((b: any, idx: number) => (
+                      <div key={idx} className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 space-y-0.5">
+                        <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider block">
+                          {b.bank_name || 'Bank'}
+                        </span>
+                        <p className="text-xs font-mono font-bold text-zinc-900 dark:text-white">
+                          {b.account_number || '-'}
+                        </p>
+                        <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 font-medium">
+                          a.n. {b.account_name || '-'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* E-Wallet Card */}
+              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-zinc-800 space-y-3">
+                <div className="flex items-center gap-2 pb-2 border-b border-zinc-200/60 dark:border-zinc-800">
+                  <span className="text-base">📱</span>
+                  <h4 className="text-xs font-black uppercase text-zinc-800 dark:text-zinc-200">
+                    E-Wallet ({ewalletsList.length})
+                  </h4>
+                </div>
+                {ewalletsList.length === 0 ? (
+                  <p className="text-[11px] text-zinc-400 italic">Tidak ada e-wallet.</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {ewalletsList.map((ew: any, idx: number) => (
+                      <div key={idx} className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 space-y-0.5">
+                        <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider block">
+                          {ew.provider || 'E-Wallet'}
+                        </span>
+                        <p className="text-xs font-mono font-bold text-zinc-900 dark:text-white">
+                          {ew.account_number || '-'}
+                        </p>
+                        <p className="text-[10.5px] text-zinc-500 dark:text-zinc-400 font-medium">
+                          a.n. {ew.account_name || '-'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── CREATIVE SPARKS & TITLE BADGES (Only for OJT) ── */}
       {profile?.user_type !== 'STAFF' && (

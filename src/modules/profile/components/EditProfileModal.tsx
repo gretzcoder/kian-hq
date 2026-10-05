@@ -35,6 +35,42 @@ const AVAILABLE_ROLES = [
   { key: 'VIDEO_EDITOR', label: 'Video Editor', emoji: '🎬', desc: 'Reels, Tiktok & Video' },
 ];
 
+interface BankAccountItem {
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+}
+
+interface EWalletItem {
+  provider: string;
+  account_number: string;
+  account_name: string;
+}
+
+const BANK_OPTIONS = [
+  'BCA',
+  'Bank Mandiri',
+  'BNI',
+  'BRI',
+  'Bank Jago',
+  'BSI (Bank Syariah Indonesia)',
+  'CIMB Niaga',
+  'Permata Bank',
+  'Seabank',
+  'Bank Danamon',
+  'Lainnya',
+];
+
+const EWALLET_OPTIONS = [
+  'GoPay',
+  'OVO',
+  'DANA',
+  'ShopeePay',
+  'LinkAja',
+  'iSAKU',
+  'Lainnya',
+];
+
 export default function EditProfileModal({ initialData, isOpen, onClose }: EditProfileModalProps) {
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
@@ -57,6 +93,10 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
   const [portfolioUrl, setPortfolioUrl] = useState(initialData.portfolio_url || '');
   const [department, setDepartment] = useState(initialData.department || '');
   const [bio, setBio] = useState(initialData.bio || '');
+
+  // Financial Details State
+  const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>([]);
+  const [ewallets, setEwallets] = useState<EWalletItem[]>([]);
 
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -93,6 +133,8 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
       setPortfolioUrl(initialData.portfolio_url || '');
       setDepartment(initialData.department || '');
       setBio(initialData.bio || '');
+      setBankAccounts([]);
+      setEwallets([]);
 
       // Dynamically fetch full profile details from server
       getMyProfileAction().then((res) => {
@@ -119,24 +161,53 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
           if (typeof p.department === 'string') setDepartment(p.department);
           if (typeof p.bio === 'string') setBio(p.bio);
           if (typeof p.user_type === 'string') setUserType(p.user_type);
+          if (p.financial_details) {
+            try {
+              const fin = typeof p.financial_details === 'string' ? JSON.parse(p.financial_details) : p.financial_details;
+              if (fin) {
+                if (Array.isArray(fin.bank_accounts)) setBankAccounts(fin.bank_accounts);
+                if (Array.isArray(fin.ewallets)) setEwallets(fin.ewallets);
+              }
+            } catch {}
+          }
         }
       });
     }
   }, [isOpen, initialData]);
 
-  // Lock background scroll when modal is active
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isOpen]);
+  const addBankAccount = () => {
+    if (bankAccounts.length >= 3) return;
+    setBankAccounts((prev) => [...prev, { bank_name: 'BCA', account_number: '', account_name: name || '' }]);
+  };
 
-  if (!isOpen || !mounted) return null;
+  const removeBankAccount = (index: number) => {
+    setBankAccounts((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const updateBankAccount = (index: number, field: keyof BankAccountItem, value: string) => {
+    setBankAccounts((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const addEWallet = () => {
+    if (ewallets.length >= 3) return;
+    setEwallets((prev) => [...prev, { provider: 'GoPay', account_number: whatsappNumber || '', account_name: name || '' }]);
+  };
+
+  const removeEWallet = (index: number) => {
+    setEwallets((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const updateEWallet = (index: number, field: keyof EWalletItem, value: string) => {
+    setEwallets((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
 
   const toggleRole = (roleKey: string) => {
     setSelectedRoles((prev) =>
@@ -165,6 +236,10 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
       portfolio_url: portfolioUrl,
       department,
       bio,
+      financial_details: {
+        bank_accounts: bankAccounts,
+        ewallets: ewallets,
+      },
     });
 
     setProfileMsg(
@@ -528,6 +603,231 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
                     }
                     className={`${inputCls} resize-none leading-relaxed`}
                   />
+                </div>
+              </div>
+
+              {/* SECTION 5: Detail Keuangan (Rekening Bank & E-Wallet) */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50/60 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">💳</span>
+                    <div>
+                      <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
+                        Detail Keuangan (Rekening Bank & E-Wallet)
+                      </h4>
+                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-normal">
+                        Input rekening bank, e-wallet, atau keduanya (maksimal 3 per kategori).
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-section 1: Rekening Bank */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">🏦</span>
+                      <span className="text-xs font-black uppercase text-zinc-700 dark:text-zinc-300">
+                        Rekening Bank ({bankAccounts.length}/3)
+                      </span>
+                    </div>
+                    {bankAccounts.length < 3 && (
+                      <button
+                        type="button"
+                        onClick={addBankAccount}
+                        className="px-3 py-1 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        <span>+ Tambah Rekening Bank</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {bankAccounts.length === 0 ? (
+                    <div className="p-3 text-center bg-white dark:bg-zinc-900/60 rounded-xl border border-zinc-200/60 dark:border-zinc-800 text-[11px] text-zinc-400 italic">
+                      Belum ada detail Rekening Bank ditambahkan. Klik &quot;+ Tambah Rekening Bank&quot; untuk menambahkan.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {bankAccounts.map((acc, index) => (
+                        <div
+                          key={index}
+                          className="p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-2.5 relative"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">
+                              Rekening Bank #{index + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeBankAccount(index)}
+                              className="text-red-500 hover:text-red-600 text-xs font-bold px-2 py-0.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition-all cursor-pointer"
+                            >
+                              Hapus 🗑️
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className={labelCls}>Nama Bank</label>
+                              <select
+                                value={BANK_OPTIONS.includes(acc.bank_name) ? acc.bank_name : 'Lainnya'}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val !== 'Lainnya') {
+                                    updateBankAccount(index, 'bank_name', val);
+                                  } else {
+                                    updateBankAccount(index, 'bank_name', '');
+                                  }
+                                }}
+                                className={inputCls}
+                              >
+                                {BANK_OPTIONS.map((b) => (
+                                  <option key={b} value={b}>
+                                    {b}
+                                  </option>
+                                ))}
+                              </select>
+                              {(!BANK_OPTIONS.includes(acc.bank_name) || acc.bank_name === '') && (
+                                <input
+                                  type="text"
+                                  value={acc.bank_name}
+                                  onChange={(e) => updateBankAccount(index, 'bank_name', e.target.value)}
+                                  placeholder="Ketik nama bank..."
+                                  className={`${inputCls} mt-1.5`}
+                                />
+                              )}
+                            </div>
+
+                            <div>
+                              <label className={labelCls}>Nomor Rekening</label>
+                              <input
+                                type="text"
+                                value={acc.account_number}
+                                onChange={(e) => updateBankAccount(index, 'account_number', e.target.value.replace(/[^0-9-]/g, ''))}
+                                placeholder="e.g. 1234567890"
+                                className={inputCls}
+                              />
+                            </div>
+
+                            <div>
+                              <label className={labelCls}>Atas Nama (Nama Pemilik)</label>
+                              <input
+                                type="text"
+                                value={acc.account_name}
+                                onChange={(e) => updateBankAccount(index, 'account_name', e.target.value)}
+                                placeholder="e.g. Syaiful Bakhri"
+                                className={inputCls}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Sub-section 2: E-Wallet */}
+                <div className="space-y-3 pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">📱</span>
+                      <span className="text-xs font-black uppercase text-zinc-700 dark:text-zinc-300">
+                        E-Wallet ({ewallets.length}/3)
+                      </span>
+                    </div>
+                    {ewallets.length < 3 && (
+                      <button
+                        type="button"
+                        onClick={addEWallet}
+                        className="px-3 py-1 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        <span>+ Tambah E-Wallet</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {ewallets.length === 0 ? (
+                    <div className="p-3 text-center bg-white dark:bg-zinc-900/60 rounded-xl border border-zinc-200/60 dark:border-zinc-800 text-[11px] text-zinc-400 italic">
+                      Belum ada detail E-Wallet ditambahkan. Klik &quot;+ Tambah E-Wallet&quot; untuk menambahkan.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {ewallets.map((wallet, index) => (
+                        <div
+                          key={index}
+                          className="p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-2.5 relative"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">
+                              E-Wallet #{index + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeEWallet(index)}
+                              className="text-red-500 hover:text-red-600 text-xs font-bold px-2 py-0.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition-all cursor-pointer"
+                            >
+                              Hapus 🗑️
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className={labelCls}>Penyedia (Provider)</label>
+                              <select
+                                value={EWALLET_OPTIONS.includes(wallet.provider) ? wallet.provider : 'Lainnya'}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val !== 'Lainnya') {
+                                    updateEWallet(index, 'provider', val);
+                                  } else {
+                                    updateEWallet(index, 'provider', '');
+                                  }
+                                }}
+                                className={inputCls}
+                              >
+                                {EWALLET_OPTIONS.map((ew) => (
+                                  <option key={ew} value={ew}>
+                                    {ew}
+                                  </option>
+                                ))}
+                              </select>
+                              {(!EWALLET_OPTIONS.includes(wallet.provider) || wallet.provider === '') && (
+                                <input
+                                  type="text"
+                                  value={wallet.provider}
+                                  onChange={(e) => updateEWallet(index, 'provider', e.target.value)}
+                                  placeholder="Ketik nama e-wallet..."
+                                  className={`${inputCls} mt-1.5`}
+                                />
+                              )}
+                            </div>
+
+                            <div>
+                              <label className={labelCls}>Nomor E-Wallet / HP</label>
+                              <input
+                                type="text"
+                                value={wallet.account_number}
+                                onChange={(e) => updateEWallet(index, 'account_number', e.target.value.replace(/[^0-9]/g, ''))}
+                                placeholder="e.g. 081234567890"
+                                className={inputCls}
+                              />
+                            </div>
+
+                            <div>
+                              <label className={labelCls}>Atas Nama (Nama Pemilik)</label>
+                              <input
+                                type="text"
+                                value={wallet.account_name}
+                                onChange={(e) => updateEWallet(index, 'account_name', e.target.value)}
+                                placeholder="e.g. Syaiful Bakhri"
+                                className={inputCls}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

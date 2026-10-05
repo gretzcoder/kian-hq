@@ -104,7 +104,7 @@ export async function getMyProfileAction() {
       id, email, username, name, status, user_type, created_at,
       university, student_id_number, study_program, semester,
       whatsapp_number, avatar_url, main_roles, custom_role,
-      tools, portfolio_url, department, bio
+      tools, portfolio_url, department, bio, financial_details
     FROM users
     WHERE id = ?
   `).bind(session.userId).first();
@@ -134,6 +134,10 @@ export async function updateOjtProfile(payload: {
   portfolio_url?: string;
   department?: string;
   bio?: string;
+  financial_details?: {
+    bank_accounts?: Array<{ bank_name: string; account_number: string; account_name: string }>;
+    ewallets?: Array<{ provider: string; account_number: string; account_name: string }>;
+  };
   completeOnboarding?: boolean;
 }) {
   const session = await getSession();
@@ -166,6 +170,45 @@ export async function updateOjtProfile(payload: {
       return { success: false, error: 'NIM harus berupa 8 digit angka.' };
     }
   }
+
+  // Financial details validation & normalization
+  let cleanBankAccounts: Array<{ bank_name: string; account_number: string; account_name: string }> = [];
+  let cleanEwallets: Array<{ provider: string; account_number: string; account_name: string }> = [];
+
+  if (payload.financial_details) {
+    if (Array.isArray(payload.financial_details.bank_accounts)) {
+      cleanBankAccounts = payload.financial_details.bank_accounts
+        .map((b) => ({
+          bank_name: b.bank_name?.trim() || '',
+          account_number: b.account_number?.trim() || '',
+          account_name: b.account_name?.trim() || '',
+        }))
+        .filter((b) => b.bank_name || b.account_number || b.account_name);
+    }
+
+    if (Array.isArray(payload.financial_details.ewallets)) {
+      cleanEwallets = payload.financial_details.ewallets
+        .map((e) => ({
+          provider: e.provider?.trim() || '',
+          account_number: e.account_number?.trim() || '',
+          account_name: e.account_name?.trim() || '',
+        }))
+        .filter((e) => e.provider || e.account_number || e.account_name);
+    }
+  }
+
+  if (cleanBankAccounts.length > 3) {
+    return { success: false, error: 'Maksimal 3 detail Rekening Bank.' };
+  }
+
+  if (cleanEwallets.length > 3) {
+    return { success: false, error: 'Maksimal 3 detail E-Wallet.' };
+  }
+
+  const finalFinancialDetailsJson = JSON.stringify({
+    bank_accounts: cleanBankAccounts,
+    ewallets: cleanEwallets,
+  });
 
   const db = await getDB();
 
@@ -224,6 +267,7 @@ export async function updateOjtProfile(payload: {
           portfolio_url = ?,
           department = ?,
           bio = ?,
+          financial_details = ?,
           onboarding_completed = 1
         WHERE id = ?
       `)
@@ -243,6 +287,7 @@ export async function updateOjtProfile(payload: {
         finalPortfolioUrl,
         payload.department?.trim() || null,
         payload.bio?.trim() || null,
+        finalFinancialDetailsJson,
         session.userId
       )
       .run();
@@ -264,7 +309,8 @@ export async function updateOjtProfile(payload: {
           tools = ?,
           portfolio_url = ?,
           department = ?,
-          bio = ?
+          bio = ?,
+          financial_details = ?
         WHERE id = ?
       `)
       .bind(
@@ -283,6 +329,7 @@ export async function updateOjtProfile(payload: {
         finalPortfolioUrl,
         payload.department?.trim() || null,
         payload.bio?.trim() || null,
+        finalFinancialDetailsJson,
         session.userId
       )
       .run();
