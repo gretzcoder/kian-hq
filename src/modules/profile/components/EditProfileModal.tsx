@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import { updateOjtProfile, changePassword, getMyProfileAction } from '../actions';
 import UserAvatar from '@/components/ui/UserAvatar';
 
@@ -23,6 +24,7 @@ interface EditProfileModalProps {
     department?: string;
     bio?: string;
     userType?: string;
+    financial_details?: any;
   };
   isOpen: boolean;
   onClose: () => void;
@@ -72,6 +74,7 @@ const EWALLET_OPTIONS = [
 ];
 
 export default function EditProfileModal({ initialData, isOpen, onClose }: EditProfileModalProps) {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
   const [userType, setUserType] = useState<string>(initialData.userType || '');
@@ -94,9 +97,27 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
   const [department, setDepartment] = useState(initialData.department || '');
   const [bio, setBio] = useState(initialData.bio || '');
 
+  // Helper to parse financial details from initialData
+  const getInitialFin = () => {
+    if (!initialData.financial_details) return null;
+    try {
+      return typeof initialData.financial_details === 'string'
+        ? JSON.parse(initialData.financial_details)
+        : initialData.financial_details;
+    } catch {
+      return null;
+    }
+  };
+
+  const initialFin = getInitialFin();
+
   // Financial Details State
-  const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>([]);
-  const [ewallets, setEwallets] = useState<EWalletItem[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>(
+    initialFin && Array.isArray(initialFin.bank_accounts) ? initialFin.bank_accounts : []
+  );
+  const [ewallets, setEwallets] = useState<EWalletItem[]>(
+    initialFin && Array.isArray(initialFin.ewallets) ? initialFin.ewallets : []
+  );
 
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -133,8 +154,10 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
       setPortfolioUrl(initialData.portfolio_url || '');
       setDepartment(initialData.department || '');
       setBio(initialData.bio || '');
-      setBankAccounts([]);
-      setEwallets([]);
+
+      const fin = getInitialFin();
+      setBankAccounts(fin && Array.isArray(fin.bank_accounts) ? fin.bank_accounts : []);
+      setEwallets(fin && Array.isArray(fin.ewallets) ? fin.ewallets : []);
 
       // Dynamically fetch full profile details from server
       getMyProfileAction().then((res) => {
@@ -163,10 +186,10 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
           if (typeof p.user_type === 'string') setUserType(p.user_type);
           if (p.financial_details) {
             try {
-              const fin = typeof p.financial_details === 'string' ? JSON.parse(p.financial_details) : p.financial_details;
-              if (fin) {
-                if (Array.isArray(fin.bank_accounts)) setBankAccounts(fin.bank_accounts);
-                if (Array.isArray(fin.ewallets)) setEwallets(fin.ewallets);
+              const serverFin = typeof p.financial_details === 'string' ? JSON.parse(p.financial_details) : p.financial_details;
+              if (serverFin) {
+                if (Array.isArray(serverFin.bank_accounts)) setBankAccounts(serverFin.bank_accounts);
+                if (Array.isArray(serverFin.ewallets)) setEwallets(serverFin.ewallets);
               }
             } catch {}
           }
@@ -247,6 +270,7 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
     );
     setProfileLoading(false);
     if (res.success) {
+      router.refresh();
       setTimeout(() => onClose(), 600);
     }
   };
@@ -263,6 +287,7 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
       setCurrentPw('');
       setNewPw('');
       setConfirmPw('');
+      router.refresh();
       setTimeout(() => onClose(), 600);
     } else {
       setPwMsg({ ok: false, text: res.error ?? 'Gagal mengubah password.' });
@@ -275,8 +300,15 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
   const labelCls =
     'block text-[10px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 flex items-center justify-between';
 
+  if (!isOpen || !mounted) return null;
+
   return createPortal(
-    <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
+    <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+    >
       {/* Modal Card - WIDER DESKTOP SIZING (max-w-4xl ~ 896px) */}
       <div className="w-full max-w-4xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 my-auto max-h-[90vh] flex flex-col z-[1001] transition-all">
         

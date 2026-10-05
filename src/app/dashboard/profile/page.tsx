@@ -317,6 +317,7 @@ export default async function ProfilePage({
                   department: (profile as any)?.department || undefined,
                   bio: (profile as any)?.bio || undefined,
                   userType: profile?.user_type || (session as any).userType || undefined,
+                  financial_details: (profile as any)?.financial_details || undefined,
                 }}
               />
             </div>

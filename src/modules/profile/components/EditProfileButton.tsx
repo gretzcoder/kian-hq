@@ -21,6 +21,7 @@ interface EditProfileButtonProps {
     department?: string;
     bio?: string;
     userType?: string;
+    financial_details?: any;
   };
 }
 
