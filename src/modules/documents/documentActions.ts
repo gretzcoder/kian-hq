@@ -2194,5 +2194,175 @@ export async function distributeSuratTugasSparksAndBadgesAction(
   }
 }
 
+export interface OfficerFinancialInfo {
+  name: string;
+  role: string;
+  nimOrNip: string;
+  matchedUserId: string | null;
+  whatsappNumber: string | null;
+  bankAccounts: Array<{ bank_name: string; account_number: string; account_name: string }>;
+  ewallets: Array<{ provider: string; account_number: string; account_name: string }>;
+  hasDetails: boolean;
+}
+
+export interface SuratTugasFinancialDetailsResult {
+  success: boolean;
+  documentNumber?: string;
+  title?: string;
+  eventName?: string;
+  officers: OfficerFinancialInfo[];
+  recapText?: string;
+  error?: string;
+}
+
+/**
+ * Fetch financial details (bank accounts & e-wallets) for all officers assigned in a Surat Tugas.
+ */
+export async function getSuratTugasFinancialDetailsAction(
+  documentId: string
+): Promise<SuratTugasFinancialDetailsResult> {
+  const session = await getSession();
+  if (!session) {
+    return { success: false, officers: [], error: 'Tidak terautentikasi.' };
+  }
+
+  const db = await getDB();
+  try {
+    const doc = (await db
+      .prepare('SELECT id, document_number, title, type_code, form_data FROM generated_documents WHERE id = ?')
+      .bind(documentId)
+      .first()) as any;
+
+    if (!doc) {
+      return { success: false, officers: [], error: 'Dokumen tidak ditemukan.' };
+    }
+
+    let formData: any = {};
+    try {
+      formData = JSON.parse(doc.form_data || '{}');
+    } catch {}
+
+    const rawAssignees: any[] = Array.isArray(formData.assignees) ? formData.assignees : [];
+    const eventName = (formData.event_name || doc.title || 'Kegiatan KIAN Troopers').trim();
+
+    // Query active users with financial details and whatsapp
+    const { results: rawUsers } = await db
+      .prepare(`
+        SELECT id, name, email, student_id_number, whatsapp_number, financial_details
+        FROM users
+        WHERE status = 'ACTIVE'
+        ORDER BY name ASC
+      `)
+      .all();
+
+    const usersList = (rawUsers || []).map((u: any) => {
+      let fin: any = {};
+      try {
+        fin = typeof u.financial_details === 'string' ? JSON.parse(u.financial_details) : (u.financial_details || {});
+      } catch {}
+
+      return {
+        id: u.id,
+        name: u.name || '',
+        student_id_number: u.student_id_number || null,
+        whatsapp_number: u.whatsapp_number || null,
+        bankAccounts: Array.isArray(fin.bank_accounts) ? fin.bank_accounts : [],
+        ewallets: Array.isArray(fin.ewallets) ? fin.ewallets : [],
+      };
+    });
+
+    const officers: OfficerFinancialInfo[] = rawAssignees.map((a: any) => {
+      const rawName = (a.name || '').trim();
+      const rawNip = (a.nip || a.nim || '').trim();
+      const rawRole = (a.role || a.tugas || 'Petugas').trim();
+      const directUserId = (a.userId || '').trim();
+
+      let matchedUser = null;
+
+      // 1. Direct userId match
+      if (directUserId) {
+        matchedUser = usersList.find((u) => u.id === directUserId);
+      }
+
+      // 2. Student ID / NIP match
+      if (!matchedUser && rawNip) {
+        matchedUser = usersList.find(
+          (u) => u.student_id_number && u.student_id_number.trim().toLowerCase() === rawNip.toLowerCase()
+        );
+      }
+
+      // 3. Exact name match
+      if (!matchedUser && rawName) {
+        matchedUser = usersList.find(
+          (u) => u.name.trim().toLowerCase() === rawName.toLowerCase()
+        );
+      }
+
+      // 4. Fuzzy name containment
+      if (!matchedUser && rawName && rawName.length >= 3) {
+        matchedUser = usersList.find(
+          (u) =>
+            u.name.toLowerCase().includes(rawName.toLowerCase()) ||
+            rawName.toLowerCase().includes(u.name.toLowerCase())
+        );
+      }
+
+      const bankAccounts = matchedUser ? matchedUser.bankAccounts : [];
+      const ewallets = matchedUser ? matchedUser.ewallets : [];
+      const hasDetails = bankAccounts.length > 0 || ewallets.length > 0;
+
+      return {
+        name: rawName || (matchedUser ? matchedUser.name : 'Petugas'),
+        role: rawRole,
+        nimOrNip: rawNip || (matchedUser?.student_id_number || '-'),
+        matchedUserId: matchedUser ? matchedUser.id : null,
+        whatsappNumber: matchedUser ? matchedUser.whatsapp_number : null,
+        bankAccounts,
+        ewallets,
+        hasDetails,
+      };
+    });
+
+    // Build pre-formatted recap text for 1-click clipboard copy
+    let recap = `📋 REKAP DETAIL KEUANGAN PETUGAS\n`;
+    recap += `Surat Tugas: ${doc.document_number}\n`;
+    recap += `Event: ${eventName}\n`;
+    recap += `Total Petugas: ${officers.length}\n`;
+    recap += `────────────────────────────\n\n`;
+
+    officers.forEach((off, idx) => {
+      recap += `${idx + 1}. ${off.name} (${off.role})\n`;
+      if (!off.hasDetails) {
+        recap += `   - (Belum mengisi rekening bank / e-wallet di profil platform)\n`;
+      } else {
+        if (off.bankAccounts.length > 0) {
+          off.bankAccounts.forEach((b: any) => {
+            recap += `   - Rek. ${b.bank_name}: ${b.account_number} (a.n. ${b.account_name})\n`;
+          });
+        }
+        if (off.ewallets.length > 0) {
+          off.ewallets.forEach((e: any) => {
+            recap += `   - E-Wallet ${e.provider}: ${e.account_number} (a.n. ${e.account_name})\n`;
+          });
+        }
+      }
+      recap += `\n`;
+    });
+
+    return {
+      success: true,
+      documentNumber: doc.document_number,
+      title: doc.title,
+      eventName,
+      officers,
+      recapText: recap.trim(),
+    };
+  } catch (err: any) {
+    console.error('getSuratTugasFinancialDetailsAction error:', err);
+    return { success: false, officers: [], error: err.message || 'Gagal memuat detail keuangan petugas.' };
+  }
+}
+
+
 
 

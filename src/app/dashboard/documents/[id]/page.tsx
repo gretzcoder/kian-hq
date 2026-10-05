@@ -9,6 +9,7 @@ import { DocumentPDFExporter } from '@/modules/documents/components/DocumentPDFE
 import { DocumentPreviewContainer } from '@/modules/documents/components/DocumentPreviewContainer';
 import { DocumentDetailApprovalBar } from '@/modules/documents/components/DocumentDetailApprovalBar';
 import { SuratTugasSparksDistributionButton } from '@/modules/documents/components/SuratTugasSparksDistributionButton';
+import { SuratTugasFinancialButton } from '@/modules/documents/components/SuratTugasFinancialButton';
 
 export default async function DocumentDetailPage({
   params,
@@ -102,6 +103,13 @@ export default async function DocumentDetailPage({
           )}
 
           {doc.type_code === 'SURAT_TUGAS' && (
+            <SuratTugasFinancialButton
+              documentId={doc.id}
+              variant="full"
+            />
+          )}
+
+          {doc.type_code === 'SURAT_TUGAS' && (
             <Link
               href={`/dashboard/documents/create?fromSuratTugasId=${doc.id}`}
               className="px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 transition-all flex items-center gap-1.5 shrink-0"
@@ -147,7 +155,7 @@ export default async function DocumentDetailPage({
         </div>
       )}
 
-      {/* Smart Shortcut Banner for Surat Tugas */}
+      {/* Smart Shortcut Banner for Surat Tugas: Dispensasi */}
       {doc.type_code === 'SURAT_TUGAS' && (
         <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 via-indigo-500/10 to-blue-500/10 border border-purple-500/25 flex flex-wrap items-center justify-between gap-3 text-xs no-print shadow-xs">
           <div className="flex items-center gap-2.5">
@@ -168,6 +176,27 @@ export default async function DocumentDetailPage({
             <span>⚡</span>
             <span>Buat Dispensasi Kuliah →</span>
           </Link>
+        </div>
+      )}
+
+      {/* Financial Details Shortcut Banner for Surat Tugas */}
+      {doc.type_code === 'SURAT_TUGAS' && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-green-500/10 border border-emerald-500/25 flex flex-wrap items-center justify-between gap-3 text-xs no-print shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">💳</span>
+            <div>
+              <p className="font-bold text-zinc-900 dark:text-zinc-100">
+                Data Rekening Bank &amp; E-Wallet Petugas
+              </p>
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                Salin ringkasan rekening untuk transfer honorarium, transport, atau rekap Excel dalam 1 klik.
+              </p>
+            </div>
+          </div>
+          <SuratTugasFinancialButton
+            documentId={doc.id}
+            variant="banner"
+          />
         </div>
       )}
 

@@ -12,6 +12,7 @@ import {
   duplicateDocumentAction,
 } from '../documentActions';
 import { SuratTugasDistributionModal } from './SuratTugasDistributionModal';
+import { SuratTugasFinancialModal } from './SuratTugasFinancialModal';
 
 interface DocumentListTableProps {
   documents: GeneratedDocumentItem[];
@@ -38,6 +39,9 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
 
   // Sparks & Badge Distribution Modal state
   const [selectedDocForDistribution, setSelectedDocForDistribution] = useState<GeneratedDocumentItem | null>(null);
+
+  // Financial Details Modal state
+  const [selectedDocForFinancial, setSelectedDocForFinancial] = useState<GeneratedDocumentItem | null>(null);
 
   const pendingCount = documents.filter((d) => d.status === 'PENDING_APPROVAL').length;
   const issuedCount = documents.filter((d) => d.status === 'ISSUED' || d.status === 'GENERATED' || d.status === 'SIGNED').length;
@@ -372,6 +376,19 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                     </button>
                   )}
 
+                  {/* Shortcut Copy Detail Keuangan Petugas */}
+                  {isSuratTugas && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDocForFinancial(doc)}
+                      className="px-3 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs flex items-center gap-1 shadow-xs active:scale-95 cursor-pointer"
+                      title="Detail Keuangan Petugas (Rekening Bank & E-Wallet)"
+                    >
+                      <span>💳</span>
+                      <span>Keuangan</span>
+                    </button>
+                  )}
+
                   {canManage && doc.status === 'PENDING_APPROVAL' && (
                     <button
                       type="button"
@@ -547,6 +564,19 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
                           >
                             <span>⚡</span>
                             <span className="hidden xl:inline">{sparksDist ? 'Sparks' : 'Bagi Sparks'}</span>
+                          </button>
+                        )}
+
+                        {/* Shortcut Copy Detail Keuangan Petugas */}
+                        {isSuratTugas && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDocForFinancial(doc)}
+                            className="px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-bold text-xs transition-all flex items-center gap-1 shadow-xs active:scale-95 cursor-pointer"
+                            title="Detail Keuangan Petugas (Rekening Bank & E-Wallet)"
+                          >
+                            <span>💳</span>
+                            <span className="hidden xl:inline">Keuangan</span>
                           </button>
                         )}
 
@@ -762,6 +792,15 @@ export const DocumentListTable: React.FC<DocumentListTableProps> = ({
           documentId={selectedDocForDistribution.id}
           isOpen={true}
           onClose={() => setSelectedDocForDistribution(null)}
+        />
+      )}
+
+      {/* Financial Details Modal for Surat Tugas */}
+      {selectedDocForFinancial && (
+        <SuratTugasFinancialModal
+          documentId={selectedDocForFinancial.id}
+          isOpen={true}
+          onClose={() => setSelectedDocForFinancial(null)}
         />
       )}
     </div>
