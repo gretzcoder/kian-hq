@@ -268,7 +268,14 @@ export function MessengerWorkspaceView() {
         if (typeof document !== 'undefined' && document.hidden) return;
         fetchActiveChat(activePartnerId, activeCategory);
       }, 8_000);
-      return () => clearInterval(interval);
+      const handleVisibility = () => {
+        if (!document.hidden) fetchActiveChat(activePartnerId, activeCategory);
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener('visibilitychange', handleVisibility);
+      };
     }
   }, [activePartnerId, activeCategory]);
 

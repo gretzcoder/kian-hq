@@ -25,6 +25,7 @@ export const DocumentPDFExporter: React.FC<DocumentPDFExporterProps> = ({
 
     // Dynamically load heavy export libraries only in the browser when user clicks
     const [{ toPng }, { jsPDF }] = await Promise.all([
+      // @ts-ignore - Dynamic client-side module
       import('html-to-image'),
       import('jspdf'),
     ]);

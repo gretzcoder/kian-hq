@@ -63,7 +63,12 @@ export function ThreadSidePanel({
 
       // Polling for realtime thread replies (20 sec)
       const interval = setInterval(fetchDetails, 20_000);
-      return () => clearInterval(interval);
+      const handleVisibility = () => { if (!document.hidden) fetchDetails(); };
+      document.addEventListener('visibilitychange', handleVisibility);
+      return () => {
+        clearInterval(interval);
+        document.removeEventListener('visibilitychange', handleVisibility);
+      };
     } else {
       setDetails(null);
     }

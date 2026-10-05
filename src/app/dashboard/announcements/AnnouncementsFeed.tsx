@@ -90,9 +90,13 @@ export default function AnnouncementsFeed({
     };
 
     const interval = setInterval(pollUpdates, 120_000);
+    const handleVisibility = () => { if (!document.hidden) pollUpdates(); };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     return () => {
       isMounted = false;
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 

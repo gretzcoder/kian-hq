@@ -169,6 +169,8 @@ export default function FloatingNotificationDrawer({
 
     // 3. Fallback polling interval (every 90 seconds)
     const interval = setInterval(loadNotifications, 90_000);
+    const handleVisibility = () => { if (!document.hidden) loadNotifications(); };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
@@ -176,6 +178,7 @@ export default function FloatingNotificationDrawer({
       }
       window.removeEventListener('kian_notif_refresh', handleCustomRefresh);
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [loadNotifications]);
 

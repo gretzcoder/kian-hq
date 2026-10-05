@@ -580,7 +580,7 @@ export async function getLeaderboardData(
   const defaultObj = { type: 'individual' as const, data: [] };
   return defaultObj;
     },
-    60 // 60s TTL
+    { ttlSeconds: 60, memoryOnly: true } // 60s isolate in-memory cache to conserve KV write quota and eliminate kv.list invalidation
   );
 }
 

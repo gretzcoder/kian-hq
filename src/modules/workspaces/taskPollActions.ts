@@ -47,7 +47,11 @@ export interface WorkspaceTaskData {
 import { getOrSetCache, invalidateCache } from '@/lib/sharedCache';
 
 export async function invalidateWorkspaceTaskCache(wsId: string): Promise<void> {
-  await invalidateCache(`ws:${wsId}:tasks:v1`);
+  await Promise.all([
+    invalidateCache(`ws:${wsId}:tasks:manager:v1`),
+    invalidateCache(`ws:${wsId}:tasks:member:v1`),
+    invalidateCache(`ws:${wsId}:tasks:v1`),
+  ]);
 }
 
 /**
@@ -119,6 +123,6 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
 
       return { tasks, assignmentsByTask };
     },
-    15 // 15 seconds TTL for polling
+    { ttlSeconds: 15, memoryOnly: true } // 15 seconds isolate in-memory cache, avoids burning KV write limits
   );
 }
