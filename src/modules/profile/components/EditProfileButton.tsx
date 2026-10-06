@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import EditProfileModal from './EditProfileModal';
+import type { BankAccount, EwalletAccount } from '@/modules/profile/actions';
 
 interface EditProfileButtonProps {
   initialData: {
@@ -20,7 +21,8 @@ interface EditProfileButtonProps {
     portfolio_url?: string;
     department?: string;
     bio?: string;
-    userType?: string;
+    bank_accounts?: BankAccount[];
+    ewallet_accounts?: EwalletAccount[];
     financial_details?: any;
   };
 }

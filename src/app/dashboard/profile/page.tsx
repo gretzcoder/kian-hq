@@ -4,11 +4,12 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import EditProfileButton from '@/modules/profile/components/EditProfileButton';
 import UserAvatar from '@/components/ui/UserAvatar';
-import { normalizeWhatsappNumber } from '@/modules/profile/actions';
+import { normalizeWhatsappNumber, ensureFinancialColumns, type BankAccount, type EwalletAccount } from '@/modules/profile/actions';
 import { getUserAchievementStatsAction, getAchievementHistoryAction } from '@/modules/achievements/actions';
 import ProfileSparksActions from '@/modules/profile/components/ProfileSparksActions';
 import ProfileActionButtons from '@/modules/profile/components/ProfileActionButtons';
 import { ProfileAchievementsSection } from './components/ProfileAchievementsSection';
+import ProfileFinancialDetailsCard from './components/ProfileFinancialDetailsCard';
 import { getSessionContext } from '@/modules/roles/rbac';
 import { getUserSparksSummary } from '@/modules/sparks/calculator';
 import { getUserBadgesAction } from '@/modules/badges/badgeActions';
@@ -31,6 +32,8 @@ interface UserProfile {
   custom_role: string | null;
   tools: string | null;
   portfolio_url: string | null;
+  bank_accounts: string | null;
+  ewallet_accounts: string | null;
 }
 
 interface AssignmentStat { status: string; count: number; }
@@ -59,12 +62,19 @@ export default async function ProfilePage({
   const isSelf = targetUserId === session.userId;
 
   const db = await getDB();
+  await ensureFinancialColumns(db);
 
   const ctx = await getSessionContext(session.userId);
   const isCoordinator =
     ctx.userType === 'STAFF' &&
     (ctx.can('MANAGE') || ctx.roles.includes('COORDINATOR') || ctx.roles.includes('EXECUTIVE'));
   const canManageSparks = ctx.can('SPARKS_MANAGE') || isCoordinator || ctx.can('MANAGE') || ctx.permissions.has('ADMIN_SYSTEM');
+  const canViewFinance =
+    isSelf ||
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.can('MANAGE') ||
+    ctx.can('ADMIN_USERS');
 
   const [
     profileRaw,
@@ -83,7 +93,7 @@ export default async function ProfilePage({
         u.id, u.email, u.name, u.status, u.user_type, u.created_at, r.name as role_name,
         u.university, u.study_program, u.semester, u.whatsapp_number, u.avatar_url,
         u.main_roles, u.custom_role, u.tools, u.portfolio_url, u.department, u.bio,
-        u.financial_details
+        u.financial_details, u.bank_accounts, u.ewallet_accounts
       FROM users u
       LEFT JOIN user_roles ur ON u.id = ur.user_id
       LEFT JOIN roles r ON ur.role_id = r.id
@@ -235,16 +245,48 @@ export default async function ProfilePage({
     ? await normalizeWhatsappNumber(profile.whatsapp_number)
     : null;
 
-  let finDetails: { bank_accounts?: any[]; ewallets?: any[] } = {};
-  if ((profile as any)?.financial_details) {
-    try {
-      finDetails = typeof (profile as any).financial_details === 'string'
-        ? JSON.parse((profile as any).financial_details)
-        : (profile as any).financial_details;
-    } catch {}
+  let bankAccountsList: any[] = [];
+  let ewalletsList: any[] = [];
+
+  if (canViewFinance) {
+    let finDetails: { bank_accounts?: any[]; ewallets?: any[] } = {};
+    if ((profile as any)?.financial_details) {
+      try {
+        finDetails = typeof (profile as any).financial_details === 'string'
+          ? JSON.parse((profile as any).financial_details)
+          : (profile as any).financial_details;
+      } catch {}
+    }
+    bankAccountsList = Array.isArray(finDetails.bank_accounts) ? finDetails.bank_accounts : [];
+    ewalletsList = Array.isArray(finDetails.ewallets) ? finDetails.ewallets : [];
+
+    if (bankAccountsList.length === 0 && (profile as any)?.bank_accounts) {
+      try {
+        const parsed = JSON.parse((profile as any).bank_accounts);
+        if (Array.isArray(parsed)) {
+          bankAccountsList = parsed.map((b: any) => ({
+            bank_name: b.bank_name,
+            account_number: b.account_number,
+            account_name: b.account_holder,
+          }));
+        }
+      } catch {}
+    }
+
+    if (ewalletsList.length === 0 && (profile as any)?.ewallet_accounts) {
+      try {
+        const parsed = JSON.parse((profile as any).ewallet_accounts);
+        if (Array.isArray(parsed)) {
+          ewalletsList = parsed.map((e: any) => ({
+            provider: e.wallet_type,
+            account_number: e.phone_number,
+            account_name: e.account_holder,
+          }));
+        }
+      } catch {}
+    }
   }
-  const bankAccountsList = Array.isArray(finDetails.bank_accounts) ? finDetails.bank_accounts : [];
-  const ewalletsList = Array.isArray(finDetails.ewallets) ? finDetails.ewallets : [];
+
   const hasFinancialDetails = bankAccountsList.length > 0 || ewalletsList.length > 0;
 
   const roleColors: Record<string, string> = {
@@ -494,21 +536,31 @@ export default async function ProfilePage({
         </div>
       </div>
 
-      {/* ── FINANCIAL DETAILS CARD (Rekening Bank & E-Wallet) ── */}
-      {(isSelf || isCoordinator) && (
+      {/* ── FINANCIAL DETAILS CARD (Rekening Bank & E-Wallet) - PRIVACY CONTROLLED ── */}
+      {canViewFinance && (
         <div className={`${card} p-5 space-y-4`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="text-xl">💳</span>
               <div>
-                <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
-                  Detail Keuangan (Rekening Bank & E-Wallet)
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-black text-zinc-900 dark:text-zinc-100">
+                    Detail Keuangan (Rekening Bank & E-Wallet)
+                  </h3>
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20">
+                    🔒 Privat
+                  </span>
+                </div>
                 <p className="text-[10px] text-zinc-500 font-bold dark:text-zinc-400">
                   Informasi pembayaran & disbursement resmi
                 </p>
               </div>
             </div>
+            {isSelf && (
+              <span className="text-[10px] text-zinc-400 font-medium hidden sm:inline-block">
+                Hanya Anda & Pimpinan/Admin yang dapat melihat data ini
+              </span>
+            )}
           </div>
 
           {!hasFinancialDetails ? (
@@ -537,7 +589,7 @@ export default async function ProfilePage({
                 ) : (
                   <div className="space-y-2.5">
                     {bankAccountsList.map((b: any, idx: number) => (
-                      <div key={idx} className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 space-y-0.5">
+                      <div key={idx} className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 space-y-0.5 shadow-xs">
                         <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider block">
                           {b.bank_name || 'Bank'}
                         </span>
@@ -566,8 +618,8 @@ export default async function ProfilePage({
                 ) : (
                   <div className="space-y-2.5">
                     {ewalletsList.map((ew: any, idx: number) => (
-                      <div key={idx} className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 space-y-0.5">
-                        <span className="text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-wider block">
+                      <div key={idx} className="p-3 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800/80 space-y-0.5 shadow-xs">
+                        <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
                           {ew.provider || 'E-Wallet'}
                         </span>
                         <p className="text-xs font-mono font-bold text-zinc-900 dark:text-white">

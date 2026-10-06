@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useRouter } from 'next/navigation';
-import { updateOjtProfile, changePassword, getMyProfileAction } from '../actions';
+import { updateOjtProfile, changePassword, getMyProfileAction, type BankAccount, type EwalletAccount } from '../actions';
 import UserAvatar from '@/components/ui/UserAvatar';
 
 interface EditProfileModalProps {
@@ -24,7 +23,8 @@ interface EditProfileModalProps {
     department?: string;
     bio?: string;
     userType?: string;
-    financial_details?: any;
+    bank_accounts?: BankAccount[];
+    ewallet_accounts?: EwalletAccount[];
   };
   isOpen: boolean;
   onClose: () => void;
@@ -37,46 +37,12 @@ const AVAILABLE_ROLES = [
   { key: 'VIDEO_EDITOR', label: 'Video Editor', emoji: '🎬', desc: 'Reels, Tiktok & Video' },
 ];
 
-interface BankAccountItem {
-  bank_name: string;
-  account_number: string;
-  account_name: string;
-}
-
-interface EWalletItem {
-  provider: string;
-  account_number: string;
-  account_name: string;
-}
-
-const BANK_OPTIONS = [
-  'BCA',
-  'Bank Mandiri',
-  'BNI',
-  'BRI',
-  'Bank Jago',
-  'BSI (Bank Syariah Indonesia)',
-  'CIMB Niaga',
-  'Permata Bank',
-  'Seabank',
-  'Bank Danamon',
-  'Lainnya',
-];
-
-const EWALLET_OPTIONS = [
-  'GoPay',
-  'OVO',
-  'DANA',
-  'ShopeePay',
-  'LinkAja',
-  'iSAKU',
-  'Lainnya',
-];
+const BANK_OPTIONS = ['BCA', 'Mandiri', 'BRI', 'BNI', 'BSI', 'Bank Jago', 'Seabank', 'CIMB Niaga', 'Permata', 'Lainnya'];
+const EWALLET_OPTIONS = ['GOPAY', 'OVO', 'DANA', 'SHOPEEPAY', 'LINKAJA', 'Lainnya'];
 
 export default function EditProfileModal({ initialData, isOpen, onClose }: EditProfileModalProps) {
-  const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'finance' | 'password'>('profile');
   const [userType, setUserType] = useState<string>(initialData.userType || '');
   const isStaff = userType === 'STAFF';
 
@@ -97,27 +63,21 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
   const [department, setDepartment] = useState(initialData.department || '');
   const [bio, setBio] = useState(initialData.bio || '');
 
-  // Helper to parse financial details from initialData
-  const getInitialFin = () => {
-    if (!initialData.financial_details) return null;
-    try {
-      return typeof initialData.financial_details === 'string'
-        ? JSON.parse(initialData.financial_details)
-        : initialData.financial_details;
-    } catch {
-      return null;
-    }
-  };
+  // Financial Form State
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>(initialData.bank_accounts || []);
+  const [ewalletAccounts, setEwalletAccounts] = useState<EwalletAccount[]>(initialData.ewallet_accounts || []);
 
-  const initialFin = getInitialFin();
+  // New Bank entry draft
+  const [newBankName, setNewBankName] = useState('BCA');
+  const [customBankName, setCustomBankName] = useState('');
+  const [newBankNumber, setNewBankNumber] = useState('');
+  const [newBankHolder, setNewBankHolder] = useState('');
 
-  // Financial Details State
-  const [bankAccounts, setBankAccounts] = useState<BankAccountItem[]>(
-    initialFin && Array.isArray(initialFin.bank_accounts) ? initialFin.bank_accounts : []
-  );
-  const [ewallets, setEwallets] = useState<EWalletItem[]>(
-    initialFin && Array.isArray(initialFin.ewallets) ? initialFin.ewallets : []
-  );
+  // New E-wallet entry draft
+  const [newWalletType, setNewWalletType] = useState('GOPAY');
+  const [customWalletType, setCustomWalletType] = useState('');
+  const [newWalletPhone, setNewWalletPhone] = useState('');
+  const [newWalletHolder, setNewWalletHolder] = useState('');
 
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -154,23 +114,30 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
       setPortfolioUrl(initialData.portfolio_url || '');
       setDepartment(initialData.department || '');
       setBio(initialData.bio || '');
-
-      const fin = getInitialFin();
-      setBankAccounts(fin && Array.isArray(fin.bank_accounts) ? fin.bank_accounts : []);
-      setEwallets(fin && Array.isArray(fin.ewallets) ? fin.ewallets : []);
+      setBankAccounts(initialData.bank_accounts || []);
+      setEwalletAccounts(initialData.ewallet_accounts || []);
+      setNewBankHolder(initialData.name || '');
+      setNewWalletHolder(initialData.name || '');
 
       // Dynamically fetch full profile details from server
       getMyProfileAction().then((res) => {
         if (res.success && res.profile) {
           const p = res.profile as any;
-          if (typeof p.name === 'string') setName(p.name);
+          if (typeof p.name === 'string') {
+            setName(p.name);
+            if (!newBankHolder) setNewBankHolder(p.name);
+            if (!newWalletHolder) setNewWalletHolder(p.name);
+          }
           if (typeof p.email === 'string') setEmail(p.email);
           if (typeof p.username === 'string') setUsername(p.username);
           if (typeof p.university === 'string') setUniversity(p.university);
           if (typeof p.student_id_number === 'string') setStudentIdNumber(p.student_id_number);
           if (typeof p.study_program === 'string') setStudyProgram(p.study_program);
           if (typeof p.semester === 'string') setSemester(p.semester);
-          if (typeof p.whatsapp_number === 'string') setWhatsappNumber(p.whatsapp_number);
+          if (typeof p.whatsapp_number === 'string') {
+            setWhatsappNumber(p.whatsapp_number);
+            if (!newWalletPhone) setNewWalletPhone(p.whatsapp_number);
+          }
           if (typeof p.avatar_url === 'string') setAvatarUrl(p.avatar_url);
           if (p.main_roles) {
             try {
@@ -184,13 +151,16 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
           if (typeof p.department === 'string') setDepartment(p.department);
           if (typeof p.bio === 'string') setBio(p.bio);
           if (typeof p.user_type === 'string') setUserType(p.user_type);
-          if (p.financial_details) {
+          if (p.bank_accounts) {
             try {
-              const serverFin = typeof p.financial_details === 'string' ? JSON.parse(p.financial_details) : p.financial_details;
-              if (serverFin) {
-                if (Array.isArray(serverFin.bank_accounts)) setBankAccounts(serverFin.bank_accounts);
-                if (Array.isArray(serverFin.ewallets)) setEwallets(serverFin.ewallets);
-              }
+              const parsed = typeof p.bank_accounts === 'string' ? JSON.parse(p.bank_accounts) : p.bank_accounts;
+              if (Array.isArray(parsed)) setBankAccounts(parsed);
+            } catch {}
+          }
+          if (p.ewallet_accounts) {
+            try {
+              const parsed = typeof p.ewallet_accounts === 'string' ? JSON.parse(p.ewallet_accounts) : p.ewallet_accounts;
+              if (Array.isArray(parsed)) setEwalletAccounts(parsed);
             } catch {}
           }
         }
@@ -198,44 +168,72 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
     }
   }, [isOpen, initialData]);
 
-  const addBankAccount = () => {
-    if (bankAccounts.length >= 3) return;
-    setBankAccounts((prev) => [...prev, { bank_name: 'BCA', account_number: '', account_name: name || '' }]);
-  };
+  // Lock background scroll when modal is active
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
-  const removeBankAccount = (index: number) => {
-    setBankAccounts((prev) => prev.filter((_, idx) => idx !== index));
-  };
-
-  const updateBankAccount = (index: number, field: keyof BankAccountItem, value: string) => {
-    setBankAccounts((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value };
-      return copy;
-    });
-  };
-
-  const addEWallet = () => {
-    if (ewallets.length >= 3) return;
-    setEwallets((prev) => [...prev, { provider: 'GoPay', account_number: whatsappNumber || '', account_name: name || '' }]);
-  };
-
-  const removeEWallet = (index: number) => {
-    setEwallets((prev) => prev.filter((_, idx) => idx !== index));
-  };
-
-  const updateEWallet = (index: number, field: keyof EWalletItem, value: string) => {
-    setEwallets((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], [field]: value };
-      return copy;
-    });
-  };
+  if (!isOpen || !mounted) return null;
 
   const toggleRole = (roleKey: string) => {
     setSelectedRoles((prev) =>
       prev.includes(roleKey) ? prev.filter((r) => r !== roleKey) : [...prev, roleKey]
     );
+  };
+
+  const handleAddBank = () => {
+    const bank = (newBankName === 'Lainnya' ? customBankName : newBankName).trim();
+    const num = newBankNumber.trim();
+    const holder = newBankHolder.trim();
+    if (!bank || !num || !holder) return;
+
+    setBankAccounts((prev) => [
+      ...prev,
+      {
+        id: `bank_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        bank_name: bank.toUpperCase(),
+        account_number: num,
+        account_holder: holder.toUpperCase(),
+      },
+    ]);
+
+    setNewBankNumber('');
+    setCustomBankName('');
+  };
+
+  const handleRemoveBank = (index: number) => {
+    setBankAccounts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddEwallet = () => {
+    const wallet = (newWalletType === 'Lainnya' ? customWalletType : newWalletType).trim();
+    const phone = newWalletPhone.trim();
+    const holder = newWalletHolder.trim();
+    if (!wallet || !phone || !holder) return;
+
+    setEwalletAccounts((prev) => [
+      ...prev,
+      {
+        id: `ewallet_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        wallet_type: wallet.toUpperCase(),
+        phone_number: phone,
+        account_holder: holder.toUpperCase(),
+      },
+    ]);
+
+    setNewWalletPhone('');
+    setCustomWalletType('');
+  };
+
+  const handleRemoveEwallet = (index: number) => {
+    setEwalletAccounts((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleProfileSave = async (e: React.FormEvent) => {
@@ -259,10 +257,8 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
       portfolio_url: portfolioUrl,
       department,
       bio,
-      financial_details: {
-        bank_accounts: bankAccounts,
-        ewallets: ewallets,
-      },
+      bank_accounts: bankAccounts,
+      ewallet_accounts: ewalletAccounts,
     });
 
     setProfileMsg(
@@ -270,7 +266,28 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
     );
     setProfileLoading(false);
     if (res.success) {
-      router.refresh();
+      setTimeout(() => onClose(), 600);
+    }
+  };
+
+  const handleFinanceSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileLoading(true);
+    setProfileMsg(null);
+
+    const res = await updateOjtProfile({
+      name,
+      bank_accounts: bankAccounts,
+      ewallet_accounts: ewalletAccounts,
+    });
+
+    setProfileMsg(
+      res.success
+        ? { ok: true, text: 'Detail rekening & e-wallet berhasil disimpan!' }
+        : { ok: false, text: res.error ?? 'Gagal menyimpan detail keuangan.' }
+    );
+    setProfileLoading(false);
+    if (res.success) {
       setTimeout(() => onClose(), 600);
     }
   };
@@ -287,7 +304,6 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
       setCurrentPw('');
       setNewPw('');
       setConfirmPw('');
-      router.refresh();
       setTimeout(() => onClose(), 600);
     } else {
       setPwMsg({ ok: false, text: res.error ?? 'Gagal mengubah password.' });
@@ -300,15 +316,8 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
   const labelCls =
     'block text-[10px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1 flex items-center justify-between';
 
-  if (!isOpen || !mounted) return null;
-
   return createPortal(
-    <div
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
-    >
+    <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200">
       {/* Modal Card - WIDER DESKTOP SIZING (max-w-4xl ~ 896px) */}
       <div className="w-full max-w-4xl bg-white dark:bg-[#09090b] border border-zinc-200 dark:border-zinc-800 rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 my-auto max-h-[90vh] flex flex-col z-[1001] transition-all">
         
@@ -323,7 +332,7 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
                 Pengaturan Profil Pengguna
               </h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Kelola informasi data diri lengkap, detail akademik/jabatan & keamanan akun platform KIAN HQ.
+                Kelola informasi data diri lengkap, detail akademik/jabatan, rekening disbursement & keamanan akun.
               </p>
             </div>
           </div>
@@ -338,28 +347,39 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-zinc-200 dark:border-zinc-800 shrink-0 gap-6">
+        <div className="flex border-b border-zinc-200 dark:border-zinc-800 shrink-0 gap-4 sm:gap-6 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('profile')}
-            className={`pb-3 text-xs sm:text-sm font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            className={`pb-3 text-xs sm:text-sm font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'profile'
                 ? 'border-purple-600 text-purple-600 dark:text-purple-400'
                 : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
             }`}
           >
-            <span>📝 Edit Data Profil Lengkap</span>
+            <span>📝 Data Diri Lengkap</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('finance')}
+            className={`pb-3 text-xs sm:text-sm font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+              activeTab === 'finance'
+                ? 'border-purple-600 text-purple-600 dark:text-purple-400'
+                : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            <span>💳 Rekening & Keuangan (Privat)</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('password')}
-            className={`pb-3 text-xs sm:text-sm font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 ${
+            className={`pb-3 text-xs sm:text-sm font-black border-b-2 transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
               activeTab === 'password'
                 ? 'border-purple-600 text-purple-600 dark:text-purple-400'
                 : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300'
             }`}
           >
-            <span>🔒 Keamanan & Ubah Password</span>
+            <span>🔒 Keamanan & Password</span>
           </button>
         </div>
 
@@ -638,231 +658,6 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
                 </div>
               </div>
 
-              {/* SECTION 5: Detail Keuangan (Rekening Bank & E-Wallet) */}
-              <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50/60 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">💳</span>
-                    <div>
-                      <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
-                        Detail Keuangan (Rekening Bank & E-Wallet)
-                      </h4>
-                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-normal">
-                        Input rekening bank, e-wallet, atau keduanya (maksimal 3 per kategori).
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sub-section 1: Rekening Bank */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm">🏦</span>
-                      <span className="text-xs font-black uppercase text-zinc-700 dark:text-zinc-300">
-                        Rekening Bank ({bankAccounts.length}/3)
-                      </span>
-                    </div>
-                    {bankAccounts.length < 3 && (
-                      <button
-                        type="button"
-                        onClick={addBankAccount}
-                        className="px-3 py-1 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                      >
-                        <span>+ Tambah Rekening Bank</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {bankAccounts.length === 0 ? (
-                    <div className="p-3 text-center bg-white dark:bg-zinc-900/60 rounded-xl border border-zinc-200/60 dark:border-zinc-800 text-[11px] text-zinc-400 italic">
-                      Belum ada detail Rekening Bank ditambahkan. Klik &quot;+ Tambah Rekening Bank&quot; untuk menambahkan.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {bankAccounts.map((acc, index) => (
-                        <div
-                          key={index}
-                          className="p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-2.5 relative"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">
-                              Rekening Bank #{index + 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeBankAccount(index)}
-                              className="text-red-500 hover:text-red-600 text-xs font-bold px-2 py-0.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition-all cursor-pointer"
-                            >
-                              Hapus 🗑️
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div>
-                              <label className={labelCls}>Nama Bank</label>
-                              <select
-                                value={BANK_OPTIONS.includes(acc.bank_name) ? acc.bank_name : 'Lainnya'}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (val !== 'Lainnya') {
-                                    updateBankAccount(index, 'bank_name', val);
-                                  } else {
-                                    updateBankAccount(index, 'bank_name', '');
-                                  }
-                                }}
-                                className={inputCls}
-                              >
-                                {BANK_OPTIONS.map((b) => (
-                                  <option key={b} value={b}>
-                                    {b}
-                                  </option>
-                                ))}
-                              </select>
-                              {(!BANK_OPTIONS.includes(acc.bank_name) || acc.bank_name === '') && (
-                                <input
-                                  type="text"
-                                  value={acc.bank_name}
-                                  onChange={(e) => updateBankAccount(index, 'bank_name', e.target.value)}
-                                  placeholder="Ketik nama bank..."
-                                  className={`${inputCls} mt-1.5`}
-                                />
-                              )}
-                            </div>
-
-                            <div>
-                              <label className={labelCls}>Nomor Rekening</label>
-                              <input
-                                type="text"
-                                value={acc.account_number}
-                                onChange={(e) => updateBankAccount(index, 'account_number', e.target.value.replace(/[^0-9-]/g, ''))}
-                                placeholder="e.g. 1234567890"
-                                className={inputCls}
-                              />
-                            </div>
-
-                            <div>
-                              <label className={labelCls}>Atas Nama (Nama Pemilik)</label>
-                              <input
-                                type="text"
-                                value={acc.account_name}
-                                onChange={(e) => updateBankAccount(index, 'account_name', e.target.value)}
-                                placeholder="e.g. Syaiful Bakhri"
-                                className={inputCls}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Sub-section 2: E-Wallet */}
-                <div className="space-y-3 pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm">📱</span>
-                      <span className="text-xs font-black uppercase text-zinc-700 dark:text-zinc-300">
-                        E-Wallet ({ewallets.length}/3)
-                      </span>
-                    </div>
-                    {ewallets.length < 3 && (
-                      <button
-                        type="button"
-                        onClick={addEWallet}
-                        className="px-3 py-1 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
-                      >
-                        <span>+ Tambah E-Wallet</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {ewallets.length === 0 ? (
-                    <div className="p-3 text-center bg-white dark:bg-zinc-900/60 rounded-xl border border-zinc-200/60 dark:border-zinc-800 text-[11px] text-zinc-400 italic">
-                      Belum ada detail E-Wallet ditambahkan. Klik &quot;+ Tambah E-Wallet&quot; untuk menambahkan.
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {ewallets.map((wallet, index) => (
-                        <div
-                          key={index}
-                          className="p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 space-y-2.5 relative"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider">
-                              E-Wallet #{index + 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeEWallet(index)}
-                              className="text-red-500 hover:text-red-600 text-xs font-bold px-2 py-0.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 transition-all cursor-pointer"
-                            >
-                              Hapus 🗑️
-                            </button>
-                          </div>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            <div>
-                              <label className={labelCls}>Penyedia (Provider)</label>
-                              <select
-                                value={EWALLET_OPTIONS.includes(wallet.provider) ? wallet.provider : 'Lainnya'}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  if (val !== 'Lainnya') {
-                                    updateEWallet(index, 'provider', val);
-                                  } else {
-                                    updateEWallet(index, 'provider', '');
-                                  }
-                                }}
-                                className={inputCls}
-                              >
-                                {EWALLET_OPTIONS.map((ew) => (
-                                  <option key={ew} value={ew}>
-                                    {ew}
-                                  </option>
-                                ))}
-                              </select>
-                              {(!EWALLET_OPTIONS.includes(wallet.provider) || wallet.provider === '') && (
-                                <input
-                                  type="text"
-                                  value={wallet.provider}
-                                  onChange={(e) => updateEWallet(index, 'provider', e.target.value)}
-                                  placeholder="Ketik nama e-wallet..."
-                                  className={`${inputCls} mt-1.5`}
-                                />
-                              )}
-                            </div>
-
-                            <div>
-                              <label className={labelCls}>Nomor E-Wallet / HP</label>
-                              <input
-                                type="text"
-                                value={wallet.account_number}
-                                onChange={(e) => updateEWallet(index, 'account_number', e.target.value.replace(/[^0-9]/g, ''))}
-                                placeholder="e.g. 081234567890"
-                                className={inputCls}
-                              />
-                            </div>
-
-                            <div>
-                              <label className={labelCls}>Atas Nama (Nama Pemilik)</label>
-                              <input
-                                type="text"
-                                value={wallet.account_name}
-                                onChange={(e) => updateEWallet(index, 'account_name', e.target.value)}
-                                placeholder="e.g. Syaiful Bakhri"
-                                className={inputCls}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
               {profileMsg && (
                 <div
                   className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
@@ -897,6 +692,276 @@ export default function EditProfileModal({ initialData, isOpen, onClose }: EditP
                     </>
                   ) : (
                     <span>Simpan Perubahan Profil</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          ) : activeTab === 'finance' ? (
+            /* FINANCE TAB */
+            <form onSubmit={handleFinanceSave} className="space-y-6">
+              {/* Privacy Notice Banner */}
+              <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-start gap-3">
+                <span className="text-xl shrink-0">🔒</span>
+                <div>
+                  <h4 className="text-xs font-black text-purple-700 dark:text-purple-300 uppercase tracking-wider">
+                    Informasi Pembayaran & Rekening Terproteksi
+                  </h4>
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-300 mt-0.5 leading-relaxed">
+                    Data rekening bank dan e-wallet Anda bersifat privat. Hanya Anda dan manajemen (Admin System & Executive) yang dapat melihat informasi ini untuk kepentingan pencairan insentif/disbursement resmi.
+                  </p>
+                </div>
+              </div>
+
+              {/* ── SECTION 1: REKENING BANK ── */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50/60 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🏦</span>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
+                      Rekening Bank ({bankAccounts.length})
+                    </h4>
+                  </div>
+                </div>
+
+                {/* List of currently added bank accounts */}
+                {bankAccounts.length > 0 && (
+                  <div className="space-y-2.5">
+                    {bankAccounts.map((acc, idx) => (
+                      <div
+                        key={acc.id || idx}
+                        className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3 shadow-xs"
+                      >
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20 inline-block mb-1">
+                            {acc.bank_name}
+                          </span>
+                          <div className="text-sm font-black font-mono text-zinc-900 dark:text-zinc-100 tracking-wider truncate">
+                            {acc.account_number}
+                          </div>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium truncate">
+                            a.n. <span className="font-semibold text-zinc-700 dark:text-zinc-200">{acc.account_holder}</span>
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBank(idx)}
+                          className="px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all shrink-0 cursor-pointer"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new bank account form inputs */}
+                <div className="p-3.5 rounded-xl bg-white/70 dark:bg-zinc-900/70 border border-dashed border-zinc-300 dark:border-zinc-700 space-y-3">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+                    + Tambah Rekening Bank Baru
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelCls}>Nama Bank</label>
+                      <select
+                        value={newBankName}
+                        onChange={(e) => setNewBankName(e.target.value)}
+                        className={inputCls}
+                      >
+                        {BANK_OPTIONS.map((b) => (
+                          <option key={b} value={b} className="dark:bg-zinc-900 text-zinc-900 dark:text-white">
+                            {b}
+                          </option>
+                        ))}
+                      </select>
+                      {newBankName === 'Lainnya' && (
+                        <input
+                          type="text"
+                          value={customBankName}
+                          onChange={(e) => setCustomBankName(e.target.value)}
+                          placeholder="Ketik nama bank..."
+                          className={`${inputCls} mt-2`}
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <label className={labelCls}>Nomor Rekening</label>
+                      <input
+                        type="text"
+                        value={newBankNumber}
+                        onChange={(e) => setNewBankNumber(e.target.value.replace(/[^0-9-]/g, ''))}
+                        placeholder="e.g. 1234567890"
+                        className={inputCls}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelCls}>Nama Pemilik (a.n.)</label>
+                      <input
+                        type="text"
+                        value={newBankHolder}
+                        onChange={(e) => setNewBankHolder(e.target.value)}
+                        placeholder="e.g. Syaiful Bakhri"
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleAddBank}
+                      disabled={!newBankNumber.trim() || !newBankHolder.trim()}
+                      className="px-4 py-2 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-bold transition-all disabled:opacity-40 cursor-pointer shadow-xs active:scale-95"
+                    >
+                      + Tambahkan Rekening
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── SECTION 2: E-WALLET ── */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-zinc-50/60 dark:bg-zinc-900/40 border border-zinc-200/80 dark:border-zinc-800/80 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-200/60 dark:border-zinc-800/60">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">📱</span>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-zinc-900 dark:text-zinc-100">
+                      Akun E-Wallet ({ewalletAccounts.length})
+                    </h4>
+                  </div>
+                </div>
+
+                {/* List of currently added e-wallets */}
+                {ewalletAccounts.length > 0 && (
+                  <div className="space-y-2.5">
+                    {ewalletAccounts.map((ew, idx) => (
+                      <div
+                        key={ew.id || idx}
+                        className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-3 shadow-xs"
+                      >
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 inline-block mb-1">
+                            {ew.wallet_type}
+                          </span>
+                          <div className="text-sm font-black font-mono text-zinc-900 dark:text-zinc-100 tracking-wider truncate">
+                            {ew.phone_number}
+                          </div>
+                          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium truncate">
+                            a.n. <span className="font-semibold text-zinc-700 dark:text-zinc-200">{ew.account_holder}</span>
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEwallet(idx)}
+                          className="px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold transition-all shrink-0 cursor-pointer"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new e-wallet form inputs */}
+                <div className="p-3.5 rounded-xl bg-white/70 dark:bg-zinc-900/70 border border-dashed border-zinc-300 dark:border-zinc-700 space-y-3">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400 block">
+                    + Tambah Akun E-Wallet Baru
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelCls}>Platform E-Wallet</label>
+                      <select
+                        value={newWalletType}
+                        onChange={(e) => setNewWalletType(e.target.value)}
+                        className={inputCls}
+                      >
+                        {EWALLET_OPTIONS.map((w) => (
+                          <option key={w} value={w} className="dark:bg-zinc-900 text-zinc-900 dark:text-white">
+                            {w}
+                          </option>
+                        ))}
+                      </select>
+                      {newWalletType === 'Lainnya' && (
+                        <input
+                          type="text"
+                          value={customWalletType}
+                          onChange={(e) => setCustomWalletType(e.target.value)}
+                          placeholder="Ketik nama e-wallet..."
+                          className={`${inputCls} mt-2`}
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <label className={labelCls}>Nomor HP / Akun</label>
+                      <input
+                        type="text"
+                        value={newWalletPhone}
+                        onChange={(e) => setNewWalletPhone(e.target.value.replace(/[^0-9+]/g, ''))}
+                        placeholder="e.g. 081234567890"
+                        className={inputCls}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelCls}>Nama Pemilik (a.n.)</label>
+                      <input
+                        type="text"
+                        value={newWalletHolder}
+                        onChange={(e) => setNewWalletHolder(e.target.value)}
+                        placeholder="e.g. Syaiful Bakhri"
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleAddEwallet}
+                      disabled={!newWalletPhone.trim() || !newWalletHolder.trim()}
+                      className="px-4 py-2 rounded-xl bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-xs font-bold transition-all disabled:opacity-40 cursor-pointer shadow-xs active:scale-95"
+                    >
+                      + Tambahkan E-Wallet
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {profileMsg && (
+                <div
+                  className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                    profileMsg.ok
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400'
+                  }`}
+                >
+                  <span>{profileMsg.ok ? '✅' : '⚠️'}</span>
+                  <span>{profileMsg.text}</span>
+                </div>
+              )}
+
+              {/* Action Buttons Footer */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-all cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={profileLoading}
+                  className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-6 py-2.5 rounded-xl transition-all shadow-md shadow-purple-500/20 disabled:opacity-50 active:scale-95 cursor-pointer flex items-center gap-2"
+                >
+                  {profileLoading ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <span>Simpan Detail Keuangan</span>
                   )}
                 </button>
               </div>

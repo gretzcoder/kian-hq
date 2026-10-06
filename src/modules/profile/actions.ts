@@ -5,6 +5,7 @@ import { getDB, getKV } from '@/db/client';
 import { generateSalt, hashPassword, createSignedSessionToken } from '@/modules/auth/crypto';
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
+import { getSessionContext } from '@/modules/roles/rbac';
 
 /**
  * Update the current user's display name.
@@ -91,6 +92,35 @@ export async function normalizeWhatsappNumber(phone: string | null | undefined):
   return digits || null;
 }
 
+export interface BankAccount {
+  id: string;
+  bank_name: string;
+  account_number: string;
+  account_holder: string;
+}
+
+export interface EwalletAccount {
+  id: string;
+  wallet_type: string;
+  phone_number: string;
+  account_holder: string;
+}
+
+/**
+ * Ensures financial columns exist in the users table.
+ */
+export async function ensureFinancialColumns(db: any): Promise<void> {
+  try {
+    await db.prepare('ALTER TABLE users ADD COLUMN financial_details TEXT').run();
+  } catch {}
+  try {
+    await db.prepare('ALTER TABLE users ADD COLUMN bank_accounts TEXT').run();
+  } catch {}
+  try {
+    await db.prepare('ALTER TABLE users ADD COLUMN ewallet_accounts TEXT').run();
+  } catch {}
+}
+
 /**
  * Fetch full profile details for current logged in user.
  */
@@ -99,6 +129,8 @@ export async function getMyProfileAction() {
   if (!session) return { success: false, error: 'Tidak terautentikasi.' };
 
   const db = await getDB();
+  await ensureFinancialColumns(db);
+
   const profile = await db.prepare(`
     SELECT
       id, email, username, name, status, user_type, created_at,
@@ -138,6 +170,8 @@ export async function updateOjtProfile(payload: {
     bank_accounts?: Array<{ bank_name: string; account_number: string; account_name: string }>;
     ewallets?: Array<{ provider: string; account_number: string; account_name: string }>;
   };
+  bank_accounts?: BankAccount[];
+  ewallet_accounts?: EwalletAccount[];
   completeOnboarding?: boolean;
 }) {
   const session = await getSession();
@@ -195,22 +229,39 @@ export async function updateOjtProfile(payload: {
         }))
         .filter((e) => e.provider || e.account_number || e.account_name);
     }
+  } else if (payload.bank_accounts || payload.ewallet_accounts) {
+    if (Array.isArray(payload.bank_accounts)) {
+      cleanBankAccounts = payload.bank_accounts.map((b) => ({
+        bank_name: b.bank_name || '',
+        account_number: b.account_number || '',
+        account_name: b.account_holder || '',
+      }));
+    }
+    if (Array.isArray(payload.ewallet_accounts)) {
+      cleanEwallets = payload.ewallet_accounts.map((e) => ({
+        provider: e.wallet_type || '',
+        account_number: e.phone_number || '',
+        account_name: e.account_holder || '',
+      }));
+    }
   }
 
-  if (cleanBankAccounts.length > 3) {
-    return { success: false, error: 'Maksimal 3 detail Rekening Bank.' };
+  if (cleanBankAccounts.length > 5) {
+    return { success: false, error: 'Maksimal 5 detail Rekening Bank.' };
   }
 
-  if (cleanEwallets.length > 3) {
-    return { success: false, error: 'Maksimal 3 detail E-Wallet.' };
+  if (cleanEwallets.length > 5) {
+    return { success: false, error: 'Maksimal 5 detail E-Wallet.' };
   }
 
-  const finalFinancialDetailsJson = JSON.stringify({
+  const hasFinancialPayload = payload.financial_details !== undefined || payload.bank_accounts !== undefined || payload.ewallet_accounts !== undefined;
+  const finalFinancialDetailsJson = hasFinancialPayload ? JSON.stringify({
     bank_accounts: cleanBankAccounts,
     ewallets: cleanEwallets,
-  });
+  }) : null;
 
   const db = await getDB();
+  await ensureFinancialColumns(db);
 
   // Validate Email uniqueness if changed
   if (email && email !== session.email) {
@@ -267,7 +318,7 @@ export async function updateOjtProfile(payload: {
           portfolio_url = ?,
           department = ?,
           bio = ?,
-          financial_details = ?,
+          financial_details = COALESCE(?, financial_details),
           onboarding_completed = 1
         WHERE id = ?
       `)
@@ -310,7 +361,7 @@ export async function updateOjtProfile(payload: {
           portfolio_url = ?,
           department = ?,
           bio = ?,
-          financial_details = ?
+          financial_details = COALESCE(?, financial_details)
         WHERE id = ?
       `)
       .bind(
@@ -418,4 +469,82 @@ export async function completeFeatureTourAction() {
 
   revalidatePath('/dashboard');
   return { success: true };
+}
+
+/**
+ * Fetch financial details (bank accounts & e-wallets) with strict privacy access control.
+ * Only the account owner OR Admin System / Executive can access this data.
+ */
+export async function getUserFinancialDetailsAction(targetUserId: string) {
+  const session = await getSession();
+  if (!session) return { success: false, error: 'Tidak terautentikasi.' };
+
+  const isSelf = session.userId === targetUserId;
+  const ctx = await getSessionContext(session.userId);
+  const isPrivileged =
+    ctx.roles.includes('EXECUTIVE') ||
+    ctx.permissions.has('ADMIN_SYSTEM') ||
+    ctx.can('MANAGE') ||
+    ctx.can('ADMIN_USERS');
+
+  if (!isSelf && !isPrivileged) {
+    return { success: false, error: 'Akses ditolak. Informasi keuangan pengguna bersifat privat.' };
+  }
+
+  const db = await getDB();
+  await ensureFinancialColumns(db);
+
+  const row = await db
+    .prepare('SELECT financial_details, bank_accounts, ewallet_accounts FROM users WHERE id = ?')
+    .bind(targetUserId)
+    .first() as { financial_details: string | null; bank_accounts: string | null; ewallet_accounts: string | null } | null;
+
+  let bankAccounts: BankAccount[] = [];
+  let ewalletAccounts: EwalletAccount[] = [];
+
+  if (row?.financial_details) {
+    try {
+      const parsed = JSON.parse(row.financial_details);
+      if (parsed) {
+        if (Array.isArray(parsed.bank_accounts)) {
+          bankAccounts = parsed.bank_accounts.map((b: any, idx: number) => ({
+            id: `bank_${idx}`,
+            bank_name: b.bank_name || '',
+            account_number: b.account_number || '',
+            account_holder: b.account_name || '',
+          }));
+        }
+        if (Array.isArray(parsed.ewallets)) {
+          ewalletAccounts = parsed.ewallets.map((e: any, idx: number) => ({
+            id: `ewallet_${idx}`,
+            wallet_type: e.provider || '',
+            phone_number: e.account_number || '',
+            account_holder: e.account_name || '',
+          }));
+        }
+      }
+    } catch {}
+  }
+
+  if (bankAccounts.length === 0 && row?.bank_accounts) {
+    try {
+      const parsed = JSON.parse(row.bank_accounts);
+      if (Array.isArray(parsed)) bankAccounts = parsed;
+    } catch {}
+  }
+
+  if (ewalletAccounts.length === 0 && row?.ewallet_accounts) {
+    try {
+      const parsed = JSON.parse(row.ewallet_accounts);
+      if (Array.isArray(parsed)) ewalletAccounts = parsed;
+    } catch {}
+  }
+
+  return {
+    success: true,
+    bankAccounts,
+    ewalletAccounts,
+    isSelf,
+    canView: true,
+  };
 }
