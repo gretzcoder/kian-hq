@@ -21,6 +21,7 @@ interface EditProfileButtonProps {
     portfolio_url?: string;
     department?: string;
     bio?: string;
+    userType?: string;
     bank_accounts?: BankAccount[];
     ewallet_accounts?: EwalletAccount[];
     financial_details?: any;
