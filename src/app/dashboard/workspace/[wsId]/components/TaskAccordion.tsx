@@ -615,7 +615,7 @@ export default function TaskAccordion({
                   return (
                     <div className="px-5 pb-5">
                       {/* Description & Brief Viewer Container when expanded */}
-                      {task.description && (
+                      {task.description && stripMetadataTags(task.description).length > 0 && (
                         <div className="mb-4">
                           <DocxDocumentViewer
                             content={stripMetadataTags(task.description)}

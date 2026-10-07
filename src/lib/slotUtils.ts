@@ -14,13 +14,19 @@ export interface DirectBriefOutputSlot {
 
 export function parseDirectBriefSlots(description: string | null | undefined): DirectBriefOutputSlot[] {
   if (!description || !description.includes('[DIRECT_BRIEF_CATEGORIES:')) return [];
-  const match = description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*([\s\S]*?)\]\]/i) || description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]/i);
+  const match =
+    description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\s*\]/i) ||
+    description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])/i) ||
+    description.match(/\[DIRECT_BRIEF_CATEGORIES:\s*([\s\S]*?)\]\]/i);
   if (match && match[1]) {
     try {
-      const raw = (match[1].startsWith('[') ? match[1] : `[${match[1]}]`)
+      let raw = match[1]
         .replace(/&quot;/g, '"')
         .replace(/&#34;/g, '"')
-        .replace(/<[^>]*>/g, '');
+        .replace(/<[^>]*>/g, '')
+        .trim();
+      if (!raw.startsWith('[')) raw = `[${raw}`;
+      if (!raw.endsWith(']')) raw = `${raw}]`;
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         return parsed.map((item, idx) => {
@@ -55,7 +61,9 @@ export const parseSlotsFromDescription = parseDirectBriefSlots;
 
 export function parseAssignedTrooperIds(description: string | null | undefined): string[] {
   if (!description || !description.includes('[ASSIGNED_TROOPERS:')) return [];
-  const match = description.match(/\[ASSIGNED_TROOPERS:\s*([\s\S]*?)\]/i);
+  const match =
+    description.match(/\[ASSIGNED_TROOPERS:\s*(\[[\s\S]*?\])\s*\]/i) ||
+    description.match(/\[ASSIGNED_TROOPERS:\s*([\s\S]*?)\]/i);
   if (!match || !match[1]) return [];
 
   const raw = match[1]
@@ -87,11 +95,16 @@ export function stripMetadataTags(description: string | null | undefined): strin
   if (!description) return '';
   return description
     .replace(/<p>\s*\[ASSIGNED_TROOPERS:[\s\S]*?\]\s*<\/p>/gi, '')
+    .replace(/\[ASSIGNED_TROOPERS:\s*\[[\s\S]*?\]\s*\]/gi, '')
     .replace(/\[ASSIGNED_TROOPERS:[\s\S]*?\]/gi, '')
     .replace(/<p>\s*\[DIRECT_BRIEF_CATEGORIES:[\s\S]*?\]\s*<\/p>/gi, '')
+    .replace(/\[DIRECT_BRIEF_CATEGORIES:\s*\[[\s\S]*?\]\s*\]/gi, '')
+    .replace(/\[DIRECT_BRIEF_CATEGORIES:[\s\S]*?\]\]/gi, '')
     .replace(/\[DIRECT_BRIEF_CATEGORIES:[\s\S]*?\]/gi, '')
     .replace(/<p>\s*\[DIRECT_BRIEF\]\s*<\/p>/gi, '')
     .replace(/\[DIRECT_BRIEF\]/gi, '')
+    .replace(/^\s*\]+\s*/, '')
+    .replace(/\s*\]+\s*$/, '')
     .trim();
 }
 

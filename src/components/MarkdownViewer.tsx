@@ -1,5 +1,6 @@
 import React from 'react';
 import { fixGoogleDriveImagesInHtml } from '@/components/editor/TiptapEditor';
+import { stripMetadataTags } from '@/lib/slotUtils';
 
 interface MarkdownViewerProps {
   content: string;
@@ -13,10 +14,8 @@ interface MarkdownViewerProps {
 export function MarkdownViewer({ content, className = '' }: MarkdownViewerProps) {
   if (!content) return null;
 
-  const contentClean = content
-    .replace(/^\[DIRECT_BRIEF_CATEGORIES:\s*(\[[\s\S]*?\])\]\s*/i, '')
-    .replace(/^\[DIRECT_BRIEF\]\s*/i, '')
-    .trim();
+  const contentClean = stripMetadataTags(content);
+  if (!contentClean) return null;
 
   const isHtml =
     /^\s*<[a-z][\s\S]*>/i.test(contentClean) ||
