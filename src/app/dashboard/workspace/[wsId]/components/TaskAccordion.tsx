@@ -791,6 +791,7 @@ function EditTaskModal({
     if (isDirectBrief) {
       if (validSlots.length > 0) {
         finalDescription = `[DIRECT_BRIEF_CATEGORIES: ${JSON.stringify(validSlots)}]\n[DIRECT_BRIEF]\n${finalDescription}`;
+        formData.set('directBriefCategories', JSON.stringify(validSlots));
       } else {
         finalDescription = `[DIRECT_BRIEF]\n${finalDescription}`;
       }

@@ -1249,7 +1249,19 @@ export default function TaskActions({
 
       const mySubmission = assignments.find(a => a.user_id === currentUserId && (a.result_url || a.status !== 'ASSIGNED'));
       const directSlots = parseDirectBriefSlots(taskDescription);
-      const categories = directSlots.length > 0 ? directSlots.map(s => s.name) : getDirectBriefCategories(taskDescription);
+      let categories = directSlots.length > 0 ? directSlots.map(s => s.name) : getDirectBriefCategories(taskDescription);
+      if (categories.length === 0) {
+        const assignedCategories = Array.from(
+          new Set(
+            assignments
+              .map((a) => (a.assignment_role || '').replace(/^Kategori:\s*/i, '').trim())
+              .filter((role) => role && !['RESEARCHER', 'PLANNER', 'DESIGNER', 'VIDEO_EDITOR', 'CREATOR', 'LEADER', 'MENTOR'].includes(role.toUpperCase()))
+          )
+        );
+        if (assignedCategories.length > 0) {
+          categories = assignedCategories;
+        }
+      }
 
       if (mySubmission && !showDirectForm) {
         const canEditDirectSubmission = (mySubmission.mentor_approved !== 1) && (mySubmission.coordinator_approved !== 1) && !['APPROVED', 'DONE', 'PUBLISHED'].includes(mySubmission.status);

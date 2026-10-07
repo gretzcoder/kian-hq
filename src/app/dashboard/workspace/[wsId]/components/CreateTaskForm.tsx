@@ -65,6 +65,11 @@ export default function CreateTaskForm({
     formData.set('assigneeUserIds', JSON.stringify(selectedAssigneeUserIds));
     formData.set('description', description);
 
+    if (isDirectBrief) {
+      const validSlots = outputSlots.filter((s) => s.name && s.name.trim().length > 0);
+      formData.set('directBriefCategories', JSON.stringify(validSlots));
+    }
+
     try {
       const res = await createTask(workspaceId, formData);
       if (res.success) {

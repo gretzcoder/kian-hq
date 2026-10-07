@@ -1903,12 +1903,34 @@ export async function updateTask(taskId: string, formData: FormData) {
     }
   }
 
+  const directBriefCategoriesStr = formData.get('directBriefCategories') as string;
+  let parsedSlotsFromForm: any[] = [];
+  if (directBriefCategoriesStr) {
+    try {
+      const rawParsed = JSON.parse(directBriefCategoriesStr);
+      if (Array.isArray(rawParsed)) {
+        parsedSlotsFromForm = rawParsed.map((item, idx) => {
+          if (typeof item === 'string') return { id: `slot_${idx + 1}`, name: item.trim() };
+          return {
+            id: item.id || `slot_${idx + 1}`,
+            name: (item.name || '').trim(),
+            assignedUserId: item.assignedUserId || null,
+            assignedUserName: item.assignedUserName || null,
+            deadline: item.deadline || null,
+            specificBrief: item.specificBrief || null,
+          };
+        }).filter((s: any) => s.name && s.name.length > 0);
+      }
+    } catch {}
+  }
+
   if (description) {
     const rawDesc = description;
     const cleanDesc = stripMetadataTags(rawDesc);
-    const slots = parseSlotsFromDescription(rawDesc);
+    const slotsFromDesc = parseSlotsFromDescription(rawDesc);
+    const slots = parsedSlotsFromForm.length > 0 ? parsedSlotsFromForm : slotsFromDesc;
     const isDirectBrief = Boolean(
-      rawDesc.includes('[DIRECT_BRIEF]') || outputType === 'DIRECT_BRIEF'
+      rawDesc.includes('[DIRECT_BRIEF]') || outputType === 'DIRECT_BRIEF' || (formData.get('isDirectBrief') as string) === 'true'
     );
 
     let rebuilt = cleanDesc;
