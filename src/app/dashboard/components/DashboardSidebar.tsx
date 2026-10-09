@@ -268,7 +268,9 @@ export default function DashboardSidebar({
             ☰
           </button>
           <Link href="/dashboard" className="flex items-center gap-2 truncate">
-            <img src="/kian.ico" alt="Kian HQ Logo" className="w-7 h-7 rounded-xl object-contain shadow-xs shrink-0" />
+            <div className="w-7 h-7 rounded-lg bg-zinc-900 dark:bg-zinc-900 p-1 border border-zinc-800/80 shadow-xs flex items-center justify-center shrink-0">
+              <img src="/icon.svg?v=5" alt="Kian HQ Logo" className="w-full h-full object-contain" />
+            </div>
             <span className="text-sm sm:text-base font-black tracking-widest bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 bg-clip-text text-transparent truncate">
               KIAN HQ
             </span>
@@ -322,11 +324,13 @@ export default function DashboardSidebar({
             className="flex items-center gap-3 min-w-0 group"
             title={collapsed ? 'Klik Logo untuk Memperluas Navigasi' : undefined}
           >
-            <img
-              src="/kian.ico"
-              alt="Kian HQ Logo"
-              className="w-9 h-9 rounded-2xl object-contain shadow-md shadow-purple-500/20 shrink-0 group-hover:scale-105 transition-transform duration-200"
-            />
+            <div className="w-9 h-9 rounded-xl bg-zinc-900 dark:bg-zinc-900 p-1.5 border border-zinc-800/80 shadow-md shadow-purple-500/10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-200">
+              <img
+                src="/icon.svg?v=5"
+                alt="Kian HQ Logo"
+                className="w-full h-full object-contain"
+              />
+            </div>
             <div
               className={`flex items-center gap-1.5 transition-all duration-300 ${
                 collapsed ? 'opacity-0 w-0 pointer-events-none' : 'opacity-100 w-auto'

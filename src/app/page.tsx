@@ -22,7 +22,10 @@ export default async function Home() {
 
       {/* Header */}
       <header className="max-w-7xl mx-auto w-full px-6 sm:px-8 py-3.5 sm:py-6 flex justify-between items-center z-10 shrink-0">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-zinc-900 dark:bg-zinc-900 p-1.5 border border-zinc-800/80 shadow-md shadow-purple-500/10 flex items-center justify-center shrink-0">
+            <img src="/icon.svg?v=5" alt="Kian HQ Logo" className="w-full h-full object-contain" />
+          </div>
           <span className="text-xl font-black tracking-widest bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 bg-clip-text text-transparent">
             KIAN HQ
           </span>

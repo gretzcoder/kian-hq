@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="blue-stem" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="25%" stop-color="#258cf4"/>
+      <stop offset="100%" stop-color="#1d65cd"/>
+    </linearGradient>
+    <linearGradient id="coral-main" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ff4a68"/>
+      <stop offset="50%" stop-color="#f43f5e"/>
+      <stop offset="100%" stop-color="#e11d48"/>
+    </linearGradient>
+    <linearGradient id="yellow-tip" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="blue-accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e6cd6"/>
+      <stop offset="100%" stop-color="#08489e"/>
+    </linearGradient>
+  </defs>
+  <g id="kian-logo">
+    <polygon points="102.0,337.7 169.3,406.5 158.3,440.9 68.9,440.9" fill="url(#yellow-tip)"/>
+<path d="M 143.4 208.7
+                 L 206.6 290.4
+                 L 260.3 290.4
+                 L 342.0 402.2
+                 Q 366.1 432.3 346.3 440.9
+                 Q 324.8 443.5 303.3 415.1
+                 L 194.2 329.1
+                 L 169.3 406.5
+                 L 102.0 337.7
+                 Z" fill="url(#coral-main)"/>
+<path d="M 188.9 66.8
+                 L 278.4 66.8
+                 L 245.2 170.0
+                 L 342.0 66.8
+                 L 434.9 66.8
+                 L 260.3 290.4
+                 L 206.6 290.4
+                 L 143.4 208.7
+                 Z" fill="url(#blue-stem)"/>
+<path d="M 260.3 290.4
+                  L 333.4 290.4
+                  L 440.9 440.9
+                  L 346.3 440.9
+                  Q 366.1 432.3 342.0 402.2
+                  Z" fill="url(#blue-accent)"/>
+  </g>
+</svg>

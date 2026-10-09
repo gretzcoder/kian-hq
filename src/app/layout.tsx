@@ -18,15 +18,18 @@ export const metadata: Metadata = {
   description: "KIAN HQ is an AI-powered creative team operating system built for modern creative agencies. Manage projects, tasks, timelines, briefs, and team collaboration in one unified platform.",
   icons: {
     icon: [
-      { url: '/kian.ico?v=4', type: 'image/x-icon' },
-      { url: '/favicon.ico?v=4', type: 'image/x-icon' },
-      { url: '/icon-192.png?v=4', type: 'image/png', sizes: '192x192' },
-      { url: '/icon-512.png?v=4', type: 'image/png', sizes: '512x512' },
+      { url: '/favicon.ico?v=5', type: 'image/x-icon' },
+      { url: '/kian.ico?v=5', type: 'image/x-icon' },
+      { url: '/icon.svg?v=5', type: 'image/svg+xml' },
+      { url: '/icon-192.png?v=5', type: 'image/png', sizes: '192x192' },
+      { url: '/icon-512.png?v=5', type: 'image/png', sizes: '512x512' },
     ],
-    shortcut: '/kian.ico?v=4',
-    apple: '/apple-touch-icon.png?v=4',
+    shortcut: '/favicon.ico?v=5',
+    apple: [
+      { url: '/apple-touch-icon.png?v=5', sizes: '180x180', type: 'image/png' },
+    ],
   },
-  manifest: "/manifest.json",
+  manifest: "/manifest.json?v=5",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -38,7 +41,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#7c3aed",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#030303" },
+    { media: "(prefers-color-scheme: dark)", color: "#030303" },
+  ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -56,11 +62,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        <link rel="icon" href="/kian.ico?v=4" type="image/x-icon" sizes="any" />
-        <link rel="shortcut icon" href="/kian.ico?v=4" type="image/x-icon" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=4" />
-        <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png?v=4" />
-        <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png?v=4" />
+        <link rel="icon" href="/favicon.ico?v=5" type="image/x-icon" sizes="any" />
+        <link rel="icon" href="/icon.svg?v=5" type="image/svg+xml" />
+        <link rel="shortcut icon" href="/favicon.ico?v=5" type="image/x-icon" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=5" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
