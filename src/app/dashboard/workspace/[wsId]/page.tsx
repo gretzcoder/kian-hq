@@ -104,6 +104,9 @@ export default async function WorkspaceDetailPage({ params }: PageProps) {
 
   const projectId = workspace.project_id;
 
+  // Ensure all task statuses and outputs in this workspace are healed & synchronized
+  await syncAndRepairTaskStatuses(db, wsId).catch(() => {});
+
   // Fetch everything else IN PARALLEL — no sequential waterfall
   const [
     project,

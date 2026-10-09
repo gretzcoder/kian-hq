@@ -1414,7 +1414,16 @@ export default function TaskActions({
               </p>
             </div>
             <span className="text-[10px] font-mono text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-full border border-zinc-200 dark:border-zinc-700">
-              {assignments.filter(a => a.result_url || a.status !== 'ASSIGNED').length}/{slotItems.length} Slot Terisi
+              {(() => {
+                const filledCount = slotItems.filter((s) => {
+                  const sClean = s.name.replace(/^Kategori:\s*/i, '').trim().toLowerCase();
+                  return assignments.some((a) =>
+                    (a.result_url || !['ASSIGNED', 'DRAFT'].includes(a.status)) &&
+                    a.assignment_role.replace(/^Kategori:\s*/i, '').trim().toLowerCase() === sClean
+                  );
+                }).length;
+                return `${filledCount}/${slotItems.length} Slot Terisi`;
+              })()}
             </span>
           </div>
 

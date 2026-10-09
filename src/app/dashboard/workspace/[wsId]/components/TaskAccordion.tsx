@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TaskActions, { getDirectBriefCategories, parseDirectBriefSlots, DirectBriefOutputSlot } from '@/modules/tasks/components/TaskActions';
-import { parseAssignedTrooperIds, stripMetadataTags } from '@/lib/slotUtils';
+import { parseAssignedTrooperIds, stripMetadataTags, getTaskOutputType } from '@/lib/slotUtils';
 import { MarkdownViewer } from '@/components/MarkdownViewer';
 import TiptapEditor, { DocxDocumentViewer } from '@/components/editor/TiptapEditor';
 import TaskAssignmentPanel from './TaskAssignmentPanel';
@@ -42,6 +42,7 @@ interface TaskRow {
   created_at: number;
   created_by?: string | null;
   task_type: string;
+  required_outputs?: string | null;
   parent_task_id: string | null;
   sparks_multiplier?: number;
 }
@@ -84,6 +85,8 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   PUBLISHED:          { label: 'Published (Done)',   color: 'text-purple-600 dark:text-purple-400 bg-purple-500/5 border-purple-500/15' },
   ARCHIVED:           { label: 'Archived',           color: 'text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-900/20 border-zinc-200 dark:border-zinc-800' },
   DECLINED:           { label: 'Declined',           color: 'text-red-800 dark:text-red-500 bg-red-800/10 border-red-800/20' },
+  IN_PROGRESS:        { label: 'In Progress',        color: 'text-blue-600 dark:text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  TODO:               { label: 'To Do',              color: 'text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700' },
 };
 
 const priorityConfig: Record<string, { label: string; color: string }> = {
@@ -102,6 +105,8 @@ function getBorderColor(status: string): string {
     return 'border-emerald-500/15 dark:border-emerald-500/15';
   if (['PUBLISHED'].includes(status))
     return 'border-purple-500/15 dark:border-purple-500/15';
+  if (['IN_PROGRESS'].includes(status))
+    return 'border-blue-500/20 dark:border-blue-500/20';
   return 'border-zinc-200/80 dark:border-zinc-800/80';
 }
 
@@ -237,7 +242,44 @@ export default function TaskAccordion({
     for (const t of tasks) {
       const taskAss = assignmentsByTask[t.id] ?? [];
       let effStatus = t.status;
-      if (taskAss.length > 0) {
+      const isDirectBrief = t.task_type === 'DIRECT_BRIEF' || Boolean(t.description && t.description.includes('[DIRECT_BRIEF]'));
+
+      if (isDirectBrief && taskAss.length > 0) {
+        const slots = parseDirectBriefSlots(t.description);
+        if (slots.length > 0) {
+          const allSlotsApproved = slots.every((slot) => {
+            const cleanLower = slot.name.replace(/^kategori:\s*/i, '').trim().toLowerCase();
+            return taskAss.some(
+              (a) =>
+                ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status) &&
+                a.assignment_role.replace(/^kategori:\s*/i, '').trim().toLowerCase() === cleanLower
+            );
+          });
+          const hasAnyWaitingReview = taskAss.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status));
+          const hasAnySubmitted = taskAss.some((a) => a.result_url || !['ASSIGNED', 'DRAFT'].includes(a.status));
+
+          if (allSlotsApproved) {
+            effStatus = 'APPROVED';
+          } else if (hasAnyWaitingReview) {
+            effStatus = 'WAITING_REVIEW';
+          } else if (hasAnySubmitted) {
+            effStatus = 'IN_PROGRESS';
+          } else {
+            effStatus = 'DRAFT';
+          }
+        } else {
+          const submittedAss = taskAss.filter((a) => a.result_url || !['ASSIGNED', 'DRAFT'].includes(a.status));
+          if (submittedAss.length > 0 && submittedAss.every((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status))) {
+            effStatus = 'APPROVED';
+          } else if (submittedAss.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status))) {
+            effStatus = 'WAITING_REVIEW';
+          } else if (submittedAss.length > 0) {
+            effStatus = 'IN_PROGRESS';
+          } else {
+            effStatus = 'DRAFT';
+          }
+        }
+      } else if (taskAss.length > 0) {
         if (taskAss.every((a) => ['APPROVED', 'LOCKED', 'PUBLISHED', 'DONE'].includes(a.status))) {
           effStatus = 'APPROVED';
         } else if (
@@ -486,15 +528,20 @@ export default function TaskAccordion({
                       {pCfg.label}
                     </span>
                     {/* Output Type Badge (Design vs Video vs Other) */}
-                    <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border flex items-center gap-1 ${
-                      task.task_type === 'VIDEO'
-                        ? 'text-pink-600 dark:text-pink-400 bg-pink-500/10 border-pink-500/20'
-                        : task.task_type === 'OTHER'
-                        ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-                        : 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20'
-                    }`}>
-                      {task.task_type === 'VIDEO' ? '🎬 Video Task' : task.task_type === 'OTHER' ? '📌 Other Task' : '🎨 Design Task'}
-                    </span>
+                    {(() => {
+                      const oType = getTaskOutputType(task);
+                      return (
+                        <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-xl border flex items-center gap-1 ${
+                          oType === 'VIDEO'
+                            ? 'text-pink-600 dark:text-pink-400 bg-pink-500/10 border-pink-500/20'
+                            : oType === 'OTHER'
+                            ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                            : 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20'
+                        }`}>
+                          {oType === 'VIDEO' ? '🎬 Video Task' : oType === 'OTHER' ? '📌 Other Task' : '🎨 Design Task'}
+                        </span>
+                      );
+                    })()}
                     {(task.task_type === 'DIRECT_BRIEF' || (task.description && task.description.includes('[DIRECT_BRIEF]'))) && (
                       <span className="text-[9px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1">
                         <span>⚡</span> Brief Diberikan Langsung
@@ -631,7 +678,7 @@ export default function TaskAccordion({
                         taskTitle={task.title}
                         taskDeadline={task.deadline}
                         taskExtendedDeadline={task.extended_deadline}
-                        taskType={task.task_type}
+                        taskType={getTaskOutputType(task)}
                         taskDescription={task.description}
                         taskCreatedBy={task.created_by}
                         sparksMultiplier={task.sparks_multiplier || 1.0}
@@ -742,10 +789,17 @@ function EditTaskModal({
   members?: Member[];
   onClose: () => void;
 }) {
-  const [priority, setPriority] = useState(task.priority || 'NORMAL');
-  const [outputType, setOutputType] = useState(task.task_type || 'DESIGN');
+  const [priority, setPriority] = useState<'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'>((task.priority as any) || 'NORMAL');
+  const [outputType, setOutputType] = useState<'DESIGN' | 'VIDEO' | 'OTHER'>(() => getTaskOutputType(task));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const editPriorityColors: Record<string, string> = {
+    LOW: 'text-zinc-500 bg-zinc-50 dark:bg-zinc-900/40 border-zinc-200 dark:border-zinc-800',
+    NORMAL: 'text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-700',
+    HIGH: 'text-orange-600 dark:text-orange-400 bg-orange-500/10 border-orange-500/30',
+    URGENT: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/30',
+  };
 
   const rawDesc = task.description ?? '';
   const isDirectBrief = rawDesc.includes('[DIRECT_BRIEF]') || task.task_type === 'DIRECT_BRIEF';
@@ -777,6 +831,7 @@ function EditTaskModal({
     const formData = new FormData(e.currentTarget);
     formData.set('priority', priority);
     formData.set('outputType', outputType);
+    formData.set('isDirectBrief', String(isDirectBrief));
     formData.set('assigneeUserId', selectedAssigneeUserIds[0] || '');
     formData.set('assigneeUserIds', JSON.stringify(selectedAssigneeUserIds));
 
@@ -857,6 +912,104 @@ function EditTaskModal({
               ⚠️ {error}
             </p>
           )}
+
+          {/* Jenis Output Karya / Kategori Jenis Task (Design vs Video vs Other) */}
+          <div className="p-4 rounded-2xl bg-zinc-50/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 space-y-2.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <label className="block text-[10px] font-black text-purple-600 dark:text-purple-400 uppercase tracking-widest">
+                Jenis Output Karya / Kategori Tugas <span className="text-red-500">*</span>
+              </label>
+              <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                outputType === 'VIDEO'
+                  ? 'text-pink-600 dark:text-pink-400 bg-pink-500/10 border-pink-500/20'
+                  : outputType === 'OTHER'
+                  ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
+                  : 'text-purple-600 dark:text-purple-400 bg-purple-500/10 border-purple-500/20'
+              }`}>
+                {outputType === 'VIDEO' ? '🎬 Video Task' : outputType === 'OTHER' ? '📌 Other Task' : '🎨 Design Task'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={() => setOutputType('DESIGN')}
+                className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                  outputType === 'DESIGN'
+                    ? 'bg-purple-500/10 border-purple-500 text-purple-700 dark:text-purple-300 font-bold ring-2 ring-purple-500/20 shadow-sm'
+                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                }`}
+              >
+                <span className="text-2xl">🎨</span>
+                <div>
+                  <p className="text-xs font-extrabold">Design Task</p>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">Grafis, Feed, Banner, Thumbnail</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOutputType('VIDEO')}
+                className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                  outputType === 'VIDEO'
+                    ? 'bg-pink-500/10 border-pink-500 text-pink-700 dark:text-pink-300 font-bold ring-2 ring-pink-500/20 shadow-sm'
+                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                }`}
+              >
+                <span className="text-2xl">🎬</span>
+                <div>
+                  <p className="text-xs font-extrabold">Video Task</p>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">Reels, TikTok, Shorts, Longform</p>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOutputType('OTHER')}
+                className={`p-3.5 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                  outputType === 'OTHER'
+                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-700 dark:text-emerald-300 font-bold ring-2 ring-emerald-500/20 shadow-sm'
+                    : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:border-zinc-300'
+                }`}
+              >
+                <span className="text-2xl">📌</span>
+                <div>
+                  <p className="text-xs font-extrabold">Other Task</p>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal">Dokumen, Copywriting, Admin, Dll</p>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Prioritas Tugas Selector */}
+          <div className="p-3.5 rounded-2xl bg-zinc-50/80 dark:bg-zinc-900/40 border border-zinc-200 dark:border-zinc-800 space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                Prioritas Tugas
+              </label>
+              <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${editPriorityColors[priority]}`}>
+                {priority}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const).map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPriority(p)}
+                  className={`py-2 px-3 rounded-xl border text-center transition-all cursor-pointer font-bold text-xs ${
+                    priority === p
+                      ? editPriorityColors[p] + ' ring-2 ring-purple-500/30 shadow-sm'
+                      : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-500 dark:text-zinc-400 hover:border-zinc-300'
+                  }`}
+                >
+                  {p === 'LOW' && '🟢 Low'}
+                  {p === 'NORMAL' && '🔵 Normal'}
+                  {p === 'HIGH' && '🟠 High'}
+                  {p === 'URGENT' && '🔴 Urgent'}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Grid Layout: Left Meta Fields, Right Tiptap Editor */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">

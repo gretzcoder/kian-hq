@@ -15,6 +15,7 @@ export interface PollTaskRow {
   start_at?: number | null;
   created_at: number;
   task_type: string;
+  required_outputs?: string | null;
   parent_task_id: string | null;
   revision_note?: string | null;
   sparks?: number | null;
@@ -72,9 +73,11 @@ export async function getWorkspaceTaskData(wsId: string): Promise<WorkspaceTaskD
     async () => {
       const db = await getDB();
 
+      await syncAndRepairTaskStatuses(db, wsId).catch(() => {});
+
       const { results: tasksRaw } = await db
         .prepare(
-          `SELECT id, title, description, status, priority, deadline, start_at, created_at, task_type, parent_task_id, revision_note, sparks, sparks_multiplier
+          `SELECT id, title, description, status, priority, deadline, start_at, created_at, task_type, required_outputs, parent_task_id, revision_note, sparks, sparks_multiplier
            FROM tasks
            WHERE workspace_id = ? AND status != 'DELETED'
            ORDER BY

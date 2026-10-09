@@ -73,7 +73,7 @@ async function checkOJTPrerequisites(db: any, taskId: string, role: string, user
   return { allowed: true };
 }
 
-import { parseSlotsFromDescription, parseAssignedTrooperIds, stripMetadataTags } from '@/lib/slotUtils';
+import { parseSlotsFromDescription, parseAssignedTrooperIds, stripMetadataTags, getTaskOutputType } from '@/lib/slotUtils';
 
 // ---------------------------------------------------------------------------
 // Helper: Calculate Fair Rolling Creative Assignments (Researcher, Planner, Creator)
@@ -610,33 +610,77 @@ export async function createTask(workspaceId: string, formData: FormData) {
  */
 export async function syncTaskOverallStatus(db: any, taskId: string): Promise<string> {
   const { results: assignments } = await db
-    .prepare('SELECT status FROM task_assignments WHERE task_id = ?')
+    .prepare('SELECT id, assignment_role, status, result_url FROM task_assignments WHERE task_id = ?')
     .bind(taskId)
     .all();
 
   const task = await db
-    .prepare('SELECT id, status FROM tasks WHERE id = ?')
+    .prepare('SELECT id, status, task_type, description FROM tasks WHERE id = ?')
     .bind(taskId)
-    .first() as { id: string; status: string } | null;
+    .first() as { id: string; status: string; task_type: string; description: string | null } | null;
 
   if (!task) return 'TODO';
 
   const rows = (assignments as any[]) || [];
   let nextStatus = 'IN_PROGRESS';
 
-  if (rows.length === 0) {
-    nextStatus = 'TODO';
-  } else {
-    const isAllApproved = rows.every((a) => ['APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED'].includes(a.status));
-    if (isAllApproved) {
-      nextStatus = 'APPROVED';
-    } else {
-      const isAllWaitingReview = rows.every((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(a.status)) &&
-        rows.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status));
-      if (isAllWaitingReview) {
+  const isDirectBrief = task.task_type === 'DIRECT_BRIEF' || Boolean(task.description && task.description.includes('[DIRECT_BRIEF]'));
+
+  if (isDirectBrief) {
+    const slots = parseSlotsFromDescription(task.description);
+    if (slots.length > 0) {
+      const allSlotsApproved = slots.every((slot) => {
+        const cleanLower = slot.name.replace(/^kategori:\s*/i, '').trim().toLowerCase();
+        return rows.some(
+          (a) =>
+            ['APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED'].includes(a.status) &&
+            a.assignment_role.replace(/^kategori:\s*/i, '').trim().toLowerCase() === cleanLower
+        );
+      });
+      const hasAnyWaitingReview = rows.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status));
+      const hasAnySubmitted = rows.some((a) => a.result_url || !['ASSIGNED', 'DRAFT'].includes(a.status));
+
+      if (allSlotsApproved) {
+        nextStatus = 'APPROVED';
+        // Auto cleanup unsubmitted placeholder assignments once all defined slots are approved
+        await db.prepare(`
+          DELETE FROM task_assignments
+          WHERE task_id = ? AND status IN ('ASSIGNED', 'DRAFT') AND (result_url IS NULL OR TRIM(result_url) = '')
+        `).bind(taskId).run().catch(() => {});
+      } else if (hasAnyWaitingReview) {
         nextStatus = 'WAITING_REVIEW';
-      } else {
+      } else if (hasAnySubmitted) {
         nextStatus = 'IN_PROGRESS';
+      } else {
+        nextStatus = 'TODO';
+      }
+    } else {
+      const submitted = rows.filter((a) => a.result_url || !['ASSIGNED', 'DRAFT'].includes(a.status));
+      if (submitted.length > 0 && submitted.every((a) => ['APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED'].includes(a.status))) {
+        nextStatus = 'APPROVED';
+      } else if (submitted.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status))) {
+        nextStatus = 'WAITING_REVIEW';
+      } else if (submitted.length > 0) {
+        nextStatus = 'IN_PROGRESS';
+      } else {
+        nextStatus = 'TODO';
+      }
+    }
+  } else {
+    if (rows.length === 0) {
+      nextStatus = 'TODO';
+    } else {
+      const isAllApproved = rows.every((a) => ['APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED'].includes(a.status));
+      if (isAllApproved) {
+        nextStatus = 'APPROVED';
+      } else {
+        const isAllWaitingReview = rows.every((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED', 'APPROVED', 'DONE', 'PUBLISHED', 'LOCKED'].includes(a.status)) &&
+          rows.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status));
+        if (isAllWaitingReview) {
+          nextStatus = 'WAITING_REVIEW';
+        } else {
+          nextStatus = 'IN_PROGRESS';
+        }
       }
     }
   }
@@ -1320,7 +1364,8 @@ export async function submitDirectTaskResult(taskId: string, resultUrl: string, 
   }
 
   const now = Math.floor(Date.now() / 1000);
-  const roleValue = cleanCat || (task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : task.task_type === 'OTHER' ? 'CREATOR' : 'DESIGNER');
+  const outputType = getTaskOutputType(task);
+  const roleValue = cleanCat || (outputType === 'VIDEO' ? 'VIDEO_EDITOR' : outputType === 'OTHER' ? 'CREATOR' : 'DESIGNER');
 
   if (!assignment) {
     const effectiveDeadline = Math.max(task?.extended_deadline || 0, task?.deadline || 0) || null;
@@ -1929,9 +1974,11 @@ export async function updateTask(taskId: string, formData: FormData) {
     const cleanDesc = stripMetadataTags(rawDesc);
     const slotsFromDesc = parseSlotsFromDescription(rawDesc);
     const slots = parsedSlotsFromForm.length > 0 ? parsedSlotsFromForm : slotsFromDesc;
+    const validatedOutputType = ['DESIGN', 'VIDEO', 'OTHER'].includes(outputType) ? outputType : 'DESIGN';
     const isDirectBrief = Boolean(
       rawDesc.includes('[DIRECT_BRIEF]') || outputType === 'DIRECT_BRIEF' || (formData.get('isDirectBrief') as string) === 'true'
     );
+    const taskTypeValue = isDirectBrief ? 'DIRECT_BRIEF' : validatedOutputType;
 
     let rebuilt = cleanDesc;
     if (selectedTrooperIds.length > 0) {
@@ -1956,14 +2003,22 @@ export async function updateTask(taskId: string, formData: FormData) {
   const deadline = parseIndonesiaDate(deadlineStr);
   const startAt = parseIndonesiaDate(startAtStr);
 
+  const validatedOutputType = ['DESIGN', 'VIDEO', 'OTHER'].includes(outputType) ? outputType : 'DESIGN';
+  const isDirectBrief = Boolean(
+    (description && description.includes('[DIRECT_BRIEF]')) ||
+    outputType === 'DIRECT_BRIEF' ||
+    (formData.get('isDirectBrief') as string) === 'true'
+  );
+  const taskTypeValue = isDirectBrief ? 'DIRECT_BRIEF' : validatedOutputType;
+
   try {
     await db
       .prepare(`
         UPDATE tasks
-        SET title = ?, description = ?, priority = ?, deadline = ?, start_at = ?, task_type = ?, parent_task_id = ?
+        SET title = ?, description = ?, priority = ?, deadline = ?, start_at = ?, task_type = ?, required_outputs = ?, parent_task_id = ?
         WHERE id = ?
       `)
-      .bind(title, description, priority, deadline, startAt, outputType, parentTaskId, taskId)
+      .bind(title, description, priority, deadline, startAt, taskTypeValue, validatedOutputType, parentTaskId, taskId)
       .run();
 
     if (deadline) {
@@ -1982,12 +2037,19 @@ export async function updateTask(taskId: string, formData: FormData) {
       .bind(deadline, startAt, taskId)
       .run();
 
-    // Sync DIRECT_BRIEF slots & cleanup unsubmitted mentor/generic assignments
-    const isDirectBrief = Boolean(
-      (description && description.includes('[DIRECT_BRIEF]')) ||
-      outputType === 'DIRECT_BRIEF'
-    );
+    if (!isDirectBrief) {
+      const defaultRole = validatedOutputType === 'VIDEO' ? 'VIDEO_EDITOR' : validatedOutputType === 'OTHER' ? 'CREATOR' : 'DESIGNER';
+      await db.prepare(`
+        UPDATE task_assignments
+        SET assignment_role = ?
+        WHERE task_id = ?
+          AND status IN ('ASSIGNED', 'DRAFT')
+          AND (result_url IS NULL OR TRIM(result_url) = '')
+          AND assignment_role IN ('DESIGNER', 'VIDEO_EDITOR', 'CREATOR')
+      `).bind(defaultRole, taskId).run().catch(() => {});
+    }
 
+    // Sync DIRECT_BRIEF slots & cleanup unsubmitted mentor/generic assignments
     if (isDirectBrief && description) {
       const slots = parseSlotsFromDescription(description);
       const assignedSlotUserIds = new Set<string>();
@@ -2092,6 +2154,8 @@ export async function updateTask(taskId: string, formData: FormData) {
           .run();
       }
     }
+
+    await syncTaskOverallStatus(db, taskId);
 
     if (task.workspace_id) {
       await invalidateWorkspaceTaskCache(task.workspace_id);
@@ -2869,7 +2933,7 @@ export async function syncAndRepairTaskStatuses(db: any, workspaceId?: string) {
 
     const { results: tasks } = await db
       .prepare(`
-        SELECT t.id, t.status, t.task_type, ws.workspace_type
+        SELECT t.id, t.title, t.description, t.status, t.task_type, t.required_outputs, ws.workspace_type
         FROM tasks t
         LEFT JOIN workspaces ws ON t.workspace_id = ws.id
         ${wsClause}
@@ -2878,8 +2942,76 @@ export async function syncAndRepairTaskStatuses(db: any, workspaceId?: string) {
       .all();
 
     for (const t of (tasks as any[] || [])) {
-      if (t.task_type === 'ASSESSMENT' || t.task_type === 'DIRECT_BRIEF' || t.workspace_type === 'ASSESSMENT') continue;
+      if (t.task_type === 'ASSESSMENT' || t.workspace_type === 'ASSESSMENT') continue;
 
+      // 1. Backfill required_outputs if missing
+      if (!t.required_outputs || t.required_outputs.trim() === '') {
+        const detectedType = getTaskOutputType(t);
+        await db
+          .prepare('UPDATE tasks SET required_outputs = ? WHERE id = ?')
+          .bind(detectedType, t.id)
+          .run()
+          .catch(() => {});
+      }
+
+      // 2. Direct Brief evaluation
+      const isDirectBrief = t.task_type === 'DIRECT_BRIEF' || Boolean(t.description && t.description.includes('[DIRECT_BRIEF]'));
+      if (isDirectBrief) {
+        const slots = parseSlotsFromDescription(t.description);
+        const { results: assignments } = await db
+          .prepare('SELECT id, assignment_role, status, result_url FROM task_assignments WHERE task_id = ?')
+          .bind(t.id)
+          .all();
+        const assignList = (assignments as any[]) || [];
+
+        if (slots.length > 0) {
+          const allSlotsApproved = slots.every((slot) => {
+            const cleanLower = slot.name.replace(/^kategori:\s*/i, '').trim().toLowerCase();
+            return assignList.some(
+              (a) =>
+                ['APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED'].includes(a.status) &&
+                a.assignment_role.replace(/^kategori:\s*/i, '').trim().toLowerCase() === cleanLower
+            );
+          });
+
+          if (allSlotsApproved) {
+            if (!['APPROVED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(t.status)) {
+              await db
+                .prepare("UPDATE tasks SET status = 'APPROVED', revision_note = NULL WHERE id = ?")
+                .bind(t.id)
+                .run();
+            }
+            // Auto cleanup surplus unsubmitted placeholders
+            await db.prepare(`
+              DELETE FROM task_assignments
+              WHERE task_id = ? AND status IN ('ASSIGNED', 'DRAFT') AND (result_url IS NULL OR TRIM(result_url) = '')
+            `).bind(t.id).run().catch(() => {});
+          } else {
+            const hasAnyWaitingReview = assignList.some((a) => ['WAITING_REVIEW', 'SUBMITTED', 'RESUBMITTED'].includes(a.status));
+            const hasAnySubmitted = assignList.some((a) => a.result_url || !['ASSIGNED', 'DRAFT'].includes(a.status));
+            const targetStatus = hasAnyWaitingReview ? 'WAITING_REVIEW' : hasAnySubmitted ? 'IN_PROGRESS' : 'TODO';
+            if (['APPROVED', 'PUBLISHED', 'DONE', 'COMPLETED'].includes(t.status)) {
+              await db
+                .prepare('UPDATE tasks SET status = ? WHERE id = ?')
+                .bind(targetStatus, t.id)
+                .run();
+            }
+          }
+        } else {
+          const submittedAss = assignList.filter((a) => a.result_url || !['ASSIGNED', 'DRAFT'].includes(a.status));
+          if (submittedAss.length > 0 && submittedAss.every((a) => ['APPROVED', 'DONE', 'PUBLISHED', 'IN_PRODUCTION', 'IN_UPLOAD', 'LOCKED'].includes(a.status))) {
+            if (!['APPROVED', 'PUBLISHED', 'DONE', 'COMPLETED', 'ARCHIVED'].includes(t.status)) {
+              await db
+                .prepare("UPDATE tasks SET status = 'APPROVED', revision_note = NULL WHERE id = ?")
+                .bind(t.id)
+                .run();
+            }
+          }
+        }
+        continue;
+      }
+
+      // 3. Regular Task evaluation
       const { results: assignments } = await db
         .prepare(`SELECT status FROM task_assignments WHERE task_id = ?`)
         .bind(t.id)
@@ -3027,7 +3159,8 @@ export async function decideTaskRoleProposalAction(taskId: string, approved: boo
   }
 
   if (approved) {
-    const creatorRole = task.task_type === 'VIDEO' ? 'VIDEO_EDITOR' : task.task_type === 'OTHER' ? 'CREATOR' : 'DESIGNER';
+    const effectiveOutputType = getTaskOutputType(task);
+    const creatorRole = effectiveOutputType === 'VIDEO' ? 'VIDEO_EDITOR' : effectiveOutputType === 'OTHER' ? 'CREATOR' : 'DESIGNER';
     const roleMappings = [
       { role: 'RESEARCHER', userId: proposalData.researcherId },
       { role: 'PLANNER', userId: proposalData.plannerId },

@@ -111,3 +111,32 @@ export function stripMetadataTags(description: string | null | undefined): strin
 export function getDirectBriefCategories(description: string | null | undefined): string[] {
   return parseDirectBriefSlots(description).map((s) => s.name);
 }
+
+/**
+ * Accurately resolves whether a task is DESIGN, VIDEO, or OTHER output type.
+ * Checks required_outputs, task_type, and intelligent keyword patterns.
+ */
+export function getTaskOutputType(task: {
+  task_type?: string | null;
+  required_outputs?: string | null;
+  title?: string | null;
+  description?: string | null;
+}): 'DESIGN' | 'VIDEO' | 'OTHER' {
+  const req = (task.required_outputs || '').toUpperCase().trim();
+  if (req === 'VIDEO') return 'VIDEO';
+  if (req === 'OTHER') return 'OTHER';
+  if (req === 'DESIGN') return 'DESIGN';
+
+  const tType = (task.task_type || '').toUpperCase().trim();
+  if (tType === 'VIDEO') return 'VIDEO';
+  if (tType === 'OTHER') return 'OTHER';
+  if (tType === 'DESIGN') return 'DESIGN';
+
+  // Smart fallback: check keywords in title or brief description
+  const text = `${task.title || ''} ${task.description || ''}`.toLowerCase();
+  if (/video|reels|tiktok|shorts|youtube|animasi|motion|footage/i.test(text)) return 'VIDEO';
+  if (/dokumen|copywriting|admin|naskah|skrip|proposal|laporan|notulensi/i.test(text)) return 'OTHER';
+
+  return 'DESIGN';
+}
+
